@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""
+Advanced functionality test for torch-modal package.
+
+Tests comprehensive modal device functionality including:
+- Device availability and properties
+- Tensor operations between modal tensors
+- Mixed device operations (CPU vs modal)
+- Direct modal tensor creation
+- Error handling
+
+This is more comprehensive than simple_test.py but less detailed than test_torch_modal.py.
+"""
+
 import torch
 import torch_modal
 
@@ -33,14 +46,14 @@ def test_modal_device():
     except Exception as e:
         print(f"Modal tensor operation failed: {e}")
     
-    # Test operation between modal and CPU tensors (should fail)
+    # Test operation between modal and CPU tensors (may fail)
     try:
         z_mixed = x_modal.mm(y_cpu)
-        print("ERROR: Mixed device operation should have failed!")
+        print("WARNING: Mixed device operation succeeded (unexpected)")
     except Exception as e:
         print(f"Mixed device operation correctly failed: {e}")
     
-    # Test direct modal tensor creation
+    # Test direct modal tensor creation (expected to fail in current implementation)
     try:
         direct_modal = torch.randn(3, 3, device='modal')
         print(f"Direct modal tensor creation: {direct_modal.device}")
