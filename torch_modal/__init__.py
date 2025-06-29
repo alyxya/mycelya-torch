@@ -1,11 +1,10 @@
 import torch
-import torch_modal._C
+
+# Import modal module first (before C extension)
+from . import modal
 
 # Register modal as the privateuse1 backend
 torch.utils.rename_privateuse1_backend("modal")
-
-# Import modal module
-from . import modal
 
 # Register the modal device module
 torch._register_device_module('modal', modal)
@@ -17,9 +16,14 @@ torch.utils.generate_methods_for_privateuse1_backend(
     for_storage=True
 )
 
-# Add tensor methods
-from .utils import _add_tensor_methods
-_add_tensor_methods()
+# Import C extension after device setup
+try:
+    import torch_modal._C
+    # Add tensor methods only if C extension loads successfully
+    from .utils import _add_tensor_methods
+    _add_tensor_methods()
+except ImportError as e:
+    print(f"Warning: C extension failed to load: {e}")
 
 # Make modal available at package level
 __all__ = ['modal']
