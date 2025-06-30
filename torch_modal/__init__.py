@@ -22,6 +22,14 @@ try:
     # Add tensor methods only if C extension loads successfully
     from .utils import _add_tensor_methods
     _add_tensor_methods()
+    
+    # Force initialization of modal device hooks
+    try:
+        # Trigger device initialization by checking if modal is available
+        torch.device('modal:0')
+    except Exception:
+        pass  # This might fail but will trigger hooks initialization
+        
 except ImportError as e:
     print(f"Warning: C extension failed to load: {e}")
 
