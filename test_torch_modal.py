@@ -8,11 +8,18 @@ This script consolidates all testing functionality including:
 - Modal tensor creation and operations
 - C extension functionality
 - Error handling and edge cases
+- Basic functionality verification
+- Debug utilities
+
+Run with: python test_torch_modal.py
+For verbose output: python test_torch_modal.py --verbose
+For quick debug mode: python test_torch_modal.py --debug
 """
 
 import torch
 import traceback
 import sys
+import argparse
 
 
 class TestResult:
@@ -178,8 +185,50 @@ def test_error_handling():
         return False
 
 
-def main():
-    """Run all tests."""
+def run_debug_mode():
+    """Run minimal debug tests for quick verification."""
+    print("PyTorch Modal Debug Mode")
+    print("=" * 30)
+    
+    print("Importing torch_modal...")
+    try:
+        import torch_modal
+        print("✓ Import successful")
+    except Exception as e:
+        print(f"✗ Import failed: {e}")
+        return 1
+    
+    print("Creating tensor...")
+    x = torch.randn(2, 2)
+    print(f"✓ Tensor created: {x.device}")
+    
+    print("Checking modal method...")
+    print(f"✓ Has modal method: {hasattr(x, 'modal')}")
+    
+    if hasattr(x, 'modal'):
+        print("Trying modal conversion...")
+        try:
+            y = x.modal()
+            print(f"✓ Modal conversion success: {y.device}")
+            print(f"Modal tensor data: {y}")
+            
+            print("Trying tensor addition...")
+            z = y + y
+            print(f"✓ Addition successful: {z.device}")
+            print(f"Result: {z}")
+            return 0
+            
+        except Exception as e:
+            print(f"✗ Error: {e}")
+            traceback.print_exc()
+            return 1
+    else:
+        print("✗ Modal method not found on tensor")
+        return 1
+
+
+def run_comprehensive_tests(verbose=False):
+    """Run comprehensive test suite."""
     print("PyTorch Modal Device Test Suite")
     print("=" * 50)
     
@@ -199,6 +248,45 @@ def main():
     results.test("Copy parameter", test_copy_parameter)
     results.test("Error handling", test_error_handling)
     
+    if verbose:
+        print("\nRunning additional verbose tests...")
+        try:
+            import torch_modal
+            print(f"Modal device available: {torch_modal.modal.is_available()}")
+            print(f"Modal device count: {torch_modal.modal.device_count()}")
+            print(f"Modal device name: {torch_modal.modal.get_device_name()}")
+            
+            # Test mixed device operations
+            print("\nTesting mixed device operations...")
+            x_cpu = torch.randn(2, 2)
+            y_cpu = torch.randn(2, 2)
+            x_modal = x_cpu.modal()
+            y_modal = y_cpu.modal()
+            
+            print(f"CPU tensor device: {x_cpu.device}")
+            print(f"Modal tensor device: {x_modal.device}")
+            
+            try:
+                z_modal = x_modal.mm(y_modal)
+                print(f"Modal-Modal operation: {z_modal.device}")
+            except Exception as e:
+                print(f"Modal-Modal operation failed: {e}")
+            
+            try:
+                z_mixed = x_modal.mm(y_cpu)
+                print("WARNING: Mixed device operation succeeded (unexpected)")
+            except Exception as e:
+                print(f"Mixed device operation correctly failed: {e}")
+                
+            try:
+                direct_modal = torch.randn(3, 3, device='modal')
+                print(f"Direct modal tensor creation: {direct_modal.device}")
+            except Exception as e:
+                print(f"Direct modal tensor creation failed: {e}")
+                
+        except Exception as e:
+            print(f"Verbose tests failed: {e}")
+    
     # Print summary
     success = results.summary()
     
@@ -208,6 +296,22 @@ def main():
     else:
         print(f"\n❌ {results.failed} test(s) failed.")
         return 1
+
+
+def main():
+    """Main entry point with argument parsing."""
+    parser = argparse.ArgumentParser(description='PyTorch Modal Test Suite')
+    parser.add_argument('--debug', action='store_true', 
+                       help='Run minimal debug tests for quick verification')
+    parser.add_argument('--verbose', action='store_true',
+                       help='Run comprehensive tests with verbose output')
+    
+    args = parser.parse_args()
+    
+    if args.debug:
+        return run_debug_mode()
+    else:
+        return run_comprehensive_tests(verbose=args.verbose)
 
 
 if __name__ == "__main__":
