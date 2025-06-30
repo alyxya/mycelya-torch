@@ -31,6 +31,22 @@ def get_device_properties(device=None):
             
     return Properties()
 
+def synchronize():
+    """Synchronize modal device operations."""
+    pass
+
+def get_rng_state():
+    """Get random number generator state."""
+    return torch.get_rng_state()
+
+def set_rng_state(new_state):
+    """Set random number generator state."""
+    torch.set_rng_state(new_state)
+
+def manual_seed(seed):
+    """Set manual seed for modal device."""
+    torch.manual_seed(seed)
+
 # Tensor types for modal device
 FloatTensor = torch.Tensor
 DoubleTensor = torch.Tensor
