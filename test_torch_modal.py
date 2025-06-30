@@ -54,13 +54,20 @@ def test_modal_tensor_operations():
     x_modal = x.modal()
     y_modal = y.modal()
     
-    # Test addition
-    z = x_modal + y_modal
+    # Test addition - verify numerical result matches CPU computation
+    z_modal = x_modal + y_modal
+    z_expected = x + y
     
-    # Test matrix multiplication  
-    w = x_modal.mm(y_modal)
+    # Test matrix multiplication - verify numerical result matches CPU computation
+    w_modal = x_modal.mm(y_modal)
+    w_expected = x.mm(y)
     
-    assert z is not None and w is not None and w.shape == (2, 2)
+    # Verify shapes
+    assert z_modal is not None and w_modal is not None and w_modal.shape == (2, 2)
+    
+    # Verify numerical results (convert modal tensors back to CPU for comparison)
+    assert torch.allclose(z_modal.cpu(), z_expected, rtol=1e-5, atol=1e-8)
+    assert torch.allclose(w_modal.cpu(), w_expected, rtol=1e-5, atol=1e-8)
 
 
 def test_dtype_conversion():
