@@ -55,7 +55,7 @@ print(f"Device count: {torch.modal.device_count()}")
 
 # Move tensors with options
 x = torch.randn(3, 3, dtype=torch.float32)
-y = x.to('modal', dtype=torch.float64, copy=True)  # Convert dtype and copy
+y = x.to("modal", dtype=torch.float64, copy=True)  # Convert dtype and copy
 ```
 
 ## Testing
