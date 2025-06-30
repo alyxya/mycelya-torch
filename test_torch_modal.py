@@ -112,7 +112,7 @@ def test_device_functions_disabled():
 
 
 # Legacy standalone execution support
-class TestResult:
+class _TestResult:
     """Simple test result tracker for standalone mode."""
     def __init__(self):
         self.passed = 0
@@ -192,7 +192,7 @@ def run_comprehensive_tests(verbose=False):
     print("PyTorch Modal Device Test Suite")
     print("=" * 50)
 
-    results = TestResult()
+    results = _TestResult()
 
     # Core functionality tests
     results.test("Basic imports", test_basic_imports)
