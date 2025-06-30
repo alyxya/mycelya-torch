@@ -88,7 +88,6 @@ The test suite includes comprehensive coverage of:
 ### Core Components
 
 - **`torch_modal/__init__.py`** - Package initialization and PrivateUse1 device registration
-- **`torch_modal/modal.py`** - Main modal device implementation and tensor operations
 - **`torch_modal/modal/__init__.py`** - Device management functions (is_available, device_count, etc.)
 - **`torch_modal/utils.py`** - Tensor method extensions (`.modal()` method injection)
 
@@ -108,7 +107,6 @@ The test suite includes comprehensive coverage of:
 ### Build System
 
 - **`setup.py`** - Package configuration with CppExtension build support
-- **`TESTING.md`** - Comprehensive testing documentation and guidelines
 
 ## Development
 
