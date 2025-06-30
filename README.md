@@ -46,16 +46,16 @@ cpu_tensor = torch.randn(2, 2)
 ### Device Management
 
 ```python
+import torch
 import torch_modal
 
 # Check device availability
-print(f"Modal available: {torch_modal.modal.is_available()}")
-print(f"Device count: {torch_modal.modal.device_count()}")
-print(f"Device name: {torch_modal.modal.get_device_name()}")
+print(f"Modal available: {torch.modal.is_available()}")
+print(f"Device count: {torch.modal.device_count()}")
 
 # Move tensors with options
 x = torch.randn(3, 3, dtype=torch.float32)
-y = x.modal(dtype=torch.float64, copy=True)  # Convert dtype and copy
+y = x.to('modal', dtype=torch.float64, copy=True)  # Convert dtype and copy
 ```
 
 ## Testing

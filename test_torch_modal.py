@@ -22,13 +22,12 @@ def test_basic_imports():
     assert True
 
 
-@pytest.mark.skip(reason="Currently unimplemented")
 def test_device_functions():
     """Test modal device functions."""
+    import torch
     import torch_modal
-    assert (torch_modal.modal.is_available() and
-            torch_modal.modal.device_count() >= 1 and
-            torch_modal.modal.get_device_name() == "Modal Device")
+    assert (torch.modal.is_available() and
+            torch.modal.device_count() >= 1)
 
 
 def test_tensor_modal_method():
@@ -107,8 +106,6 @@ def test_error_handling():
     assert True  # If we get here without segfault, it's good
 
 
-# Skip device functions test by default
-@pytest.mark.skip(reason="Device functions test disabled")
 def test_device_functions_disabled():
     """Test modal device functions (disabled)."""
     test_device_functions()
