@@ -173,6 +173,64 @@ def _local_scalar_dense(ten):
     return host_mem.item()
 
 
+def empty_modal(
+    size,
+    dtype=None,
+    layout=None,
+    device=None,
+    pin_memory=None,
+    memory_format=None,
+):
+    if device is None:
+        device = torch.device("modal", 0)
+    elif isinstance(device, int):
+        device = torch.device("modal", device)
+    elif isinstance(device, str):
+        device = torch.device(device)
+    
+    dtype = dtype or torch.get_default_dtype()
+    
+    if layout is not None and layout != torch.strided:
+        raise RuntimeError("Non strided layout not supported")
+    if pin_memory:
+        raise RuntimeError("Pin memory can only be on CPU")
+    
+    # Create empty tensor with proper device and dtype
+    with torch.modal.device(device):  # type: ignore[misc]
+        # Use driver to allocate empty tensor on modal device
+        args, _ = prepare_for_sending((size, dtype), {})
+        return driver.exec("empty_tensor", *args)
+
+
+def empty_strided_modal(
+    size,
+    stride,
+    dtype=None,
+    layout=None,
+    device=None,
+    pin_memory=None,
+):
+    if device is None:
+        device = torch.device("modal", 0)
+    elif isinstance(device, int):
+        device = torch.device("modal", device)
+    elif isinstance(device, str):
+        device = torch.device(device)
+    
+    dtype = dtype or torch.get_default_dtype()
+    
+    if layout is not None and layout != torch.strided:
+        raise RuntimeError("Non strided layout not supported")
+    if pin_memory:
+        raise RuntimeError("Pin memory can only be on CPU")
+    
+    # Create empty strided tensor with proper device and dtype
+    with torch.modal.device(device):  # type: ignore[misc]
+        # Use driver to allocate empty strided tensor on modal device
+        args, _ = prepare_for_sending((size, stride, dtype), {})
+        return driver.exec("empty_strided_tensor", *args)
+
+
 _modal_lib = torch.library.Library("_", "IMPL")
 _modal_lib.fallback(_modal_kernel_fallback, dispatch_key="PrivateUse1")
 
@@ -183,4 +241,10 @@ _modal_lib_aten.impl(
 )
 _modal_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
+)
+_modal_lib_aten.impl(
+    "empty.memory_format", empty_modal, dispatch_key="PrivateUse1"
+)
+_modal_lib_aten.impl(
+    "empty_strided", empty_strided_modal, dispatch_key="PrivateUse1"
 )

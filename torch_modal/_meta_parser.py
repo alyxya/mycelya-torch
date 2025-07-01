@@ -30,9 +30,9 @@ class ModalTensorData(torch.Tensor):
         return ModalTensorData(allocator.tensor_from_meta(tensor_meta))
 
 
-VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float}
+VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}
 
-VALID_QUEUE_TYPES_OUT = {ModalTensorMeta, int, float, str}
+VALID_QUEUE_TYPES_OUT = {ModalTensorMeta, int, float, str, torch.dtype}
 
 
 def safe_str(args):

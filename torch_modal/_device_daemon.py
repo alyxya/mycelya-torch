@@ -393,5 +393,38 @@ class _Executor:
         # no-op
         pass
 
+    @register(registry)
+    def empty_strided_tensor(self, size, stride, dtype):
+        # Allocate memory for the tensor
+        element_size = torch.zeros(1, dtype=dtype).element_size()
+        total_size = max(s * st for s, st in zip(size, stride)) * element_size if size else 0
+        
+        if total_size > 0:
+            ptr = self.allocator.malloc(total_size)
+        else:
+            # For empty tensors, use a dummy pointer
+            ptr = 0
+        
+        # Create a meta object to represent this tensor
+        from ._meta_parser import ModalTensorMeta
+        
+        # Create a minimal tensor meta
+        class TensorMeta:
+            def __init__(self, data_ptr, size, stride, storage_offset, dtype, nelem_in_bytes):
+                self.data_ptr = data_ptr
+                self.size = size
+                self.stride = stride
+                self.storage_offset = storage_offset
+                self.dtype = dtype
+                self.nelem_in_bytes = nelem_in_bytes
+        
+        nelem = 1
+        for s in size:
+            nelem *= s
+        nelem_in_bytes = nelem * element_size
+        
+        meta = TensorMeta(ptr, size, stride, 0, dtype, nelem_in_bytes)
+        return ModalTensorData.from_meta(self.allocator, meta)
+
 
 driver = Driver(NUM_DEVICES)
