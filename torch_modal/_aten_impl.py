@@ -248,3 +248,17 @@ _modal_lib_aten.impl(
 _modal_lib_aten.impl(
     "empty_strided", empty_strided_modal, dispatch_key="PrivateUse1"
 )
+
+
+def cleanup_library_registrations():
+    """Clean up library registrations to prevent hanging."""
+    global _modal_lib, _modal_lib_aten
+    try:
+        # PyTorch doesn't provide a clean way to unregister, but we can try
+        # Calling this during cleanup might help
+        if hasattr(_modal_lib, '_destroy'):
+            _modal_lib._destroy()
+        if hasattr(_modal_lib_aten, '_destroy'):
+            _modal_lib_aten._destroy()
+    except Exception:
+        pass

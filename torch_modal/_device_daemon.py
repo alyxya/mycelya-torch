@@ -1,7 +1,11 @@
+import atexit
 import ctypes
 import logging
+import os
+import signal
 import threading
 import time
+import weakref
 
 import torch
 
@@ -14,7 +18,10 @@ from ._meta_parser import (
 
 
 log = logging.getLogger(__name__)
-mp_context = torch.multiprocessing.get_context("spawn")
+
+# Use a simple queue-based threading approach instead of multiprocessing
+# to avoid the complex cleanup issues with multiprocessing
+import queue
 
 # Constant properties of our device
 NUM_DEVICES = 2
@@ -100,6 +107,9 @@ def register(registry):
 
 
 class Driver:
+    _instances = weakref.WeakSet()
+    _signal_handlers_registered = False
+
     def __init__(self, num_devices):
         super().__init__()
         self.num_devices = num_devices
@@ -115,6 +125,14 @@ class Driver:
         self.event_belong = {}
 
         self.rlock = threading.RLock()
+        
+        # Register this instance for cleanup
+        Driver._instances.add(self)
+        
+        # Register signal handlers once
+        if not Driver._signal_handlers_registered:
+            Driver._register_signal_handlers()
+            Driver._signal_handlers_registered = True
 
     def _lazy_init(self):
         if self.is_initialized:
@@ -122,17 +140,78 @@ class Driver:
         self.devices = []
 
         for i in range(self.num_devices):
-            req_queue = mp_context.Queue()
-            ans_queue = mp_context.Queue()
-            runner = mp_context.Process(
-                target=_Executor(i).run_forever,
+            req_queue = queue.Queue()
+            ans_queue = queue.Queue()
+            executor = _Executor(i)
+            
+            # Use threading instead of multiprocessing
+            runner = threading.Thread(
+                target=executor.run_forever,
                 args=(req_queue, ans_queue),
-                daemon=True,
+                daemon=True  # Daemon threads will exit when main process exits
             )
             runner.start()
-            self.devices.append((req_queue, ans_queue, runner))
+            self.devices.append((req_queue, ans_queue, runner, executor))
 
         self.is_initialized = True
+        # Register cleanup on exit
+        atexit.register(self._cleanup)
+
+    @classmethod
+    def _register_signal_handlers(cls):
+        """Register signal handlers for proper cleanup."""
+        def signal_handler(signum, frame):
+            cls._cleanup_all_instances()
+            # Re-raise the signal to continue normal termination
+            signal.signal(signum, signal.SIG_DFL)
+            signal.raise_signal(signum)
+        
+        # Register for common termination signals
+        for sig in [signal.SIGTERM, signal.SIGINT]:
+            try:
+                signal.signal(sig, signal_handler)
+            except (OSError, ValueError):
+                # Signal handling might not be available in some contexts
+                pass
+
+    @classmethod
+    def _cleanup_all_instances(cls):
+        """Clean up all Driver instances."""
+        for instance in list(cls._instances):
+            try:
+                instance._cleanup()
+            except Exception:
+                pass
+
+    def _cleanup(self):
+        """Clean up daemon processes on exit."""
+        if not self.is_initialized:
+            return
+        
+        with self.rlock:
+            # Signal all threads to shutdown
+            for req_queue, ans_queue, runner, executor in self.devices:
+                if runner.is_alive():
+                    try:
+                        # Send shutdown signal
+                        req_queue.put(("shutdown",), block=False)
+                    except:
+                        pass
+            
+            # Wait for threads to finish
+            for req_queue, ans_queue, runner, executor in self.devices:
+                if runner.is_alive():
+                    runner.join(timeout=0.1)
+            
+            self.devices = []
+            self.is_initialized = False
+            
+            # Also cleanup library registrations
+            try:
+                from ._aten_impl import cleanup_library_registrations
+                cleanup_library_registrations()
+            except Exception:
+                pass
 
     def exec(self, cmd, *args):
         with self.rlock:
@@ -151,7 +230,7 @@ class Driver:
 
     def run_on_executor(self, device_idx, cmd, *args):
         self._lazy_init()
-        req_queue, ans_queue, _ = self.devices[device_idx]
+        req_queue, ans_queue, _, _ = self.devices[device_idx]
         stream = self.getStream(device_idx)
         validate_send_queue_args(cmd, args)
         req_queue.put((stream, cmd) + args)
@@ -296,7 +375,10 @@ class _Executor:
         # Serve all requests
         while True:
             # Ignore stream since cpu backend doesn't support asynchronous execution
-            _, cmd, *args = req_queue.get()
+            req = req_queue.get()
+            if req[0] == "shutdown":
+                break
+            _, cmd, *args = req
             log.info("Worker executing: %s", cmd)
             if cmd in _Executor.registry:
                 res = _Executor.registry[cmd](self, *args)
@@ -428,3 +510,8 @@ class _Executor:
 
 
 driver = Driver(NUM_DEVICES)
+
+# Register global cleanup for all contexts
+atexit.register(Driver._cleanup_all_instances)
+
+# Note: pytest cleanup is handled in conftest.py to prevent hanging
