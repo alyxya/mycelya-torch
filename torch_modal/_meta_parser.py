@@ -28,6 +28,24 @@ class ModalTensorData(torch.Tensor):
     @staticmethod
     def from_meta(allocator, tensor_meta):
         return ModalTensorData(allocator.tensor_from_meta(tensor_meta))
+    
+    @property
+    def device(self):
+        """Override device property to report 'modal' instead of the underlying CPU device."""
+        import torch
+        # Get current modal device index, default to 0 if not available
+        try:
+            device_index = torch.modal.current_device()
+        except (AttributeError, RuntimeError):
+            device_index = 0
+        return torch.device("modal", device_index)
+    
+    def cpu(self, memory_format=torch.preserve_format):
+        """Override cpu() method to return actual CPU tensor, not ModalTensorData."""
+        # Get the underlying tensor data and create a true CPU tensor
+        cpu_tensor = super().cpu()
+        # Ensure it's a regular torch.Tensor, not ModalTensorData
+        return torch.tensor(cpu_tensor.detach().numpy())
 
 
 VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}
