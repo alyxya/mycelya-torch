@@ -184,37 +184,3 @@ _modal_lib_aten.impl(
 _modal_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
 )
-
-
-def _empty_modal(
-    size,
-    dtype=None,
-    layout=None,
-    device=None,
-    pin_memory=None,
-    memory_format=None,
-):
-    # Just create a CPU tensor - this will be treated as a Modal tensor
-    # due to the device specification in the dispatch system
-    return torch.empty(
-        size, dtype=dtype, layout=layout, device='cpu', pin_memory=pin_memory, memory_format=memory_format
-    )
-
-
-def _empty_strided_modal(
-    size,
-    stride,
-    dtype=None,
-    layout=None,
-    device=None,
-    pin_memory=None,
-):
-    # Just create a CPU tensor - this will be treated as a Modal tensor
-    # due to the device specification in the dispatch system
-    return torch.empty_strided(
-        size, stride, dtype=dtype, layout=layout, device='cpu', pin_memory=pin_memory
-    )
-
-
-_modal_lib_aten.impl("empty.memory_format", _empty_modal, dispatch_key="PrivateUse1")
-_modal_lib_aten.impl("empty_strided", _empty_strided_modal, dispatch_key="PrivateUse1")

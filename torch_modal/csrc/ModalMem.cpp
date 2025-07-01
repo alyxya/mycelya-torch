@@ -41,13 +41,57 @@ struct ModalAllocator final : at::Allocator {
 static ModalAllocator global_modal_alloc;
 REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_modal_alloc);
 
+// Empty op needs C++ code and cannot be handled by python side fallback
+at::Tensor empty_modal(
+    c10::IntArrayRef size,
+    std::optional<c10::ScalarType> dtype_opt,
+    std::optional<c10::Layout> layout_opt,
+    std::optional<c10::Device> device_opt,
+    std::optional<bool> pin_memory_opt,
+    std::optional<c10::MemoryFormat> memory_format_opt) {
+  const auto device = c10::device_or_default(device_opt);
+  const auto dtype = c10::dtype_or_default(dtype_opt);
+  TORCH_CHECK(device.is_privateuseone());
+  TORCH_CHECK(
+      c10::layout_or_default(layout_opt) == c10::Layout::Strided,
+      "Non strided layout not supported");
+  TORCH_CHECK(
+      !c10::pinned_memory_or_default(pin_memory_opt),
+      "Pin memory can only be on CPU");
+  const c10::DeviceGuard device_guard(device);
+  constexpr c10::DispatchKeySet pu1_dks(c10::DispatchKey::PrivateUse1);
+  return at::detail::empty_generic(
+      size, &global_modal_alloc, pu1_dks, dtype, memory_format_opt);
+}
+
+at::Tensor empty_strided_modal(
+    c10::IntArrayRef size,
+    c10::IntArrayRef stride,
+    std::optional<c10::ScalarType> dtype_opt,
+    std::optional<c10::Layout> layout_opt,
+    std::optional<c10::Device> device_opt,
+    std::optional<bool> pin_memory_opt) {
+  const auto device = c10::device_or_default(device_opt);
+  const auto dtype = c10::dtype_or_default(dtype_opt);
+  TORCH_CHECK(device.is_privateuseone());
+  TORCH_CHECK(
+      c10::layout_or_default(layout_opt) == c10::Layout::Strided,
+      "Non strided layout not supported");
+  TORCH_CHECK(
+      !c10::pinned_memory_or_default(pin_memory_opt),
+      "Pin memory can only be on CPU");
+  const c10::DeviceGuard device_guard(device);
+  constexpr c10::DispatchKeySet pu1_dks(c10::DispatchKey::PrivateUse1);
+  return at::detail::empty_strided_generic(
+      size, stride, &global_modal_alloc, pu1_dks, dtype);
+}
 
 } // namespace
 
 // Register ATEN implementations
-// TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
-//   m.impl("empty.memory_format", empty_modal);
-//   m.impl("empty_strided", empty_strided_modal);
-// }
+TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
+  m.impl("empty.memory_format", empty_modal);
+  m.impl("empty_strided", empty_strided_modal);
+}
 
 } // namespace modal
