@@ -73,8 +73,27 @@ def _kernel_fallback(op, *args, **kwargs):
             real_res = kwargs["out"]
     elif not tree_any(lambda obj: isinstance(obj, torch.Tensor), (args, kwargs)):
         # No Tensor argument means factory function
-        # They should decompose and be handled in our c++ side directly
-        raise RuntimeError(f"{op} not handled yet.")
+        # Check if this is a modal device factory function
+        device_arg = kwargs.get('device', None)
+        if device_arg is not None:
+            if isinstance(device_arg, torch.device) and device_arg.type == "modal":
+                # This is a modal device factory function - handle it
+                pass  # Continue to normal processing below
+            elif isinstance(device_arg, str) and device_arg == "modal":
+                # Convert string to device object
+                kwargs['device'] = torch.device("modal", 0)
+            elif isinstance(device_arg, str) and device_arg.startswith("modal"):
+                # Handle modal:0 format
+                kwargs['device'] = torch.device(device_arg)
+            else:
+                # Not a modal device factory function
+                raise RuntimeError(f"{op} not handled yet.")
+        else:
+            # No device specified, not a modal factory function
+            raise RuntimeError(f"{op} not handled yet.")
+        
+        # For modal device factory functions, we'll let them fall through to normal processing
+        # The meta computation and device allocation will handle the rest
     elif op._schema.is_mutable or op is torch.ops.aten._copy_from.default:
         # Only handle inplace ops returning their first arg
         assert len(args) >= 1, f"Inplace {op} needs at least one arg"
@@ -199,7 +218,13 @@ def empty_modal(
     with torch.modal.device(device):  # type: ignore[misc]
         # Use driver to allocate empty tensor on modal device
         args, _ = prepare_for_sending((size, dtype), {})
-        return driver.exec("empty_tensor", *args)
+        # Get the meta result and convert to ModalTensorData
+        meta_result = driver.exec("empty_tensor", *args)
+        from ._meta_parser import ModalTensorData
+        device_idx = device.index if device.index is not None else 0
+        driver._lazy_init()  # Ensure devices are initialized
+        allocator = driver.devices[device_idx][3].allocator
+        return ModalTensorData.from_meta(allocator, meta_result)
 
 
 def empty_strided_modal(
@@ -228,7 +253,13 @@ def empty_strided_modal(
     with torch.modal.device(device):  # type: ignore[misc]
         # Use driver to allocate empty strided tensor on modal device
         args, _ = prepare_for_sending((size, stride, dtype), {})
-        return driver.exec("empty_strided_tensor", *args)
+        # Get the meta result and convert to ModalTensorData
+        meta_result = driver.exec("empty_strided_tensor", *args)
+        from ._meta_parser import ModalTensorData
+        device_idx = device.index if device.index is not None else 0
+        driver._lazy_init()  # Ensure devices are initialized
+        allocator = driver.devices[device_idx][3].allocator
+        return ModalTensorData.from_meta(allocator, meta_result)
 
 
 _modal_lib = torch.library.Library("_", "IMPL")

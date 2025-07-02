@@ -476,6 +476,17 @@ class _Executor:
         pass
 
     @register(registry)
+    def empty_tensor(self, size, dtype):
+        # Calculate default strides for contiguous tensor
+        stride = []
+        if size:
+            stride = [1]
+            for i in range(len(size) - 2, -1, -1):
+                stride.insert(0, stride[0] * size[i + 1])
+        
+        return self.empty_strided_tensor(size, stride, dtype)
+
+    @register(registry)
     def empty_strided_tensor(self, size, stride, dtype):
         # Allocate memory for the tensor
         element_size = torch.zeros(1, dtype=dtype).element_size()
@@ -506,7 +517,7 @@ class _Executor:
         nelem_in_bytes = nelem * element_size
         
         meta = TensorMeta(ptr, size, stride, 0, dtype, nelem_in_bytes)
-        return ModalTensorData.from_meta(self.allocator, meta)
+        return meta
 
 
 driver = Driver(NUM_DEVICES)
