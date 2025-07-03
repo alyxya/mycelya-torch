@@ -62,12 +62,20 @@ if __name__ == "__main__":
         name=PACKAGE_NAME,
         version=version,
         author="PyTorch Modal Extension",
-        description="Modal device extension for PyTorch",
+        description="Modal device extension for PyTorch with A100 GPU support",
         packages=find_packages(exclude=("test",)),
-        package_data={PACKAGE_NAME: ["*.dll", "*.dylib", "*.so"]},
+        package_data={
+            PACKAGE_NAME: [
+                "*.dll", "*.dylib", "*.so"  # Binary extensions
+            ]
+        },
         install_requires=[
             "torch>=2.0.0",
+            "./torch_modal_remote",  # Install the private package
         ],
+        extras_require={
+            "remote": ["modal>=0.60.0"],
+        },
         ext_modules=ext_modules,
         python_requires=">=3.8",
         cmdclass={

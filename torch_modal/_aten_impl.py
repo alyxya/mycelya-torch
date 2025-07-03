@@ -9,6 +9,38 @@ log = logging.getLogger(__name__)
 from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending, to_device_no_copy
 
+# Configuration for remote execution
+_REMOTE_EXECUTION_ENABLED = True
+
+def enable_remote_execution():
+    """Enable remote A100 execution for modal tensors."""
+    global _REMOTE_EXECUTION_ENABLED
+    _REMOTE_EXECUTION_ENABLED = True
+
+def disable_remote_execution():
+    """Disable remote A100 execution, use local execution instead.""" 
+    global _REMOTE_EXECUTION_ENABLED
+    _REMOTE_EXECUTION_ENABLED = False
+
+def is_remote_execution_enabled():
+    """Check if remote execution is enabled."""
+    return _REMOTE_EXECUTION_ENABLED
+
+# Lazy import to avoid import errors if modal is not available
+_remote_executor = None
+
+def _get_remote_executor():
+    """Get remote executor, importing lazily."""
+    global _remote_executor
+    if _remote_executor is None:
+        try:
+            from ._modal_remote import remote_executor
+            _remote_executor = remote_executor
+        except ImportError as e:
+            log.warning(f"Modal remote execution not available: {e}")
+            _remote_executor = None
+    return _remote_executor
+
 
 _IMPL_REGISTRY = {}
 
@@ -25,6 +57,101 @@ def impl_factory(name):
     return _
 
 
+def _should_use_remote_execution(op, args, kwargs):
+    """
+    Determine whether to use remote A100 execution for this operation.
+    
+    Currently uses remote execution for most tensor operations involving modal tensors,
+    except for certain operations that are better handled locally.
+    """
+    # Skip remote execution for certain operations
+    skip_ops = {
+        # Memory operations
+        "aten.copy_",
+        "aten._copy_from",
+        "aten.set_",
+        "aten.resize_",
+        "aten.storage_offset",
+        "aten.stride",
+        "aten.size",
+        "aten.numel",
+        "aten.dim",
+        "aten.is_contiguous",
+        # Factory functions
+        "aten.empty",
+        "aten.empty_like",
+        "aten.zeros",
+        "aten.zeros_like",
+        "aten.ones",
+        "aten.ones_like",
+        # Scalar operations (low compute)
+        "aten.item",
+        "aten._local_scalar_dense",
+        # View operations (should be fast locally)
+        "aten.view",
+        "aten.reshape",
+        "aten.squeeze",
+        "aten.unsqueeze",
+        "aten.transpose",
+        "aten.permute",
+    }
+    
+    op_name = op.overloadpacket._qualified_op_name
+    
+    # Skip if operation is in the skip list
+    if any(skip_op in op_name for skip_op in skip_ops):
+        return False
+    
+    # Use remote execution for compute-intensive operations
+    compute_intensive_ops = {
+        "aten.add",
+        "aten.sub", 
+        "aten.mul",
+        "aten.div",
+        "aten.mm",
+        "aten.bmm",
+        "aten.addmm",
+        "aten.conv2d",
+        "aten.linear",
+        "aten.relu",
+        "aten.sigmoid",
+        "aten.tanh",
+        "aten.softmax",
+        "aten.log_softmax",
+        "aten.cross_entropy",
+        "aten.mse_loss",
+        "aten.sum",
+        "aten.mean",
+        "aten.var",
+        "aten.std",
+        "aten.max",
+        "aten.min",
+        "aten.argmax",
+        "aten.argmin",
+        "aten.sort",
+        "aten.topk",
+        "aten.matmul",
+        "aten.einsum",
+    }
+    
+    # Check if this is a compute-intensive operation
+    if any(compute_op in op_name for compute_op in compute_intensive_ops):
+        return True
+    
+    # For other operations, check if tensors are large enough to benefit from GPU
+    total_elements = 0
+    for arg in args:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "modal":
+            total_elements += arg.numel()
+    
+    for value in kwargs.values():
+        if isinstance(value, torch.Tensor) and value.device.type == "modal":
+            total_elements += value.numel()
+    
+    # Use remote execution if we have significant compute (>1000 elements)
+    return total_elements > 1000
+
+
 def _modal_kernel_fallback(op, *args, **kwargs):
     def get_tensor_device(*args):
         for arg in args:
@@ -35,6 +162,17 @@ def _modal_kernel_fallback(op, *args, **kwargs):
     if device is None:
         return _kernel_fallback(op, *args, **kwargs)
 
+    # Check if we should use remote execution
+    if _REMOTE_EXECUTION_ENABLED and _should_use_remote_execution(op, args, kwargs):
+        executor = _get_remote_executor()
+        if executor is not None:
+            log.info(f"Using remote execution for {op}")
+            return executor.execute_remote_operation(
+                op.overloadpacket._qualified_op_name, args, kwargs
+            )
+        else:
+            log.warning(f"Remote execution requested but not available for {op}, using local execution")
+
     # Mimicks the DeviceGuard system we have in aten
     with torch.modal.device(device):  # type: ignore[misc]
         return _kernel_fallback(op, *args, **kwargs)
@@ -42,6 +180,18 @@ def _modal_kernel_fallback(op, *args, **kwargs):
 
 def _kernel_fallback(op, *args, **kwargs):
     log.info("Calling kernel %s", op)
+
+    # Check if we should use remote execution for this operation
+    if _REMOTE_EXECUTION_ENABLED and _should_use_remote_execution(op, args, kwargs):
+        executor = _get_remote_executor()
+        if executor is not None:
+            log.info(f"Using remote execution for {op}")
+            print(f"🚀 Creating Modal job for {op.overloadpacket._qualified_op_name}")
+            return executor.execute_remote_operation(
+                op.overloadpacket._qualified_op_name, args, kwargs
+            )
+        else:
+            log.warning(f"Remote execution requested but not available for {op}, using local execution")
 
     op_name = None
     post_process = None

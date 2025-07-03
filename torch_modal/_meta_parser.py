@@ -46,6 +46,9 @@ class ModalTensorData(torch.Tensor):
         cpu_tensor = super().cpu()
         # Ensure it's a regular torch.Tensor, not ModalTensorData
         return torch.tensor(cpu_tensor.detach().numpy())
+    
+    # Note: Removed __torch_dispatch__ to avoid infinite recursion
+    # Remote execution will be handled through the PyTorch dispatch system instead
 
 
 VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}
