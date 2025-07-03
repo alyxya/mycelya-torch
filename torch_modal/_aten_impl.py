@@ -153,6 +153,7 @@ def _should_use_remote_execution(op, args, kwargs):
 
 
 def _modal_kernel_fallback(op, *args, **kwargs):
+    print(f"🔍 _modal_kernel_fallback called for {op}")
     def get_tensor_device(*args):
         for arg in args:
             if isinstance(arg, torch.Tensor) and arg.device.type == "modal":
@@ -160,13 +161,16 @@ def _modal_kernel_fallback(op, *args, **kwargs):
 
     device = get_tensor_device(*args)
     if device is None:
+        print(f"❌ No modal device found, using standard kernel fallback")
         return _kernel_fallback(op, *args, **kwargs)
 
+    print(f"✅ Found modal device: {device}")
     # Check if we should use remote execution
     if _REMOTE_EXECUTION_ENABLED and _should_use_remote_execution(op, args, kwargs):
         executor = _get_remote_executor()
         if executor is not None:
-            log.info(f"Using remote execution for {op}")
+            log.info(f"🚀 Using remote execution for {op}")
+            print(f"🚀 Creating Modal job for {op.overloadpacket._qualified_op_name}")
             return executor.execute_remote_operation(
                 op.overloadpacket._qualified_op_name, args, kwargs
             )
@@ -174,6 +178,7 @@ def _modal_kernel_fallback(op, *args, **kwargs):
             log.warning(f"Remote execution requested but not available for {op}, using local execution")
 
     # Mimicks the DeviceGuard system we have in aten
+    print(f"🔄 Using local execution for {op}")
     with torch.modal.device(device):  # type: ignore[misc]
         return _kernel_fallback(op, *args, **kwargs)
 

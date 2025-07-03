@@ -1,7 +1,11 @@
 import pprint
+import threading
 
 import torch
 from torch.utils._pytree import tree_map, tree_map_only
+
+# Thread-local storage to prevent infinite recursion
+_thread_local = threading.local()
 
 
 class ModalTensorMeta:
@@ -47,8 +51,98 @@ class ModalTensorData(torch.Tensor):
         # Ensure it's a regular torch.Tensor, not ModalTensorData
         return torch.tensor(cpu_tensor.detach().numpy())
     
-    # Note: Removed __torch_dispatch__ to avoid infinite recursion
-    # Remote execution will be handled through the PyTorch dispatch system instead
+    @classmethod  
+    def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
+        """
+        Dispatch modal tensor operations to remote execution when appropriate.
+        This properly integrates with PyTorch's dispatch system.
+        """
+        if kwargs is None:
+            kwargs = {}
+        
+        # Check if we're already in a dispatch to prevent infinite recursion
+        if getattr(_thread_local, 'in_dispatch', False):
+            # We're already processing a dispatch, use torch.Tensor's behavior
+            return torch.Tensor.__torch_dispatch__(func, types, args, kwargs)
+        
+        # Mark that we're in dispatch
+        _thread_local.in_dispatch = True
+        
+        try:
+            # Get operation name
+            op_name = func._qualified_name if hasattr(func, '_qualified_name') else str(func)
+            
+            # Skip dispatch for certain operations to avoid infinite recursion
+            skip_dispatch_ops = {
+                'aten.alias.default',
+                'aten._make_subclass.default', 
+                'aten.detach.default',
+                'aten.requires_grad_.default',
+                'aten.is_contiguous.memory_format',
+                'aten.size.default',
+                'aten.stride.default',
+                'aten.storage_offset.default',
+                'aten.numel.default',
+                'aten.dim.default',
+                'aten.copy_.default'
+            }
+            
+            if op_name in skip_dispatch_ops:
+                # Use torch.Tensor's default behavior for these operations
+                return torch.Tensor.__torch_dispatch__(func, types, args, kwargs)
+            
+            # Optionally log for debugging - comment out for production
+            # print(f"🔍 ModalTensorData.__torch_dispatch__ called for {op_name}")
+            
+            # Import here to avoid circular imports
+            from ._aten_impl import _REMOTE_EXECUTION_ENABLED, _should_use_remote_execution, _get_remote_executor
+            
+            # Create a mock op object for _should_use_remote_execution
+            class MockOp:
+                class MockOverloadPacket:
+                    def __init__(self, name):
+                        self._qualified_op_name = name
+                
+                def __init__(self, name):
+                    self.overloadpacket = MockOp.MockOverloadPacket(op_name)
+            
+            mock_op = MockOp(op_name)
+            
+            # Check if we should use remote execution
+            if _REMOTE_EXECUTION_ENABLED and _should_use_remote_execution(mock_op, args, kwargs):
+                executor = _get_remote_executor()
+                if executor is not None:
+                    # print(f"🚀 Using remote execution for {op_name}")
+                    try:
+                        return executor.execute_remote_operation(op_name, args, kwargs)
+                    except Exception as e:
+                        # print(f"⚠️  Remote execution failed for {op_name}: {e}, falling back to CPU")
+                        pass  # Silently fall back to CPU
+            
+            # Fallback to CPU execution
+            # print(f"🔄 Using CPU fallback for {op_name}")
+            
+            # Convert modal tensors to CPU for fallback execution
+            def to_cpu_if_modal(arg):
+                if isinstance(arg, ModalTensorData):
+                    # Use torch.Tensor's behavior directly to get underlying data
+                    return torch.Tensor.__torch_dispatch__(torch.ops.aten.detach.default, (torch.Tensor,), (arg,), {})
+                return arg
+            
+            cpu_args = tuple(to_cpu_if_modal(arg) for arg in args)
+            cpu_kwargs = {k: to_cpu_if_modal(v) for k, v in kwargs.items()}
+            
+            # Execute on CPU using torch.Tensor's dispatch
+            cpu_result = torch.Tensor.__torch_dispatch__(func, types, cpu_args, cpu_kwargs)
+            
+            # Convert result back to modal tensor if it's a tensor
+            if isinstance(cpu_result, torch.Tensor):
+                return cpu_result.to("modal")
+            return cpu_result
+            
+        finally:
+            # Always clear the flag when done
+            _thread_local.in_dispatch = False
 
 
 VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}
