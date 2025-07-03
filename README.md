@@ -60,19 +60,10 @@ y = x.to("modal", dtype=torch.float64, copy=True)  # Convert dtype and copy
 
 ## Testing
 
-### Quick Test (Recommended)
-```bash
-python test_torch_modal.py
-```
+To run the tests, use `pytest`:
 
-### Debug Mode
 ```bash
-python test_torch_modal.py --debug
-```
-
-### Verbose Testing
-```bash
-python test_torch_modal.py --verbose
+pytest
 ```
 
 The test suite includes comprehensive coverage of:
