@@ -172,9 +172,14 @@ def _remote_kernel_fallback(op, *args, **kwargs):
         return _kernel_fallback(op, *args, **kwargs)
 
     print(f"✅ Found remote device: {device}")
+    
     # Check if we should use remote execution
-    if _REMOTE_EXECUTION_ENABLED and _should_use_remote_execution(op, args, kwargs):
+    should_use_remote = _should_use_remote_execution(op, args, kwargs)
+    print(f"🤔 Should use remote execution: {should_use_remote} (enabled: {_REMOTE_EXECUTION_ENABLED})")
+    
+    if _REMOTE_EXECUTION_ENABLED and should_use_remote:
         executor = _get_remote_executor()
+        print(f"🔧 Remote executor: {executor}")
         if executor is not None:
             log.info(f"🚀 Using remote execution for {op}")
             print(f"🚀 Creating remote job for {op.overloadpacket._qualified_op_name}")
