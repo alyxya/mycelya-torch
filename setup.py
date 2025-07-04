@@ -76,6 +76,7 @@ if __name__ == "__main__":
         extras_require={
             "modal": ["modal>=0.60.0"],
             "runpod": ["runpod>=1.0.0"],  # Future provider support
+            "all": ["modal>=0.60.0", "runpod>=1.0.0"],
         },
         ext_modules=ext_modules,
         python_requires=">=3.8",
