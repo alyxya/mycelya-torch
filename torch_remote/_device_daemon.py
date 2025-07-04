@@ -10,7 +10,7 @@ import weakref
 import torch
 
 from ._meta_parser import (
-    ModalTensorData,
+    RemoteTensorData,
     receive_after_sending,
     safe_str,
     validate_send_queue_args,
@@ -295,7 +295,7 @@ class Driver:
 
     @register(registry)
     def hostCopyData(self, dest, src, count):
-        # For modal device, this is just a memcpy operation
+        # For remote device, this is just a memcpy operation
         import ctypes
         ctypes.memmove(dest, src, count)
 
@@ -415,11 +415,11 @@ class _Executor:
     @register(registry)
     def send_data(self, *args):
         assert len(args) == 1
-        return ModalTensorData.from_meta(self.allocator, args[0])
+        return RemoteTensorData.from_meta(self.allocator, args[0])
 
     @register(registry)
     def recv_data(self, host_tensor, dev_mem):
-        dev_tensor = ModalTensorData.from_meta(self.allocator, dev_mem)
+        dev_tensor = RemoteTensorData.from_meta(self.allocator, dev_mem)
         dev_tensor.copy_(host_tensor)
 
     @register(registry)
@@ -499,7 +499,7 @@ class _Executor:
             ptr = 0
         
         # Create a meta object to represent this tensor
-        from ._meta_parser import ModalTensorMeta
+        from ._meta_parser import RemoteTensorMeta
         
         # Create a minimal tensor meta
         class TensorMeta:

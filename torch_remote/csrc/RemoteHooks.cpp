@@ -1,4 +1,4 @@
-#include "Modal.h"
+#include "Remote.h"
 
 #include <ATen/CPUGeneratorImpl.h>
 #include <ATen/core/GeneratorForPrivateuseone.h>
@@ -8,7 +8,7 @@
 #include <c10/core/Device.h>
 #include <c10/core/impl/DeviceGuardImplInterface.h>
 
-namespace modal {
+namespace remote {
 namespace {
 
 // Python factory function where real implementations can be found
@@ -22,7 +22,7 @@ struct HostAllocator final : at::Allocator {
     void* data = nullptr;
     if (nbytes > 0) {
       data = reinterpret_cast<void*>(
-          get_method("hostMalloc")(nbytes).cast<modal_ptr_t>());
+          get_method("hostMalloc")(nbytes).cast<remote_ptr_t>());
       TORCH_CHECK(data, "Failed to allocator ", nbytes, " bytes on host.");
     }
     return {data, data, &ReportAndDelete<kHostFreeMethod>, at::Device(at::kCPU)};
@@ -35,8 +35,8 @@ struct HostAllocator final : at::Allocator {
   void copy_data(void* dest, const void* src, std::size_t count) const final {
     py::gil_scoped_acquire acquire;
     get_method("hostCopyData")(
-        reinterpret_cast<modal_ptr_t>(dest),
-        reinterpret_cast<modal_ptr_t>(src),
+        reinterpret_cast<remote_ptr_t>(dest),
+        reinterpret_cast<remote_ptr_t>(src),
         count);
   }
 };
@@ -53,25 +53,25 @@ static c10::DeviceIndex current_device_idx() {
   return get_method("getDevice")().cast<c10::DeviceIndex>();
 }
 
-class ModalGeneratorImpl : public at::CPUGeneratorImpl {
+class RemoteGeneratorImpl : public at::CPUGeneratorImpl {
  public:
-  ModalGeneratorImpl(c10::DeviceIndex device_index) {
+  RemoteGeneratorImpl(c10::DeviceIndex device_index) {
     device_ = c10::Device(c10::DeviceType::PrivateUse1, device_index);
     key_set_ = c10::DispatchKeySet(c10::DispatchKey::PrivateUse1);
   }
-  ~ModalGeneratorImpl() override = default;
+  ~RemoteGeneratorImpl() override = default;
 };
 
-static at::Generator make_modal_generator(c10::DeviceIndex device_index) {
-  return at::make_generator<ModalGeneratorImpl>(device_index);
+static at::Generator make_remote_generator(c10::DeviceIndex device_index) {
+  return at::make_generator<RemoteGeneratorImpl>(device_index);
 }
 
 // Default, global generators, one per device.
 static std::vector<at::Generator> default_generators;
 
-struct ModalHooksInterface : public at::PrivateUse1HooksInterface {
-  ModalHooksInterface() {};
-  ~ModalHooksInterface() override = default;
+struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
+  RemoteHooksInterface() {};
+  ~RemoteHooksInterface() override = default;
 
   bool hasPrimaryContext(c10::DeviceIndex device_index) const override {
     py::gil_scoped_acquire acquire;
@@ -84,7 +84,7 @@ struct ModalHooksInterface : public at::PrivateUse1HooksInterface {
 
   bool isPinnedPtr(const void* data) const override {
     py::gil_scoped_acquire acquire;
-    return get_method("isPinnedPtr")(reinterpret_cast<modal_ptr_t>(data))
+    return get_method("isPinnedPtr")(reinterpret_cast<remote_ptr_t>(data))
         .cast<bool>();
   }
 
@@ -94,7 +94,7 @@ struct ModalHooksInterface : public at::PrivateUse1HooksInterface {
       auto device_nums = device_count();
       default_generators.resize(device_nums);
       for (auto i = 0; i < device_nums; i++) {
-        default_generators[i] = make_modal_generator(i);
+        default_generators[i] = make_remote_generator(i);
         default_generators[i].seed();
       }
       return true;
@@ -110,22 +110,22 @@ struct ModalHooksInterface : public at::PrivateUse1HooksInterface {
   }
 
   at::Generator getNewGenerator(c10::DeviceIndex device_index) const override {
-    return make_modal_generator(device_index);
+    return make_remote_generator(device_index);
   }
 };
 
 static bool register_hook_flag [[maybe_unused]] = []() {
-  at::RegisterPrivateUse1HooksInterface(new ModalHooksInterface());
+  at::RegisterPrivateUse1HooksInterface(new RemoteHooksInterface());
 
   return true;
 }();
 
 // Device guard registration
-struct ModalGuardImpl final : public c10::impl::DeviceGuardImplInterface {
+struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   static constexpr c10::DeviceType static_type = c10::DeviceType::PrivateUse1;
 
-  ModalGuardImpl() = default;
-  explicit ModalGuardImpl(c10::DeviceType t) {
+  RemoteGuardImpl() = default;
+  explicit RemoteGuardImpl(c10::DeviceType t) {
     TORCH_INTERNAL_ASSERT(t == static_type);
   }
 
@@ -251,7 +251,7 @@ struct ModalGuardImpl final : public c10::impl::DeviceGuardImplInterface {
 };
 
 // Register our device guard
-C10_REGISTER_GUARD_IMPL(PrivateUse1, ModalGuardImpl);
+C10_REGISTER_GUARD_IMPL(PrivateUse1, RemoteGuardImpl);
 
 } // namespace
 
@@ -265,4 +265,4 @@ py::function get_method(const char* name) {
   return factory(name);
 }
 
-} // namespace modal
+} // namespace remote

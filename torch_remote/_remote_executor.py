@@ -1,6 +1,9 @@
 """
-Modal remote execution system for aten operations on A100 GPUs.
-Uses ephemeral Modal runs (no deployment needed).
+Remote execution system for aten operations on remote GPUs.
+Supports multiple remote execution providers.
+
+This module provides a generic interface for remote execution of PyTorch operations.
+Currently supports Modal as the first provider implementation.
 """
 import logging
 from typing import Any, Dict, List, Tuple
@@ -8,46 +11,50 @@ import torch
 
 log = logging.getLogger(__name__)
 
-# Global modal app - will be auto-imported
-_modal_app = None
+# Global remote app - will be auto-imported (Modal provider implementation)
+_remote_app = None
 _execute_aten_operation = None
 
-# Try to import the Modal app
+# Try to import the remote app (Modal provider implementation)
 try:
-    from torch_modal_remote.app import app as _modal_app, execute_aten_operation as _execute_aten_operation
-    log.info("Loaded torch_modal remote execution app")
+    from torch_remote_execution.app import app as _remote_app, execute_aten_operation as _execute_aten_operation
+    log.info("Loaded torch_remote_execution app")
 except Exception as e:
-    log.warning(f"Modal remote execution not available: {e}")
-    _modal_app = None
+    log.warning(f"Remote execution not available: {e}")
+    _remote_app = None
     _execute_aten_operation = None
 
-def _get_modal_app():
-    """Get the Modal app for remote execution."""
-    global _modal_app, _execute_aten_operation
+def _get_remote_app():
+    """Get the remote app for remote execution (Modal provider implementation)."""
+    global _remote_app, _execute_aten_operation
     
-    if _modal_app is None:
-        raise RuntimeError("Modal remote execution not available. Install with: pip install modal")
+    if _remote_app is None:
+        raise RuntimeError("Remote execution not available. Install provider dependencies (e.g., pip install modal)")
     
     # Store the function in the app for easy access
-    _modal_app._execute_aten_operation = _execute_aten_operation
-    return _modal_app
+    _remote_app._execute_aten_operation = _execute_aten_operation
+    return _remote_app
 
 
-class ModalRemoteExecutor:
-    """Handles remote execution of aten operations on Modal A100 GPUs using ephemeral runs."""
+class RemoteExecutor:
+    """Handles remote execution of aten operations on remote GPUs.
+    
+    This is the Modal provider implementation. Future providers can be added
+    by extending this class or creating provider-specific executors.
+    """
     
     def __init__(self):
-        self._modal_app = None
+        self._remote_app = None
         self._app_context = None
         
     def _get_app_context(self):
-        """Get or create the Modal app context for ephemeral runs."""
-        if self._modal_app is None:
-            self._modal_app = _get_modal_app()
+        """Get or create the remote app context for ephemeral runs (Modal provider implementation)."""
+        if self._remote_app is None:
+            self._remote_app = _get_remote_app()
         
         # For ephemeral execution, we don't need to manage the context manually
-        # Modal will handle the app lifecycle automatically
-        return self._modal_app
+        # The provider will handle the app lifecycle automatically
+        return self._remote_app
         
     def execute_remote_operation(
         self, 
@@ -56,7 +63,7 @@ class ModalRemoteExecutor:
         kwargs: Dict[str, Any]
     ) -> Any:
         """
-        Execute an aten operation remotely on A100 GPU.
+        Execute an aten operation remotely on GPU.
         
         Args:
             op_name: The aten operation name
@@ -64,11 +71,11 @@ class ModalRemoteExecutor:
             kwargs: Operation keyword arguments (may contain tensors)
             
         Returns:
-            Result of the operation (tensors moved back to modal device)
+            Result of the operation (tensors moved back to remote device)
         """
         try:
-            # Get the Modal app
-            modal_app = self._get_app_context()
+            # Get the remote app (Modal provider implementation)
+            remote_app = self._get_app_context()
             
             # Separate tensors from other arguments
             tensors_data = []
@@ -79,12 +86,12 @@ class ModalRemoteExecutor:
             # Process args
             for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == "modal":
-                    # Convert ModalTensorData to regular CPU tensor
+                    # Convert remote tensor data to regular CPU tensor
                     if hasattr(arg, '__class__') and 'ModalTensorData' in str(arg.__class__):
-                        # This is a ModalTensorData, convert to CPU tensor
-                        cpu_tensor = self._modal_tensor_to_cpu(arg)
+                        # This is a ModalTensorData (provider-specific), convert to CPU tensor
+                        cpu_tensor = self._remote_tensor_to_cpu(arg)
                     else:
-                        # Regular modal tensor, copy to CPU
+                        # Regular remote tensor, copy to CPU
                         cpu_tensor = arg.cpu()
                     
                     tensor_data = self._serialize_tensor(cpu_tensor)
@@ -99,12 +106,12 @@ class ModalRemoteExecutor:
             # Process kwargs
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == "modal":
-                    # Convert ModalTensorData to regular CPU tensor
+                    # Convert remote tensor data to regular CPU tensor
                     if hasattr(value, '__class__') and 'ModalTensorData' in str(value.__class__):
-                        # This is a ModalTensorData, convert to CPU tensor
-                        cpu_tensor = self._modal_tensor_to_cpu(value)
+                        # This is a ModalTensorData (provider-specific), convert to CPU tensor
+                        cpu_tensor = self._remote_tensor_to_cpu(value)
                     else:
-                        # Regular modal tensor, copy to CPU
+                        # Regular remote tensor, copy to CPU
                         cpu_tensor = value.cpu()
                     
                     tensor_data = self._serialize_tensor(cpu_tensor)
@@ -118,24 +125,24 @@ class ModalRemoteExecutor:
             
             log.info(f"Executing {op_name} remotely with {len(tensors_data)} tensors")
             
-            # Execute remotely with app context
-            with modal_app.run():
+            # Execute remotely with app context (Modal provider implementation)
+            with remote_app.run():
                 # Get the function from the app's registered functions
-                execute_function = modal_app.registered_functions.get('execute_aten_operation')
+                execute_function = remote_app.registered_functions.get('execute_aten_operation')
                 if execute_function is None:
                     # Fallback to the stored function
-                    execute_function = modal_app._execute_aten_operation
+                    execute_function = remote_app._execute_aten_operation
                 
                 serialized_results, result_metadata = execute_function.remote(
                     op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs
                 )
             
-            # Deserialize results and create modal tensors
+            # Deserialize results and create remote tensors
             results = []
             for data, metadata in zip(serialized_results, result_metadata):
                 cpu_tensor = self._deserialize_tensor(data)
-                modal_tensor = self._cpu_tensor_to_modal(cpu_tensor)
-                results.append(modal_tensor)
+                remote_tensor = self._cpu_tensor_to_remote(cpu_tensor)
+                results.append(remote_tensor)
             
             # Return single tensor or tuple based on original operation
             if len(results) == 1:
@@ -148,7 +155,7 @@ class ModalRemoteExecutor:
             raise RuntimeError(f"Remote execution failed: {str(e)}")
     
     def cleanup(self):
-        """Clean up the Modal app context."""
+        """Clean up the remote app context."""
         if self._app_context is not None:
             try:
                 self._app_context.__exit__(None, None, None)
@@ -156,20 +163,20 @@ class ModalRemoteExecutor:
                 pass
             self._app_context = None
     
-    def _modal_tensor_to_cpu(self, modal_tensor: torch.Tensor) -> torch.Tensor:
-        """Convert modal tensor to CPU tensor."""
+    def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
+        """Convert remote tensor to CPU tensor (Modal provider implementation)."""
         try:
-            # Try the modal-specific copy first
+            # Try the provider-specific copy first
             from ._aten_impl import copy_from_device
-            return copy_from_device(modal_tensor)
+            return copy_from_device(remote_tensor)
         except Exception:
             # Fallback to direct CPU conversion
-            return modal_tensor.cpu()
+            return remote_tensor.cpu()
     
-    def _cpu_tensor_to_modal(self, cpu_tensor: torch.Tensor) -> torch.Tensor:
-        """Convert CPU tensor to modal tensor."""
-        # Create a new modal tensor from the CPU tensor
-        # This is simpler than using copy_from_host_to_device which has issues with ModalTensorData
+    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor) -> torch.Tensor:
+        """Convert CPU tensor to remote tensor (Modal provider implementation)."""
+        # Create a new remote tensor from the CPU tensor
+        # This is simpler than using copy_from_host_to_device which has issues with provider-specific tensor data
         return cpu_tensor.to("modal")
     
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
@@ -195,5 +202,5 @@ class ModalRemoteExecutor:
         }
 
 
-# Global executor instance
-remote_executor = ModalRemoteExecutor()
+# Global executor instance (Modal provider implementation)
+remote_executor = RemoteExecutor()

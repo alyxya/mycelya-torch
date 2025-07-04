@@ -4,11 +4,11 @@ import torch
 from torch.utils._pytree import tree_map, tree_map_only
 
 
-class ModalTensorMeta:
+class RemoteTensorMeta:
     def __init__(self, tensor, checked=True):
-        if checked and not tensor.device.type == "modal":
+        if checked and not tensor.device.type == "remote":
             raise RuntimeError(
-                "Creating ModalTensorMeta is only for Tensors on modal device"
+                "Creating RemoteTensorMeta is only for Tensors on remote device"
             )
         self.data_ptr = tensor.untyped_storage().data_ptr()
         self.size = tensor.size()
@@ -19,38 +19,38 @@ class ModalTensorMeta:
 
     def __repr__(self):
         return (
-            f"ModalTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
+            f"RemoteTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
             f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=})"
         )
 
 
-class ModalTensorData(torch.Tensor):
+class RemoteTensorData(torch.Tensor):
     @staticmethod
     def from_meta(allocator, tensor_meta):
-        return ModalTensorData(allocator.tensor_from_meta(tensor_meta))
+        return RemoteTensorData(allocator.tensor_from_meta(tensor_meta))
     
     @property
     def device(self):
-        """Override device property to report 'modal' instead of the underlying CPU device."""
+        """Override device property to report 'remote' instead of the underlying CPU device."""
         import torch
-        # Get current modal device index, default to 0 if not available
+        # Get current remote device index, default to 0 if not available
         try:
-            device_index = torch.modal.current_device()
+            device_index = torch.remote.current_device()
         except (AttributeError, RuntimeError):
             device_index = 0
-        return torch.device("modal", device_index)
+        return torch.device("remote", device_index)
     
     def cpu(self, memory_format=torch.preserve_format):
-        """Override cpu() method to return actual CPU tensor, not ModalTensorData."""
+        """Override cpu() method to return actual CPU tensor, not RemoteTensorData."""
         # Get the underlying tensor data and create a true CPU tensor
         cpu_tensor = super().cpu()
-        # Ensure it's a regular torch.Tensor, not ModalTensorData
+        # Ensure it's a regular torch.Tensor, not RemoteTensorData
         return torch.tensor(cpu_tensor.detach().numpy())
     
     @classmethod  
     def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
         """
-        Dispatch modal tensor operations to remote execution when appropriate.
+        Dispatch remote tensor operations to remote execution when appropriate.
         This properly integrates with PyTorch's dispatch system.
         """
         if kwargs is None:
@@ -79,7 +79,7 @@ class ModalTensorData(torch.Tensor):
             return torch.Tensor.__torch_dispatch__(func, types, args, kwargs)
         
         # Optionally log for debugging - comment out for production
-        # print(f"🔍 ModalTensorData.__torch_dispatch__ called for {op_name}")
+        # print(f"🔍 RemoteTensorData.__torch_dispatch__ called for {op_name}")
         
         # Import here to avoid circular imports
         from ._aten_impl import _REMOTE_EXECUTION_ENABLED, _should_use_remote_execution, _get_remote_executor
@@ -109,34 +109,34 @@ class ModalTensorData(torch.Tensor):
         # Fallback to CPU execution
         # print(f"🔄 Using CPU fallback for {op_name}")
         
-        # Convert modal tensors to CPU for fallback execution
-        def to_cpu_if_modal(arg):
-            if isinstance(arg, ModalTensorData):
+        # Convert remote tensors to CPU for fallback execution
+        def to_cpu_if_remote(arg):
+            if isinstance(arg, RemoteTensorData):
                 # Use torch.Tensor's behavior directly to get underlying data
                 return torch.Tensor.__torch_dispatch__(torch.ops.aten.detach.default, (torch.Tensor,), (arg,), {})
             return arg
         
-        cpu_args = tuple(to_cpu_if_modal(arg) for arg in args)
-        cpu_kwargs = {k: to_cpu_if_modal(v) for k, v in kwargs.items()}
+        cpu_args = tuple(to_cpu_if_remote(arg) for arg in args)
+        cpu_kwargs = {k: to_cpu_if_remote(v) for k, v in kwargs.items()}
         
         # Execute on CPU using torch.Tensor's dispatch
         cpu_result = torch.Tensor.__torch_dispatch__(func, types, cpu_args, cpu_kwargs)
         
-        # Convert result back to modal tensor if it's a tensor
+        # Convert result back to remote tensor if it's a tensor
         if isinstance(cpu_result, torch.Tensor):
-            return cpu_result.to("modal")
+            return cpu_result.to("remote")
         return cpu_result
 
 
 VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}
 
-VALID_QUEUE_TYPES_OUT = {ModalTensorMeta, int, float, str, torch.dtype}
+VALID_QUEUE_TYPES_OUT = {RemoteTensorMeta, int, float, str, torch.dtype}
 
 
 def safe_str(args):
     def convert(obj):
         if isinstance(obj, torch.Tensor):
-            return str(ModalTensorMeta(obj, checked=False))
+            return str(RemoteTensorMeta(obj, checked=False))
         else:
             return obj
 
@@ -149,7 +149,7 @@ def validate_send_queue_args(cmd, args):
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             if (
                 cmd == "recv_data"
-                and type(obj) in [torch.Tensor, ModalTensorData]
+                and type(obj) in [torch.Tensor, RemoteTensorData]
                 and obj.device.type == "cpu"
             ):
                 # Only HtoD copy command can send cpu Tensors over
@@ -165,11 +165,11 @@ def prepare_for_sending(args, kwargs):
     def convert(obj):
         if type(obj) not in VALID_QUEUE_TYPES_IN:
             raise RuntimeError(
-                f"Cannot send object of type {type(obj)} over modal device pipe."
+                f"Cannot send object of type {type(obj)} over remote device pipe."
             )
 
         if isinstance(obj, torch.Tensor):
-            return ModalTensorMeta(obj)
+            return RemoteTensorMeta(obj)
         else:
             return obj
 
@@ -180,10 +180,10 @@ def receive_after_sending(allocator, args, kwargs):
     def convert(obj):
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             raise RuntimeError(
-                f"Received invalid object of type {type(obj)} over modal device pipe."
+                f"Received invalid object of type {type(obj)} over remote device pipe."
             )
 
-        if isinstance(obj, ModalTensorMeta):
+        if isinstance(obj, RemoteTensorMeta):
             return allocator.tensor_from_meta(obj)
         else:
             return obj

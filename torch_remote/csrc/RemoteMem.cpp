@@ -1,12 +1,12 @@
-#include "Modal.h"
+#include "Remote.h"
 
 #include <c10/core/Allocator.h>
 
-namespace modal {
+namespace remote {
 namespace {
 
-struct ModalAllocator final : at::Allocator {
-  ModalAllocator() = default;
+struct RemoteAllocator final : at::Allocator {
+  RemoteAllocator() = default;
 
   at::DataPtr allocate(size_t nbytes) override {
     py::gil_scoped_acquire acquire;
@@ -16,9 +16,9 @@ struct ModalAllocator final : at::Allocator {
     void* data = nullptr;
     if (nbytes > 0) {
       data = reinterpret_cast<void*>(
-          get_method("malloc")(nbytes).cast<modal_ptr_t>());
+          get_method("malloc")(nbytes).cast<remote_ptr_t>());
       TORCH_CHECK(
-          data, "Failed to allocator ", nbytes, " bytes on modal device.");
+          data, "Failed to allocator ", nbytes, " bytes on remote device.");
     }
     return {data, data, &ReportAndDelete<kFreeMethod>, curr_device};
   }
@@ -30,17 +30,17 @@ struct ModalAllocator final : at::Allocator {
   void copy_data(void* dest, const void* src, std::size_t count) const final {
     py::gil_scoped_acquire acquire;
     get_method("copy_data")(
-        reinterpret_cast<modal_ptr_t>(dest),
-        reinterpret_cast<modal_ptr_t>(src),
+        reinterpret_cast<remote_ptr_t>(dest),
+        reinterpret_cast<remote_ptr_t>(src),
         count);
   }
 };
 
-static ModalAllocator global_modal_alloc;
-REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_modal_alloc);
+static RemoteAllocator global_remote_alloc;
+REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_remote_alloc);
 
 
 } // namespace
 
 
-} // namespace modal
+} // namespace remote

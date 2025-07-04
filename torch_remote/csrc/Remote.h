@@ -2,9 +2,9 @@
 
 #include <torch/csrc/utils/pybind.h>
 
-namespace modal {
+namespace remote {
 
-using modal_ptr_t = uint64_t;
+using remote_ptr_t = uint64_t;
 
 void set_impl_factory(PyObject* factory);
 py::function get_method(const char* name);
@@ -25,7 +25,7 @@ static void ReportAndDelete(void* ptr) {
   PyErr_Fetch(&type, &value, &traceback);
 
   TORCH_CHECK(
-      get_method(name)(reinterpret_cast<modal_ptr_t>(ptr)).cast<bool>(),
+      get_method(name)(reinterpret_cast<remote_ptr_t>(ptr)).cast<bool>(),
       "Failed to free memory pointer at ",
       ptr);
 
@@ -38,4 +38,4 @@ static void ReportAndDelete(void* ptr) {
   PyErr_Restore(type, value, traceback);
 }
 
-} // namespace modal
+} // namespace remote

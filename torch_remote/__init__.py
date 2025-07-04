@@ -10,11 +10,11 @@ from ._device_daemon import driver
 
 
 # Load the C++ Module
-import torch_modal._C  # isort:skip # type: ignore[import] # noqa: F401
+import torch_remote._C  # isort:skip # type: ignore[import] # noqa: F401
 
 
 def _create_module():
-    module = types.ModuleType("_ModalMod")
+    module = types.ModuleType("_RemoteMod")
 
     class device:
         r"""Context-manager that changes the selected device.
@@ -44,46 +44,46 @@ def _create_module():
     def current_device():
         return torch.accelerator.current_device_index()
 
-    def get_rng_state(device="modal"):
+    def get_rng_state(device="remote"):
         if isinstance(device, str):
             device = torch.device(device)
         elif isinstance(device, int):
-            device = torch.device("modal", device)
+            device = torch.device("remote", device)
         idx = device.index
         if idx is None:
             idx = current_device()
-        default_generator = torch_modal._C._get_default_generator(idx)
+        default_generator = torch_remote._C._get_default_generator(idx)
         return default_generator.get_state()
 
-    def set_rng_state(new_state, device="modal"):
+    def set_rng_state(new_state, device="remote"):
         if isinstance(device, str):
             device = torch.device(device)
         elif isinstance(device, int):
-            device = torch.device("modal", device)
+            device = torch.device("remote", device)
         idx = device.index
         if idx is None:
             idx = current_device()
-        default_generator = torch_modal._C._get_default_generator(idx)
+        default_generator = torch_remote._C._get_default_generator(idx)
         default_generator.set_state(new_state)
 
     def initial_seed() -> int:
         _lazy_init()
         idx = current_device()
-        default_generator = torch_modal._C._get_default_generator(idx)
+        default_generator = torch_remote._C._get_default_generator(idx)
         return default_generator.initial_seed()
 
     def manual_seed(seed: int) -> None:
         seed = int(seed)
 
         idx = current_device()
-        default_generator = torch_modal._C._get_default_generator(idx)
+        default_generator = torch_remote._C._get_default_generator(idx)
         default_generator.manual_seed(seed)
 
     def manual_seed_all(seed: int) -> None:
         seed = int(seed)
 
         for idx in range(device_count()):
-            default_generator = torch_modal._C._get_default_generator(idx)
+            default_generator = torch_remote._C._get_default_generator(idx)
             default_generator.manual_seed(seed)
 
     def is_initialized():
@@ -95,7 +95,7 @@ def _create_module():
     def _lazy_init():
         if is_initialized():
             return
-        torch_modal._C._init()
+        torch_remote._C._init()
         module._initialized = True
 
     module.is_available = is_available  # type: ignore[assignment]
@@ -123,6 +123,10 @@ def _create_module():
 
 
 # Set all the appropriate state on PyTorch
-torch.utils.rename_privateuse1_backend("modal")
-torch._register_device_module("modal", _create_module())
+torch.utils.rename_privateuse1_backend("remote")
+torch._register_device_module("remote", _create_module())
 torch.utils.generate_methods_for_privateuse1_backend(for_storage=True)
+
+# Add .remote() method to tensors
+from .utils import _add_tensor_methods
+_add_tensor_methods()

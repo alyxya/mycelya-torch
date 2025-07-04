@@ -9,11 +9,11 @@ from setuptools import find_packages, setup
 from torch.utils.cpp_extension import CppExtension, BuildExtension
 
 
-PACKAGE_NAME = "torch_modal"
+PACKAGE_NAME = "torch_remote"
 version = "0.1.0"
 
 ROOT_DIR = Path(__file__).absolute().parent
-CSRC_DIR = ROOT_DIR / "torch_modal/csrc"
+CSRC_DIR = ROOT_DIR / "torch_remote/csrc"
 
 
 class clean(distutils.command.clean.clean):
@@ -21,8 +21,8 @@ class clean(distutils.command.clean.clean):
         # Run default behavior first
         distutils.command.clean.clean.run(self)
 
-        # Remove torch_modal extension
-        for path in (ROOT_DIR / "torch_modal").glob("**/*.so"):
+        # Remove torch_remote extension
+        for path in (ROOT_DIR / "torch_remote").glob("**/*.so"):
             path.unlink()
         # Remove build directory
         build_dirs = [
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # Note that we always compile with debug info
     ext_modules = [
         CppExtension(
-            name="torch_modal._C",
+            name="torch_remote._C",
             sources=sorted(str(s) for s in sources),
             include_dirs=[CSRC_DIR],
             extra_compile_args=CXX_FLAGS,
@@ -61,9 +61,9 @@ if __name__ == "__main__":
     setup(
         name=PACKAGE_NAME,
         version=version,
-        author="PyTorch Modal Extension",
-        description="Modal device extension for PyTorch with A100 GPU support",
-        packages=find_packages(exclude=("test",)) + find_packages(where="torch_modal_remote"),
+        author="PyTorch Remote Extension",
+        description="Remote GPU cloud execution extension for PyTorch supporting multiple providers",
+        packages=find_packages(exclude=("test",)) + find_packages(where="torch_remote_execution"),
         package_data={
             PACKAGE_NAME: [
                 "*.dll", "*.dylib", "*.so"  # Binary extensions
@@ -71,10 +71,11 @@ if __name__ == "__main__":
         },
         install_requires=[
             "torch>=2.0.0",
-            # "./torch_modal_remote",  # Now bundled directly
+            # "./torch_remote_execution",  # Now bundled directly
         ],
         extras_require={
-            "remote": ["modal>=0.60.0"],
+            "modal": ["modal>=0.60.0"],
+            "runpod": ["runpod>=1.0.0"],  # Future provider support
         },
         ext_modules=ext_modules,
         python_requires=">=3.8",

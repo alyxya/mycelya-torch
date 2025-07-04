@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Auto-generated Modal remote execution app for torch_modal extension.
+Auto-generated Modal remote execution app for torch_remote extension.
 
-This file is automatically created and managed by the torch_modal extension.
+This file is automatically created and managed by the torch_remote extension.
 Users never need to interact with this file directly - it's used automatically
 when remote execution is needed.
 
-Part of: torch_modal PyTorch extension
+Part of: torch_remote PyTorch extension
 """
 import modal
 from typing import Any, Dict, List, Tuple
@@ -26,7 +26,7 @@ image = (
 )
 
 # Create app
-app = modal.App("torch-modal-extension")
+app = modal.App("torch-remote-extension")
 
 @app.function(
     image=image,
