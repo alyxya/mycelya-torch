@@ -9,22 +9,6 @@ log = logging.getLogger(__name__)
 from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending, to_device_no_copy
 
-# Configuration for remote execution
-_REMOTE_EXECUTION_ENABLED = True
-
-def enable_remote_execution():
-    """Enable remote GPU execution for remote tensors."""
-    global _REMOTE_EXECUTION_ENABLED
-    _REMOTE_EXECUTION_ENABLED = True
-
-def disable_remote_execution():
-    """Disable remote GPU execution, use local execution instead.""" 
-    global _REMOTE_EXECUTION_ENABLED
-    _REMOTE_EXECUTION_ENABLED = False
-
-def is_remote_execution_enabled():
-    """Check if remote execution is enabled."""
-    return _REMOTE_EXECUTION_ENABLED
 
 # Lazy import to avoid import errors if remote execution is not available
 _remote_executor = None
@@ -175,9 +159,9 @@ def _remote_kernel_fallback(op, *args, **kwargs):
     
     # Check if we should use remote execution
     should_use_remote = _should_use_remote_execution(op, args, kwargs)
-    print(f"🤔 Should use remote execution: {should_use_remote} (enabled: {_REMOTE_EXECUTION_ENABLED})")
+    print(f"🤔 Should use remote execution: {should_use_remote}")
     
-    if _REMOTE_EXECUTION_ENABLED and should_use_remote:
+    if should_use_remote:
         executor = _get_remote_executor()
         print(f"🔧 Remote executor: {executor}")
         if executor is not None:
@@ -199,7 +183,7 @@ def _kernel_fallback(op, *args, **kwargs):
     log.info("Calling kernel %s", op)
 
     # Check if we should use remote execution for this operation
-    if _REMOTE_EXECUTION_ENABLED and _should_use_remote_execution(op, args, kwargs):
+    if _should_use_remote_execution(op, args, kwargs):
         executor = _get_remote_executor()
         if executor is not None:
             log.info(f"Using remote execution for {op}")

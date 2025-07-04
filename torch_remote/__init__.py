@@ -5,7 +5,6 @@ import torch
 # Create our python implementation dict so that the C++ module
 # can access it during its initialization and also register aten impls.
 from ._aten_impl import impl_factory as impl_factory  # noqa: F401
-from ._aten_impl import enable_remote_execution, disable_remote_execution, is_remote_execution_enabled
 from ._device_daemon import driver
 
 
@@ -114,10 +113,6 @@ def _create_module():
     module.manual_seed = manual_seed  # type: ignore[assignment]
     module.manual_seed_all = manual_seed_all  # type: ignore[assignment]
     
-    # Remote execution configuration
-    module.enable_remote_execution = enable_remote_execution  # type: ignore[assignment]
-    module.disable_remote_execution = disable_remote_execution  # type: ignore[assignment]
-    module.is_remote_execution_enabled = is_remote_execution_enabled  # type: ignore[assignment]
 
     return module
 

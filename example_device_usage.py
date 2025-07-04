@@ -12,9 +12,7 @@ def main():
     print("🚀 PyTorch Remote Device Backend Example")
     print("="*50)
     
-    # Enable remote execution (should be on by default, but let's be explicit)
-    torch_remote.enable_remote_execution()
-    print(f"Remote execution enabled: {torch_remote.is_remote_execution_enabled()}")
+    # Remote execution is now always enabled for remote tensors
     
     # Create different GPU devices
     print("\n1. Creating different GPU devices:")

@@ -82,7 +82,7 @@ class RemoteTensorData(torch.Tensor):
         # print(f"🔍 RemoteTensorData.__torch_dispatch__ called for {op_name}")
         
         # Import here to avoid circular imports
-        from ._aten_impl import _REMOTE_EXECUTION_ENABLED, _should_use_remote_execution, _get_remote_executor
+        from ._aten_impl import _should_use_remote_execution, _get_remote_executor
         
         # Create a mock op object for _should_use_remote_execution
         class MockOp:
@@ -96,7 +96,7 @@ class RemoteTensorData(torch.Tensor):
         mock_op = MockOp(op_name)
         
         # Check if we should use remote execution
-        if _REMOTE_EXECUTION_ENABLED and _should_use_remote_execution(mock_op, args, kwargs):
+        if _should_use_remote_execution(mock_op, args, kwargs):
             executor = _get_remote_executor()
             if executor is not None:
                 # print(f"🚀 Using remote execution for {op_name}")
