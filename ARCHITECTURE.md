@@ -60,9 +60,6 @@ torch_remote_execution/        # Private package for remote execution
   - `current_device()` - Get current device index
   - `is_available()` - Check device availability
 - Sets up random number generation, streams, and device context management
-- Exposes remote execution configuration APIs:
-  - `set_provider()` - Set the active cloud provider backend
-  - `get_provider()` - Get the current cloud provider
 - Imports and initializes the C++ extension
 
 **`torch_remote/_aten_impl.py`** - Operation Dispatch & Remote Execution Logic
@@ -269,17 +266,7 @@ Remote tensors are stored in CPU memory but report as "remote" device to PyTorch
 
 ## Configuration
 
-Users can control remote execution behavior:
-
-```python
-import torch_remote
-
-# Set provider backend
-torch_remote.set_provider('modal')  # or other supported providers
-
-# Get current provider
-print(torch_remote.get_provider())
-```
+The system uses Modal as the default cloud provider backend.
 
 ## Testing
 
