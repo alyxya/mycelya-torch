@@ -61,9 +61,6 @@ torch_remote_execution/        # Private package for remote execution
   - `is_available()` - Check device availability
 - Sets up random number generation, streams, and device context management
 - Exposes remote execution configuration APIs:
-  - `enable_remote_execution()` - Enable cloud provider execution
-  - `disable_remote_execution()` - Use local execution only
-  - `is_remote_execution_enabled()` - Check current setting
   - `set_provider()` - Set the active cloud provider backend
   - `get_provider()` - Get the current cloud provider
 - Imports and initializes the C++ extension
@@ -276,15 +273,6 @@ Users can control remote execution behavior:
 
 ```python
 import torch_remote
-
-# Enable remote execution (default)
-torch_remote.enable_remote_execution()
-
-# Disable remote execution (use local execution)
-torch_remote.disable_remote_execution()
-
-# Check current setting
-print(torch_remote.is_remote_execution_enabled())
 
 # Set provider backend
 torch_remote.set_provider('modal')  # or other supported providers

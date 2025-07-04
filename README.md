@@ -11,7 +11,6 @@ A PyTorch extension that implements a custom "remote" device type using PyTorch'
 - **Seamless Integration**: Works with existing PyTorch code with minimal changes
 - **High Performance**: Leverages high-end cloud GPUs for compute-intensive operations
 - **Private Package Architecture**: Remote execution code is isolated in a separate package to prevent import conflicts
-- **Configurable Execution**: Enable/disable remote execution as needed
 - **Device-Specific GPU Routing**: Automatically selects appropriate GPU type based on workload requirements
 - **Comprehensive C++ Integration**: Full PrivateUse1HooksInterface implementation
 - **Memory Management**: Custom storage and device daemon for tensor lifecycle
@@ -39,23 +38,6 @@ y = torch.randn(3, 3, device="remote")
 # Operations automatically use cloud GPU
 result = x + y  # Executed on cloud GPU
 print(result)
-```
-
-### Remote Execution Configuration
-
-You can control whether operations are executed remotely on cloud GPUs:
-
-```python
-import torch_remote
-
-# Enable remote execution (default)
-torch_remote.enable_remote_execution()
-
-# Disable remote execution (use local execution)
-torch_remote.disable_remote_execution()
-
-# Check current setting
-print(torch_remote.is_remote_execution_enabled())
 ```
 
 ### Device Management
@@ -138,4 +120,3 @@ Key design principles:
 - **Package Isolation**: Private package structure prevents import conflicts during remote execution
 - **Memory Safety**: Proper tensor lifecycle management across local and remote execution
 - **PyTorch Integration**: Native integration with PyTorch's device infrastructure
-- **Configurable Execution**: Runtime control over local vs remote execution
