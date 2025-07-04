@@ -17,7 +17,7 @@ _execute_aten_operation = None
 
 # Try to import the remote app (Modal provider implementation)
 try:
-    from torch_remote_execution.app import app as _remote_app, execute_aten_operation as _execute_aten_operation
+    from torch_remote_execution.modal_app import app as _remote_app, execute_aten_operation as _execute_aten_operation
     log.info("Loaded torch_remote_execution app")
 except Exception as e:
     log.warning(f"Remote execution not available: {e}")
