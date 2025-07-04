@@ -6,11 +6,13 @@ A PyTorch extension that implements a custom "remote" device type using PyTorch'
 
 - **Remote Device**: A new PyTorch device type that automatically routes computations to cloud GPU providers
 - **Multi-Provider Support**: Designed to support multiple cloud providers (Modal, RunPod, etc.) with Modal as the first implementation
+- **Multi-GPU Support**: Supports a wide range of GPU types including T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, and B200
 - **Automatic Dispatch**: Operations on remote tensors are automatically executed on cloud GPUs
 - **Seamless Integration**: Works with existing PyTorch code with minimal changes
 - **High Performance**: Leverages high-end cloud GPUs for compute-intensive operations
 - **Private Package Architecture**: Remote execution code is isolated in a separate package to prevent import conflicts
 - **Configurable Execution**: Enable/disable remote execution as needed
+- **Device-Specific GPU Routing**: Automatically selects appropriate GPU type based on workload requirements
 - **Comprehensive C++ Integration**: Full PrivateUse1HooksInterface implementation
 - **Memory Management**: Custom storage and device daemon for tensor lifecycle
 
@@ -82,7 +84,7 @@ pytest test_torch_remote.py -v
 Test remote execution manually:
 
 ```bash
-python demo_manual_remote.py
+python example_device_usage.py
 ```
 
 The test suite includes comprehensive coverage of:
@@ -119,7 +121,7 @@ The test suite includes comprehensive coverage of:
 ### Private Package Structure
 
 - **`torch_remote_execution/`** - Private package containing cloud provider apps for remote execution
-  - `app.py` - Modal application with A100 GPU execution functions
+  - `modal_app.py` - Modal application with multi-GPU support (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
   - `setup.py` - Separate installation configuration
 
 ### Build System

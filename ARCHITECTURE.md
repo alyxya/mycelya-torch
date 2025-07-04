@@ -40,12 +40,9 @@ torch_remote/                   # Main PyTorch extension package
     ├── RemoteMem.cpp          # Memory management
     └── Remote.h               # C++ header definitions
 
-torch_remote_backends/         # Private package for remote execution
+torch_remote_execution/        # Private package for remote execution
 ├── __init__.py               # Private package marker
-├── modal/                    # Modal provider package
-│   ├── __init__.py          # Modal package marker
-│   ├── app.py               # Modal A100 execution app
-│   └── setup.py             # Modal package installation
+├── modal_app.py              # Modal multi-GPU execution app (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
 └── setup.py                  # Private package installation
 ```
 
@@ -184,38 +181,42 @@ torch_remote_backends/         # Private package for remote execution
 - Template functions for cleanup and error reporting
 - Method lookup utilities for calling Python functions from C++
 
-### torch_remote_backends Package (Private Package)
+### torch_remote_execution Package (Private Package)
 
-**`torch_remote_backends/__init__.py`** - Private Package Marker
+**`torch_remote_execution/__init__.py`** - Private Package Marker
 - Simple package initialization with version information
 - Documentation warning against direct use
 - Marks package as internal to torch_remote
-- Provider registry and backend management utilities
 
-**`torch_remote_backends/modal/app.py`** - Modal A100 Execution App
-- **Modal application definition**: Creates Modal app "torch-remote-modal" with A100 GPU configuration
+**`torch_remote_execution/modal_app.py`** - Modal Multi-GPU Execution App
+- **Modal application definition**: Creates Modal app "torch-remote-extension" with multi-GPU support
 - **Docker image setup**: 
   - Debian slim base with Python 3.11
   - Installs PyTorch with CUDA 12.1 support
-  - Includes torchvision, torchaudio, and nvidia-ml-py3
-- **execute_aten_operation function**: The core function decorated with `@app.function` that runs on A100 GPUs:
+- **Multi-GPU support**: Separate execution functions for each GPU type:
+  - T4: `execute_aten_operation_t4()`
+  - L4: `execute_aten_operation_l4()`
+  - A10G: `execute_aten_operation_a10g()`
+  - A100-40GB: `execute_aten_operation_a100_40gb()`
+  - A100-80GB: `execute_aten_operation_a100_80gb()`
+  - L40S: `execute_aten_operation_l40s()`
+  - H100: `execute_aten_operation_h100()`
+  - H200: `execute_aten_operation_h200()`
+  - B200: `execute_aten_operation_b200()`
+- **Device-specific GPU routing**: Each function configured with appropriate GPU type, timeout, and retry settings
+- **Common execution implementation**: Shared `_execute_aten_operation_impl()` function that:
   - Receives serialized tensors, metadata, args, and kwargs
   - Deserializes tensors and moves them to CUDA device
   - Processes tensor placeholders in arguments
-  - Executes the requested ATen operation on A100 GPU
+  - Executes the requested ATen operation on specified GPU
   - Serializes results and returns them
 - **GPU utilization**: Automatically detects and uses CUDA when available
 - **Error handling**: Comprehensive error reporting and traceback printing
+- **Function registry**: `GPU_FUNCTIONS` dictionary maps GPU types to their execution functions
 
-**`torch_remote_backends/modal/setup.py`** - Modal Backend Package Installation
-- Separate setuptools configuration for the Modal backend package
+**`torch_remote_execution/setup.py`** - Private Package Installation
+- Main setuptools configuration for the remote execution package
 - Dependencies: modal>=0.60.0, torch>=2.0.0
-- Marked as development status to discourage standalone installation
-- Classifiers indicate it's for internal use
-
-**`torch_remote_backends/setup.py`** - Private Package Installation
-- Main setuptools configuration for the remote execution backends package
-- Manages dependencies for all supported providers
 - Marked as development status to discourage standalone installation
 - Classifiers indicate it's for internal use
 
@@ -238,7 +239,8 @@ Here's how a typical operation flows through the system:
    - Current provider backend is selected (e.g., Modal)
    - Tensors are serialized to bytes
    - Provider app is invoked (e.g., Modal app with `app.run()` context)
-   - `torch_remote_backends.modal.app.execute_aten_operation` runs on cloud GPU
+   - Appropriate GPU-specific function is called based on device configuration
+   - `torch_remote_execution.modal_app.execute_aten_operation_*` runs on cloud GPU
    - Results are serialized and returned
    - Results are deserialized back to remote tensors
 
@@ -251,7 +253,7 @@ Here's how a typical operation flows through the system:
 ## Key Design Decisions
 
 ### Private Package Isolation
-The most important architectural decision is separating the provider backend code into `torch_remote_backends`. This prevents import conflicts when cloud provider jobs execute, since providers would otherwise try to import the entire `torch_remote` extension and create circular dependencies. Each provider backend is isolated in its own subpackage.
+The most important architectural decision is separating the provider backend code into `torch_remote_execution`. This prevents import conflicts when cloud provider jobs execute, since providers would otherwise try to import the entire `torch_remote` extension and create circular dependencies. The execution package is isolated with minimal dependencies.
 
 ### Threading vs Multiprocessing
 The system uses threading instead of multiprocessing for device simulation to avoid complex cleanup issues that were causing hanging processes.
@@ -261,6 +263,9 @@ Remote execution is lazy-loaded and gracefully degrades when cloud providers are
 
 ### Operation Filtering
 Smart filtering ensures that only operations that benefit from cloud GPU acceleration are sent remotely, while keeping memory operations, views, and small tensor operations local for efficiency.
+
+### Multi-GPU Support
+The system supports multiple GPU types through device-specific Modal functions, allowing automatic routing to the most appropriate GPU based on workload requirements and availability.
 
 ### CPU Storage with Device Spoofing
 Remote tensors are stored in CPU memory but report as "remote" device to PyTorch, enabling seamless integration with PyTorch's device system while maintaining compatibility.
