@@ -6,7 +6,7 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 import torch
 
 log = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ class RemoteExecutor:
     def __init__(self):
         self._remote_app = None
         self._app_context = None
+        self._device_apps: Dict[str, Any] = {}  # Cache for device-specific apps
         
     def _get_app_context(self):
         """Get or create the remote app context for ephemeral runs (Modal provider implementation)."""
@@ -55,12 +56,35 @@ class RemoteExecutor:
         # For ephemeral execution, we don't need to manage the context manually
         # The provider will handle the app lifecycle automatically
         return self._remote_app
+    
+    def _get_device_app(self, device_id: str):
+        """Get the Modal app for a specific device."""
+        if device_id in self._device_apps:
+            return self._device_apps[device_id]
+        
+        # Import here to avoid circular imports
+        from .device import get_device_registry
+        from .modal_device_apps import get_modal_app_for_device
+        
+        # Get the device from registry
+        registry = get_device_registry()
+        device = registry.get_device_by_id(device_id)
+        
+        if device is None:
+            raise RuntimeError(f"Device {device_id} not found in registry")
+        
+        # Get device-specific app
+        app = get_modal_app_for_device(device)
+        self._device_apps[device_id] = app
+        
+        return app
         
     def execute_remote_operation(
         self, 
         op_name: str, 
         args: Tuple[Any, ...], 
-        kwargs: Dict[str, Any]
+        kwargs: Dict[str, Any],
+        device_id: Optional[str] = None
     ) -> Any:
         """
         Execute an aten operation remotely on GPU.
@@ -69,13 +93,21 @@ class RemoteExecutor:
             op_name: The aten operation name
             args: Operation arguments (may contain tensors)
             kwargs: Operation keyword arguments (may contain tensors)
+            device_id: Optional device ID for device-specific execution
             
         Returns:
             Result of the operation (tensors moved back to remote device)
         """
         try:
-            # Get the remote app (Modal provider implementation)
-            remote_app = self._get_app_context()
+            # Detect device from tensors if not specified
+            if device_id is None:
+                device_id = self._detect_device_from_tensors(args, kwargs)
+            
+            # Get the appropriate app (device-specific or default)
+            if device_id is not None:
+                remote_app = self._get_device_app(device_id)
+            else:
+                remote_app = self._get_app_context()
             
             # Separate tensors from other arguments
             tensors_data = []
@@ -133,8 +165,9 @@ class RemoteExecutor:
                     # Fallback to the stored function
                     execute_function = remote_app._execute_aten_operation
                 
+                # Include device_id in the call for device-specific execution
                 serialized_results, result_metadata = execute_function.remote(
-                    op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs
+                    op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs, device_id or "default"
                 )
             
             # Deserialize results and create remote tensors
@@ -202,6 +235,40 @@ class RemoteExecutor:
             'size': tensor.numel(),
             'element_size': tensor.element_size()
         }
+    
+    def _detect_device_from_tensors(self, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Optional[str]:
+        """Detect device ID from tensors in arguments."""
+        detected_device_id = None
+        
+        # Check args for remote tensors
+        for arg in args:
+            if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
+                # Try to get device ID from tensor metadata
+                if hasattr(arg, '_device_id'):
+                    if detected_device_id is None:
+                        detected_device_id = arg._device_id
+                    elif detected_device_id != arg._device_id:
+                        # Different devices found - this is not allowed
+                        raise RuntimeError(
+                            f"Cannot perform operations between tensors on different remote devices: "
+                            f"'{detected_device_id}' and '{arg._device_id}'"
+                        )
+        
+        # Check kwargs for remote tensors
+        for value in kwargs.values():
+            if isinstance(value, torch.Tensor) and value.device.type == "remote":
+                # Try to get device ID from tensor metadata
+                if hasattr(value, '_device_id'):
+                    if detected_device_id is None:
+                        detected_device_id = value._device_id
+                    elif detected_device_id != value._device_id:
+                        # Different devices found - this is not allowed
+                        raise RuntimeError(
+                            f"Cannot perform operations between tensors on different remote devices: "
+                            f"'{detected_device_id}' and '{value._device_id}'"
+                        )
+        
+        return detected_device_id
 
 
 # Global executor instance (Modal provider implementation)
