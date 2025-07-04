@@ -85,7 +85,7 @@ class RemoteExecutor:
             
             # Process args
             for arg in args:
-                if isinstance(arg, torch.Tensor) and arg.device.type == "modal":
+                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     # Convert remote tensor data to regular CPU tensor
                     if hasattr(arg, '__class__') and 'ModalTensorData' in str(arg.__class__):
                         # This is a ModalTensorData (provider-specific), convert to CPU tensor
@@ -105,7 +105,7 @@ class RemoteExecutor:
             
             # Process kwargs
             for key, value in kwargs.items():
-                if isinstance(value, torch.Tensor) and value.device.type == "modal":
+                if isinstance(value, torch.Tensor) and value.device.type == "remote":
                     # Convert remote tensor data to regular CPU tensor
                     if hasattr(value, '__class__') and 'ModalTensorData' in str(value.__class__):
                         # This is a ModalTensorData (provider-specific), convert to CPU tensor
@@ -177,13 +177,15 @@ class RemoteExecutor:
         """Convert CPU tensor to remote tensor (Modal provider implementation)."""
         # Create a new remote tensor from the CPU tensor
         # This is simpler than using copy_from_host_to_device which has issues with provider-specific tensor data
-        return cpu_tensor.to("modal")
+        return cpu_tensor.to("remote")
     
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
         """Serialize tensor to bytes."""
         import io
         buffer = io.BytesIO()
-        torch.save(tensor, buffer)
+        # Convert to pure CPU tensor to avoid torch_remote dependencies in serialization
+        cpu_tensor = tensor.cpu().detach()
+        torch.save(cpu_tensor, buffer)
         return buffer.getvalue()
     
     def _deserialize_tensor(self, data: bytes) -> torch.Tensor:
