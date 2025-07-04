@@ -6,3 +6,6 @@ and should not be imported directly. It's used internally by torch_remote.
 """
 
 __version__ = "0.1.0"
+
+# Modal execution components are imported lazily when needed
+# to avoid Modal initialization errors during package import

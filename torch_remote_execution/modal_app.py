@@ -1,137 +1,344 @@
 #!/usr/bin/env python3
 """
-Auto-generated Modal remote execution app for torch_remote extension.
+Modal remote execution app for torch_remote extension.
 
-This file is automatically created and managed by the torch_remote extension.
-Users never need to interact with this file directly - it's used automatically
-when remote execution is needed.
+This module handles all Modal-specific functionality including:
+- Device-specific app creation for different GPU types
+- Remote execution of PyTorch operations
+- Dynamic GPU selection and configuration
 
 Part of: torch_remote PyTorch extension
 """
 import modal
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
+import os
 
-# Create image with PyTorch and CUDA support
+# Create simplified image with just PyTorch and CUDA support
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .pip_install([
-        "torch>=2.0.0", 
-        "torchvision", 
-        "torchaudio",
-        "nvidia-ml-py3"
-    ])
-    .run_commands([
-        "pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
-    ])
+    .pip_install(
+        ["torch>=2.0.0"],
+        extra_options=["--index-url", "https://download.pytorch.org/whl/cu121"]
+    )
 )
 
-# Create app
+# Create app with dynamic GPU support
 app = modal.App("torch-remote-extension")
 
-@app.function(
-    image=image,
-    gpu="A100-40GB",
-    timeout=300,
-    retries=2
-)
-def execute_aten_operation(
-    op_name: str, 
-    tensors_data: List[bytes], 
-    tensor_metadata: List[Dict[str, Any]], 
-    args: List[Any], 
-    kwargs: Dict[str, Any]
-) -> Tuple[List[bytes], List[Dict[str, Any]]]:
-    """Execute an aten operation remotely on A100 GPU."""
-    import torch
-    import io
+# Get GPU type from environment variable or default to T4 (cheaper option)
+DEFAULT_GPU = os.environ.get("TORCH_REMOTE_GPU", "T4")
+
+# Global function to be created lazily
+execute_aten_operation = None
+
+def _get_execute_function():
+    """Lazily create the execution function to avoid Modal import errors."""
+    global execute_aten_operation
+    if execute_aten_operation is None:
+        execute_aten_operation = _create_execution_function(DEFAULT_GPU)
+    return execute_aten_operation
+
+def _create_execution_function(gpu_type: str):
+    """Create a Modal function for the specified GPU type."""
     
-    print(f"🚀 Modal A100 executing: {op_name}")
-    print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
+    @app.function(
+        image=image,
+        gpu=gpu_type,
+        timeout=300 if gpu_type in ["T4", "L4"] else 450,  # Longer timeout for better GPUs
+        retries=2
+    )
+    def execute_aten_operation_impl(
+        op_name: str, 
+        tensors_data: List[bytes], 
+        tensor_metadata: List[Dict[str, Any]], 
+        args: List[Any], 
+        kwargs: Dict[str, Any],
+        device_id: str = "default"
+    ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+        """Execute an aten operation remotely on specified GPU."""
+        import torch
+        import io
+        
+        print(f"🚀 Modal {gpu_type} (device {device_id}) executing: {op_name}")
+        print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
+        
+        try:
+            # Check GPU availability
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(f"Using device: {device}")
+            
+            if torch.cuda.is_available():
+                print(f"GPU: {torch.cuda.get_device_name()}")
+                print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+            
+            # Deserialize tensors and move to GPU
+            tensors = []
+            for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
+                # Deserialize tensor
+                buffer = io.BytesIO(data)
+                tensor = torch.load(buffer, map_location='cpu')
+                
+                # Move to GPU
+                tensor = tensor.to(device)
+                tensors.append(tensor)
+            
+            # Replace tensor placeholders in args with actual tensors
+            processed_args = []
+            for arg in args:
+                if isinstance(arg, str) and arg.startswith("__TENSOR_"):
+                    idx = int(arg.split("_")[-1])
+                    processed_args.append(tensors[idx])
+                else:
+                    processed_args.append(arg)
+            
+            # Process kwargs similarly
+            processed_kwargs = {}
+            for key, value in kwargs.items():
+                if isinstance(value, str) and value.startswith("__TENSOR_"):
+                    idx = int(value.split("_")[-1])
+                    processed_kwargs[key] = tensors[idx]
+                else:
+                    processed_kwargs[key] = value
+            
+            # Get the operation
+            # Convert aten::add.Tensor to aten.add.Tensor
+            op_name_fixed = op_name.replace("::", ".")
+            op_parts = op_name_fixed.split('.')
+            op = torch.ops
+            for part in op_parts:
+                op = getattr(op, part)
+            
+            print(f"Executing operation with {len(processed_args)} args")
+            
+            # Execute the operation
+            result = op(*processed_args, **processed_kwargs)
+            
+            print(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
+            
+            # Handle different result types
+            if isinstance(result, torch.Tensor):
+                results = [result]
+            elif isinstance(result, (list, tuple)):
+                results = [r for r in result if isinstance(r, torch.Tensor)]
+            else:
+                # For scalar results, convert to tensor
+                results = [torch.tensor(result, device=device)]
+            
+            # Serialize results
+            serialized_results = []
+            result_metadata = []
+            
+            for i, tensor in enumerate(results):
+                # Move back to CPU for serialization
+                cpu_tensor = tensor.cpu()
+                
+                # Serialize tensor
+                buffer = io.BytesIO()
+                torch.save(cpu_tensor, buffer)
+                serialized_results.append(buffer.getvalue())
+                
+                # Store metadata
+                metadata = {
+                    'shape': list(cpu_tensor.shape),
+                    'dtype': str(cpu_tensor.dtype),
+                    'size': cpu_tensor.numel(),
+                    'element_size': cpu_tensor.element_size()
+                }
+                result_metadata.append(metadata)
+            
+            return serialized_results, result_metadata
+            
+        except Exception as e:
+            print(f"❌ Error executing {op_name}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
     
-    try:
-        # Check GPU availability
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"Using device: {device}")
+    return execute_aten_operation_impl
+
+# Cache for GPU-specific apps
+_gpu_apps: Dict[str, modal.App] = {}
+
+def create_modal_app_for_gpu(gpu_type, app_name: Optional[str] = None) -> modal.App:
+    """
+    Create a Modal app configured for a specific GPU type.
+    
+    Args:
+        gpu_type: The GPU type to configure for (GPUType enum or string)
+        app_name: Optional custom app name
         
-        # Deserialize tensors and move to GPU
-        tensors = []
-        for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
-            # Deserialize tensor
-            buffer = io.BytesIO(data)
-            tensor = torch.load(buffer, map_location='cpu')
+    Returns:
+        Modal app configured for the specified GPU
+    """
+    # Handle both string and enum inputs
+    if hasattr(gpu_type, 'value'):
+        gpu_spec = gpu_type.value
+    else:
+        gpu_spec = str(gpu_type)
+    
+    # Check cache first
+    if gpu_spec in _gpu_apps:
+        return _gpu_apps[gpu_spec]
+    
+    # Create app with GPU-specific name
+    if app_name is None:
+        app_name = f"torch-remote-{gpu_spec.lower().replace('-', '_')}"
+    
+    app = modal.App(app_name)
+    
+    # Configure timeout based on GPU type (more powerful GPUs get more time)
+    timeout = 300  # Default 5 minutes
+    if gpu_spec in ["H100", "H200", "B200"]:
+        timeout = 600  # 10 minutes for high-end GPUs
+    elif gpu_spec in ["A100-40GB", "A100-80GB"]:
+        timeout = 450  # 7.5 minutes for A100s
+    
+    @app.function(
+        image=image,
+        gpu=gpu_spec,
+        timeout=timeout,
+        retries=2
+    )
+    def execute_aten_operation(
+        op_name: str, 
+        tensors_data: List[bytes], 
+        tensor_metadata: List[Dict[str, Any]], 
+        args: List[Any], 
+        kwargs: Dict[str, Any],
+        device_id: str = "default"
+    ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+        """Execute an aten operation remotely on the specified GPU."""
+        import torch
+        import io
+        
+        print(f"🚀 Modal {gpu_spec} (device {device_id}) executing: {op_name}")
+        print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
+        
+        try:
+            # Check GPU availability
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(f"Using device: {device}")
             
-            # Move to GPU
-            tensor = tensor.to(device)
-            tensors.append(tensor)
-        
-        # Replace tensor placeholders in args with actual tensors
-        processed_args = []
-        for arg in args:
-            if isinstance(arg, str) and arg.startswith("__TENSOR_"):
-                idx = int(arg.split("_")[-1])
-                processed_args.append(tensors[idx])
+            if torch.cuda.is_available():
+                print(f"GPU: {torch.cuda.get_device_name()}")
+                print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+            
+            # Deserialize tensors and move to GPU
+            tensors = []
+            for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
+                # Deserialize tensor
+                buffer = io.BytesIO(data)
+                tensor = torch.load(buffer, map_location='cpu')
+                
+                # Move to GPU
+                tensor = tensor.to(device)
+                tensors.append(tensor)
+            
+            # Replace tensor placeholders in args with actual tensors
+            processed_args = []
+            for arg in args:
+                if isinstance(arg, str) and arg.startswith("__TENSOR_"):
+                    idx = int(arg.split("_")[-1])
+                    processed_args.append(tensors[idx])
+                else:
+                    processed_args.append(arg)
+            
+            # Process kwargs similarly
+            processed_kwargs = {}
+            for key, value in kwargs.items():
+                if isinstance(value, str) and value.startswith("__TENSOR_"):
+                    idx = int(value.split("_")[-1])
+                    processed_kwargs[key] = tensors[idx]
+                else:
+                    processed_kwargs[key] = value
+            
+            # Get the operation
+            # Convert aten::add.Tensor to aten.add.Tensor
+            op_name_fixed = op_name.replace("::", ".")
+            op_parts = op_name_fixed.split('.')
+            op = torch.ops
+            for part in op_parts:
+                op = getattr(op, part)
+            
+            print(f"Executing operation with {len(processed_args)} args")
+            
+            # Execute the operation
+            result = op(*processed_args, **processed_kwargs)
+            
+            print(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
+            
+            # Handle different result types
+            if isinstance(result, torch.Tensor):
+                results = [result]
+            elif isinstance(result, (list, tuple)):
+                results = [r for r in result if isinstance(r, torch.Tensor)]
             else:
-                processed_args.append(arg)
-        
-        # Process kwargs similarly
-        processed_kwargs = {}
-        for key, value in kwargs.items():
-            if isinstance(value, str) and value.startswith("__TENSOR_"):
-                idx = int(value.split("_")[-1])
-                processed_kwargs[key] = tensors[idx]
-            else:
-                processed_kwargs[key] = value
-        
-        # Get the operation
-        # Convert aten::add.Tensor to aten.add.Tensor
-        op_name_fixed = op_name.replace("::", ".")
-        op_parts = op_name_fixed.split('.')
-        op = torch.ops
-        for part in op_parts:
-            op = getattr(op, part)
-        
-        print(f"Executing operation with {len(processed_args)} args")
-        
-        # Execute the operation
-        result = op(*processed_args, **processed_kwargs)
-        
-        print(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
-        
-        # Handle different result types
-        if isinstance(result, torch.Tensor):
-            results = [result]
-        elif isinstance(result, (list, tuple)):
-            results = [r for r in result if isinstance(r, torch.Tensor)]
-        else:
-            # For scalar results, convert to tensor
-            results = [torch.tensor(result, device=device)]
-        
-        # Serialize results
-        serialized_results = []
-        result_metadata = []
-        
-        for i, tensor in enumerate(results):
-            # Move back to CPU for serialization
-            cpu_tensor = tensor.cpu()
+                # For scalar results, convert to tensor
+                results = [torch.tensor(result, device=device)]
             
-            # Serialize tensor
-            buffer = io.BytesIO()
-            torch.save(cpu_tensor, buffer)
-            serialized_results.append(buffer.getvalue())
+            # Serialize results
+            serialized_results = []
+            result_metadata = []
             
-            # Store metadata
-            metadata = {
-                'shape': list(cpu_tensor.shape),
-                'dtype': str(cpu_tensor.dtype),
-                'size': cpu_tensor.numel(),
-                'element_size': cpu_tensor.element_size()
-            }
-            result_metadata.append(metadata)
+            for i, tensor in enumerate(results):
+                # Move back to CPU for serialization
+                cpu_tensor = tensor.cpu()
+                
+                # Serialize tensor
+                buffer = io.BytesIO()
+                torch.save(cpu_tensor, buffer)
+                serialized_results.append(buffer.getvalue())
+                
+                # Store metadata
+                metadata = {
+                    'shape': list(cpu_tensor.shape),
+                    'dtype': str(cpu_tensor.dtype),
+                    'size': cpu_tensor.numel(),
+                    'element_size': cpu_tensor.element_size()
+                }
+                result_metadata.append(metadata)
+            
+            return serialized_results, result_metadata
+            
+        except Exception as e:
+            print(f"❌ Error executing {op_name}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
+    
+    # Store the execution function in the app for easy access
+    app._execute_aten_operation = execute_aten_operation
+    
+    # Cache the app
+    _gpu_apps[gpu_spec] = app
+    
+    return app
+
+
+def get_modal_app_for_device(device) -> modal.App:
+    """
+    Get the Modal app for a specific device.
+    
+    Args:
+        device: The BackendDevice to get the app for
         
-        return serialized_results, result_metadata
-        
-    except Exception as e:
-        print(f"❌ Error executing {op_name}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise
+    Returns:
+        Modal app configured for the device's GPU type
+    """
+    if hasattr(device, 'provider') and device.provider.value != "modal":
+        raise ValueError(f"Device provider {device.provider.value} is not Modal")
+    
+    return create_modal_app_for_gpu(device.gpu_type)
+
+
+def clear_app_cache():
+    """Clear the app cache."""
+    global _gpu_apps
+    _gpu_apps.clear()
+
+
+# For backwards compatibility, create a lazy getter
+def __getattr__(name):
+    if name == "execute_aten_operation":
+        return _get_execute_function()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

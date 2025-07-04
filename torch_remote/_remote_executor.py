@@ -64,7 +64,7 @@ class RemoteExecutor:
         
         # Import here to avoid circular imports
         from .device import get_device_registry
-        from .modal_device_apps import get_modal_app_for_device
+        from torch_remote_execution.modal_app import get_modal_app_for_device
         
         # Get the device from registry
         registry = get_device_registry()
