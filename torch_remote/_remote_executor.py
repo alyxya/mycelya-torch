@@ -17,12 +17,13 @@ _execute_aten_operation = None
 
 # Try to import the remote app (Modal provider implementation)
 try:
-    from torch_remote_execution.modal_app import app as _remote_app, execute_aten_operation as _execute_aten_operation
+    from torch_remote_execution.modal_app import app as _remote_app, execute_aten_operation as _execute_aten_operation, get_gpu_function
     log.info("Loaded torch_remote_execution app")
 except Exception as e:
     log.warning(f"Remote execution not available: {e}")
     _remote_app = None
     _execute_aten_operation = None
+    get_gpu_function = None
 
 def _get_remote_app():
     """Get the remote app for remote execution (Modal provider implementation)."""
@@ -159,11 +160,8 @@ class RemoteExecutor:
             
             # Execute remotely with app context (Modal provider implementation)
             with remote_app.run():
-                # Get the function from the app's registered functions
-                execute_function = remote_app.registered_functions.get('execute_aten_operation')
-                if execute_function is None:
-                    # Fallback to the stored function
-                    execute_function = remote_app._execute_aten_operation
+                # Get the GPU-specific function based on the device
+                execute_function = self._get_gpu_function_for_device(device_id or "default")
                 
                 # Include device_id in the call for device-specific execution
                 serialized_results, result_metadata = execute_function.remote(
@@ -186,6 +184,29 @@ class RemoteExecutor:
         except Exception as e:
             log.error(f"Remote execution failed for {op_name}: {str(e)}")
             raise RuntimeError(f"Remote execution failed: {str(e)}")
+    
+    def _get_gpu_function_for_device(self, device_id: str):
+        """Get the GPU-specific Modal function for a device."""
+        # Import here to avoid circular imports
+        from .device import get_device_registry
+        
+        # Get the device from registry
+        registry = get_device_registry()
+        device = registry.get_device_by_id(device_id)
+        
+        if device is None:
+            # Default to T4 if device not found
+            log.warning(f"Device {device_id} not found in registry, defaulting to T4")
+            return get_gpu_function("T4")
+        
+        # Get the GPU type from the device
+        gpu_type = device.gpu_type.value if hasattr(device, 'gpu_type') else "T4"
+        
+        # Get the appropriate GPU function
+        gpu_function = get_gpu_function(gpu_type)
+        
+        log.info(f"Using GPU function for {gpu_type} on device {device_id}")
+        return gpu_function
     
     def cleanup(self):
         """Clean up the remote app context."""

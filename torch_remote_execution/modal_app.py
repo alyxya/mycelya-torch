@@ -24,29 +24,20 @@ image = (
 # Create app with dynamic GPU support
 app = modal.App("torch-remote-extension")
 
-# Get GPU type from environment variable or default to T4 (cheaper option)
-DEFAULT_GPU = os.environ.get("TORCH_REMOTE_GPU", "T4")
-
-# Define the Modal function at global scope
-@app.function(
-    image=image,
-    gpu=DEFAULT_GPU,
-    timeout=300 if DEFAULT_GPU in ["T4", "L4"] else 450,  # Longer timeout for better GPUs
-    retries=2
-)
-def execute_aten_operation(
+# Common execution function implementation
+def _execute_aten_operation_impl(
     op_name: str, 
     tensors_data: List[bytes], 
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str,
+    gpu_type: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
-    """Execute an aten operation remotely on specified GPU."""
+    """Common implementation for executing an aten operation remotely."""
     import torch
     import io
     
-    gpu_type = os.environ.get("TORCH_REMOTE_GPU", "T4")
     print(f"🚀 Modal {gpu_type} (device {device_id}) executing: {op_name}")
     print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
     
@@ -142,6 +133,185 @@ def execute_aten_operation(
         traceback.print_exc()
         raise
 
+# Define separate Modal functions for each GPU type
+@app.function(
+    image=image,
+    gpu="T4",
+    timeout=300,
+    retries=2
+)
+def execute_aten_operation_t4(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on T4 GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "T4")
+
+@app.function(
+    image=image,
+    gpu="L4",
+    timeout=300,
+    retries=2
+)
+def execute_aten_operation_l4(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on L4 GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "L4")
+
+@app.function(
+    image=image,
+    gpu="A10G",
+    timeout=450,
+    retries=2
+)
+def execute_aten_operation_a10g(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on A10G GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "A10G")
+
+@app.function(
+    image=image,
+    gpu="A100-40GB",
+    timeout=450,
+    retries=2
+)
+def execute_aten_operation_a100_40gb(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on A100-40GB GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "A100-40GB")
+
+@app.function(
+    image=image,
+    gpu="A100-80GB",
+    timeout=450,
+    retries=2
+)
+def execute_aten_operation_a100_80gb(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on A100-80GB GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "A100-80GB")
+
+@app.function(
+    image=image,
+    gpu="L40S",
+    timeout=450,
+    retries=2
+)
+def execute_aten_operation_l40s(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on L40S GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "L40S")
+
+@app.function(
+    image=image,
+    gpu="H100",
+    timeout=450,
+    retries=2
+)
+def execute_aten_operation_h100(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on H100 GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "H100")
+
+@app.function(
+    image=image,
+    gpu="H200",
+    timeout=450,
+    retries=2
+)
+def execute_aten_operation_h200(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on H200 GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "H200")
+
+@app.function(
+    image=image,
+    gpu="B200",
+    timeout=450,
+    retries=2
+)
+def execute_aten_operation_b200(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Execute an aten operation remotely on B200 GPU."""
+    return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "B200")
+
+# Dictionary to map GPU types to their corresponding functions
+GPU_FUNCTIONS = {
+    "T4": execute_aten_operation_t4,
+    "L4": execute_aten_operation_l4,
+    "A10G": execute_aten_operation_a10g,
+    "A100-40GB": execute_aten_operation_a100_40gb,
+    "A100-80GB": execute_aten_operation_a100_80gb,
+    "L40S": execute_aten_operation_l40s,
+    "H100": execute_aten_operation_h100,
+    "H200": execute_aten_operation_h200,
+    "B200": execute_aten_operation_b200,
+}
+
+# Legacy function for backward compatibility (defaults to T4)
+def execute_aten_operation(
+    op_name: str, 
+    tensors_data: List[bytes], 
+    tensor_metadata: List[Dict[str, Any]], 
+    args: List[Any], 
+    kwargs: Dict[str, Any],
+    device_id: str = "default"
+) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+    """Legacy function - defaults to T4 GPU."""
+    return execute_aten_operation_t4(op_name, tensors_data, tensor_metadata, args, kwargs, device_id)
+
 # Cache for GPU-specific apps
 _gpu_apps: Dict[str, modal.App] = {}
 
@@ -187,5 +357,10 @@ def clear_app_cache():
     _gpu_apps.clear()
 
 
-# Store the execution function in the app for easy access
+# Store the execution functions in the app for easy access
 app._execute_aten_operation = execute_aten_operation
+app._gpu_functions = GPU_FUNCTIONS
+
+def get_gpu_function(gpu_type: str):
+    """Get the appropriate Modal function for a given GPU type."""
+    return GPU_FUNCTIONS.get(gpu_type, execute_aten_operation_t4)  # Default to T4
