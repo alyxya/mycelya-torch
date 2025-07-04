@@ -16,10 +16,9 @@ import os
 # Create simplified image with just PyTorch and CUDA support
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .pip_install(
-        ["torch>=2.0.0"],
-        extra_options=["--index-url", "https://download.pytorch.org/whl/cu121"]
-    )
+    .run_commands([
+        "pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu121"
+    ])
 )
 
 # Create app with dynamic GPU support
