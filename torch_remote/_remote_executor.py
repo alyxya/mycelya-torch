@@ -197,14 +197,15 @@ class RemoteExecutor:
             self._app_context = None
     
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
-        """Convert remote tensor to CPU tensor (Modal provider implementation)."""
+        """Convert remote tensor to CPU tensor without triggering remote execution."""
         try:
-            # Try the provider-specific copy first
-            from ._aten_impl import copy_from_device
-            return copy_from_device(remote_tensor)
+            # Use the device daemon's copy_from_device to avoid recursion
+            from ._device_daemon import driver
+            return driver.exec("copy_from_device", remote_tensor)
         except Exception:
-            # Fallback to direct CPU conversion
-            return remote_tensor.cpu()
+            # If that fails, use direct tensor data access (avoid .cpu() recursion)
+            # This creates a new CPU tensor with the same data
+            return torch.tensor(remote_tensor.detach().numpy(), device='cpu')
     
     def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor) -> torch.Tensor:
         """Convert CPU tensor to remote tensor (Modal provider implementation)."""

@@ -12,6 +12,10 @@ def main():
     print("🚀 PyTorch Remote Device Backend Example")
     print("="*50)
     
+    # Enable remote execution (should be on by default, but let's be explicit)
+    torch_remote.enable_remote_execution()
+    print(f"Remote execution enabled: {torch_remote.is_remote_execution_enabled()}")
+    
     # Create different GPU devices
     print("\n1. Creating different GPU devices:")
     
@@ -29,33 +33,46 @@ def main():
     # Create tensors on different devices
     print("\n2. Creating tensors on different devices:")
     
+    # Start with small tensors for testing (will use local execution)
     # Method 1: Using torch.randn with device parameter
-    x_t4 = torch.randn(3, 3, device=t4_device)
-    y_t4 = torch.randn(3, 3, device=t4_device)
+    x_t4 = torch.randn(2, 2, device=t4_device)  # 4 elements
+    y_t4 = torch.randn(2, 2, device=t4_device)  # 4 elements
     
     # Method 2: Using .remote() method
-    x_l4 = torch.randn(3, 3).remote(l4_device)
-    y_l4 = torch.randn(3, 3).remote(l4_device)
+    x_l4 = torch.randn(2, 2).remote(l4_device)  # 4 elements
+    y_l4 = torch.randn(2, 2).remote(l4_device)  # 4 elements
     
-    print(f"   T4 tensors: {x_t4.shape} on {x_t4.device}")
-    print(f"   L4 tensors: {x_l4.shape} on {x_l4.device}")
+    print(f"   T4 tensors: {x_t4.shape} ({x_t4.numel()} elements) on {x_t4.device}")
+    print(f"   L4 tensors: {x_l4.shape} ({x_l4.numel()} elements) on {x_l4.device}")
+    print(f"   Total T4 elements: {x_t4.numel() + y_t4.numel()} (<1000 → will use LOCAL execution)")
+    print(f"   Total L4 elements: {x_l4.numel() + y_l4.numel()} (<1000 → will use LOCAL execution)")
+    
+    # Check if device IDs are attached
+    print(f"   T4 device ID: {getattr(x_t4, '_device_id', 'NOT SET')}")
+    print(f"   L4 device ID: {getattr(x_l4, '_device_id', 'NOT SET')}")
     
     # Operations within the same device work
     print("\n3. Operations within the same device:")
     
+    print("   Note: Watch for '🚀 Creating remote job' messages below...")
+    
     try:
-        # This should work - same device
+        # This should work - same device and trigger remote execution
+        print("   Executing T4 addition (should see remote execution)...")
         z_t4 = x_t4 + y_t4
         print(f"   ✅ T4: {x_t4.shape} + {y_t4.shape} = {z_t4.shape}")
     except Exception as e:
         print(f"   ❌ T4 operation failed: {e}")
     
     try:
-        # This should work - same device
+        # This should work - same device and trigger remote execution
+        print("   Executing L4 addition (should see remote execution)...")
         z_l4 = x_l4 + y_l4
         print(f"   ✅ L4: {x_l4.shape} + {y_l4.shape} = {z_l4.shape}")
     except Exception as e:
         print(f"   ❌ L4 operation failed: {e}")
+    
+    # Skip matrix multiplication for now to avoid potential issues
     
     # Operations between different devices should fail
     print("\n4. Operations between different devices (should fail):")

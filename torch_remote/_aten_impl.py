@@ -94,6 +94,13 @@ def _should_use_remote_execution(op, args, kwargs):
         "aten.unsqueeze",
         "aten.transpose",
         "aten.permute",
+        # Device transfer operations (CRITICAL - prevents infinite recursion)
+        "aten.to",
+        "aten.to.device",
+        "aten.to.dtype",
+        "aten.to.dtype_layout",
+        "aten.cpu",
+        "aten.cuda",
     }
     
     op_name = op.overloadpacket._qualified_op_name
