@@ -5,7 +5,7 @@ def _remote(self, device=None, dtype=None, non_blocking=False, copy=False):
     from .device import BackendDevice, get_device_registry
     
     if device is None:
-        device = torch.device("remote", 0)
+        raise ValueError("device argument is required for remote operations. Create a BackendDevice first.")
     elif isinstance(device, BackendDevice):
         # Get device index from registry
         registry = get_device_registry()
@@ -14,12 +14,8 @@ def _remote(self, device=None, dtype=None, non_blocking=False, copy=False):
             # Register the device if not already registered
             device_index = registry.register_device(device)
         device = torch.device("remote", device_index)
-    elif isinstance(device, int):
-        device = torch.device("remote", device)
-    elif isinstance(device, str) and not device.startswith("remote"):
-        device = torch.device("remote", 0)  # Default to remote:0 if just "remote"
-    elif isinstance(device, str):
-        device = torch.device(device)
+    elif isinstance(device, (int, str)):
+        raise ValueError("Remote devices must be BackendDevice objects. Create a BackendDevice using create_modal_device() or similar.")
     
     # Move to device
     tensor = self.to(device=device, dtype=dtype, non_blocking=non_blocking, copy=copy)
@@ -33,8 +29,38 @@ def _remote(self, device=None, dtype=None, non_blocking=False, copy=False):
     
     return tensor
 
+def _to_with_backend_device(self, device=None, dtype=None, non_blocking=False, copy=False, memory_format=None):
+    """Patched .to() method that handles BackendDevice."""
+    from .device import BackendDevice, get_device_registry
+    
+    if isinstance(device, BackendDevice):
+        # Convert BackendDevice to torch.device and handle device ID
+        registry = get_device_registry()
+        device_index = registry.get_device_index(device)
+        if device_index is None:
+            device_index = registry.register_device(device)
+        torch_device = torch.device("remote", device_index)
+        
+        # Call original .to() method
+        result = self._original_to(device=torch_device, dtype=dtype, non_blocking=non_blocking, copy=copy, memory_format=memory_format)
+        
+        # Attach device ID to the result tensor
+        result._device_id = device.device_id
+        return result
+    else:
+        # Call original .to() method for non-BackendDevice cases
+        return self._original_to(device=device, dtype=dtype, non_blocking=non_blocking, copy=copy, memory_format=memory_format)
+
+
 def _add_tensor_methods():
-    """Add .remote() method to torch.Tensor."""
+    """Add .remote() method and patch .to() method for torch.Tensor."""
+    # Store original .to() method
+    torch.Tensor._original_to = torch.Tensor.to
+    
+    # Patch .to() method
+    torch.Tensor.to = _to_with_backend_device
+    
+    # Add .remote() method
     torch.Tensor.remote = _remote
 
 
@@ -57,6 +83,8 @@ def _patch_torch_factory_functions():
             if device_index is None:
                 device_index = registry.register_device(device)
             return torch.device("remote", device_index), device.device_id
+        elif isinstance(device, str) and (device == "remote" or device.startswith("remote:")):
+            raise ValueError("Remote devices must be BackendDevice objects. Use create_modal_device() or similar to create a BackendDevice.")
         return device, None
     
     def _attach_device_id(tensor, device_id):

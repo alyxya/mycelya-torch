@@ -230,12 +230,9 @@ def _kernel_fallback(op, *args, **kwargs):
             if isinstance(device_arg, torch.device) and device_arg.type == "remote":
                 # This is a remote device factory function - handle it
                 pass  # Continue to normal processing below
-            elif isinstance(device_arg, str) and device_arg == "remote":
-                # Convert string to device object
-                kwargs['device'] = torch.device("remote", 0)
-            elif isinstance(device_arg, str) and device_arg.startswith("remote"):
-                # Handle remote:0 format
-                kwargs['device'] = torch.device(device_arg)
+            elif isinstance(device_arg, str) and (device_arg == "remote" or device_arg.startswith("remote")):
+                # Reject string-based remote devices
+                raise ValueError("Remote devices must be BackendDevice objects. Use create_modal_device() or similar to create a BackendDevice.")
             else:
                 # Not a remote device factory function
                 raise RuntimeError(f"{op} not handled yet.")
