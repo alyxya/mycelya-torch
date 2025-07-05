@@ -38,20 +38,18 @@ class BackendDevice:
     Operations between different BackendDevice instances are not supported.
     """
     
-    def __init__(self, provider: BackendProvider, gpu_type: GPUType, 
-                 device_id: Optional[str] = None, **kwargs):
+    def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs):
         """
         Initialize a backend device.
         
         Args:
             provider: The cloud provider (e.g., Modal)
             gpu_type: The GPU type (e.g., A100-40GB)
-            device_id: Optional unique identifier for this device instance
             **kwargs: Additional provider-specific configuration
         """
         self.provider = provider
         self.gpu_type = gpu_type
-        self.device_id = device_id or self._generate_device_id()
+        self.device_id = self._generate_device_id()
         self.config = kwargs
         self._initialized = False
         
