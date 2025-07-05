@@ -112,8 +112,8 @@ torch_remote_execution/        # Private package for remote execution
 #### Utility Files
 
 **`torch_remote/utils.py`** - Tensor Method Extensions
-- Adds `.remote()` method to `torch.Tensor` class
-- Enables `tensor.remote()` to move tensors to remote device
+- Patches `.to()` method to support `BackendDevice` objects
+- Enables `tensor.to(backend_device)` to move tensors to remote device
 - Simple wrapper around the C++ remote conversion function
 
 **`torch_remote/remote/__init__.py`** - Device Management Functions

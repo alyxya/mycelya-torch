@@ -84,7 +84,7 @@ The test suite includes comprehensive coverage of:
 
 - **`torch_remote/__init__.py`** - Package initialization and PrivateUse1 device registration
 - **`torch_remote/backends/modal/__init__.py`** - Modal backend device management functions
-- **`torch_remote/utils.py`** - Tensor method extensions (`.remote()` method injection)
+- **`torch_remote/utils.py`** - Tensor method patches (`.to()` method enhancement for BackendDevice)
 
 ### Backend Implementation
 

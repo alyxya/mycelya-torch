@@ -36,9 +36,9 @@ def main():
     x_t4 = torch.randn(64, 64, device=t4_device)  # 4096 elements
     y_t4 = torch.randn(64, 64, device=t4_device)  # 4096 elements
     
-    # Method 2: Using .remote() method
-    x_l4 = torch.randn(50, 50).remote(l4_device)  # 2500 elements
-    y_l4 = torch.randn(50, 50).remote(l4_device)  # 2500 elements
+    # Method 2: Using .to() method
+    x_l4 = torch.randn(50, 50).to(l4_device)  # 2500 elements
+    y_l4 = torch.randn(50, 50).to(l4_device)  # 2500 elements
     
     print(f"   T4 tensors: {x_t4.shape} ({x_t4.numel()} elements) on {x_t4.device}")
     print(f"   L4 tensors: {x_l4.shape} ({x_l4.numel()} elements) on {x_l4.device}")

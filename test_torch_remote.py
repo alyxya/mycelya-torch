@@ -27,31 +27,31 @@ def test_device_functions():
             torch.remote.device_count() >= 1)
 
 
-def test_tensor_remote_method():
-    """Test that tensors have remote() method."""
+def test_tensor_to_method():
+    """Test that tensors have to() method that works with BackendDevice."""
     import torch_remote
     x = torch.randn(2, 2)
-    assert hasattr(x, 'remote') and callable(x.remote)
+    assert hasattr(x, 'to') and callable(x.to)
 
 
-def test_remote_tensor_creation():
-    """Test remote tensor creation via .remote() method."""
+def test_backend_tensor_creation():
+    """Test backend tensor creation via .to() method."""
     import torch_remote
     device = torch_remote.create_modal_device("T4")
     x = torch.randn(2, 2)
-    y = x.remote(device)
+    y = x.to(device)
     assert y is not None and y.shape == x.shape
 
 
-def test_remote_tensor_operations():
-    """Test operations on remote tensors."""
+def test_backend_tensor_operations():
+    """Test operations on backend tensors."""
     import torch_remote
     device = torch_remote.create_modal_device("T4")
     x = torch.randn(2, 2)
     y = torch.randn(2, 2)
 
-    x_remote = x.remote(device)
-    y_remote = y.remote(device)
+    x_remote = x.to(device)
+    y_remote = y.to(device)
 
     # Test addition - verify numerical result matches CPU computation
     z_remote = x_remote + y_remote
@@ -64,7 +64,7 @@ def test_remote_tensor_operations():
     # Verify shapes
     assert z_remote is not None and w_remote is not None and w_remote.shape == (2, 2)
 
-    # Verify numerical results (convert remote tensors back to CPU for comparison)
+    # Verify numerical results (convert backend tensors back to CPU for comparison)
     assert torch.allclose(z_remote.cpu(), z_expected, rtol=1e-5, atol=1e-8)
     assert torch.allclose(w_remote.cpu(), w_expected, rtol=1e-5, atol=1e-8)
 
@@ -74,7 +74,7 @@ def test_dtype_conversion():
     import torch_remote
     device = torch_remote.create_modal_device("T4")
     x = torch.randn(2, 2, dtype=torch.float32)
-    y = x.remote(device, dtype=torch.float64)
+    y = x.to(device, dtype=torch.float64)
     assert y.dtype == torch.float64
 
 
@@ -83,8 +83,8 @@ def test_copy_parameter():
     import torch_remote
     device = torch_remote.create_modal_device("T4")
     x = torch.randn(2, 2)
-    y = x.remote(device, copy=True)
-    z = x.remote(device, copy=False)
+    y = x.to(device, copy=True)
+    z = x.to(device, copy=False)
     assert y is not None and z is not None
 
 
@@ -99,7 +99,7 @@ def test_error_handling():
 
     try:
         device = torch_remote.create_modal_device("T4")
-        x = torch.randn(2, 2).remote(device)
+        x = torch.randn(2, 2).to(device)
         y = torch.randn(2, 2)  # CPU tensor
         z = x.mm(y)  # Mixed device - may or may not work
     except Exception:
@@ -108,39 +108,39 @@ def test_error_handling():
     assert True  # If we get here without segfault, it's good
 
 
-def test_remote_tensor_device_properties():
-    """Test that remote tensors report correct device properties."""
+def test_backend_tensor_device_properties():
+    """Test that backend tensors report correct device properties."""
     import torch_remote
     
-    # Create CPU tensor and convert to remote
+    # Create CPU tensor and convert to backend
     device = torch_remote.create_modal_device("T4")
     x_cpu = torch.randn(3, 3)
-    x_remote = x_cpu.remote(device)
+    x_remote = x_cpu.to(device)
     
-    # Check that remote tensor has the expected type
+    # Check that backend tensor has the expected type
     assert type(x_remote).__name__ == 'RemoteTensorData'
     
-    # Test device property - remote tensors should identify as remote device
+    # Test device property - backend tensors should identify as remote device
     assert x_remote.device.type == 'remote'
-    assert x_remote.device.index == 0  # Default remote device index
+    assert x_remote.device.index == 0  # Default backend device index
 
 
-def test_remote_only_operations():
-    """Test operations that require both tensors to be remote."""
+def test_backend_only_operations():
+    """Test operations that require both tensors to be on the same backend."""
     import torch_remote
     
     device = torch_remote.create_modal_device("T4")
     x_cpu = torch.randn(2, 3)
     y_cpu = torch.randn(3, 2)
     
-    x_remote = x_cpu.remote(device)
-    y_remote = y_cpu.remote(device)
+    x_remote = x_cpu.to(device)
+    y_remote = y_cpu.to(device)
     
     # Test remote-remote operations (should work)
     result_add = x_remote + x_remote
     result_mm = x_remote.mm(y_remote)
     
-    # Verify results are correct and still remote tensors
+    # Verify results are correct and still backend tensors
     assert type(result_add).__name__ == 'RemoteTensorData'
     assert type(result_mm).__name__ == 'RemoteTensorData'
     assert result_add.shape == x_remote.shape
@@ -160,7 +160,7 @@ def test_mixed_device_operations_fail():
     device = torch_remote.create_modal_device("T4")
     x_cpu = torch.randn(2, 2)
     y_cpu = torch.randn(2, 2)
-    x_remote = x_cpu.remote(device)
+    x_remote = x_cpu.to(device)
     
     # Test mixed device operations (should fail or be handled gracefully)
     operations_tested = 0
@@ -192,8 +192,8 @@ def test_mixed_device_operations_fail():
     assert operations_tested == 3
 
 
-def test_cpu_to_remote_conversion():
-    """Test converting CPU tensors to remote tensors."""
+def test_cpu_to_backend_conversion():
+    """Test converting CPU tensors to backend tensors."""
     import torch_remote
     
     # Test with different tensor types and shapes
@@ -207,7 +207,7 @@ def test_cpu_to_remote_conversion():
     
     device = torch_remote.create_modal_device("T4")
     for cpu_tensor in test_cases:
-        remote_tensor = cpu_tensor.remote(device)
+        remote_tensor = cpu_tensor.to(device)
         
         # Verify conversion
         assert type(remote_tensor).__name__ == 'RemoteTensorData'
@@ -218,14 +218,14 @@ def test_cpu_to_remote_conversion():
         assert torch.allclose(remote_tensor.cpu(), cpu_tensor, rtol=1e-5, atol=1e-8)
 
 
-def test_remote_to_cpu_conversion():
-    """Test converting remote tensors back to CPU tensors."""
+def test_backend_to_cpu_conversion():
+    """Test converting backend tensors back to CPU tensors."""
     import torch_remote
     
-    # Create remote tensor
+    # Create backend tensor
     device = torch_remote.create_modal_device("T4")
     original_cpu = torch.randn(3, 4)
-    remote_tensor = original_cpu.remote(device)
+    remote_tensor = original_cpu.to(device)
     
     # Convert back to CPU
     back_to_cpu = remote_tensor.cpu()
@@ -239,8 +239,8 @@ def test_remote_to_cpu_conversion():
     assert torch.allclose(back_to_cpu, original_cpu, rtol=1e-5, atol=1e-8)
 
 
-def test_multiple_remote_cpu_transfers():
-    """Test multiple transfers between remote and CPU devices."""
+def test_multiple_backend_cpu_transfers():
+    """Test multiple transfers between backend and CPU devices."""
     import torch_remote
     
     # Start with CPU tensor
@@ -248,22 +248,22 @@ def test_multiple_remote_cpu_transfers():
     original = torch.randn(2, 3)
     
     # Multiple round trips: CPU -> Remote -> CPU -> Remote -> CPU
-    step1_remote = original.remote(device)
+    step1_remote = original.to(device)
     step2_cpu = step1_remote.cpu()
-    step3_remote = step2_cpu.remote(device)
+    step3_remote = step2_cpu.to(device)
     step4_cpu = step3_remote.cpu()
     
     # Verify final result matches original
     assert torch.allclose(step4_cpu, original, rtol=1e-5, atol=1e-8)
     assert step4_cpu.device.type == 'cpu'
     
-    # Verify intermediate remote tensors have correct types
+    # Verify intermediate backend tensors have correct types
     assert type(step1_remote).__name__ == 'RemoteTensorData'
     assert type(step3_remote).__name__ == 'RemoteTensorData'
 
 
-def test_remote_tensor_creation_with_dtypes():
-    """Test creating remote tensors with different data types."""
+def test_backend_tensor_creation_with_dtypes():
+    """Test creating backend tensors with different data types."""
     import torch_remote
     
     dtypes = [torch.float32, torch.float64, torch.int32, torch.int64]
@@ -272,16 +272,16 @@ def test_remote_tensor_creation_with_dtypes():
     for dtype in dtypes:
         try:
             cpu_tensor = torch.randn(2, 2).to(dtype)
-            remote_tensor = cpu_tensor.remote(device)
+            remote_tensor = cpu_tensor.to(device)
             
             # Verify dtype preservation
             assert remote_tensor.dtype == dtype
             assert type(remote_tensor).__name__ == 'RemoteTensorData'
             
             # Test dtype conversion during remote creation
-            remote_converted = cpu_tensor.remote(device, dtype=torch.float64)
+            remote_converted = cpu_tensor.to(device, dtype=torch.float64)
             assert remote_converted.dtype == torch.float64
             
         except Exception as e:
             # Some dtypes might not be supported; that's acceptable
-            print(f"Dtype {dtype} not supported for remote tensors: {e}")
+            print(f"Dtype {dtype} not supported for backend tensors: {e}")

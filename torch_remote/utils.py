@@ -1,33 +1,5 @@
 import torch
 
-def _remote(self, device=None, dtype=None, non_blocking=False, copy=False):
-    """Move tensor to remote device."""
-    from .device import BackendDevice, get_device_registry
-    
-    if device is None:
-        raise ValueError("device argument is required for remote operations. Create a BackendDevice first.")
-    elif isinstance(device, BackendDevice):
-        # Get device index from registry
-        registry = get_device_registry()
-        device_index = registry.get_device_index(device)
-        if device_index is None:
-            # Register the device if not already registered
-            device_index = registry.register_device(device)
-        device = torch.device("remote", device_index)
-    elif isinstance(device, (int, str)):
-        raise ValueError("Remote devices must be BackendDevice objects. Create a BackendDevice using create_modal_device() or similar.")
-    
-    # Move to device
-    tensor = self.to(device=device, dtype=dtype, non_blocking=non_blocking, copy=copy)
-    
-    # If moving to a BackendDevice, store the device ID in the tensor
-    if isinstance(device, torch.device) and device.type == "remote":
-        registry = get_device_registry()
-        backend_device = registry.get_device_by_index(device.index)
-        if backend_device is not None:
-            tensor._device_id = backend_device.device_id
-    
-    return tensor
 
 def _to_with_backend_device(self, device=None, dtype=None, non_blocking=False, copy=False, memory_format=None):
     """Patched .to() method that handles BackendDevice."""
@@ -53,15 +25,16 @@ def _to_with_backend_device(self, device=None, dtype=None, non_blocking=False, c
 
 
 def _add_tensor_methods():
-    """Add .remote() method and patch .to() method for torch.Tensor."""
+    """Patch .to() method for torch.Tensor to handle BackendDevice."""
     # Store original .to() method
     torch.Tensor._original_to = torch.Tensor.to
     
     # Patch .to() method
     torch.Tensor.to = _to_with_backend_device
     
-    # Add .remote() method
-    torch.Tensor.remote = _remote
+    # Remove auto-generated remote() method - we use standard .to() instead
+    if hasattr(torch.Tensor, 'remote'):
+        delattr(torch.Tensor, 'remote')
 
 
 def _patch_torch_factory_functions():
