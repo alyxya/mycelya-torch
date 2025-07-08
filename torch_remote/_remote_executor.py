@@ -13,27 +13,23 @@ log = logging.getLogger(__name__)
 
 # Global remote app - will be auto-imported (Modal provider implementation)
 _remote_app = None
-_execute_aten_operation = None
 
 # Try to import the remote app (Modal provider implementation)
 try:
-    from torch_remote_execution.modal_app import app as _remote_app, execute_aten_operation as _execute_aten_operation, get_gpu_function
+    from torch_remote_execution.modal_app import app as _remote_app, get_gpu_function
     log.info("Loaded torch_remote_execution app")
 except Exception as e:
     log.warning(f"Remote execution not available: {e}")
     _remote_app = None
-    _execute_aten_operation = None
     get_gpu_function = None
 
 def _get_remote_app():
     """Get the remote app for remote execution (Modal provider implementation)."""
-    global _remote_app, _execute_aten_operation
+    global _remote_app
     
     if _remote_app is None:
         raise RuntimeError("Remote execution not available. Install provider dependencies (e.g., pip install modal)")
     
-    # Store the function in the app for easy access
-    _remote_app._execute_aten_operation = _execute_aten_operation
     return _remote_app
 
 

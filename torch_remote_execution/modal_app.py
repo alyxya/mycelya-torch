@@ -301,17 +301,6 @@ GPU_FUNCTIONS = {
     "B200": execute_aten_operation_b200,
 }
 
-# Legacy function for backward compatibility - should not be used
-def execute_aten_operation(
-    op_name: str, 
-    tensors_data: List[bytes], 
-    tensor_metadata: List[Dict[str, Any]], 
-    args: List[Any], 
-    kwargs: Dict[str, Any],
-    device_id: str
-) -> Tuple[List[bytes], List[Dict[str, Any]]]:
-    """Legacy function - use specific GPU functions instead."""
-    raise RuntimeError("execute_aten_operation is deprecated. Use get_gpu_function(gpu_type) to get specific GPU functions.")
 
 # Cache for GPU-specific apps
 _gpu_apps: Dict[str, modal.App] = {}
@@ -359,7 +348,6 @@ def clear_app_cache():
 
 
 # Store the execution functions in the app for easy access
-app._execute_aten_operation = execute_aten_operation
 app._gpu_functions = GPU_FUNCTIONS
 
 def get_gpu_function(gpu_type: str):
