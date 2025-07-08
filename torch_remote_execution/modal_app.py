@@ -17,7 +17,8 @@ import os
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .run_commands([
-        "pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu121"
+        "pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu121",
+        "pip install numpy"
     ])
 )
 
