@@ -129,18 +129,16 @@ def _should_use_remote_execution(op, args, kwargs):
     if any(compute_op in op_name for compute_op in compute_intensive_ops):
         return True
     
-    # For other operations, check if tensors are large enough to benefit from GPU
-    total_elements = 0
+    # All operations on remote tensors should execute on the remote machine
     for arg in args:
         if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            total_elements += arg.numel()
+            return True
     
     for value in kwargs.values():
         if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            total_elements += value.numel()
+            return True
     
-    # Use remote execution if we have significant compute (>1000 elements)
-    return total_elements > 1000
+    return False
 
 
 def _remote_kernel_fallback(op, *args, **kwargs):
