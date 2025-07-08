@@ -68,6 +68,9 @@ def _should_use_remote_execution(op, args, kwargs):
         "aten.zeros_like",
         "aten.ones",
         "aten.ones_like",
+        "aten.normal_",
+        "aten.uniform_",
+        "aten.random_",
         # Scalar operations (low compute)
         "aten.item",
         "aten._local_scalar_dense",

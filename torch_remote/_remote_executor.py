@@ -161,18 +161,22 @@ class RemoteExecutor:
             # Execute remotely with app context (Modal provider implementation)
             with remote_app.run():
                 # Get the GPU-specific function based on the device
-                execute_function = self._get_gpu_function_for_device(device_id or "default")
+                if device_id is not None:
+                    execute_function = self._get_gpu_function_for_device(device_id)
+                else:
+                    # Use default GPU function when device_id is None
+                    execute_function = get_gpu_function("T4")
                 
                 # Include device_id in the call for device-specific execution
                 serialized_results, result_metadata = execute_function.remote(
-                    op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs, device_id or "default"
+                    op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs, device_id
                 )
             
             # Deserialize results and create remote tensors
             results = []
             for data, metadata in zip(serialized_results, result_metadata):
                 cpu_tensor = self._deserialize_tensor(data)
-                remote_tensor = self._cpu_tensor_to_remote(cpu_tensor)
+                remote_tensor = self._cpu_tensor_to_remote(cpu_tensor, device_id)
                 results.append(remote_tensor)
             
             # Return single tensor or tuple based on original operation
@@ -185,22 +189,26 @@ class RemoteExecutor:
             log.error(f"Remote execution failed for {op_name}: {str(e)}")
             raise RuntimeError(f"Remote execution failed: {str(e)}")
     
-    def _get_gpu_function_for_device(self, device_id: str):
+    def _get_gpu_function_for_device(self, device_id: Optional[str]):
         """Get the GPU-specific Modal function for a device."""
         # Import here to avoid circular imports
         from .device import get_device_registry
+        
+        # Require explicit device specification
+        if device_id is None:
+            raise RuntimeError("Device ID must be explicitly specified for remote operations")
         
         # Get the device from registry
         registry = get_device_registry()
         device = registry.get_device_by_id(device_id)
         
         if device is None:
-            # Default to T4 if device not found
-            log.warning(f"Device {device_id} not found in registry, defaulting to T4")
-            return get_gpu_function("T4")
+            raise RuntimeError(f"Device {device_id} not found in registry")
         
         # Get the GPU type from the device
-        gpu_type = device.gpu_type.value if hasattr(device, 'gpu_type') else "T4"
+        gpu_type = device.gpu_type.value if hasattr(device, 'gpu_type') else None
+        if gpu_type is None:
+            raise RuntimeError(f"Device {device_id} has no GPU type specified")
         
         # Get the appropriate GPU function
         gpu_function = get_gpu_function(gpu_type)
@@ -228,11 +236,22 @@ class RemoteExecutor:
             # This creates a new CPU tensor with the same data
             return torch.tensor(remote_tensor.detach().numpy(), device='cpu')
     
-    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor) -> torch.Tensor:
+    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device_id: Optional[str] = None) -> torch.Tensor:
         """Convert CPU tensor to remote tensor (Modal provider implementation)."""
         # Create a new remote tensor from the CPU tensor
         # This is simpler than using copy_from_host_to_device which has issues with provider-specific tensor data
-        return cpu_tensor.to("remote")
+        if device_id is None:
+            raise RuntimeError("Device ID must be explicitly specified for remote tensor creation")
+        
+        # Get the BackendDevice to preserve device_id
+        from .device import get_device_registry
+        registry = get_device_registry()
+        device = registry.get_device_by_id(device_id)
+        if device is None:
+            raise RuntimeError(f"Device {device_id} not found in registry")
+        
+        # Use the BackendDevice to ensure _device_id is preserved
+        return cpu_tensor.to(device)
     
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
         """Serialize tensor to bytes."""

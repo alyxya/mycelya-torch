@@ -146,7 +146,7 @@ def execute_aten_operation_t4(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on T4 GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "T4")
@@ -163,7 +163,7 @@ def execute_aten_operation_l4(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on L4 GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "L4")
@@ -180,7 +180,7 @@ def execute_aten_operation_a10g(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on A10G GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "A10G")
@@ -197,7 +197,7 @@ def execute_aten_operation_a100_40gb(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on A100-40GB GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "A100-40GB")
@@ -214,7 +214,7 @@ def execute_aten_operation_a100_80gb(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on A100-80GB GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "A100-80GB")
@@ -231,7 +231,7 @@ def execute_aten_operation_l40s(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on L40S GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "L40S")
@@ -248,7 +248,7 @@ def execute_aten_operation_h100(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on H100 GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "H100")
@@ -265,7 +265,7 @@ def execute_aten_operation_h200(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on H200 GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "H200")
@@ -282,7 +282,7 @@ def execute_aten_operation_b200(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Execute an aten operation remotely on B200 GPU."""
     return _execute_aten_operation_impl(op_name, tensors_data, tensor_metadata, args, kwargs, device_id, "B200")
@@ -300,17 +300,17 @@ GPU_FUNCTIONS = {
     "B200": execute_aten_operation_b200,
 }
 
-# Legacy function for backward compatibility (defaults to T4)
+# Legacy function for backward compatibility - should not be used
 def execute_aten_operation(
     op_name: str, 
     tensors_data: List[bytes], 
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str = "default"
+    device_id: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
-    """Legacy function - defaults to T4 GPU."""
-    return execute_aten_operation_t4(op_name, tensors_data, tensor_metadata, args, kwargs, device_id)
+    """Legacy function - use specific GPU functions instead."""
+    raise RuntimeError("execute_aten_operation is deprecated. Use get_gpu_function(gpu_type) to get specific GPU functions.")
 
 # Cache for GPU-specific apps
 _gpu_apps: Dict[str, modal.App] = {}
@@ -363,4 +363,6 @@ app._gpu_functions = GPU_FUNCTIONS
 
 def get_gpu_function(gpu_type: str):
     """Get the appropriate Modal function for a given GPU type."""
-    return GPU_FUNCTIONS.get(gpu_type, execute_aten_operation_t4)  # Default to T4
+    if gpu_type not in GPU_FUNCTIONS:
+        raise ValueError(f"GPU type '{gpu_type}' is not supported. Available types: {list(GPU_FUNCTIONS.keys())}")
+    return GPU_FUNCTIONS[gpu_type]
