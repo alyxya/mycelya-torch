@@ -56,7 +56,7 @@ def _execute_aten_operation_impl(
         for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
             # Deserialize tensor
             buffer = io.BytesIO(data)
-            tensor = torch.load(buffer, map_location='cpu')
+            tensor = torch.load(buffer, map_location='cpu', weights_only=True)
             
             # Move to GPU
             tensor = tensor.to(device)
