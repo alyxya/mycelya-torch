@@ -47,6 +47,30 @@ class RemoteTensorData(torch.Tensor):
         # Ensure it's a regular torch.Tensor, not RemoteTensorData
         return torch.tensor(cpu_tensor.detach().numpy())
     
+    def __str__(self):
+        """Safe string representation for remote tensors."""
+        try:
+            # Handle scalar tensors (0-dimensional)
+            if self.ndim == 0:
+                shape_str = "()"
+            else:
+                shape_str = str(tuple(self.shape))
+            return f"RemoteTensor(shape={shape_str}, dtype={self.dtype}, device={self.device})"
+        except Exception:
+            return f"RemoteTensor(device=remote)"
+    
+    def __repr__(self):
+        """Safe repr representation for remote tensors."""
+        try:
+            # Handle scalar tensors (0-dimensional)
+            if self.ndim == 0:
+                shape_str = "()"
+            else:
+                shape_str = str(tuple(self.shape))
+            return f"RemoteTensor(shape={shape_str}, dtype={self.dtype}, device={self.device})"
+        except Exception:
+            return f"RemoteTensor(device=remote)"
+    
     @classmethod  
     def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
         """
