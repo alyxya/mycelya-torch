@@ -139,23 +139,28 @@ class Driver:
             return
         self.devices = []
 
+        # Start with initial number of devices
         for i in range(self.num_devices):
-            req_queue = queue.Queue()
-            ans_queue = queue.Queue()
-            executor = _Executor(i)
-            
-            # Use threading instead of multiprocessing
-            runner = threading.Thread(
-                target=executor.run_forever,
-                args=(req_queue, ans_queue),
-                daemon=True  # Daemon threads will exit when main process exits
-            )
-            runner.start()
-            self.devices.append((req_queue, ans_queue, runner, executor))
+            self._add_device(i)
 
         self.is_initialized = True
         # Register cleanup on exit
         atexit.register(self._cleanup)
+
+    def _add_device(self, device_id):
+        """Add a new device executor."""
+        req_queue = queue.Queue()
+        ans_queue = queue.Queue()
+        executor = _Executor(device_id)
+        
+        # Use threading instead of multiprocessing
+        runner = threading.Thread(
+            target=executor.run_forever,
+            args=(req_queue, ans_queue),
+            daemon=True  # Daemon threads will exit when main process exits
+        )
+        runner.start()
+        self.devices.append((req_queue, ans_queue, runner, executor))
 
     @classmethod
     def _register_signal_handlers(cls):
@@ -230,6 +235,9 @@ class Driver:
 
     def run_on_executor(self, device_idx, cmd, *args):
         self._lazy_init()
+        # Ensure we have enough devices for the requested index
+        while device_idx >= len(self.devices):
+            self._add_device(len(self.devices))
         req_queue, ans_queue, _, _ = self.devices[device_idx]
         stream = self.getStream(device_idx)
         validate_send_queue_args(cmd, args)
@@ -240,12 +248,14 @@ class Driver:
 
     @register(registry)
     def hasPrimaryContext(self, device_idx):
-        return device_idx >= 0 and device_idx < self.num_devices
+        # We can dynamically create devices, so any non-negative index is valid
+        return device_idx >= 0
 
     @register(registry)
     def deviceCount(self, *args):
         assert len(args) == 0
-        return self.num_devices
+        self._lazy_init()
+        return len(self.devices)
 
     @register(registry)
     def getDevice(self):
@@ -253,7 +263,11 @@ class Driver:
 
     @register(registry)
     def setDevice(self, device_idx):
-        assert device_idx >= 0 and device_idx < self.num_devices
+        assert device_idx >= 0
+        self._lazy_init()
+        # Ensure we have enough devices for the requested index
+        while device_idx >= len(self.devices):
+            self._add_device(len(self.devices))
         self.curr_device_idx = device_idx
 
     @register(registry)
