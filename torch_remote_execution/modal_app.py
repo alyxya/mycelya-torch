@@ -145,24 +145,25 @@ def _execute_aten_operation_impl(
         raise
 
 
-def create_modal_app_for_gpu(gpu_type: str) -> Tuple[modal.App, Any]:
+def create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App, Any]:
     """
-    Create a Modal app and function for a specific GPU type.
+    Create a Modal app and function for a specific GPU type and device.
     
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
+        device_id: The device ID (e.g., "modal-t4-f3a7d67e")
         
     Returns:
-        Tuple of (modal_app, function) for the specified GPU
+        Tuple of (modal_app, function) for the specified device
     """
-    if gpu_type in _gpu_apps:
-        return _gpu_apps[gpu_type]
+    if device_id in _gpu_apps:
+        return _gpu_apps[device_id]
     
     if gpu_type not in GPU_CONFIG:
         raise ValueError(f"GPU type '{gpu_type}' is not supported. Available types: {list(GPU_CONFIG.keys())}")
     
     config = GPU_CONFIG[gpu_type]
-    app = modal.App(f"torch-remote-{gpu_type.lower().replace('-', '')}")
+    app = modal.App(f"torch-remote-{device_id}")
     
     @app.function(
         image=image,
@@ -278,7 +279,7 @@ def create_modal_app_for_gpu(gpu_type: str) -> Tuple[modal.App, Any]:
             traceback.print_exc()
             raise
     
-    _gpu_apps[gpu_type] = (app, execute_aten_operation)
+    _gpu_apps[device_id] = (app, execute_aten_operation)
     return app, execute_aten_operation
 
 
@@ -295,7 +296,7 @@ def get_modal_app_for_device(device) -> Tuple[modal.App, Any]:
     if hasattr(device, 'provider') and device.provider.value != "modal":
         raise ValueError(f"Device provider {device.provider.value} is not Modal")
     
-    return create_modal_app_for_gpu(device.gpu_type.value)
+    return create_modal_app_for_gpu(device.gpu_type.value, device.device_id)
 
 
 def clear_app_cache():
@@ -306,5 +307,7 @@ def clear_app_cache():
 
 def get_gpu_function(gpu_type: str):
     """Get the appropriate Modal function for a given GPU type."""
-    app, function = create_modal_app_for_gpu(gpu_type)
+    # For backward compatibility, create a temporary device ID
+    temp_device_id = f"temp-{gpu_type.lower().replace('-', '')}"
+    app, function = create_modal_app_for_gpu(gpu_type, temp_device_id)
     return function
