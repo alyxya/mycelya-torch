@@ -28,10 +28,10 @@ class RemoteExecutor:
     """
     
     def __init__(self):
-        self._device_apps: Dict[str, Any] = {}  # Cache for device-specific apps
+        self._device_apps: Dict[str, Any] = {}  # Cache for device-specific GPU machines
     
     def _get_device_app_and_function(self, device_id: str):
-        """Get the Modal app and function for a specific device."""
+        """Get the RemoteGPUMachine for a specific device."""
         if device_id in self._device_apps:
             return self._device_apps[device_id]
         
@@ -46,11 +46,11 @@ class RemoteExecutor:
         if device is None:
             raise RuntimeError(f"Device {device_id} not found in registry")
         
-        # Get device-specific app and function
-        app, function = get_modal_app_for_device(device)
-        self._device_apps[device_id] = (app, function)
+        # Get device-specific GPU machine
+        gpu_machine = get_modal_app_for_device(device)
+        self._device_apps[device_id] = gpu_machine
         
-        return app, function
+        return gpu_machine
         
     def execute_remote_operation(
         self, 
@@ -77,7 +77,7 @@ class RemoteExecutor:
             if device_id is None:
                 raise ValueError("device_id is required for remote execution")
             
-            remote_app, execute_function = self._get_device_app_and_function(device_id)
+            gpu_machine = self._get_device_app_and_function(device_id)
             
             # Separate tensors from other arguments
             tensors_data = []
@@ -127,23 +127,20 @@ class RemoteExecutor:
             
             log.info(f"Executing {op_name} remotely with {len(tensors_data)} tensors")
             
-            # Execute remotely with app context (Modal provider implementation)
-            log.info(f"🚀 Starting remote app context for {op_name}")
-            with remote_app.run():
-                log.info(f"📡 App context started, calling remote function for {op_name}")
-                log.info(f"🔧 Executor class: {execute_function}")
+            # Execute remotely using RemoteGPUMachine
+            log.info(f"🚀 Starting remote GPU machine for {op_name}")
+            with gpu_machine:
+                log.info(f"📡 GPU machine started: {gpu_machine}")
                 log.info(f"📊 Args: op_name={op_name}, tensors={len(tensors_data)}, device_id={device_id}")
                 
                 try:
-                    # Instantiate the executor class and call the method
-                    executor_instance = execute_function()
-                    serialized_results, result_metadata = executor_instance.execute_aten_operation.remote(
-                        op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs, device_id
+                    serialized_results, result_metadata = gpu_machine.execute_operation(
+                        op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs
                     )
-                    log.info(f"✅ Remote function call completed for {op_name}")
+                    log.info(f"✅ Remote operation completed for {op_name}")
                     log.info(f"📥 Received {len(serialized_results)} results")
                 except Exception as remote_ex:
-                    log.error(f"❌ Remote function call failed for {op_name}: {remote_ex}")
+                    log.error(f"❌ Remote operation failed for {op_name}: {remote_ex}")
                     log.error(f"Exception type: {type(remote_ex).__name__}")
                     import traceback
                     log.error(f"Traceback: {traceback.format_exc()}")

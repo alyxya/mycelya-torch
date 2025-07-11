@@ -19,8 +19,10 @@ image = (
     .pip_install("numpy", "torch")
 )
 
-# Cache for GPU-specific apps and their functions
+# Cache for GPU-specific apps and their functions  
 _gpu_apps: Dict[str, Tuple[modal.App, Any]] = {}
+# Cache for RemoteGPUMachine instances
+_gpu_machines: Dict[str, "RemoteGPUMachine"] = {}
 
 # GPU configuration mapping
 GPU_CONFIG = {
@@ -145,7 +147,118 @@ def _execute_aten_operation_impl(
         raise
 
 
-def create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App, Any]:
+class RemoteGPUMachine:
+    """
+    Stateful wrapper representing a remote GPU machine running on Modal.
+    
+    This class encapsulates both the Modal app and executor, providing a clean
+    interface for interacting with remote GPU execution while maintaining
+    state and connection management.
+    """
+    
+    def __init__(self, gpu_type: str, device_id: str):
+        self.gpu_type = gpu_type
+        self.device_id = device_id
+        self._app = None
+        self._executor_class = None
+        self._executor_instance = None
+        self._app_context = None
+        
+        # Initialize the Modal app and executor
+        self._initialize()
+    
+    def _initialize(self):
+        """Initialize the Modal app and executor class."""
+        self._app, self._executor_class = _create_modal_app_for_gpu(
+            self.gpu_type, self.device_id
+        )
+    
+    def start(self):
+        """Start the Modal app context for this machine."""
+        if self._app_context is None:
+            self._app_context = self._app.run()
+            self._app_context.__enter__()
+            # Create executor instance when app starts
+            self._executor_instance = self._executor_class()
+    
+    def stop(self):
+        """Stop the Modal app context for this machine."""
+        if self._app_context is not None:
+            self._app_context.__exit__(None, None, None)
+            self._app_context = None
+            self._executor_instance = None
+    
+    def is_running(self) -> bool:
+        """Check if the machine is currently running."""
+        return self._app_context is not None
+    
+    def execute_operation(
+        self,
+        op_name: str,
+        tensors_data: List[bytes],
+        tensor_metadata: List[Dict[str, Any]],
+        args: List[Any],
+        kwargs: Dict[str, Any]
+    ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
+        """
+        Execute an operation on this remote GPU machine.
+        
+        Args:
+            op_name: The operation name to execute
+            tensors_data: Serialized tensor data
+            tensor_metadata: Tensor metadata
+            args: Operation arguments
+            kwargs: Operation keyword arguments
+            
+        Returns:
+            Tuple of (serialized_results, result_metadata)
+            
+        Raises:
+            RuntimeError: If machine is not running
+        """
+        if not self.is_running():
+            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+        
+        return self._executor_instance.execute_aten_operation.remote(
+            op_name, tensors_data, tensor_metadata, args, kwargs, self.device_id
+        )
+    
+    def __enter__(self):
+        """Context manager entry - starts the machine."""
+        self.start()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - stops the machine."""
+        self.stop()
+    
+    def __repr__(self):
+        status = "running" if self.is_running() else "stopped"
+        return f"RemoteGPUMachine(gpu_type='{self.gpu_type}', device_id='{self.device_id}', status='{status}')"
+
+
+def create_modal_app_for_gpu(gpu_type: str, device_id: str) -> RemoteGPUMachine:
+    """
+    Create a RemoteGPUMachine for a specific GPU type and device.
+    
+    Args:
+        gpu_type: The GPU type (e.g., "T4", "A100-40GB")
+        device_id: The device ID (e.g., "modal-t4-f3a7d67e")
+        
+    Returns:
+        RemoteGPUMachine instance representing the remote GPU
+    """
+    # Check cache first
+    if device_id in _gpu_machines:
+        return _gpu_machines[device_id]
+    
+    # Create new machine and cache it
+    machine = RemoteGPUMachine(gpu_type, device_id)
+    _gpu_machines[device_id] = machine
+    return machine
+
+
+def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and class for a specific GPU type and device.
     
@@ -286,15 +399,15 @@ def create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App, 
     return app, PytorchOperationExecutor
 
 
-def get_modal_app_for_device(device) -> Tuple[modal.App, Any]:
+def get_modal_app_for_device(device) -> RemoteGPUMachine:
     """
-    Get the Modal app and function for a specific device.
+    Get the RemoteGPUMachine for a specific device.
     
     Args:
-        device: The BackendDevice to get the app for
+        device: The BackendDevice to get the machine for
         
     Returns:
-        Tuple of (modal_app, function) for the device's GPU type
+        RemoteGPUMachine for the device's GPU type
     """
     if hasattr(device, 'provider') and device.provider.value != "modal":
         raise ValueError(f"Device provider {device.provider.value} is not Modal")
