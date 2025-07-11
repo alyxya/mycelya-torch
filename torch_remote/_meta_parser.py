@@ -76,6 +76,44 @@ class RemoteTensorData(torch.Tensor):
         except Exception:
             return f"RemoteTensor(device=remote)"
     
+    @classmethod
+    def _validate_mixed_device_operation(cls, func, args, kwargs):
+        """Prevent operations between tensors on different devices."""
+        import torch
+        
+        devices = set()
+        
+        # Check all tensor arguments for device types
+        def check_tensor(tensor):
+            if isinstance(tensor, torch.Tensor):
+                devices.add(tensor.device)
+        
+        # Check args
+        for arg in args:
+            if isinstance(arg, (list, tuple)):
+                for item in arg:
+                    check_tensor(item)
+            else:
+                check_tensor(arg)
+        
+        # Check kwargs if present
+        if kwargs:
+            for value in kwargs.values():
+                if isinstance(value, (list, tuple)):
+                    for item in value:
+                        check_tensor(item)
+                else:
+                    check_tensor(value)
+        
+        # Raise error if multiple different devices detected
+        if len(devices) > 1:
+            op_name = func._qualified_name if hasattr(func, '_qualified_name') else str(func)
+            device_list = [str(d) for d in sorted(devices, key=str)]
+            raise RuntimeError(
+                f"Cannot perform {op_name} between tensors on different devices: {device_list}. "
+                "Move all tensors to the same device first using .to()."
+            )
+    
     @classmethod  
     def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
         """
@@ -109,6 +147,9 @@ class RemoteTensorData(torch.Tensor):
         
         # Optionally log for debugging - comment out for production
         # print(f"🔍 RemoteTensorData.__torch_dispatch__ called for {op_name}")
+        
+        # Validate mixed device operations before proceeding
+        cls._validate_mixed_device_operation(func, args, kwargs)
         
         # Import here to avoid circular imports
         from ._aten_impl import _should_use_remote_execution, _get_remote_executor
