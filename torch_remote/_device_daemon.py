@@ -492,8 +492,10 @@ class _Executor:
     @register(registry)
     def empty_tensor(self, size, dtype):
         # Calculate default strides for contiguous tensor
-        stride = []
-        if size:
+        if len(size) == 0:
+            # Scalar tensor (0-dimensional) has empty strides
+            stride = []
+        else:
             stride = [1]
             for i in range(len(size) - 2, -1, -1):
                 stride.insert(0, stride[0] * size[i + 1])
@@ -504,7 +506,14 @@ class _Executor:
     def empty_strided_tensor(self, size, stride, dtype):
         # Allocate memory for the tensor
         element_size = torch.zeros(1, dtype=dtype).element_size()
-        total_size = max(s * st for s, st in zip(size, stride)) * element_size if size else 0
+        
+        # Handle scalar tensors (0-dimensional) separately
+        if len(size) == 0:
+            # Scalar tensor always needs one element
+            total_size = element_size
+        else:
+            # For non-scalar tensors, calculate size from strides
+            total_size = max(s * st for s, st in zip(size, stride)) * element_size if size else 0
         
         if total_size > 0:
             ptr = self.allocator.malloc(total_size)
