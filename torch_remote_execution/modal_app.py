@@ -421,9 +421,3 @@ def clear_app_cache():
     _gpu_apps.clear()
 
 
-def get_gpu_function(gpu_type: str):
-    """Get the appropriate Modal function for a given GPU type."""
-    # For backward compatibility, create a temporary device ID
-    temp_device_id = f"temp-{gpu_type.lower().replace('-', '')}"
-    app, function = create_modal_app_for_gpu(gpu_type, temp_device_id)
-    return function

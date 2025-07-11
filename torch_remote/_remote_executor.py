@@ -11,13 +11,12 @@ import torch
 
 log = logging.getLogger(__name__)
 
-# Try to import the remote app (Modal provider implementation)
+# Try to load the remote execution module (Modal provider implementation)
 try:
-    from torch_remote_execution.modal_app import get_gpu_function
+    import torch_remote_execution.modal_app
     log.info("Loaded torch_remote_execution app")
 except Exception as e:
     log.warning(f"Remote execution not available: {e}")
-    get_gpu_function = None
 
 
 class RemoteExecutor:
