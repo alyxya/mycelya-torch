@@ -104,11 +104,12 @@ class BackendDevice:
             raise ValueError("modal_gpu_spec only available for Modal provider")
         return self.gpu_type.value
 
-    def to_torch_device(self, index: int = 0):
-        """Convert to a torch.device for compatibility."""
-        # For now, we'll use the remote device type with a custom index
-        # The index will be managed by the device registry
-        return torch.device("remote", index)
+    @property
+    def remote_index(self):
+        """Get the device's index in the device registry."""
+        registry = get_device_registry()
+        return registry.get_device_index(self)
+
 
 
 class DeviceRegistry:

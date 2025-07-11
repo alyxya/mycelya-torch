@@ -33,12 +33,17 @@ class RemoteTensorData(torch.Tensor):
     def device(self):
         """Override device property to report 'remote' instead of the underlying CPU device."""
         import torch
-        # Get current remote device index, default to 0 if not available
-        try:
-            device_index = torch.remote.current_device()
-        except (AttributeError, RuntimeError):
-            device_index = 0
-        return torch.device("remote", device_index)
+        # Get the device index from the BackendDevice via the device ID
+        device_id = getattr(self, '_device_id', None)
+        if device_id is not None:
+            from .device import get_device_registry
+            registry = get_device_registry()
+            backend_device = registry.get_device_by_id(device_id)
+            if backend_device is not None:
+                device_index = backend_device.remote_index
+                return torch.device("remote", device_index)
+        
+        raise RuntimeError(f"RemoteTensorData missing device ID")
     
     def cpu(self, memory_format=torch.preserve_format):
         """Override cpu() method to return actual CPU tensor, not RemoteTensorData."""
