@@ -11,26 +11,13 @@ import torch
 
 log = logging.getLogger(__name__)
 
-# Global remote app - will be auto-imported (Modal provider implementation)
-_remote_app = None
-
 # Try to import the remote app (Modal provider implementation)
 try:
-    from torch_remote_execution.modal_app import app as _remote_app, get_gpu_function
+    from torch_remote_execution.modal_app import get_gpu_function
     log.info("Loaded torch_remote_execution app")
 except Exception as e:
     log.warning(f"Remote execution not available: {e}")
-    _remote_app = None
     get_gpu_function = None
-
-def _get_remote_app():
-    """Get the remote app for remote execution (Modal provider implementation)."""
-    global _remote_app
-    
-    if _remote_app is None:
-        raise RuntimeError("Remote execution not available. Install provider dependencies (e.g., pip install modal)")
-    
-    return _remote_app
 
 
 class RemoteExecutor:
@@ -41,21 +28,10 @@ class RemoteExecutor:
     """
     
     def __init__(self):
-        self._remote_app = None
-        self._app_context = None
         self._device_apps: Dict[str, Any] = {}  # Cache for device-specific apps
-        
-    def _get_app_context(self):
-        """Get or create the remote app context for ephemeral runs (Modal provider implementation)."""
-        if self._remote_app is None:
-            self._remote_app = _get_remote_app()
-        
-        # For ephemeral execution, we don't need to manage the context manually
-        # The provider will handle the app lifecycle automatically
-        return self._remote_app
     
-    def _get_device_app(self, device_id: str):
-        """Get the Modal app for a specific device."""
+    def _get_device_app_and_function(self, device_id: str):
+        """Get the Modal app and function for a specific device."""
         if device_id in self._device_apps:
             return self._device_apps[device_id]
         
@@ -70,11 +46,11 @@ class RemoteExecutor:
         if device is None:
             raise RuntimeError(f"Device {device_id} not found in registry")
         
-        # Get device-specific app
-        app = get_modal_app_for_device(device)
-        self._device_apps[device_id] = app
+        # Get device-specific app and function
+        app, function = get_modal_app_for_device(device)
+        self._device_apps[device_id] = (app, function)
         
-        return app
+        return app, function
         
     def execute_remote_operation(
         self, 
@@ -100,11 +76,13 @@ class RemoteExecutor:
             if device_id is None:
                 device_id = self._detect_device_from_tensors(args, kwargs)
             
-            # Get the appropriate app (device-specific or default)
+            # Get the appropriate app and function (device-specific or default)
             if device_id is not None:
-                remote_app = self._get_device_app(device_id)
+                remote_app, execute_function = self._get_device_app_and_function(device_id)
             else:
-                remote_app = self._get_app_context()
+                # For device_id None, use T4 as default
+                from torch_remote_execution.modal_app import create_modal_app_for_gpu
+                remote_app, execute_function = create_modal_app_for_gpu("T4")
             
             # Separate tensors from other arguments
             tensors_data = []
@@ -155,18 +133,24 @@ class RemoteExecutor:
             log.info(f"Executing {op_name} remotely with {len(tensors_data)} tensors")
             
             # Execute remotely with app context (Modal provider implementation)
+            log.info(f"🚀 Starting remote app context for {op_name}")
             with remote_app.run():
-                # Get the GPU-specific function based on the device
-                if device_id is not None:
-                    execute_function = self._get_gpu_function_for_device(device_id)
-                else:
-                    # Use default GPU function when device_id is None
-                    execute_function = get_gpu_function("T4")
+                log.info(f"📡 App context started, calling remote function for {op_name}")
+                log.info(f"🔧 Function: {execute_function}")
+                log.info(f"📊 Args: op_name={op_name}, tensors={len(tensors_data)}, device_id={device_id}")
                 
-                # Include device_id in the call for device-specific execution
-                serialized_results, result_metadata = execute_function.remote(
-                    op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs, device_id
-                )
+                try:
+                    serialized_results, result_metadata = execute_function.remote(
+                        op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs, device_id
+                    )
+                    log.info(f"✅ Remote function call completed for {op_name}")
+                    log.info(f"📥 Received {len(serialized_results)} results")
+                except Exception as remote_ex:
+                    log.error(f"❌ Remote function call failed for {op_name}: {remote_ex}")
+                    log.error(f"Exception type: {type(remote_ex).__name__}")
+                    import traceback
+                    log.error(f"Traceback: {traceback.format_exc()}")
+                    raise
             
             # Deserialize results and create remote tensors
             results = []
@@ -185,41 +169,10 @@ class RemoteExecutor:
             log.error(f"Remote execution failed for {op_name}: {str(e)}")
             raise RuntimeError(f"Remote execution failed: {str(e)}")
     
-    def _get_gpu_function_for_device(self, device_id: Optional[str]):
-        """Get the GPU-specific Modal function for a device."""
-        # Import here to avoid circular imports
-        from .device import get_device_registry
-        
-        # Require explicit device specification
-        if device_id is None:
-            raise RuntimeError("Device ID must be explicitly specified for remote operations")
-        
-        # Get the device from registry
-        registry = get_device_registry()
-        device = registry.get_device_by_id(device_id)
-        
-        if device is None:
-            raise RuntimeError(f"Device {device_id} not found in registry")
-        
-        # Get the GPU type from the device
-        gpu_type = device.gpu_type.value if hasattr(device, 'gpu_type') else None
-        if gpu_type is None:
-            raise RuntimeError(f"Device {device_id} has no GPU type specified")
-        
-        # Get the appropriate GPU function
-        gpu_function = get_gpu_function(gpu_type)
-        
-        log.info(f"Using GPU function for {gpu_type} on device {device_id}")
-        return gpu_function
     
     def cleanup(self):
         """Clean up the remote app context."""
-        if self._app_context is not None:
-            try:
-                self._app_context.__exit__(None, None, None)
-            except Exception:
-                pass
-            self._app_context = None
+        self._device_apps.clear()
     
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor without triggering remote execution."""
