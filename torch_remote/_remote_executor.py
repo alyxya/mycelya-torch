@@ -76,13 +76,11 @@ class RemoteExecutor:
             if device_id is None:
                 device_id = self._detect_device_from_tensors(args, kwargs)
             
-            # Get the appropriate app and function (device-specific or default)
-            if device_id is not None:
-                remote_app, execute_function = self._get_device_app_and_function(device_id)
-            else:
-                # For device_id None, use T4 as default
-                from torch_remote_execution.modal_app import create_modal_app_for_gpu
-                remote_app, execute_function = create_modal_app_for_gpu("T4")
+            # Get the appropriate app and function (device-specific)
+            if device_id is None:
+                raise ValueError("device_id is required for remote execution")
+            
+            remote_app, execute_function = self._get_device_app_and_function(device_id)
             
             # Separate tensors from other arguments
             tensors_data = []
@@ -136,11 +134,13 @@ class RemoteExecutor:
             log.info(f"🚀 Starting remote app context for {op_name}")
             with remote_app.run():
                 log.info(f"📡 App context started, calling remote function for {op_name}")
-                log.info(f"🔧 Function: {execute_function}")
+                log.info(f"🔧 Executor class: {execute_function}")
                 log.info(f"📊 Args: op_name={op_name}, tensors={len(tensors_data)}, device_id={device_id}")
                 
                 try:
-                    serialized_results, result_metadata = execute_function.remote(
+                    # Instantiate the executor class and call the method
+                    executor_instance = execute_function()
+                    serialized_results, result_metadata = executor_instance.execute_aten_operation.remote(
                         op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs, device_id
                     )
                     log.info(f"✅ Remote function call completed for {op_name}")

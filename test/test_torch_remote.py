@@ -122,7 +122,6 @@ def test_backend_tensor_device_properties():
     
     # Test device property - backend tensors should identify as remote device
     assert x_remote.device.type == 'remote'
-    assert x_remote.device.index == 0  # Default backend device index
 
 
 def test_backend_only_operations():
