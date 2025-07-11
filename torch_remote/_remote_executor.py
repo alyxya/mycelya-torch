@@ -56,8 +56,7 @@ class RemoteExecutor:
         self, 
         op_name: str, 
         args: Tuple[Any, ...], 
-        kwargs: Dict[str, Any],
-        device_id: Optional[str] = None
+        kwargs: Dict[str, Any]
     ) -> Any:
         """
         Execute an aten operation remotely on GPU.
@@ -66,15 +65,13 @@ class RemoteExecutor:
             op_name: The aten operation name
             args: Operation arguments (may contain tensors)
             kwargs: Operation keyword arguments (may contain tensors)
-            device_id: Optional device ID for device-specific execution
             
         Returns:
             Result of the operation (tensors moved back to remote device)
         """
         try:
-            # Detect device from tensors if not specified
-            if device_id is None:
-                device_id = self._detect_device_from_tensors(args, kwargs)
+            # Detect device from tensors
+            device_id = self._detect_device_from_tensors(args, kwargs)
             
             # Get the appropriate app and function (device-specific)
             if device_id is None:
