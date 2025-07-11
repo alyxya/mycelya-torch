@@ -30,29 +30,66 @@ This will install both the main `torch_remote` package and the private `torch_re
 ```python
 import torch
 import torch_remote
+from torch_remote import create_modal_device
+
+# Create a Modal device with A100-40GB GPU
+device = create_modal_device("A100-40GB")
 
 # Create tensors on the remote device
-x = torch.randn(3, 3, device="remote")
-y = torch.randn(3, 3, device="remote")
+x = torch.randn(3, 3, device=device)
+y = torch.randn(3, 3, device=device)
 
 # Operations automatically use cloud GPU
-result = x + y  # Executed on cloud GPU
+result = x + y  # Executed on A100-40GB GPU on Modal
 print(result)
 ```
 
-### Device Management
+### Available GPU Types
+
+```python
+from torch_remote import create_modal_device, GPUType
+
+# Create devices with different GPU types
+t4_device = create_modal_device("T4")           # Entry-level GPU
+l4_device = create_modal_device("L4")           # Mid-range GPU
+a100_40_device = create_modal_device("A100-40GB")  # High-end GPU
+a100_80_device = create_modal_device("A100-80GB")  # High-memory GPU
+h100_device = create_modal_device("H100")       # Latest high-end GPU
+
+# Or use the GPUType enum
+device = create_modal_device(GPUType.A100_40GB)
+
+# Supported GPU types: T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200
+```
+
+### Device Management and Validation
 
 ```python
 import torch
 import torch_remote
+from torch_remote import create_modal_device
 
 # Check device availability
 print(f"Remote available: {torch.remote.is_available()}")
 print(f"Device count: {torch.remote.device_count()}")
 
+# Create device and get device info
+device = create_modal_device("A100-40GB")
+print(f"Device: {device}")
+print(f"Device name: {device.device_name}")
+print(f"GPU type: {device.gpu_type.value}")
+
+# Device validation - tensors must be on the same device instance
+device1 = create_modal_device("A100-40GB")
+device2 = create_modal_device("A100-40GB")  # Different device instance
+
+x = torch.randn(3, 3, device=device1)
+y = torch.randn(3, 3, device=device2)
+# Operations between different device instances will fail
+
 # Move tensors with options
 x = torch.randn(3, 3, dtype=torch.float32)
-y = x.to("remote", dtype=torch.float64, copy=True)  # Convert dtype and copy
+y = x.to(device, dtype=torch.float64, copy=True)  # Convert dtype and copy
 ```
 
 ## Testing
@@ -60,7 +97,7 @@ y = x.to("remote", dtype=torch.float64, copy=True)  # Convert dtype and copy
 Run the test suite:
 
 ```bash
-pytest test_torch_remote.py -v
+pytest test/test_torch_remote.py -v
 ```
 
 Test remote execution manually:

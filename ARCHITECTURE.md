@@ -23,17 +23,15 @@ Automatically dispatches compute-intensive operations to cloud providers via a p
 torch_remote/                   # Main PyTorch extension package
 ├── __init__.py                 # Package initialization & device registration
 ├── _aten_impl.py              # Operation dispatch & remote execution logic  
-├── _remote_execution.py       # Remote execution system
+├── _remote_executor.py        # Remote execution system
 ├── _meta_parser.py            # Tensor metadata & data structures
 ├── _device_daemon.py          # Device management & process communication
+├── device.py                  # Backend device abstraction & registry
 ├── utils.py                   # Tensor method extensions
 ├── backends/                  # Multi-provider backend system
 │   ├── __init__.py            # Backend registry & management
 │   └── modal/                 # Modal provider implementation
-│       ├── __init__.py        # Modal backend integration
-│       └── _modal_remote.py   # Modal-specific remote execution
-├── remote/
-│   └── __init__.py            # Device management functions
+│       └── __init__.py        # Modal backend integration
 └── csrc/                      # C++ extension
     ├── remote_extension.cpp   # Python extension entry point
     ├── RemoteHooks.cpp        # PrivateUse1 backend implementation
@@ -78,13 +76,14 @@ torch_remote_execution/        # Private package for remote execution
 - **Factory function support**: Handles tensor creation operations on remote device
 - **Library registration**: Registers remote device implementations for specific PyTorch operations
 
-**`torch_remote/_remote_execution.py`** - Remote Execution System
-- **RemoteExecutor class**: Manages remote execution across cloud providers
+**`torch_remote/_remote_executor.py`** - Remote Execution System
+- **RemoteExecutor class**: Manages remote execution across cloud providers using stateful RemoteGPUMachine instances
 - **Tensor serialization/deserialization**: Converts remote tensors to/from bytes for network transport
-- **Provider backend integration**: Interfaces with the `torch_remote_backends` package
+- **Provider backend integration**: Interfaces with the `torch_remote_execution` package
 - **Error handling and fallbacks**: Graceful degradation when remote providers are unavailable
-- **Multi-provider support**: Abstracts provider-specific execution details
+- **Device validation**: Enforces single-device operations and prevents mixed-device tensor operations
 - **Device conversion helpers**: Converts between remote tensors and CPU tensors for transport
+- **Stateful execution**: Manages device-specific GPU machines with caching for improved performance
 
 **`torch_remote/_meta_parser.py`** - Tensor Metadata & Data Structures
 - **RemoteTensorMeta class**: Captures tensor metadata (shape, dtype, strides, storage info) for serialization
@@ -116,11 +115,21 @@ torch_remote_execution/        # Private package for remote execution
 - Enables `tensor.to(backend_device)` to move tensors to remote device
 - Simple wrapper around the C++ remote conversion function
 
-**`torch_remote/remote/__init__.py`** - Device Management Functions
-- Device availability, count, and property queries
-- RNG state management for remote device
-- Synchronization primitives
-- Tensor type aliases (FloatTensor, DoubleTensor, etc.)
+**`torch_remote/device.py`** - Backend Device Abstraction & Registry
+- **BackendDevice class**: Represents a remote GPU device with specific provider and GPU type
+  - Unique device ID generation with provider-gpu-uuid format
+  - GPU type validation for provider compatibility
+  - Device equality and hashing based on unique device ID
+  - Provider-specific configuration support
+- **DeviceRegistry class**: Manages active BackendDevice instances
+  - Device registration with automatic index assignment
+  - Device lookup by ID or index
+  - Device compatibility validation for operations
+  - Enforces single-device constraint for tensor operations
+- **GPUType enum**: Supported GPU types (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
+- **BackendProvider enum**: Supported cloud providers (Modal, with future providers planned)
+- **Factory functions**: `create_modal_device()` for easy Modal device creation
+- **Global registry**: Shared device registry for system-wide device management
 
 #### Backend System Files
 
@@ -137,11 +146,6 @@ torch_remote_execution/        # Private package for remote execution
 - **Resource configuration**: Handles Modal-specific GPU and container configurations
 - **Error translation**: Converts Modal-specific errors to standard backend errors
 
-**`torch_remote/backends/modal/_modal_remote.py`** - Modal-Specific Remote Execution
-- **ModalRemoteExecutor class**: Modal-specific implementation of remote execution
-- **Modal app integration**: Interfaces with the `torch_remote_backends.modal` package
-- **A100 GPU optimization**: Modal-specific optimizations for A100 GPU utilization
-- **Ephemeral execution**: Uses Modal's run contexts for one-off operations
 
 #### C++ Extension
 
@@ -183,22 +187,23 @@ torch_remote_execution/        # Private package for remote execution
 - Marks package as internal to torch_remote
 
 **`torch_remote_execution/modal_app.py`** - Modal Multi-GPU Execution App
-- **Modal application definition**: Creates Modal app "torch-remote-extension" with multi-GPU support
+- **RemoteGPUMachine class**: Stateful wrapper representing a remote GPU machine running on Modal
+  - Encapsulates Modal app and executor with connection management
+  - Context manager support for automatic resource cleanup
+  - Device-specific initialization and state management
+  - Machine lifecycle operations (start, stop, is_running)
+- **Modal application definition**: Creates device-specific Modal apps with unique identifiers
 - **Docker image setup**: 
   - Debian slim base with Python 3.11
-  - Installs PyTorch with CUDA 12.1 support
-- **Multi-GPU support**: Separate execution functions for each GPU type:
-  - T4: `execute_aten_operation_t4()`
-  - L4: `execute_aten_operation_l4()`
-  - A10G: `execute_aten_operation_a10g()`
-  - A100-40GB: `execute_aten_operation_a100_40gb()`
-  - A100-80GB: `execute_aten_operation_a100_80gb()`
-  - L40S: `execute_aten_operation_l40s()`
-  - H100: `execute_aten_operation_h100()`
-  - H200: `execute_aten_operation_h200()`
-  - B200: `execute_aten_operation_b200()`
-- **Device-specific GPU routing**: Each function configured with appropriate GPU type, timeout, and retry settings
-- **Common execution implementation**: Shared `_execute_aten_operation_impl()` function that:
+  - Installs PyTorch with CUDA support
+- **Multi-GPU support**: Dynamic creation of device-specific execution functions for each GPU type:
+  - T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200
+- **Device-specific GPU routing**: Each machine configured with appropriate GPU type, timeout, and retry settings
+- **Stateful execution model**: 
+  - `create_modal_app_for_gpu()` creates device-specific RemoteGPUMachine instances
+  - Machine caching prevents redundant app creation for same device
+  - Context management ensures proper resource cleanup
+- **Common execution implementation**: Shared execution logic that:
   - Receives serialized tensors, metadata, args, and kwargs
   - Deserializes tensors and moves them to CUDA device
   - Processes tensor placeholders in arguments
@@ -206,7 +211,7 @@ torch_remote_execution/        # Private package for remote execution
   - Serializes results and returns them
 - **GPU utilization**: Automatically detects and uses CUDA when available
 - **Error handling**: Comprehensive error reporting and traceback printing
-- **Function registry**: `GPU_FUNCTIONS` dictionary maps GPU types to their execution functions
+- **Dynamic app creation**: Creates unique Modal apps per device to support multiple concurrent GPU machines
 
 **`torch_remote_execution/setup.py`** - Private Package Installation
 - Main setuptools configuration for the remote execution package
@@ -225,18 +230,20 @@ Here's how a typical operation flows through the system:
 3. **_aten_impl.py**: 
    - `_remote_kernel_fallback` or `_kernel_fallback` receives the operation
    - `_should_use_remote_execution()` decides if this should run remotely
+   - **Device validation**: Ensures all tensors belong to same device before operation
    - For compute-intensive ops: routes to remote execution
    - For simple ops: handles locally
 
 4. **Remote Execution Path** (if enabled):
    - `RemoteExecutor.execute_remote_operation()` is called
-   - Current provider backend is selected (e.g., Modal)
+   - **Device detection and validation**: `_detect_device_from_tensors()` ensures single-device operation
+   - Device-specific RemoteGPUMachine is retrieved or created
    - Tensors are serialized to bytes
-   - Provider app is invoked (e.g., Modal app with `app.run()` context)
+   - RemoteGPUMachine context is started (Modal app)
    - Appropriate GPU-specific function is called based on device configuration
-   - `torch_remote_execution.modal_app.execute_aten_operation_*` runs on cloud GPU
+   - `PytorchOperationExecutor.execute_aten_operation()` runs on cloud GPU
    - Results are serialized and returned
-   - Results are deserialized back to remote tensors
+   - Results are deserialized back to remote tensors with original device ID preserved
 
 5. **Local Execution Path** (fallback):
    - Operation metadata is computed
@@ -258,11 +265,26 @@ Remote execution is lazy-loaded and gracefully degrades when cloud providers are
 ### Operation Filtering
 Smart filtering ensures that only operations that benefit from cloud GPU acceleration are sent remotely, while keeping memory operations, views, and small tensor operations local for efficiency.
 
+### Stateful Remote Execution
+The system uses stateful RemoteGPUMachine instances for improved performance and resource management:
+- **Device-specific machines**: Each BackendDevice gets its own RemoteGPUMachine instance
+- **Connection caching**: Modal app contexts are reused across operations on the same device
+- **Context management**: Automatic startup/shutdown of remote GPU resources
+- **Machine lifecycle**: Start, stop, and running state management for remote resources
+
 ### Multi-GPU Support
-The system supports multiple GPU types through device-specific Modal functions, allowing automatic routing to the most appropriate GPU based on workload requirements and availability.
+The system supports multiple GPU types through device-specific RemoteGPUMachine instances, allowing automatic routing to the most appropriate GPU based on workload requirements and availability.
 
 ### CPU Storage with Device Spoofing
 Remote tensors are stored in CPU memory but report as "remote" device to PyTorch, enabling seamless integration with PyTorch's device system while maintaining compatibility.
+
+### Device Validation and Isolation
+The system enforces strict device isolation to prevent operations between tensors on different remote devices:
+- **Single-device constraint**: Operations can only be performed between tensors on the same BackendDevice instance
+- **Device ID tracking**: Each tensor maintains a `_device_id` attribute linking it to its specific remote device
+- **Cross-device detection**: `_detect_device_from_tensors()` validates all tensors in an operation belong to the same device
+- **Error prevention**: Mixed-device operations raise clear error messages before execution
+- **Provider isolation**: Different cloud provider instances are treated as distinct devices
 
 ## Configuration
 
@@ -275,4 +297,4 @@ The system includes comprehensive testing:
 - Provider-specific tests for backend validation
 - Pytest-based test suite with cleanup handling
 
-This architecture provides a seamless PyTorch device experience while leveraging cloud provider GPU infrastructure for high-performance computing. The multi-provider system allows users to choose their preferred cloud backend while maintaining a consistent API.
+This architecture provides a seamless PyTorch device experience while leveraging cloud provider GPU infrastructure for high-performance computing. The multi-provider system with stateful execution, device validation, and backend abstraction allows users to choose their preferred cloud backend while maintaining a consistent API and ensuring safe, efficient operations across different remote GPU devices.
