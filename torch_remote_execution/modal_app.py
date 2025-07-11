@@ -184,9 +184,14 @@ class RemoteGPUMachine:
     def stop(self):
         """Stop the Modal app context for this machine."""
         if self._app_context is not None:
-            self._app_context.__exit__(None, None, None)
-            self._app_context = None
-            self._executor_instance = None
+            try:
+                self._app_context.__exit__(None, None, None)
+            except Exception:
+                # Silently ignore cleanup errors during atexit
+                pass
+            finally:
+                self._app_context = None
+                self._executor_instance = None
     
     def is_running(self) -> bool:
         """Check if the machine is currently running."""
@@ -231,6 +236,7 @@ class RemoteGPUMachine:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - stops the machine."""
         self.stop()
+    
     
     def __repr__(self):
         status = "running" if self.is_running() else "stopped"

@@ -29,14 +29,10 @@ class RemoteExecutor:
     def __init__(self):
         self._device_apps: Dict[str, Any] = {}  # Cache for device-specific GPU machines
     
-    def _get_device_app_and_function(self, device_id: str):
-        """Get the RemoteGPUMachine for a specific device."""
-        if device_id in self._device_apps:
-            return self._device_apps[device_id]
-        
+    def _get_device_gpu_machine(self, device_id: str):
+        """Get the active RemoteGPUMachine for a specific device."""
         # Import here to avoid circular imports
         from .device import get_device_registry
-        from torch_remote_execution.modal_app import get_modal_app_for_device
         
         # Get the device from registry
         registry = get_device_registry()
@@ -45,9 +41,14 @@ class RemoteExecutor:
         if device is None:
             raise RuntimeError(f"Device {device_id} not found in registry")
         
-        # Get device-specific GPU machine
-        gpu_machine = get_modal_app_for_device(device)
-        self._device_apps[device_id] = gpu_machine
+        # Get the pre-started GPU machine from the device
+        gpu_machine = device.get_gpu_machine()
+        
+        if gpu_machine is None:
+            raise RuntimeError(f"No GPU machine available for device {device_id}")
+        
+        if not gpu_machine.is_running():
+            raise RuntimeError(f"GPU machine for device {device_id} is not running")
         
         return gpu_machine
         
@@ -72,11 +73,11 @@ class RemoteExecutor:
             # Detect device from tensors
             device_id = self._detect_device_from_tensors(args, kwargs)
             
-            # Get the appropriate app and function (device-specific)
+            # Get the pre-started GPU machine (device-specific)
             if device_id is None:
                 raise ValueError("device_id is required for remote execution")
             
-            gpu_machine = self._get_device_app_and_function(device_id)
+            gpu_machine = self._get_device_gpu_machine(device_id)
             
             # Separate tensors from other arguments
             tensors_data = []
@@ -126,24 +127,22 @@ class RemoteExecutor:
             
             log.info(f"Executing {op_name} remotely with {len(tensors_data)} tensors")
             
-            # Execute remotely using RemoteGPUMachine
-            log.info(f"🚀 Starting remote GPU machine for {op_name}")
-            with gpu_machine:
-                log.info(f"📡 GPU machine started: {gpu_machine}")
-                log.info(f"📊 Args: op_name={op_name}, tensors={len(tensors_data)}, device_id={device_id}")
-                
-                try:
-                    serialized_results, result_metadata = gpu_machine.execute_operation(
-                        op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs
-                    )
-                    log.info(f"✅ Remote operation completed for {op_name}")
-                    log.info(f"📥 Received {len(serialized_results)} results")
-                except Exception as remote_ex:
-                    log.error(f"❌ Remote operation failed for {op_name}: {remote_ex}")
-                    log.error(f"Exception type: {type(remote_ex).__name__}")
-                    import traceback
-                    log.error(f"Traceback: {traceback.format_exc()}")
-                    raise
+            # Execute remotely using pre-started RemoteGPUMachine
+            log.info(f"🚀 Using active GPU machine for {op_name}: {gpu_machine}")
+            log.info(f"📊 Args: op_name={op_name}, tensors={len(tensors_data)}, device_id={device_id}")
+            
+            try:
+                serialized_results, result_metadata = gpu_machine.execute_operation(
+                    op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs
+                )
+                log.info(f"✅ Remote operation completed for {op_name}")
+                log.info(f"📥 Received {len(serialized_results)} results")
+            except Exception as remote_ex:
+                log.error(f"❌ Remote operation failed for {op_name}: {remote_ex}")
+                log.error(f"Exception type: {type(remote_ex).__name__}")
+                import traceback
+                log.error(f"Traceback: {traceback.format_exc()}")
+                raise
             
             # Deserialize results and create remote tensors
             results = []
@@ -164,7 +163,8 @@ class RemoteExecutor:
     
     
     def cleanup(self):
-        """Clean up the remote app context."""
+        """Clean up the remote executor."""
+        # No longer needed since machines are managed by devices
         self._device_apps.clear()
     
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:

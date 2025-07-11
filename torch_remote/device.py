@@ -4,6 +4,7 @@ Backend device management for torch_remote.
 This module provides device abstraction for different GPU cloud providers and GPU types.
 """
 import uuid
+import atexit
 from typing import Dict, Any, Optional, Union
 from enum import Enum
 import torch
@@ -52,9 +53,13 @@ class BackendDevice:
         self.device_id = self._generate_device_id()
         self.config = kwargs
         self._initialized = False
+        self._gpu_machine = None
 
         # Validate GPU type is supported by provider
         self._validate_gpu_support()
+        
+        # Create and start the GPU machine
+        self._create_and_start_gpu_machine()
 
     def _generate_device_id(self) -> str:
         """Generate a human-readable device ID with provider and GPU info."""
@@ -76,6 +81,39 @@ class BackendDevice:
                 raise ValueError(f"GPU type {self.gpu_type.value} not supported by {self.provider.value}")
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
+    
+    def _create_and_start_gpu_machine(self):
+        """Create and start the GPU machine for this device."""
+        try:
+            if self.provider == BackendProvider.MODAL:
+                # Import here to avoid circular imports
+                from torch_remote_execution.modal_app import create_modal_app_for_gpu
+                self._gpu_machine = create_modal_app_for_gpu(self.gpu_type.value, self.device_id)
+                self._gpu_machine.start()
+                print(f"🚀 Started GPU machine: {self._gpu_machine}")
+            else:
+                raise ValueError(f"Provider {self.provider.value} not implemented yet")
+        except ImportError as e:
+            print(f"⚠️  Remote execution not available: {e}")
+            # Continue without remote execution capability
+        except Exception as e:
+            print(f"⚠️  Failed to start GPU machine: {e}")
+            # Continue without remote execution capability
+    
+    def get_gpu_machine(self):
+        """Get the active GPU machine for this device."""
+        return self._gpu_machine
+    
+    def stop_gpu_machine(self):
+        """Stop the GPU machine for this device."""
+        if self._gpu_machine and self._gpu_machine.is_running():
+            try:
+                self._gpu_machine.stop()
+                print(f"🛑 Stopped GPU machine: {self.device_id}")
+            except Exception as e:
+                # Don't print full stack traces during shutdown
+                print(f"⚠️  Error stopping GPU machine {self.device_id}: {type(e).__name__}")
+        self._gpu_machine = None
 
     def __str__(self):
         return f"BackendDevice(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.device_id})"
@@ -91,6 +129,7 @@ class BackendDevice:
 
     def __hash__(self):
         return hash(self.device_id)
+    
 
     @property
     def device_name(self):
@@ -176,10 +215,24 @@ class DeviceRegistry:
         self._device_to_index.clear()
         self._index_to_device.clear()
         self._next_index = 0
+    
+    def shutdown_all_machines(self):
+        """Stop all GPU machines without clearing the registry."""
+        for device in self._devices.values():
+            if device._gpu_machine and device._gpu_machine.is_running():
+                try:
+                    device._gpu_machine.stop()
+                except Exception:
+                    # Silently ignore errors during shutdown
+                    pass
 
 
 # Global device registry
 _device_registry = DeviceRegistry()
+
+# No explicit cleanup during exit - Modal handles its own async context cleanup
+# The atexit approach works for simple standalone cases but conflicts with the complex
+# PyTorch extension architecture. The errors are cosmetic and can be suppressed with stderr redirection.
 
 
 def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> BackendDevice:
@@ -214,6 +267,9 @@ def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> BackendDevice:
 
     # Register the device
     _device_registry.register_device(device)
+    
+    # Register atexit cleanup for this specific device
+    atexit.register(device.stop_gpu_machine)
 
     return device
 
