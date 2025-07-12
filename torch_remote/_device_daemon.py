@@ -429,11 +429,11 @@ class _Executor:
     @register(registry)
     def send_data(self, *args):
         assert len(args) == 1
-        return RemoteTensorData.from_meta(self.allocator, args[0])
+        return RemoteTensorData.from_meta(self.allocator, args[0], self.id)
 
     @register(registry)
     def recv_data(self, host_tensor, dev_mem):
-        dev_tensor = RemoteTensorData.from_meta(self.allocator, dev_mem)
+        dev_tensor = RemoteTensorData.from_meta(self.allocator, dev_mem, self.id)
         dev_tensor.copy_(host_tensor)
 
     @register(registry)

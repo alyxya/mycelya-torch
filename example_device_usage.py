@@ -45,9 +45,12 @@ def main():
     print(f"   Total T4 elements: {x_t4.numel() + y_t4.numel()} (>1000 → should use REMOTE execution)")
     print(f"   Total L4 elements: {x_l4.numel() + y_l4.numel()} (>1000 → should use REMOTE execution)")
     
-    # Check if device IDs are attached
-    print(f"   T4 device ID: {getattr(x_t4, '_device_id', 'NOT SET')}")
-    print(f"   L4 device ID: {getattr(x_l4, '_device_id', 'NOT SET')}")
+    # Check device indices and get device IDs from registry
+    registry = torch_remote.get_device_registry()
+    t4_device_from_registry = registry.get_device_by_index(x_t4.device.index)
+    l4_device_from_registry = registry.get_device_by_index(x_l4.device.index)
+    print(f"   T4 device index: {x_t4.device.index}, ID: {t4_device_from_registry.device_id if t4_device_from_registry else 'NOT FOUND'}")
+    print(f"   L4 device index: {x_l4.device.index}, ID: {l4_device_from_registry.device_id if l4_device_from_registry else 'NOT FOUND'}")
     
     # Operations within the same device work
     print("\n3. Operations within the same device:")

@@ -26,24 +26,21 @@ class RemoteTensorMeta:
 
 class RemoteTensorData(torch.Tensor):
     @staticmethod
-    def from_meta(allocator, tensor_meta):
-        return RemoteTensorData(allocator.tensor_from_meta(tensor_meta))
+    def from_meta(allocator, tensor_meta, device_index: int = 0):
+        tensor = RemoteTensorData(allocator.tensor_from_meta(tensor_meta))
+        tensor._remote_device_index = device_index
+        return tensor
     
     @property
     def device(self):
         """Override device property to report 'remote' instead of the underlying CPU device."""
         import torch
-        # Get the device index from the BackendDevice via the device ID
-        device_id = getattr(self, '_device_id', None)
-        if device_id is not None:
-            from .device import get_device_registry
-            registry = get_device_registry()
-            backend_device = registry.get_device_by_id(device_id)
-            if backend_device is not None:
-                device_index = backend_device.remote_index
-                return torch.device("remote", device_index)
+        # Use the stored device index
+        device_index = getattr(self, '_remote_device_index', None)
+        if device_index is not None:
+            return torch.device("remote", device_index)
         
-        raise RuntimeError(f"RemoteTensorData missing device ID")
+        raise RuntimeError(f"RemoteTensorData missing device index")
     
     def cpu(self, memory_format=torch.preserve_format):
         """Override cpu() method to return actual CPU tensor, not RemoteTensorData."""

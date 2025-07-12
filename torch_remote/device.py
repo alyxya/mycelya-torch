@@ -169,14 +169,11 @@ class DeviceRegistry:
     """
     Registry to manage active BackendDevice instances.
 
-    This ensures that tensors can only operate with other tensors
-    on the same device instance.
+    Maps device indices directly to BackendDevice instances for simple lookups.
     """
 
     def __init__(self):
-        self._devices: Dict[str, BackendDevice] = {}
-        self._device_to_index: Dict[str, int] = {}
-        self._index_to_device: Dict[int, str] = {}
+        self._devices: Dict[int, BackendDevice] = {}  # index -> BackendDevice
         self._next_index = 0
 
     def register_device(self, device: BackendDevice) -> int:
@@ -189,45 +186,46 @@ class DeviceRegistry:
         Returns:
             The assigned device index
         """
-        if device.device_id in self._devices:
-            return self._device_to_index[device.device_id]
+        # Check if device is already registered
+        for index, existing_device in self._devices.items():
+            if existing_device is device:
+                return index
 
         # Assign new index
         index = self._next_index
         self._next_index += 1
 
-        # Store mappings
-        self._devices[device.device_id] = device
-        self._device_to_index[device.device_id] = index
-        self._index_to_device[index] = device.device_id
+        # Store direct mapping
+        self._devices[index] = device
 
         return index
 
     def get_device_by_index(self, index: int) -> Optional[BackendDevice]:
         """Get device by its index."""
-        device_id = self._index_to_device.get(index)
-        if device_id is None:
-            return None
-        return self._devices.get(device_id)
+        return self._devices.get(index)
 
     def get_device_by_id(self, device_id: str) -> Optional[BackendDevice]:
-        """Get device by its ID."""
-        return self._devices.get(device_id)
+        """Get device by its ID (for backwards compatibility)."""
+        for device in self._devices.values():
+            if device.device_id == device_id:
+                return device
+        return None
 
     def get_device_index(self, device: BackendDevice) -> Optional[int]:
         """Get the index of a device."""
-        return self._device_to_index.get(device.device_id)
+        for index, existing_device in self._devices.items():
+            if existing_device is device:
+                return index
+        return None
 
     def devices_compatible(self, device1: BackendDevice, device2: BackendDevice) -> bool:
         """Check if two devices are compatible for operations."""
-        # For now, devices are only compatible if they are the same instance
-        return device1.device_id == device2.device_id
+        # Devices are compatible if they are the same instance
+        return device1 is device2
 
     def clear(self):
         """Clear all registered devices."""
         self._devices.clear()
-        self._device_to_index.clear()
-        self._index_to_device.clear()
         self._next_index = 0
     
     def shutdown_all_machines(self):

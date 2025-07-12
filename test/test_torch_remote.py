@@ -317,8 +317,11 @@ def test_backend_device_method():
     assert x.shape == (2, 2)
     assert y.shape == (3, 3)
     
-    # Verify device ID is attached
-    assert hasattr(x, '_device_id')
-    assert hasattr(y, '_device_id')
-    assert x._device_id == backend_device.device_id
-    assert y._device_id == backend_device.device_id
+    # Verify device index is correct
+    assert x.device.index is not None
+    assert y.device.index is not None
+    assert x.device.index == y.device.index  # Same device
+    # Verify we can map back to BackendDevice via registry
+    registry = torch_remote.get_device_registry()
+    device_from_registry = registry.get_device_by_index(x.device.index)
+    assert device_from_registry is backend_device
