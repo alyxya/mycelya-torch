@@ -122,6 +122,9 @@ torch.utils.rename_privateuse1_backend("remote")
 torch._register_device_module("remote", _create_module())
 torch.utils.generate_methods_for_privateuse1_backend(for_storage=True)
 
+# Remove auto-generated .remote() method - we use explicit .device() method instead
+if hasattr(torch.Tensor, 'remote'):
+    delattr(torch.Tensor, 'remote')
 
 # Import device management
 from .device import create_modal_device, BackendDevice, GPUType, get_device_registry
