@@ -141,6 +141,36 @@ class RemoteTensorData(torch.Tensor):
             'aten.copy_.default'
         }
         
+        # Skip validation for tensor creation operations (single-device by nature)
+        skip_validation_ops = {
+            # Basic factory functions
+            'aten.empty', 'aten.empty.memory_format', 'aten.empty.default',
+            'aten.empty_like', 'aten.empty_strided',
+            'aten.zeros', 'aten.zeros.default', 'aten.zeros_like',
+            'aten.ones', 'aten.ones.default', 'aten.ones_like',
+            'aten.full', 'aten.full_like',
+            
+            # Random number generation
+            'aten.randn', 'aten.randn.default', 'aten.rand', 'aten.rand_like',
+            'aten.randn_like', 'aten.randint', 'aten.randint_like', 'aten.randperm',
+            'aten.normal', 'aten.normal_.default', 'aten.uniform', 'aten.uniform_',
+            'aten.random_',
+            
+            # Sequential and range functions
+            'aten.arange', 'aten.arange.start', 'aten.arange.start_step',
+            'aten.linspace', 'aten.logspace',
+            
+            # Special matrices
+            'aten.eye', 'aten.eye.m',
+            
+            # Tensor construction from data
+            'aten.tensor', 'aten.lift_fresh', 'aten.lift_fresh.default',
+            'aten.scalar_tensor',
+            
+            # Initialization functions
+            'aten.new_empty', 'aten.new_zeros', 'aten.new_ones', 'aten.new_full'
+        }
+        
         if op_name in skip_dispatch_ops:
             # Use torch.Tensor's default behavior for these operations
             return torch.Tensor.__torch_dispatch__(func, types, args, kwargs)
@@ -148,8 +178,10 @@ class RemoteTensorData(torch.Tensor):
         # Optionally log for debugging - comment out for production
         # print(f"🔍 RemoteTensorData.__torch_dispatch__ called for {op_name}")
         
-        # Validate mixed device operations before proceeding
-        cls._validate_mixed_device_operation(func, args, kwargs)
+        # Skip validation for tensor creation operations (single-device by nature)
+        if op_name not in skip_validation_ops:
+            # Validate mixed device operations before proceeding
+            cls._validate_mixed_device_operation(func, args, kwargs)
         
         # Import here to avoid circular imports
         from ._aten_impl import _should_use_remote_execution, _get_remote_executor
