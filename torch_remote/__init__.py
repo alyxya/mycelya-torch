@@ -122,10 +122,6 @@ torch.utils.rename_privateuse1_backend("remote")
 torch._register_device_module("remote", _create_module())
 torch.utils.generate_methods_for_privateuse1_backend(for_storage=True)
 
-# Patch tensor methods and factory functions to support BackendDevice
-from .utils import _add_tensor_methods, _patch_torch_factory_functions
-_add_tensor_methods()
-_patch_torch_factory_functions()
 
 # Import device management
 from .device import create_modal_device, BackendDevice, GPUType, get_device_registry

@@ -193,7 +193,10 @@ class RemoteExecutor:
             raise RuntimeError(f"Device {device_id} not found in registry")
         
         # Use the BackendDevice to ensure _device_id is preserved
-        return cpu_tensor.to(device)
+        result = cpu_tensor.to(device.device())
+        # Manually attach device ID since we're not using patched .to() anymore
+        result._device_id = device.device_id
+        return result
     
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
         """Serialize tensor to bytes."""

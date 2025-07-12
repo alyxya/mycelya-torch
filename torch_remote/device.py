@@ -148,6 +148,20 @@ class BackendDevice:
         """Get the device's index in the device registry."""
         registry = get_device_registry()
         return registry.get_device_index(self)
+    
+    def device(self):
+        """
+        Get a PyTorch device object for this BackendDevice.
+        
+        Returns:
+            torch.device: A PyTorch device object with type 'remote' and the device's index
+            
+        Example:
+            >>> backend_device = create_modal_device("A100-40GB")
+            >>> torch_device = backend_device.device()
+            >>> tensor = torch.randn(3, 3, device=torch_device)
+        """
+        return torch.device("remote", self.remote_index)
 
 
 

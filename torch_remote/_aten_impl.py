@@ -373,7 +373,16 @@ def empty_remote(
         device_idx = device.index if device.index is not None else 0
         driver._lazy_init()  # Ensure devices are initialized
         allocator = driver.devices[device_idx][3].allocator
-        return RemoteTensorData.from_meta(allocator, meta_result)
+        tensor = RemoteTensorData.from_meta(allocator, meta_result)
+        
+        # Attach device ID by looking up the device in the registry
+        from .device import get_device_registry
+        registry = get_device_registry()
+        backend_device = registry.get_device_by_index(device_idx)
+        if backend_device is not None:
+            tensor._device_id = backend_device.device_id
+        
+        return tensor
 
 
 def empty_strided_remote(
@@ -408,7 +417,16 @@ def empty_strided_remote(
         device_idx = device.index if device.index is not None else 0
         driver._lazy_init()  # Ensure devices are initialized
         allocator = driver.devices[device_idx][3].allocator
-        return RemoteTensorData.from_meta(allocator, meta_result)
+        tensor = RemoteTensorData.from_meta(allocator, meta_result)
+        
+        # Attach device ID by looking up the device in the registry
+        from .device import get_device_registry
+        registry = get_device_registry()
+        backend_device = registry.get_device_by_index(device_idx)
+        if backend_device is not None:
+            tensor._device_id = backend_device.device_id
+        
+        return tensor
 
 
 _remote_lib = torch.library.Library("_", "IMPL")

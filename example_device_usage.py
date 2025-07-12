@@ -33,12 +33,12 @@ def main():
     
     # Use larger tensors to definitely trigger remote execution
     # Method 1: Using torch.randn with device parameter
-    x_t4 = torch.randn(64, 64, device=t4_device)  # 4096 elements
-    y_t4 = torch.randn(64, 64, device=t4_device)  # 4096 elements
+    x_t4 = torch.randn(64, 64, device=t4_device.device())  # 4096 elements
+    y_t4 = torch.randn(64, 64, device=t4_device.device())  # 4096 elements
     
     # Method 2: Using .to() method
-    x_l4 = torch.randn(50, 50).to(l4_device)  # 2500 elements
-    y_l4 = torch.randn(50, 50).to(l4_device)  # 2500 elements
+    x_l4 = torch.randn(50, 50).to(l4_device.device())  # 2500 elements
+    y_l4 = torch.randn(50, 50).to(l4_device.device())  # 2500 elements
     
     print(f"   T4 tensors: {x_t4.shape} ({x_t4.numel()} elements) on {x_t4.device}")
     print(f"   L4 tensors: {x_l4.shape} ({x_l4.numel()} elements) on {x_l4.device}")

@@ -36,12 +36,35 @@ from torch_remote import create_modal_device
 device = create_modal_device("A100-40GB")
 
 # Create tensors on the remote device
-x = torch.randn(3, 3, device=device)
-y = torch.randn(3, 3, device=device)
+x = torch.randn(3, 3, device=device.device())
+y = torch.randn(3, 3, device=device.device())
 
 # Operations automatically use cloud GPU
 result = x + y  # Executed on A100-40GB GPU on Modal
 print(result)
+```
+
+### Device API
+
+The `BackendDevice` provides a `.device()` method to get a PyTorch device object:
+
+```python
+import torch
+import torch_remote
+
+# Create a backend device
+backend_device = torch_remote.create_modal_device("A100-40GB")
+
+# Get PyTorch device object
+torch_device = backend_device.device()
+print(f"Device: {torch_device}")  # Device: remote:0
+
+# Use with PyTorch factory functions
+x = torch.randn(3, 3, device=backend_device.device())
+y = torch.zeros(5, 5, device=backend_device.device())
+
+# Use with .to() method (BackendDevice directly supported)
+z = torch.ones(2, 2).to(backend_device)
 ```
 
 ### Available GPU Types
@@ -83,8 +106,8 @@ print(f"GPU type: {device.gpu_type.value}")
 device1 = create_modal_device("A100-40GB")
 device2 = create_modal_device("A100-40GB")  # Different device instance
 
-x = torch.randn(3, 3, device=device1)
-y = torch.randn(3, 3, device=device2)
+x = torch.randn(3, 3, device=device1.device())
+y = torch.randn(3, 3, device=device2.device())
 # Operations between different device instances will fail
 
 # Move tensors with options

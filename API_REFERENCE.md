@@ -58,7 +58,7 @@ from torch_remote import GPUType
 h100_device = torch_remote.create_modal_device(GPUType.H100)
 
 # Create tensor on remote device
-tensor = torch.randn(3, 3, device=t4_device)
+tensor = torch.randn(3, 3, device=t4_device.device())
 ```
 
 ### `get_device_registry()`
@@ -130,6 +130,22 @@ def remote_index(self) -> Optional[int]
 Device's index in the device registry.
 
 **Methods:**
+
+#### `device()`
+```python
+def device(self) -> torch.device
+```
+Get a PyTorch device object for this BackendDevice.
+
+**Returns:**
+- `torch.device`: A PyTorch device object with type 'remote' and the device's index
+
+**Example:**
+```python
+backend_device = torch_remote.create_modal_device("A100-40GB")
+torch_device = backend_device.device()
+tensor = torch.randn(3, 3, device=torch_device)
+```
 
 #### `__str__()` and `__repr__()`
 ```python
@@ -308,35 +324,19 @@ Currently only Modal is supported, with additional providers planned for future 
 
 ### Factory Functions
 
-PyTorch factory functions are patched to support BackendDevice instances:
+PyTorch factory functions work with remote devices using the `.device()` method:
 
-#### `torch.randn()`
+#### Using `.device()` Method
 ```python
-torch.randn(*size, device=None, **kwargs) -> Tensor
-```
-
-#### `torch.zeros()`
-```python
-torch.zeros(*size, device=None, **kwargs) -> Tensor
-```
-
-#### `torch.ones()`
-```python
-torch.ones(*size, device=None, **kwargs) -> Tensor
-```
-
-#### `torch.empty()`
-```python
-torch.empty(*size, device=None, **kwargs) -> Tensor
-```
-
-#### `torch.tensor()`
-```python
-torch.tensor(data, device=None, **kwargs) -> Tensor
+torch.randn(*size, device=backend_device.device(), **kwargs) -> Tensor
+torch.zeros(*size, device=backend_device.device(), **kwargs) -> Tensor
+torch.ones(*size, device=backend_device.device(), **kwargs) -> Tensor
+torch.empty(*size, device=backend_device.device(), **kwargs) -> Tensor
+torch.tensor(data, device=backend_device.device(), **kwargs) -> Tensor
 ```
 
 **Parameters:**
-- `device`: Can be a `BackendDevice` instance for remote execution
+- `device`: Use `backend_device.device()` to get a PyTorch device object for remote execution
 - Other parameters follow standard PyTorch conventions
 
 **Example:**
@@ -344,12 +344,12 @@ torch.tensor(data, device=None, **kwargs) -> Tensor
 import torch
 import torch_remote
 
-device = torch_remote.create_modal_device("A100-40GB")
+backend_device = torch_remote.create_modal_device("A100-40GB")
 
-# Create tensors directly on remote device
-x = torch.randn(100, 100, device=device)
-y = torch.zeros(50, 50, device=device)
-z = torch.ones(10, 10, device=device)
+# Create tensors on remote device using .device() method
+x = torch.randn(100, 100, device=backend_device.device())
+y = torch.zeros(50, 50, device=backend_device.device())
+z = torch.ones(10, 10, device=backend_device.device())
 ```
 
 ### Tensor Methods
@@ -489,8 +489,8 @@ import torch_remote
 device = torch_remote.create_modal_device("A100-40GB")
 
 # Create tensors
-x = torch.randn(1000, 1000, device=device)
-y = torch.randn(1000, 1000, device=device)
+x = torch.randn(1000, 1000, device=device.device())
+y = torch.randn(1000, 1000, device=device.device())
 
 # Operations execute remotely
 z = x @ y  # Matrix multiplication on remote GPU
@@ -510,8 +510,8 @@ t4_device = torch_remote.create_modal_device("T4")
 a100_device = torch_remote.create_modal_device("A100-40GB")
 
 # Create tensors on different devices
-x_t4 = torch.randn(100, 100, device=t4_device)
-x_a100 = torch.randn(200, 200, device=a100_device)
+x_t4 = torch.randn(100, 100, device=t4_device.device())
+x_a100 = torch.randn(200, 200, device=a100_device.device())
 
 # Operations within same device work
 y_t4 = x_t4 + x_t4     # Works - same device
@@ -551,7 +551,7 @@ import torch
 import torch_remote
 
 device = torch_remote.create_modal_device("H100")
-x = torch.randn(5, 5, device=device)
+x = torch.randn(5, 5, device=device.device())
 
 # Use remote device context
 with torch.remote.device(device.remote_index):
