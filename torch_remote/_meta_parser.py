@@ -31,6 +31,47 @@ class RemoteTensorData(torch.Tensor):
         tensor._remote_device_index = device_index
         return tensor
     
+    @staticmethod
+    def from_tensor_id(tensor_id: str, metadata: dict, device_index: int = 0):
+        """
+        Create a RemoteTensorData from a tensor ID and metadata.
+        This is the new primary way to create remote tensors with true persistence.
+        Uses meta tensors for memory efficiency - no local data allocation.
+        
+        Args:
+            tensor_id: Unique tensor ID on the remote machine
+            metadata: Tensor metadata (shape, dtype, etc.)
+            device_index: Device index for the remote device
+            
+        Returns:
+            RemoteTensorData with only metadata and tensor ID (no local data)
+        """
+        import torch
+        
+        # Extract shape and dtype from metadata
+        shape = metadata['shape']
+        dtype_str = metadata['dtype']
+        
+        # Parse dtype string to torch.dtype
+        if hasattr(torch, dtype_str.split('.')[-1]):
+            dtype = getattr(torch, dtype_str.split('.')[-1])
+        else:
+            # Fallback for complex dtype strings
+            dtype = torch.float32
+        
+        # Use meta device to avoid allocating actual memory locally
+        # This stores only metadata without allocating CPU memory equal to tensor size
+        meta_tensor = torch.empty(shape, dtype=dtype, device='meta')
+        
+        # Create RemoteTensorData from the meta tensor
+        remote_tensor = RemoteTensorData(meta_tensor)
+        remote_tensor._remote_device_index = device_index
+        remote_tensor._tensor_id = tensor_id
+        remote_tensor._is_persistent = True  # Flag to indicate this uses tensor ID
+        remote_tensor._metadata = metadata.copy()
+        
+        return remote_tensor
+    
     @property
     def device(self):
         """Override device property to report 'remote' instead of the underlying CPU device."""
@@ -42,9 +83,118 @@ class RemoteTensorData(torch.Tensor):
         
         raise RuntimeError(f"RemoteTensorData missing device index")
     
+    @property
+    def tensor_id(self):
+        """Get the tensor ID if this is a persistent remote tensor."""
+        return getattr(self, '_tensor_id', None)
+    
+    @property
+    def is_persistent(self):
+        """Check if this tensor uses persistent remote storage."""
+        return getattr(self, '_is_persistent', False)
+    
+    def get_remote_metadata(self):
+        """Get the stored remote metadata."""
+        return getattr(self, '_metadata', None)
+    
+    def to(self, *args, **kwargs):
+        """
+        Override .to() method to handle device transfers with persistent tensors.
+        """
+        # Handle different .to() call patterns
+        if len(args) == 1 and not kwargs:
+            # .to(device) or .to(dtype)
+            arg = args[0]
+            if isinstance(arg, (torch.device, str)) or (hasattr(arg, 'device') and callable(arg.device)):
+                # This is a device transfer
+                if hasattr(arg, 'device') and callable(arg.device):
+                    # BackendDevice.device() call
+                    target_device = arg.device()
+                else:
+                    # Direct device
+                    target_device = torch.device(arg) if isinstance(arg, str) else arg
+                
+                if target_device.type == "remote":
+                    # Remote to remote transfer - should be same device for now
+                    if target_device.index == self.device.index:
+                        return self  # Same device, no transfer needed
+                    else:
+                        # Cross-device transfer via CPU
+                        cpu_data = self.cpu()
+                        from ._aten_impl import cpu_tensor_to_persistent_remote
+                        return cpu_tensor_to_persistent_remote(cpu_data, target_device)
+                else:
+                    # Remote to CPU/CUDA - use existing cpu() method
+                    return self.cpu().to(target_device)
+            else:
+                # This is a dtype conversion - call parent
+                return super().to(*args, **kwargs)
+        else:
+            # Complex .to() call with multiple args/kwargs - call parent
+            return super().to(*args, **kwargs)
+    
+    def __del__(self):
+        """Destructor to clean up remote tensor when object is garbage collected."""
+        try:
+            if self.is_persistent and self.tensor_id:
+                # Decrement reference count on remote machine
+                from .device import get_device_registry
+                registry = get_device_registry()
+                device = registry.get_device_by_index(self.device.index)
+                
+                if device:
+                    gpu_machine = device.get_gpu_machine()
+                    if gpu_machine and gpu_machine.is_running():
+                        # Don't wait for remote call in destructor to avoid blocking
+                        try:
+                            # Try to remove tensor, but don't block if it fails
+                            gpu_machine.remove_tensor(self.tensor_id)
+                        except Exception:
+                            # Silently ignore failures in destructor
+                            pass
+        except Exception:
+            # Silently ignore any errors in destructor
+            pass
+    
     def cpu(self, memory_format=torch.preserve_format):
         """Override cpu() method to return actual CPU tensor, not RemoteTensorData."""
-        # Get the underlying tensor data and create a true CPU tensor
+        if self.is_persistent and self.tensor_id:
+            # For persistent tensors, need to fetch data from remote machine
+            from ._remote_executor import _get_remote_executor, StaleReferenceError, ConnectionError
+            from .device import get_device_registry
+            
+            executor = _get_remote_executor()
+            if executor:
+                try:
+                    # Validate tensor reference first
+                    registry = get_device_registry()
+                    device = registry.get_device_by_index(self.device.index)
+                    
+                    if device and not executor.validate_tensor_reference(self.tensor_id, device):
+                        raise StaleReferenceError(f"Tensor {self.tensor_id} no longer exists on remote machine")
+                    
+                    # Get tensor data from remote machine
+                    tensor_data = executor.get_tensor_data_from_remote(self.tensor_id, self.device.index)
+                    return tensor_data
+                    
+                except (StaleReferenceError, ConnectionError) as e:
+                    # Handle specific remote tensor errors
+                    print(f"Remote tensor error: {e}")
+                    # Fallback to creating zeros tensor with metadata
+                    metadata = self.get_remote_metadata()
+                    if metadata:
+                        return torch.zeros(metadata['shape'], dtype=getattr(torch, metadata['dtype'].split('.')[-1]))
+                    else:
+                        raise RuntimeError(f"Cannot access remote tensor {self.tensor_id}: {e}")
+                        
+                except Exception as e:
+                    print(f"Warning: Failed to fetch remote tensor data: {e}")
+                    # Fallback to creating zeros tensor with metadata
+                    metadata = self.get_remote_metadata()
+                    if metadata:
+                        return torch.zeros(metadata['shape'], dtype=getattr(torch, metadata['dtype'].split('.')[-1]))
+        
+        # Legacy behavior for non-persistent tensors
         cpu_tensor = super().cpu()
         # Ensure it's a regular torch.Tensor, not RemoteTensorData
         return torch.tensor(cpu_tensor.detach().numpy())
@@ -200,7 +350,85 @@ class RemoteTensorData(torch.Tensor):
             if executor is not None:
                 # print(f"🚀 Using remote execution for {op_name}")
                 try:
-                    return executor.execute_remote_operation(op_name, args, kwargs)
+                    # Check if all tensors are persistent and use tensor ID-based execution
+                    persistent_tensors = []
+                    tensor_ids = []
+                    all_persistent = True
+                    device = None
+                    
+                    # Collect tensor IDs and check if all tensors are persistent
+                    def collect_tensor_info(arg):
+                        nonlocal all_persistent, device
+                        if isinstance(arg, RemoteTensorData):
+                            if arg.is_persistent and arg.tensor_id:
+                                persistent_tensors.append(arg)
+                                tensor_ids.append(arg.tensor_id)
+                                if device is None:
+                                    from .device import get_device_registry
+                                    registry = get_device_registry()
+                                    device = registry.get_device_by_index(arg.device.index)
+                            else:
+                                all_persistent = False
+                    
+                    # Check args
+                    for arg in args:
+                        collect_tensor_info(arg)
+                    
+                    # Check kwargs
+                    for value in kwargs.values():
+                        collect_tensor_info(value)
+                    
+                    if all_persistent and tensor_ids and device:
+                        # Use tensor ID-based execution for persistent tensors
+                        from ._remote_executor import StaleReferenceError, ConnectionError, RemoteExecutionError
+                        
+                        # Clean args and kwargs - replace RemoteTensorData with placeholders
+                        clean_args = []
+                        tensor_idx = 0
+                        for arg in args:
+                            if isinstance(arg, RemoteTensorData):
+                                clean_args.append(f"__TENSOR_{tensor_idx}")
+                                tensor_idx += 1
+                            else:
+                                clean_args.append(arg)
+                        
+                        clean_kwargs = {}
+                        for key, value in kwargs.items():
+                            if isinstance(value, RemoteTensorData):
+                                clean_kwargs[key] = f"__TENSOR_{tensor_idx}"
+                                tensor_idx += 1
+                            else:
+                                clean_kwargs[key] = value
+                        
+                        try:
+                            result_ids = executor.safe_execute_remote_operation_with_ids(
+                                op_name, tensor_ids, clean_args, clean_kwargs, device
+                            )
+                        except (StaleReferenceError, ConnectionError) as e:
+                            print(f"Remote execution error: {e}, falling back to CPU")
+                            # Force fallback to CPU execution
+                            raise Exception("Remote execution failed, forcing CPU fallback")
+                        
+                        # Convert result IDs back to RemoteTensorData
+                        results = []
+                        for result_id in result_ids:
+                            gpu_machine = device.get_gpu_machine()
+                            if gpu_machine and gpu_machine.is_running():
+                                metadata = gpu_machine.get_tensor_metadata(result_id)
+                                result_tensor = RemoteTensorData.from_tensor_id(
+                                    result_id, metadata, device.remote_index
+                                )
+                                results.append(result_tensor)
+                        
+                        # Return single tensor or tuple
+                        if len(results) == 1:
+                            return results[0]
+                        else:
+                            return tuple(results)
+                    else:
+                        # Fallback to legacy remote execution
+                        return executor.execute_remote_operation(op_name, args, kwargs)
+                        
                 except Exception as e:
                     # print(f"⚠️  Remote execution failed for {op_name}: {e}, falling back to CPU")
                     pass  # Silently fall back to CPU
@@ -211,8 +439,12 @@ class RemoteTensorData(torch.Tensor):
         # Convert remote tensors to CPU for fallback execution
         def to_cpu_if_remote(arg):
             if isinstance(arg, RemoteTensorData):
-                # Use torch.Tensor's behavior directly to get underlying data
-                return torch.Tensor.__torch_dispatch__(torch.ops.aten.detach.default, (torch.Tensor,), (arg,), {})
+                if arg.is_persistent and arg.tensor_id:
+                    # For persistent tensors, fetch data from remote
+                    return arg.cpu()
+                else:
+                    # Use torch.Tensor's behavior directly to get underlying data
+                    return torch.Tensor.__torch_dispatch__(torch.ops.aten.detach.default, (torch.Tensor,), (arg,), {})
             return arg
         
         cpu_args = tuple(to_cpu_if_remote(arg) for arg in args)
@@ -223,7 +455,28 @@ class RemoteTensorData(torch.Tensor):
         
         # Convert result back to remote tensor if it's a tensor
         if isinstance(cpu_result, torch.Tensor):
-            return cpu_result.to("remote")
+            # Try to use persistent tensor conversion for the result
+            from ._aten_impl import cpu_tensor_to_persistent_remote
+            try:
+                # Detect original device from remote tensors in args
+                remote_device = None
+                for arg in args:
+                    if isinstance(arg, RemoteTensorData):
+                        remote_device = arg.device
+                        break
+                if remote_device is None:
+                    for value in kwargs.values():
+                        if isinstance(value, RemoteTensorData):
+                            remote_device = value.device
+                            break
+                
+                if remote_device is not None:
+                    return cpu_tensor_to_persistent_remote(cpu_result, remote_device)
+                else:
+                    return cpu_result.to("remote")
+            except Exception:
+                # Fallback to legacy conversion
+                return cpu_result.to("remote")
         return cpu_result
 
 

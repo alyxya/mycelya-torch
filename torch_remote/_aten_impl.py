@@ -309,6 +309,45 @@ def copy_from_host_to_device(from_, to_):
 
 
 def _copy_from(from_, to_):
+    # Handle persistent tensor transfers
+    if hasattr(from_, 'is_persistent') and from_.is_persistent and from_.tensor_id:
+        if to_.device.type == "cpu":
+            # Remote persistent tensor -> CPU: fetch data from remote
+            return from_.cpu()  # This will use the updated cpu() method
+        elif to_.device.type == "remote":
+            if from_.device.index == to_.device.index:
+                # Same device: no actual transfer needed for persistent tensors
+                return to_
+            else:
+                # Different remote devices: transfer via CPU
+                cpu_data = from_.cpu()
+                return to_.copy_(cpu_data)
+    
+    if hasattr(to_, 'is_persistent') and to_.is_persistent and to_.tensor_id:
+        if from_.device.type == "cpu":
+            # CPU -> Remote persistent tensor: update remote data
+            try:
+                from .device import get_device_registry
+                from ._remote_executor import _get_remote_executor
+                
+                registry = get_device_registry() 
+                device = registry.get_device_by_index(to_.device.index)
+                executor = _get_remote_executor()
+                
+                if device and executor:
+                    # Serialize CPU tensor and update remote
+                    tensor_data = executor._serialize_tensor(from_)
+                    gpu_machine = device.get_gpu_machine()
+                    if gpu_machine and gpu_machine.is_running():
+                        # Create new tensor on remote and update the tensor_id
+                        new_tensor_id = gpu_machine.create_tensor(tensor_data, to_.tensor_id)
+                        # Update metadata
+                        to_._tensor_id = new_tensor_id
+                        return to_
+            except Exception as e:
+                print(f"Warning: Failed to update persistent tensor, falling back: {e}")
+    
+    # Legacy behavior for non-persistent tensors
     if from_.device.type == to_.device.type:
         assert from_.device.type == "remote"
         if from_.device.index == to_.device.index:
@@ -341,6 +380,50 @@ def _local_scalar_dense(ten):
     return host_mem.item()
 
 
+def cpu_tensor_to_persistent_remote(cpu_tensor, device):
+    """
+    Convert a CPU tensor to a persistent remote tensor.
+    
+    Args:
+        cpu_tensor: The CPU tensor to convert
+        device: Target remote device (torch.device)
+        
+    Returns:
+        RemoteTensorData with persistent tensor ID
+    """
+    try:
+        from .device import get_device_registry
+        from ._remote_executor import _get_remote_executor
+        from ._meta_parser import RemoteTensorData
+        
+        device_idx = device.index if device.index is not None else 0
+        registry = get_device_registry()
+        backend_device = registry.get_device_by_index(device_idx)
+        
+        if backend_device is not None:
+            executor = _get_remote_executor()
+            if executor is not None:
+                # Serialize CPU tensor and send to remote
+                tensor_data = executor._serialize_tensor(cpu_tensor)
+                tensor_id = executor.create_tensor_on_remote(tensor_data, backend_device)
+                
+                # Get metadata from remote
+                gpu_machine = backend_device.get_gpu_machine()
+                if gpu_machine and gpu_machine.is_running():
+                    metadata = gpu_machine.get_tensor_metadata(tensor_id)
+                    
+                    # Create persistent RemoteTensorData
+                    return RemoteTensorData.from_tensor_id(tensor_id, metadata, device_idx)
+        
+        # Fallback to legacy conversion
+        return cpu_tensor.to(device)
+        
+    except Exception as e:
+        print(f"Warning: Failed to create persistent remote tensor: {e}")
+        # Fallback to legacy conversion
+        return cpu_tensor.to(device)
+
+
 def empty_remote(
     size,
     dtype=None,
@@ -363,19 +446,47 @@ def empty_remote(
     if pin_memory:
         raise RuntimeError("Pin memory can only be on CPU")
     
-    # Create empty tensor with proper device and dtype
+    device_idx = device.index if device.index is not None else 0
+    
+    # Try to use the new persistent tensor system first
+    try:
+        from .device import get_device_registry
+        from ._remote_executor import _get_remote_executor
+        from ._meta_parser import RemoteTensorData
+        
+        registry = get_device_registry()
+        backend_device = registry.get_device_by_index(device_idx)
+        
+        if backend_device is not None:
+            executor = _get_remote_executor()
+            if executor is not None:
+                # Use new persistent system: create tensor directly on remote machine
+                tensor_id = executor.create_factory_tensor_on_remote(
+                    "empty", [size], {"dtype": dtype}, backend_device
+                )
+                
+                # Get metadata from remote machine
+                gpu_machine = backend_device.get_gpu_machine()
+                if gpu_machine and gpu_machine.is_running():
+                    metadata = gpu_machine.get_tensor_metadata(tensor_id)
+                    
+                    # Create RemoteTensorData with tensor ID (no local data)
+                    return RemoteTensorData.from_tensor_id(tensor_id, metadata, device_idx)
+    
+    except Exception as e:
+        print(f"Warning: Failed to create persistent tensor, falling back to legacy mode: {e}")
+    
+    # Fallback to legacy system
     with torch.remote.device(device):  # type: ignore[misc]
         # Use driver to allocate empty tensor on remote device
         args, _ = prepare_for_sending((size, dtype), {})
         # Get the meta result and convert to RemoteTensorData
         meta_result = driver.exec("empty_tensor", *args)
         from ._meta_parser import RemoteTensorData
-        device_idx = device.index if device.index is not None else 0
         driver._lazy_init()  # Ensure devices are initialized
         allocator = driver.devices[device_idx][3].allocator
         tensor = RemoteTensorData.from_meta(allocator, meta_result, device_idx)
         
-        # No need to attach _device_id anymore - device.index provides the mapping
         return tensor
 
 
@@ -433,6 +544,110 @@ _remote_lib_aten.impl(
 )
 _remote_lib_aten.impl(
     "empty_strided", empty_strided_remote, dispatch_key="PrivateUse1"
+)
+
+def randn_remote(
+    size,
+    dtype=None,
+    layout=None,
+    device=None,
+    pin_memory=None,
+    memory_format=None,
+):
+    """Remote implementation for torch.randn"""
+    return _create_factory_tensor("randn", size, dtype, layout, device, pin_memory, memory_format)
+
+def zeros_remote(
+    size,
+    dtype=None,
+    layout=None,
+    device=None,
+    pin_memory=None,
+    memory_format=None,
+):
+    """Remote implementation for torch.zeros"""
+    return _create_factory_tensor("zeros", size, dtype, layout, device, pin_memory, memory_format)
+
+def ones_remote(
+    size,
+    dtype=None,
+    layout=None,
+    device=None,
+    pin_memory=None,
+    memory_format=None,
+):
+    """Remote implementation for torch.ones"""
+    return _create_factory_tensor("ones", size, dtype, layout, device, pin_memory, memory_format)
+
+def _create_factory_tensor(factory_op, size, dtype, layout, device, pin_memory, memory_format):
+    """Common implementation for factory tensor operations"""
+    if device is None:
+        device = torch.device("remote", 0)
+    elif isinstance(device, int):
+        device = torch.device("remote", device)
+    elif isinstance(device, str):
+        device = torch.device(device)
+    
+    dtype = dtype or torch.get_default_dtype()
+    
+    if layout is not None and layout != torch.strided:
+        raise RuntimeError("Non strided layout not supported")
+    if pin_memory:
+        raise RuntimeError("Pin memory can only be on CPU")
+    
+    device_idx = device.index if device.index is not None else 0
+    
+    # Try to use the new persistent tensor system
+    try:
+        from .device import get_device_registry
+        from ._remote_executor import _get_remote_executor
+        from ._meta_parser import RemoteTensorData
+        
+        registry = get_device_registry()
+        backend_device = registry.get_device_by_index(device_idx)
+        
+        if backend_device is not None:
+            executor = _get_remote_executor()
+            if executor is not None:
+                # Use new persistent system: create tensor directly on remote machine
+                tensor_id = executor.create_factory_tensor_on_remote(
+                    factory_op, [size], {"dtype": dtype}, backend_device
+                )
+                
+                # Get metadata from remote machine
+                gpu_machine = backend_device.get_gpu_machine()
+                if gpu_machine and gpu_machine.is_running():
+                    metadata = gpu_machine.get_tensor_metadata(tensor_id)
+                    
+                    # Create RemoteTensorData with tensor ID (no local data)
+                    return RemoteTensorData.from_tensor_id(tensor_id, metadata, device_idx)
+    
+    except Exception as e:
+        print(f"Warning: Factory tensor creation failed: {e}, falling back to legacy")
+    
+    # Fallback to legacy behavior if persistent system fails
+    from ._meta_parser import RemoteTensorData
+    
+    # Use meta tensor to avoid local memory allocation
+    # This creates only metadata without allocating actual memory
+    meta_tensor = torch.empty(size, dtype=dtype, device='meta')
+    
+    # Convert to RemoteTensorData
+    remote_tensor = RemoteTensorData(meta_tensor)
+    remote_tensor._remote_device_index = device_idx
+    remote_tensor._is_persistent = False
+    
+    return remote_tensor
+
+# Register factory function implementations
+_remote_lib_aten.impl(
+    "randn", randn_remote, dispatch_key="PrivateUse1"
+)
+_remote_lib_aten.impl(
+    "zeros", zeros_remote, dispatch_key="PrivateUse1"
+)
+_remote_lib_aten.impl(
+    "ones", ones_remote, dispatch_key="PrivateUse1"
 )
 
 
