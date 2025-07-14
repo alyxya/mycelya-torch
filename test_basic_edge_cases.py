@@ -8,11 +8,11 @@ import torch_remote
 import gc
 import time
 
-def test_tensor_creation_and_basic_ops():
+def test_tensor_creation_and_basic_ops(modal_t4_device):
     """Test basic tensor creation and operations."""
     print("🧪 Testing basic tensor creation and operations...")
     
-    device = torch_remote.create_modal_device("T4")
+    device = modal_t4_device
     
     # Test direct creation
     x = torch.randn(3, 3, device=device.device())
@@ -31,13 +31,13 @@ def test_tensor_creation_and_basic_ops():
     cpu_result = z.cpu()
     print(f"   CPU result: shape={cpu_result.shape}, device={cpu_result.device}")
     
-    return True
+    assert True
 
-def test_large_tensor():
+def test_large_tensor(modal_t4_device):
     """Test handling of larger tensors."""
     print("🧪 Testing large tensor handling...")
     
-    device = torch_remote.create_modal_device("T4")
+    device = modal_t4_device
     
     # Create a reasonably large tensor
     large_tensor = torch.randn(500, 500, device=device.device())
@@ -48,13 +48,13 @@ def test_large_tensor():
     cpu_result = result.cpu()
     print(f"   Sum result: {cpu_result.item():.4f}")
     
-    return True
+    assert True
 
-def test_error_scenarios():
+def test_error_scenarios(modal_t4_device):
     """Test error handling scenarios."""
     print("🧪 Testing error scenarios...")
     
-    device = torch_remote.create_modal_device("T4")
+    device = modal_t4_device
     
     # Test dimension mismatch (should fail gracefully)
     try:
@@ -72,16 +72,16 @@ def test_error_scenarios():
         y = torch.randn(2, 2, device=device.device())
         result = x + y  # Should work
         print("   ✅ Recovery after error works")
-        return True
+        assert True
     except Exception as e:
         print(f"   ❌ Recovery failed: {e}")
-        return False
+        assert False, f"Recovery failed: {e}"
 
-def test_different_dtypes():
+def test_different_dtypes(modal_t4_device):
     """Test different data types."""
     print("🧪 Testing different data types...")
     
-    device = torch_remote.create_modal_device("T4")
+    device = modal_t4_device
     
     dtypes = [torch.float32, torch.float64, torch.int32, torch.int64]
     
@@ -96,9 +96,9 @@ def test_different_dtypes():
             print(f"   ✅ {dtype} works: shape={x.shape}")
         except Exception as e:
             print(f"   ❌ {dtype} failed: {e}")
-            return False
+            assert False, f"{dtype} failed: {e}"
     
-    return True
+    assert True
 
 def run_basic_tests():
     """Run basic edge case tests."""

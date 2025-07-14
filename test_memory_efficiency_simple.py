@@ -7,12 +7,12 @@ Simple version that focuses on tensor properties rather than system memory.
 import torch
 import torch_remote
 
-def test_meta_tensor_properties():
+def test_meta_tensor_properties(modal_t4_device):
     """Test that remote tensors are using meta tensors underneath."""
     print("🧪 Testing Meta Tensor Properties")
     print("=" * 50)
     
-    device = torch_remote.create_modal_device("T4")
+    device = modal_t4_device
     
     # Test 1: Direct tensor creation
     print("1. Testing direct tensor creation...")
@@ -56,14 +56,14 @@ def test_meta_tensor_properties():
     is_meta_ops = z.data.device.type == 'meta'
     print(f"   ✅ Operations use meta tensors: {is_meta_ops}")
     
-    return is_meta and is_meta_transfer and is_meta_ops
+    assert is_meta and is_meta_transfer and is_meta_ops
 
-def test_data_integrity():
+def test_data_integrity(modal_t4_device):
     """Test that data integrity is maintained despite using meta tensors."""
     print("\n🧪 Testing Data Integrity with Meta Tensors")
     print("=" * 50)
     
-    device = torch_remote.create_modal_device("T4")
+    device = modal_t4_device
     
     # Test 1: Round-trip data integrity
     print("1. Testing round-trip data integrity...")
@@ -97,14 +97,14 @@ def test_data_integrity():
     operations_match = torch.allclose(expected_result, actual_result, rtol=1e-4, atol=1e-6)
     print(f"   ✅ Operation results match: {operations_match}")
     
-    return matches and operations_match
+    assert matches and operations_match
 
-def test_different_tensor_types():
+def test_different_tensor_types(modal_t4_device):
     """Test meta tensors work with different dtypes and shapes."""
     print("\n🧪 Testing Different Tensor Types with Meta Tensors")
     print("=" * 50)
     
-    device = torch_remote.create_modal_device("T4")
+    device = modal_t4_device
     
     test_cases = [
         ("float32", torch.float32, lambda: torch.randn(10, 10)),
@@ -152,15 +152,15 @@ def test_different_tensor_types():
             print(f"     ❌ Failed: {e}")
             all_passed = False
     
-    return all_passed
+    assert all_passed
 
-def test_backward_compatibility():
+def test_backward_compatibility(modal_t4_device):
     """Test that existing functionality still works."""
     print("\n🧪 Testing Backward Compatibility")
     print("=" * 50)
     
     try:
-        device = torch_remote.create_modal_device("T4")
+        device = modal_t4_device
         
         # Test from existing test suite
         print("1. Running subset of existing tests...")
@@ -182,13 +182,13 @@ def test_backward_compatibility():
         int_result = int_tensor.cpu()
         print("   ✅ Integer dtypes work")
         
-        return True
+        assert True
         
     except Exception as e:
         print(f"   ❌ Compatibility test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        assert False, f"Compatibility test failed: {e}"
 
 def run_memory_efficiency_tests():
     """Run all memory efficiency tests."""
