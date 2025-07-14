@@ -45,102 +45,61 @@ def _should_use_remote_execution(op, args, kwargs):
     """
     Determine whether to use remote GPU execution for this operation.
     
-    Currently uses remote execution for most tensor operations involving remote tensors,
-    except for certain operations that are better handled locally.
+    Fundamental principles:
+    1. Operations between remote tensors always execute remotely
+    2. Operations between non-remote tensors happen locally as usual  
+    3. Operations between remote and non-remote tensors are disallowed
+    4. Device movement for tensors is always explicit (handled elsewhere)
     """
-    # Skip remote execution for certain operations
-    skip_ops = {
-        # Memory operations
-        "aten.copy_",
-        "aten._copy_from",
-        "aten.set_",
-        "aten.resize_",
-        "aten.storage_offset",
-        "aten.stride",
-        "aten.size",
-        "aten.numel",
-        "aten.dim",
-        "aten.is_contiguous",
-        # Factory functions
-        "aten.empty",
-        "aten.empty_like",
-        "aten.zeros",
-        "aten.zeros_like",
-        "aten.ones",
-        "aten.ones_like",
-        "aten.normal_",
-        "aten.uniform_",
-        "aten.random_",
-        # Scalar operations (low compute)
-        "aten.item",
-        "aten._local_scalar_dense",
-        # View operations (should be fast locally)
-        "aten.view",
-        "aten.reshape",
-        "aten.squeeze",
-        "aten.unsqueeze",
-        "aten.transpose",
-        "aten.permute",
-        # Device transfer operations (CRITICAL - prevents infinite recursion)
+    op_name = op.overloadpacket._qualified_op_name
+    
+    # Device transfer operations are always handled locally to prevent recursion
+    device_transfer_ops = {
         "aten.to",
-        "aten.to.device",
+        "aten.to.device", 
         "aten.to.dtype",
         "aten.to.dtype_layout",
         "aten.cpu",
         "aten.cuda",
+        "aten._copy_from",
     }
-    
-    op_name = op.overloadpacket._qualified_op_name
-    
-    # Skip if operation is in the skip list
-    if any(skip_op in op_name for skip_op in skip_ops):
+    if any(transfer_op in op_name for transfer_op in device_transfer_ops):
         return False
     
-    # Use remote execution for compute-intensive operations
-    compute_intensive_ops = {
-        "aten.add",
-        "aten.sub", 
-        "aten.mul",
-        "aten.div",
-        "aten.mm",
-        "aten.bmm",
-        "aten.addmm",
-        "aten.conv2d",
-        "aten.linear",
-        "aten.relu",
-        "aten.sigmoid",
-        "aten.tanh",
-        "aten.softmax",
-        "aten.log_softmax",
-        "aten.cross_entropy",
-        "aten.mse_loss",
-        "aten.sum",
-        "aten.mean",
-        "aten.var",
-        "aten.std",
-        "aten.max",
-        "aten.min",
-        "aten.argmax",
-        "aten.argmin",
-        "aten.sort",
-        "aten.topk",
-        "aten.matmul",
-        "aten.einsum",
-    }
+    # Collect all tensor arguments
+    remote_tensors = []
+    non_remote_tensors = []
     
-    # Check if this is a compute-intensive operation
-    if any(compute_op in op_name for compute_op in compute_intensive_ops):
-        return True
-    
-    # All operations on remote tensors should execute on the remote machine
     for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            return True
+        if isinstance(arg, torch.Tensor):
+            if arg.device.type == "remote":
+                remote_tensors.append(arg)
+            else:
+                non_remote_tensors.append(arg)
     
     for value in kwargs.values():
-        if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            return True
+        if isinstance(value, torch.Tensor):
+            if value.device.type == "remote":
+                remote_tensors.append(value)
+            else:
+                non_remote_tensors.append(value)
     
+    # Apply fundamental principles
+    if remote_tensors and non_remote_tensors:
+        # Mixed remote and non-remote tensors are disallowed
+        remote_devices = [t.device for t in remote_tensors]
+        non_remote_devices = [t.device for t in non_remote_tensors]
+        raise RuntimeError(
+            f"Mixed remote and non-remote tensor operation not supported for {op_name}. "
+            f"Remote devices: {remote_devices}, Non-remote devices: {non_remote_devices}. "
+            f"Use explicit .to() to move tensors to the same device first."
+        )
+    
+    if remote_tensors:
+        # Operations between remote tensors always execute remotely
+        return True
+    
+    # Operations between non-remote tensors happen locally as usual
     return False
 
 
