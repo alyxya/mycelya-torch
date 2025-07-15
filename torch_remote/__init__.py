@@ -120,11 +120,6 @@ def _create_module():
 # Set all the appropriate state on PyTorch
 torch.utils.rename_privateuse1_backend("remote")
 torch._register_device_module("remote", _create_module())
-torch.utils.generate_methods_for_privateuse1_backend(for_storage=True)
-
-# Remove auto-generated .remote() method - we use explicit .device() method instead
-if hasattr(torch.Tensor, 'remote'):
-    delattr(torch.Tensor, 'remote')
 
 # Patch tensor.to() method to support persistent remote tensors
 def _patch_tensor_to_method():
