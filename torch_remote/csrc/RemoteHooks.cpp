@@ -17,34 +17,6 @@ namespace {
 // Python factory function where real implementations can be found
 PyObject* py_factory;
 
-struct HostAllocator final : at::Allocator {
-  HostAllocator() = default;
-
-  at::DataPtr allocate(size_t nbytes) override {
-    py::gil_scoped_acquire acquire;
-    void* data = nullptr;
-    if (nbytes > 0) {
-      data = reinterpret_cast<void*>(
-          get_method("hostMalloc")(nbytes).cast<remote_ptr_t>());
-      TORCH_CHECK(data, "Failed to allocator ", nbytes, " bytes on host.");
-    }
-    return {data, data, &ReportAndDelete<kHostFreeMethod>, at::Device(at::kCPU)};
-  }
-
-  at::DeleterFnPtr raw_deleter() const override {
-    return &ReportAndDelete<kHostFreeMethod>;
-  }
-
-  void copy_data(void* dest, const void* src, std::size_t count) const final {
-    py::gil_scoped_acquire acquire;
-    get_method("hostCopyData")(
-        reinterpret_cast<remote_ptr_t>(dest),
-        reinterpret_cast<remote_ptr_t>(src),
-        count);
-  }
-};
-
-static HostAllocator global_host_alloc;
 
 static c10::DeviceIndex device_count() {
   py::gil_scoped_acquire acquire;
@@ -82,13 +54,11 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
   }
 
   at::Allocator* getPinnedMemoryAllocator() const override {
-    return &global_host_alloc;
+    TORCH_CHECK(false, "Pinned memory is not supported for remote tensors");
   }
 
   bool isPinnedPtr(const void* data) const override {
-    py::gil_scoped_acquire acquire;
-    return get_method("isPinnedPtr")(reinterpret_cast<remote_ptr_t>(data))
-        .cast<bool>();
+    return false;
   }
 
   const at::Generator& getDefaultGenerator(

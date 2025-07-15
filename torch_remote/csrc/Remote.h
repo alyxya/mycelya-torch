@@ -18,7 +18,6 @@ void set_impl_factory(PyObject* factory);
 py::function get_method(const char* name);
 
 static constexpr char kFreeMethod[] = "free";
-static constexpr char kHostFreeMethod[] = "hostFree";
 static constexpr char kCreateTensorMethod[] = "create_tensor_with_id";
 static constexpr char kFreeTensorMethod[] = "free_tensor_with_id";
 

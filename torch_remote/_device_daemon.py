@@ -48,12 +48,6 @@ class Allocator:
             return True
 
 
-class HostAllocator(Allocator):
-    def is_pinned_ptr(self, ptr):
-        return ptr in self.allocated or any(
-            ptr_ <= ptr and ptr < ptr_ + size
-            for ptr_, (size, _) in self.allocated.items()
-        )
 
 
 class DeviceAllocator(Allocator):
@@ -123,7 +117,6 @@ class Driver:
 
         # Allocated memory belongs to which device
         self.memory_belong = {}
-        self.host_allocator = HostAllocator()
         self.event_belong = {}
 
         self.rlock = threading.RLock()
@@ -297,23 +290,6 @@ class Driver:
             return False
         return self.run_on_executor(device_idx, "free", ptr)
 
-    @register(registry)
-    def isPinnedPtr(self, ptr):
-        return self.host_allocator.is_pinned_ptr(ptr)
-
-    @register(registry)
-    def hostMalloc(self, size):
-        return self.host_allocator.malloc(size)
-
-    @register(registry)
-    def hostFree(self, ptr):
-        return self.host_allocator.free(ptr)
-
-    @register(registry)
-    def hostCopyData(self, dest, src, count):
-        # For remote device, this is just a memcpy operation
-        import ctypes
-        ctypes.memmove(dest, src, count)
 
     @register(registry)
     def getNewStream(self, device_idx, priority):
