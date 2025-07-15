@@ -91,6 +91,11 @@ class DeviceAllocator(Allocator):
         as_dtype = raw.view(dtype=meta.dtype)
         # View to the right shape/stride/offset
         view = as_dtype.as_strided(meta.size, meta.stride, meta.storage_offset)
+        
+        # Preserve requires_grad property if available
+        if hasattr(meta, 'requires_grad') and meta.requires_grad:
+            view.requires_grad_(True)
+        
         return view
 
 

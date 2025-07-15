@@ -161,77 +161,6 @@ at::Tensor empty_strided_remote(
       size, stride, &global_remote_alloc, remote_dks, resolved_dtype);
 }
 
-// C++ implementation for tensor device conversion (handles .cpu() calls)
-at::Tensor to_device_cpp(
-    const at::Tensor& self,
-    at::Device device, 
-    at::ScalarType dtype,
-    bool non_blocking, 
-    bool copy, 
-    c10::optional<at::MemoryFormat> memory_format) {
-  
-  // If converting from remote to CPU, use the Python copy_from_device function
-  if (self.device().type() == c10::DeviceType::PrivateUse1 && device.type() == c10::DeviceType::CPU) {
-    py::gil_scoped_acquire acquire;
-    try {
-      // Call the Python copy_from_device function
-      py::module_ aten_impl = py::module_::import("torch_remote._aten_impl");
-      py::function copy_from_device = aten_impl.attr("copy_from_device");
-      py::object result = copy_from_device(self);
-      at::Tensor cpu_tensor = result.cast<at::Tensor>();
-      
-      // Handle dtype conversion if requested
-      if (cpu_tensor.dtype() != dtype) {
-        cpu_tensor = cpu_tensor.to(dtype);
-      }
-      
-      return cpu_tensor;
-    } catch (const std::exception& e) {
-      TORCH_CHECK(false, "Failed to copy remote tensor to CPU: ", e.what());
-    }
-  }
-  
-  // For other device transfers, fall back to default implementation
-  return self.to(device, dtype, non_blocking, copy, memory_format);
-}
-
-// C++ implementation for dtype_layout variant
-at::Tensor to_dtype_layout_cpp(
-    const at::Tensor& self,
-    c10::optional<at::ScalarType> dtype, 
-    c10::optional<at::Layout> layout,
-    c10::optional<at::Device> device, 
-    c10::optional<bool> pin_memory,
-    bool non_blocking, 
-    bool copy, 
-    c10::optional<at::MemoryFormat> memory_format) {
-  
-  // If converting from remote to CPU, use our custom conversion
-  if (self.device().type() == c10::DeviceType::PrivateUse1 && 
-      device.has_value() && device.value().type() == c10::DeviceType::CPU) {
-    
-    py::gil_scoped_acquire acquire;
-    try {
-      // Call the Python copy_from_device function
-      py::module_ aten_impl = py::module_::import("torch_remote._aten_impl");
-      py::function copy_from_device = aten_impl.attr("copy_from_device");
-      py::object result = copy_from_device(self);
-      at::Tensor cpu_tensor = result.cast<at::Tensor>();
-      
-      // Handle dtype conversion if requested
-      if (dtype.has_value() && cpu_tensor.dtype() != dtype.value()) {
-        cpu_tensor = cpu_tensor.to(dtype.value());
-      }
-      
-      return cpu_tensor;
-    } catch (const std::exception& e) {
-      TORCH_CHECK(false, "Failed to copy remote tensor to CPU: ", e.what());
-    }
-  }
-  
-  // For other device transfers, fall back to default implementation
-  return self.to(dtype, layout, device, pin_memory, non_blocking, copy, memory_format);
-}
 
 // Register the C++ implementations directly with PyTorch's dispatch system
 // This follows the OpenReg pattern where empty operations are implemented in C++
@@ -240,10 +169,6 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // These will override the Python fallback for these specific operations
   m.impl("empty.memory_format", empty_remote);
   m.impl("empty_strided", empty_strided_remote);
-  
-  // Register custom to implementations for proper .cpu() support
-  m.impl("to.device", to_device_cpp);
-  m.impl("to.dtype_layout", to_dtype_layout_cpp);
 }
 
 } // namespace remote

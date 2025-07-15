@@ -19,11 +19,12 @@ class RemoteTensorMeta:
         self.storage_offset = tensor.storage_offset()
         self.dtype = tensor.dtype
         self.nelem_in_bytes = tensor.nelement() * tensor.element_size()
+        self.requires_grad = tensor.requires_grad
 
     def __repr__(self):
         return (
             f"RemoteTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
-            f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=})"
+            f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=}, {self.requires_grad=})"
         )
 
 
@@ -96,6 +97,6 @@ def receive_after_sending(allocator, args, kwargs):
 
 def to_device_no_copy(device, args, kwargs):
     def safe_to(t):
-        return torch.empty_like(t, device=device)
+        return torch.empty_like(t, device=device, requires_grad=t.requires_grad)
 
     return tree_map_only(torch.Tensor, safe_to, (args, kwargs))

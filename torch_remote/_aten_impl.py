@@ -144,7 +144,6 @@ def _should_use_remote_execution(op, args, kwargs):
 
 
 def _remote_kernel_fallback(op, *args, **kwargs):
-    print(f"🔍 _remote_kernel_fallback called for {op}")
     def get_tensor_device(*args):
         for arg in args:
             if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
@@ -152,21 +151,15 @@ def _remote_kernel_fallback(op, *args, **kwargs):
 
     device = get_tensor_device(*args)
     if device is None:
-        print(f"❌ No remote device found, using standard kernel fallback")
         return _kernel_fallback(op, *args, **kwargs)
 
-    print(f"✅ Found remote device: {device}")
-    
     # Check if we should use remote execution
     should_use_remote = _should_use_remote_execution(op, args, kwargs)
-    print(f"🤔 Should use remote execution: {should_use_remote}")
     
     if should_use_remote:
         executor = _get_remote_executor()
-        print(f"🔧 Remote executor: {executor}")
         if executor is not None:
-            log.info(f"🚀 Using remote execution for {op}")
-            print(f"🚀 Creating remote job for {op.overloadpacket._qualified_op_name}")
+            log.info(f"Using remote execution for {op}")
             return executor.execute_remote_operation(
                 op.overloadpacket._qualified_op_name, args, kwargs
             )
@@ -174,7 +167,6 @@ def _remote_kernel_fallback(op, *args, **kwargs):
             log.warning(f"Remote execution requested but not available for {op}, using local execution")
 
     # Mimicks the DeviceGuard system we have in aten
-    print(f"🔄 Using local execution for {op}")
     with torch.remote.device(device):  # type: ignore[misc]
         return _kernel_fallback(op, *args, **kwargs)
 
@@ -187,7 +179,6 @@ def _kernel_fallback(op, *args, **kwargs):
         executor = _get_remote_executor()
         if executor is not None:
             log.info(f"Using remote execution for {op}")
-            print(f"🚀 Creating remote job for {op.overloadpacket._qualified_op_name}")
             return executor.execute_remote_operation(
                 op.overloadpacket._qualified_op_name, args, kwargs
             )
@@ -311,29 +302,38 @@ def _copy_from(from_, to_):
     # Simplified copy implementation - remote tensors are now regular torch.Tensor
     # with proper device handling via C++ allocator
     
+    # Preserve requires_grad property from source tensor
+    should_preserve_grad = from_.requires_grad
+    
     if from_.device.type == to_.device.type:
         if from_.device.type == "remote":
             if from_.device.index == to_.device.index:
                 # Same remote device - use direct copy
                 op = torch.ops.aten.copy_.default
-                return _remote_kernel_fallback(op, to_, from_)
+                result = _remote_kernel_fallback(op, to_, from_)
             else:
                 # Different remote devices: transfer via CPU
                 host_mem = copy_from_device(from_)
-                return copy_from_host_to_device(host_mem, to_)
+                result = copy_from_host_to_device(host_mem, to_)
         else:
             # Both tensors on same non-remote device
-            return to_.copy_(from_)
+            result = to_.copy_(from_)
     elif from_.device.type == "remote":
         # Remote to non-remote
         host_mem = copy_from_device(from_)
-        return to_.copy_(host_mem)
+        result = to_.copy_(host_mem)
     elif to_.device.type == "remote":
         # Non-remote to remote
-        return copy_from_host_to_device(from_, to_)
+        result = copy_from_host_to_device(from_, to_)
     else:
         # Both non-remote but different devices
-        return to_.copy_(from_)
+        result = to_.copy_(from_)
+    
+    # Preserve autograd properties
+    if should_preserve_grad and not result.requires_grad:
+        result.requires_grad_(True)
+    
+    return result
 
 
 def _set_source_tensor(ten1, ten2):
