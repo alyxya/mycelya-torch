@@ -30,19 +30,18 @@ Successfully enhanced the current remote tensor implementation by adopting the m
 
 ### Core Changes Made
 
-#### 1. Enhanced `RemoteTensorData.from_tensor_id()` 
+#### 1. C++ Tensor Creation with ID-based Allocation
 ```python
-# Use meta device to avoid allocating actual memory locally
-meta_tensor = torch.empty(shape, dtype=dtype, device='meta')
-remote_tensor = RemoteTensorData(meta_tensor)
+# Remote tensors are now regular torch.Tensor objects created via C++
+device = torch.device("remote", 0)
+remote_tensor = torch.empty(shape, dtype=dtype, device=device)
 ```
 
-#### 2. Updated Factory Functions
+#### 2. Updated Allocation System
 ```python
-def _create_factory_tensor(factory_op, size, dtype, ...):
-    # Use meta tensor to avoid local memory allocation
-    meta_tensor = torch.empty(size, dtype=dtype, device='meta')
-    remote_tensor = RemoteTensorData(meta_tensor)
+# C++ allocator uses ID-based allocation instead of pointer-based
+# Memory allocation handled through create_tensor_with_id method
+# Returns regular torch.Tensor objects without wrapper classes
 ```
 
 #### 3. Preserved Remote Execution Pipeline

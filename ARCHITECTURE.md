@@ -87,12 +87,9 @@ torch_remote_execution/        # Private package for remote execution
 
 **`torch_remote/_meta_parser.py`** - Tensor Metadata & Data Structures
 - **RemoteTensorMeta class**: Captures tensor metadata (shape, dtype, strides, storage info) for serialization
-- **RemoteTensorData class**: Custom tensor subclass that:
-  - Reports "remote" device but stores data on CPU
-  - Overrides `.device` property to return `torch.device("remote", index)`
-  - Provides proper `.cpu()` method that returns regular torch.Tensor
+- **C++ Integration**: Remote tensors are now regular torch.Tensor objects created via C++ TORCH_LIBRARY_IMPL
 - **Serialization helpers**: Convert tensors to/from metadata for inter-process communication
-- **Device spoofing**: Makes CPU tensors appear as remote device tensors to PyTorch
+- **Device handling**: Direct PyTorch device integration without wrapper classes
 - **Validation functions**: Ensures only valid data types pass through device boundaries
 
 **`torch_remote/_device_daemon.py`** - Device Management & Process Communication

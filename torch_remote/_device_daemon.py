@@ -10,7 +10,6 @@ import weakref
 import torch
 
 from ._meta_parser import (
-    RemoteTensorData,
     receive_after_sending,
     safe_str,
     validate_send_queue_args,
@@ -429,11 +428,11 @@ class _Executor:
     @register(registry)
     def send_data(self, *args):
         assert len(args) == 1
-        return RemoteTensorData.from_meta(self.allocator, args[0], self.id)
+        return self.allocator.tensor_from_meta(args[0])
 
     @register(registry)
     def recv_data(self, host_tensor, dev_mem):
-        dev_tensor = RemoteTensorData.from_meta(self.allocator, dev_mem, self.id)
+        dev_tensor = self.allocator.tensor_from_meta(dev_mem)
         dev_tensor.copy_(host_tensor)
 
     @register(registry)

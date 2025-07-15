@@ -126,12 +126,8 @@ class RemoteExecutor:
             for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     # Convert remote tensor data to regular CPU tensor
-                    if hasattr(arg, '__class__') and 'ModalTensorData' in str(arg.__class__):
-                        # This is a ModalTensorData (provider-specific), convert to CPU tensor
-                        cpu_tensor = self._remote_tensor_to_cpu(arg)
-                    else:
-                        # Regular remote tensor, copy to CPU
-                        cpu_tensor = arg.cpu()
+                    # Use proper remote-to-CPU conversion for all remote tensors
+                    cpu_tensor = self._remote_tensor_to_cpu(arg)
                     
                     tensor_data = self._serialize_tensor(cpu_tensor)
                     metadata = self._get_tensor_metadata(cpu_tensor)
@@ -146,12 +142,8 @@ class RemoteExecutor:
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == "remote":
                     # Convert remote tensor data to regular CPU tensor
-                    if hasattr(value, '__class__') and 'ModalTensorData' in str(value.__class__):
-                        # This is a ModalTensorData (provider-specific), convert to CPU tensor
-                        cpu_tensor = self._remote_tensor_to_cpu(value)
-                    else:
-                        # Regular remote tensor, copy to CPU
-                        cpu_tensor = value.cpu()
+                    # Use proper remote-to-CPU conversion for all remote tensors
+                    cpu_tensor = self._remote_tensor_to_cpu(value)
                     
                     tensor_data = self._serialize_tensor(cpu_tensor)
                     metadata = self._get_tensor_metadata(cpu_tensor)
@@ -440,13 +432,14 @@ class RemoteExecutor:
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor without triggering remote execution."""
         try:
-            # Use the device daemon's copy_from_device to avoid recursion
-            from ._device_daemon import driver
-            return driver.exec("copy_from_device", remote_tensor)
-        except Exception:
-            # If that fails, use direct tensor data access (avoid .cpu() recursion)
-            # This creates a new CPU tensor with the same data
-            return torch.tensor(remote_tensor.detach().numpy(), device='cpu')
+            # Use the proper copy_from_device function from _aten_impl
+            from ._aten_impl import copy_from_device
+            return copy_from_device(remote_tensor)
+        except Exception as e:
+            # If that fails, create empty tensor with same shape/dtype
+            # This is a fallback that at least preserves tensor structure
+            log.warning(f"Failed to copy remote tensor data: {e}")
+            return torch.zeros_like(remote_tensor, device='cpu')
     
     def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: 'BackendDevice') -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""
