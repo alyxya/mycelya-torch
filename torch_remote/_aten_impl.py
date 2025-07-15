@@ -57,7 +57,7 @@ def impl_factory(name):
         def _(tensor_id):
             """Free the tensor associated with the given ID."""
             try:
-                if hasattr(driver, '_tensor_id_mappings') and tensor_id in driver._tensor_id_mappings:
+                if hasattr(driver, "_tensor_id_mappings") and tensor_id in driver._tensor_id_mappings:
                     # Get the actual remote tensor ID
                     actual_id = driver._tensor_id_mappings[tensor_id]
                     
@@ -225,7 +225,7 @@ def _kernel_fallback(op, *args, **kwargs):
     elif not tree_any(lambda obj: isinstance(obj, torch.Tensor), (args, kwargs)):
         # No Tensor argument means factory function
         # Check if this is a remote device factory function
-        device_arg = kwargs.get('device', None)
+        device_arg = kwargs.get("device", None)
         if device_arg is not None:
             if isinstance(device_arg, torch.device) and device_arg.type == "remote":
                 # This is a remote device factory function - handle it
@@ -388,9 +388,9 @@ def cleanup_library_registrations():
     try:
         # PyTorch doesn't provide a clean way to unregister, but we can try
         # Calling this during cleanup might help
-        if hasattr(_remote_lib, '_destroy'):
+        if hasattr(_remote_lib, "_destroy"):
             _remote_lib._destroy()
-        if hasattr(_remote_lib_aten, '_destroy'):
+        if hasattr(_remote_lib_aten, "_destroy"):
             _remote_lib_aten._destroy()
     except Exception:
         pass

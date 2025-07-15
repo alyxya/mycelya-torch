@@ -77,7 +77,7 @@ def _execute_aten_operation_impl(
         for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
             # Deserialize tensor
             buffer = io.BytesIO(data)
-            tensor = torch.load(buffer, map_location='cpu', weights_only=True)
+            tensor = torch.load(buffer, map_location="cpu", weights_only=True)
             
             # Move to GPU
             tensor = tensor.to(device)
@@ -104,7 +104,7 @@ def _execute_aten_operation_impl(
         # Get the operation
         # Convert aten::add.Tensor to aten.add.Tensor
         op_name_fixed = op_name.replace("::", ".")
-        op_parts = op_name_fixed.split('.')
+        op_parts = op_name_fixed.split(".")
         op = torch.ops
         for part in op_parts:
             op = getattr(op, part)
@@ -140,10 +140,10 @@ def _execute_aten_operation_impl(
             
             # Store metadata
             metadata = {
-                'shape': list(cpu_tensor.shape),
-                'dtype': str(cpu_tensor.dtype),
-                'size': cpu_tensor.numel(),
-                'element_size': cpu_tensor.element_size()
+                "shape": list(cpu_tensor.shape),
+                "dtype": str(cpu_tensor.dtype),
+                "size": cpu_tensor.numel(),
+                "element_size": cpu_tensor.element_size()
             }
             result_metadata.append(metadata)
         
@@ -396,7 +396,7 @@ class RemoteGPUMachine:
     
     def __repr__(self):
         status = "running" if self.is_running() else "stopped"
-        return f"RemoteGPUMachine(gpu_type='{self.gpu_type}', device_id='{self.device_id}', status='{status}')"
+        return f"RemoteGPUMachine(gpu_type=\"{self.gpu_type}\", device_id=\"{self.device_id}\", status=\"{status}\")"
 
 
 def create_modal_app_for_gpu(gpu_type: str, device_id: str) -> RemoteGPUMachine:
@@ -435,7 +435,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
         return _gpu_apps[device_id]
     
     if gpu_type not in GPU_CONFIG:
-        raise ValueError(f"GPU type '{gpu_type}' is not supported. Available types: {list(GPU_CONFIG.keys())}")
+        raise ValueError(f"GPU type \"{gpu_type}\" is not supported. Available types: {list(GPU_CONFIG.keys())}")
     
     config = GPU_CONFIG[gpu_type]
     app = modal.App(f"torch-remote-{device_id}")
@@ -451,7 +451,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
         
         def _get_tensor_registry(self):
             """Get or create tensor registry for this executor instance."""
-            if not hasattr(self, '_tensor_registry'):
+            if not hasattr(self, "_tensor_registry"):
                 # Define TensorRegistry class locally to avoid import issues
                 import threading
                 from collections import defaultdict
@@ -474,12 +474,12 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                         with self._lock:
                             self._tensors[tensor_id] = tensor
                             self._metadata[tensor_id] = {
-                                'shape': list(tensor.shape),
-                                'dtype': str(tensor.dtype),
-                                'device': str(tensor.device),
-                                'numel': tensor.numel(),
-                                'element_size': tensor.element_size(),
-                                'requires_grad': tensor.requires_grad,
+                                "shape": list(tensor.shape),
+                                "dtype": str(tensor.dtype),
+                                "device": str(tensor.device),
+                                "numel": tensor.numel(),
+                                "element_size": tensor.element_size(),
+                                "requires_grad": tensor.requires_grad,
                             }
                             self._ref_counts[tensor_id] += 1
                             
@@ -513,13 +513,13 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                             total_tensors = len(self._tensors)
                             total_memory = 0
                             for tensor in self._tensors.values():
-                                if hasattr(tensor, 'numel') and hasattr(tensor, 'element_size'):
+                                if hasattr(tensor, "numel") and hasattr(tensor, "element_size"):
                                     total_memory += tensor.numel() * tensor.element_size()
                             
                             return {
-                                'total_tensors': total_tensors,
-                                'total_memory_bytes': total_memory,
-                                'tensor_ids': list(self._tensors.keys())
+                                "total_tensors": total_tensors,
+                                "total_memory_bytes": total_memory,
+                                "tensor_ids": list(self._tensors.keys())
                             }
                     
                     def clear(self):
@@ -576,7 +576,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
             
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
-            tensor = torch.load(buffer, map_location='cpu', weights_only=True)
+            tensor = torch.load(buffer, map_location="cpu", weights_only=True)
             
             # Move to GPU if available
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -696,7 +696,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 
                 # Get the operation
                 op_name_fixed = op_name.replace("::", ".")
-                op_parts = op_name_fixed.split('.')
+                op_parts = op_name_fixed.split(".")
                 op = torch.ops
                 for part in op_parts:
                     op = getattr(op, part)
@@ -761,8 +761,8 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                 
                 # Update kwargs to use local device
-                if 'device' in kwargs:
-                    kwargs['device'] = device
+                if "device" in kwargs:
+                    kwargs["device"] = device
                 
                 # Get the factory function
                 factory_func = getattr(torch, factory_op)
@@ -859,7 +859,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
                     # Deserialize tensor
                     buffer = io.BytesIO(data)
-                    tensor = torch.load(buffer, map_location='cpu', weights_only=True)
+                    tensor = torch.load(buffer, map_location="cpu", weights_only=True)
                     
                     # Move to GPU
                     tensor = tensor.to(device)
@@ -886,7 +886,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 # Get the operation
                 # Convert aten::add.Tensor to aten.add.Tensor
                 op_name_fixed = op_name.replace("::", ".")
-                op_parts = op_name_fixed.split('.')
+                op_parts = op_name_fixed.split(".")
                 op = torch.ops
                 for part in op_parts:
                     op = getattr(op, part)
@@ -922,10 +922,10 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                     
                     # Store metadata
                     metadata = {
-                        'shape': list(cpu_tensor.shape),
-                        'dtype': str(cpu_tensor.dtype),
-                        'size': cpu_tensor.numel(),
-                        'element_size': cpu_tensor.element_size()
+                        "shape": list(cpu_tensor.shape),
+                        "dtype": str(cpu_tensor.dtype),
+                        "size": cpu_tensor.numel(),
+                        "element_size": cpu_tensor.element_size()
                     }
                     result_metadata.append(metadata)
                 
@@ -951,7 +951,7 @@ def get_modal_app_for_device(device) -> RemoteGPUMachine:
     Returns:
         RemoteGPUMachine for the device's GPU type
     """
-    if hasattr(device, 'provider') and device.provider.value != "modal":
+    if hasattr(device, "provider") and device.provider.value != "modal":
         raise ValueError(f"Device provider {device.provider.value} is not Modal")
     
     return create_modal_app_for_gpu(device.gpu_type.value, device.device_id)

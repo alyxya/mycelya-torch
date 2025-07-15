@@ -128,7 +128,7 @@ torch._register_device_module("remote", _create_module())
 def _patch_tensor_to_method():
     """Patch torch.Tensor.to() to handle CPU->remote transfers with persistent tensors."""
     # Store original method
-    if not hasattr(torch.Tensor, '_original_to'):
+    if not hasattr(torch.Tensor, "_original_to"):
         torch.Tensor._original_to = torch.Tensor.to
         
         def enhanced_to(self, *args, **kwargs):

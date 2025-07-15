@@ -157,7 +157,7 @@ class RemoteBackend:
         Get a PyTorch device object for this RemoteBackend.
         
         Returns:
-            torch.device: A PyTorch device object with type 'remote' and the device's index
+            torch.device: A PyTorch device object with type "remote" and the device's index
             
         Example:
             >>> backend_device = create_modal_device("A100-40GB")
@@ -270,7 +270,7 @@ def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:
             gpu_type = GPUType(gpu)
         except ValueError:
             valid_gpus = [g.value for g in GPUType]
-            raise ValueError(f"Invalid GPU type '{gpu}'. Valid types: {valid_gpus}")
+            raise ValueError(f"Invalid GPU type \"{gpu}\". Valid types: {valid_gpus}")
     else:
         gpu_type = gpu
 

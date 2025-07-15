@@ -43,7 +43,7 @@ def demonstrate_memory_efficiency():
         print(f"   Has tensor ID: {bool(remote_tensor.tensor_id)}")
         
         # Check if using meta tensors
-        is_meta = remote_tensor.data.device.type == 'meta'
+        is_meta = remote_tensor.data.device.type == "meta"
         if is_meta:
             print(f"   ✅ MEMORY EFFICIENT: Using meta tensors (zero local overhead)")
         else:
@@ -86,7 +86,7 @@ def demonstrate_operations():
     for op_name, op_func in operations:
         try:
             result = op_func()
-            result_is_meta = result.data.device.type == 'meta'
+            result_is_meta = result.data.device.type == "meta"
             
             # Test CPU retrieval
             cpu_result = result.cpu()

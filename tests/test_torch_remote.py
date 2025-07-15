@@ -34,7 +34,7 @@ def test_tensor_to_method():
     """Test that tensors have to() method that works with RemoteBackend."""
     import torch_remote
     x = torch.randn(2, 2)
-    assert hasattr(x, 'to') and callable(x.to)
+    assert hasattr(x, "to") and callable(x.to)
 
 
 def test_backend_tensor_creation(modal_t4_device):
@@ -92,7 +92,7 @@ def test_error_handling(modal_t4_device):
     import torch_remote
     # These operations might fail, but shouldn't crash
     try:
-        torch.randn(3, 3, device='remote')  # Should fail gracefully
+        torch.randn(3, 3, device="remote")  # Should fail gracefully
     except Exception:
         pass  # Expected to fail
 
@@ -115,10 +115,10 @@ def test_backend_tensor_device_properties(modal_t4_device):
     x_remote = x_cpu.to(modal_t4_device.device())
     
     # Check that backend tensor has the expected type (now regular torch.Tensor)
-    assert type(x_remote).__name__ == 'Tensor'
+    assert type(x_remote).__name__ == "Tensor"
     
     # Test device property - backend tensors should identify as remote device
-    assert x_remote.device.type == 'remote'
+    assert x_remote.device.type == "remote"
 
 
 def test_backend_only_operations(modal_t4_device):
@@ -136,8 +136,8 @@ def test_backend_only_operations(modal_t4_device):
     result_mm = x_remote.mm(y_remote)
     
     # Verify results are correct and still backend tensors (now regular torch.Tensor)
-    assert type(result_add).__name__ == 'Tensor'
-    assert type(result_mm).__name__ == 'Tensor'
+    assert type(result_add).__name__ == "Tensor"
+    assert type(result_mm).__name__ == "Tensor"
     assert result_add.shape == x_remote.shape
     assert result_mm.shape == (2, 2)
     
@@ -203,7 +203,7 @@ def test_cpu_to_backend_conversion(modal_t4_device):
         remote_tensor = cpu_tensor.to(modal_t4_device.device())
         
         # Verify conversion (now regular torch.Tensor)
-        assert type(remote_tensor).__name__ == 'Tensor'
+        assert type(remote_tensor).__name__ == "Tensor"
         assert remote_tensor.shape == cpu_tensor.shape
         assert remote_tensor.dtype == cpu_tensor.dtype
         
@@ -223,7 +223,7 @@ def test_backend_to_cpu_conversion(modal_t4_device):
     back_to_cpu = remote_tensor.cpu()
     
     # Verify conversion back to CPU
-    assert back_to_cpu.device.type == 'cpu'
+    assert back_to_cpu.device.type == "cpu"
     assert back_to_cpu.shape == original_cpu.shape
     assert back_to_cpu.dtype == original_cpu.dtype
     
@@ -246,11 +246,11 @@ def test_multiple_backend_cpu_transfers(modal_t4_device):
     
     # Verify final result matches original
     assert torch.allclose(step4_cpu, original, rtol=1e-4, atol=1e-6)
-    assert step4_cpu.device.type == 'cpu'
+    assert step4_cpu.device.type == "cpu"
     
     # Verify intermediate backend tensors have correct types (now regular torch.Tensor)
-    assert type(step1_remote).__name__ == 'Tensor'
-    assert type(step3_remote).__name__ == 'Tensor'
+    assert type(step1_remote).__name__ == "Tensor"
+    assert type(step3_remote).__name__ == "Tensor"
 
 
 def test_backend_tensor_creation_with_dtypes(modal_t4_device):
@@ -266,7 +266,7 @@ def test_backend_tensor_creation_with_dtypes(modal_t4_device):
             
             # Verify dtype preservation
             assert remote_tensor.dtype == dtype
-            assert type(remote_tensor).__name__ == 'Tensor'
+            assert type(remote_tensor).__name__ == "Tensor"
             
             # Test dtype conversion during remote creation
             remote_converted = cpu_tensor.to(modal_t4_device.device(), dtype=torch.float64)
@@ -285,7 +285,7 @@ def test_backend_device_method(modal_t4_device):
     backend_device = modal_t4_device
     
     # Test .device() method exists and is callable
-    assert hasattr(backend_device, 'device')
+    assert hasattr(backend_device, "device")
     assert callable(backend_device.device)
     
     # Get torch device from .device() method
@@ -293,7 +293,7 @@ def test_backend_device_method(modal_t4_device):
     
     # Verify torch device properties
     assert isinstance(torch_device, torch.device)
-    assert torch_device.type == 'remote'
+    assert torch_device.type == "remote"
     assert isinstance(torch_device.index, int)
     assert torch_device.index >= 0
     
@@ -303,8 +303,8 @@ def test_backend_device_method(modal_t4_device):
     
     # Verify tensors were created correctly
     assert x is not None and y is not None
-    assert x.device.type == 'remote'
-    assert y.device.type == 'remote'
+    assert x.device.type == "remote"
+    assert y.device.type == "remote"
     assert x.shape == (2, 2)
     assert y.shape == (3, 3)
     

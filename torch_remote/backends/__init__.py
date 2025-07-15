@@ -16,6 +16,6 @@ Future backends may include:
 # Import available backends
 try:
     from . import modal
-    __all__ = ['modal']
+    __all__ = ["modal"]
 except ImportError:
     __all__ = []
