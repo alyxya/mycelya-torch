@@ -946,7 +946,7 @@ def get_modal_app_for_device(device) -> RemoteGPUMachine:
     Get the RemoteGPUMachine for a specific device.
     
     Args:
-        device: The BackendDevice to get the machine for
+        device: The RemoteBackend to get the machine for
         
     Returns:
         RemoteGPUMachine for the device's GPU type

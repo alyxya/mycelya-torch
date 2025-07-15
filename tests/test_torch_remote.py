@@ -31,7 +31,7 @@ def test_device_functions():
 
 
 def test_tensor_to_method():
-    """Test that tensors have to() method that works with BackendDevice."""
+    """Test that tensors have to() method that works with RemoteBackend."""
     import torch_remote
     x = torch.randn(2, 2)
     assert hasattr(x, 'to') and callable(x.to)
@@ -278,7 +278,7 @@ def test_backend_tensor_creation_with_dtypes(modal_t4_device):
 
 
 def test_backend_device_method(modal_t4_device):
-    """Test the new .device() method on BackendDevice."""
+    """Test the new .device() method on RemoteBackend."""
     import torch_remote
     
     # Use the shared backend device
@@ -312,7 +312,7 @@ def test_backend_device_method(modal_t4_device):
     assert x.device.index is not None
     assert y.device.index is not None
     assert x.device.index == y.device.index  # Same device
-    # Verify we can map back to BackendDevice via registry
+    # Verify we can map back to RemoteBackend via registry
     registry = torch_remote.get_device_registry()
     device_from_registry = registry.get_device_by_index(x.device.index)
     assert device_from_registry is backend_device

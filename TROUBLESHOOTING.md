@@ -284,7 +284,7 @@ This is **by design** - each remote device represents a separate GPU instance.
 
 #### **Problem**: String-based device specification
 ```
-ValueError: Remote devices must be BackendDevice objects. Use create_modal_device() or similar to create a BackendDevice.
+ValueError: Remote devices must be RemoteBackend objects. Use create_modal_device() or similar to create a RemoteBackend.
 ```
 
 **Solution**:

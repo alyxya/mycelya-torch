@@ -108,17 +108,17 @@ torch_remote_execution/        # Private package for remote execution
 #### Utility Files
 
 **`torch_remote/utils.py`** - Tensor Method Extensions
-- Patches `.to()` method to support `BackendDevice` objects
+- Patches `.to()` method to support `RemoteBackend` objects
 - Enables `tensor.to(backend_device)` to move tensors to remote device
 - Simple wrapper around the C++ remote conversion function
 
 **`torch_remote/device.py`** - Backend Device Abstraction & Registry
-- **BackendDevice class**: Represents a remote GPU device with specific provider and GPU type
+- **RemoteBackend class**: Represents a remote GPU device with specific provider and GPU type
   - Unique device ID generation with provider-gpu-uuid format
   - GPU type validation for provider compatibility
   - Device equality and hashing based on unique device ID
   - Provider-specific configuration support
-- **DeviceRegistry class**: Manages active BackendDevice instances
+- **DeviceRegistry class**: Manages active RemoteBackend instances
   - Device registration with automatic index assignment
   - Device lookup by ID or index
   - Device compatibility validation for operations
@@ -264,7 +264,7 @@ Smart filtering ensures that only operations that benefit from cloud GPU acceler
 
 ### Stateful Remote Execution
 The system uses stateful RemoteGPUMachine instances for improved performance and resource management:
-- **Device-specific machines**: Each BackendDevice gets its own RemoteGPUMachine instance
+- **Device-specific machines**: Each RemoteBackend gets its own RemoteGPUMachine instance
 - **Connection caching**: Modal app contexts are reused across operations on the same device
 - **Context management**: Automatic startup/shutdown of remote GPU resources
 - **Machine lifecycle**: Start, stop, and running state management for remote resources
@@ -277,7 +277,7 @@ Remote tensors are stored in CPU memory but report as "remote" device to PyTorch
 
 ### Device Validation and Isolation
 The system enforces strict device isolation to prevent operations between tensors on different remote devices:
-- **Single-device constraint**: Operations can only be performed between tensors on the same BackendDevice instance
+- **Single-device constraint**: Operations can only be performed between tensors on the same RemoteBackend instance
 - **Device ID tracking**: Each tensor maintains a `_device_id` attribute linking it to its specific remote device
 - **Cross-device detection**: `_detect_device_from_tensors()` validates all tensors in an operation belong to the same device
 - **Error prevention**: Mixed-device operations raise clear error messages before execution

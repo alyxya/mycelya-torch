@@ -34,12 +34,12 @@ class BackendProvider(Enum):
     # LAMBDA = "lambda"
 
 
-class BackendDevice:
+class RemoteBackend:
     """
     Represents a remote GPU device with specific provider and GPU type.
 
-    Each BackendDevice instance represents a unique remote GPU instance.
-    Operations between different BackendDevice instances are not supported.
+    Each RemoteBackend instance represents a unique remote GPU instance.
+    Operations between different RemoteBackend instances are not supported.
     """
 
     def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs):
@@ -119,14 +119,14 @@ class BackendDevice:
         self._gpu_machine = None
 
     def __str__(self):
-        return f"BackendDevice(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.device_id})"
+        return f"RemoteBackend(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.device_id})"
 
     def __repr__(self):
         return self.__str__()
 
     def __eq__(self, other):
         """Two devices are equal only if they have the same device_id."""
-        if not isinstance(other, BackendDevice):
+        if not isinstance(other, RemoteBackend):
             return False
         return self.device_id == other.device_id
 
@@ -154,7 +154,7 @@ class BackendDevice:
     
     def device(self):
         """
-        Get a PyTorch device object for this BackendDevice.
+        Get a PyTorch device object for this RemoteBackend.
         
         Returns:
             torch.device: A PyTorch device object with type 'remote' and the device's index
@@ -170,21 +170,21 @@ class BackendDevice:
 
 class DeviceRegistry:
     """
-    Registry to manage active BackendDevice instances.
+    Registry to manage active RemoteBackend instances.
 
-    Maps device indices directly to BackendDevice instances for simple lookups.
+    Maps device indices directly to RemoteBackend instances for simple lookups.
     """
 
     def __init__(self):
-        self._devices: Dict[int, BackendDevice] = {}  # index -> BackendDevice
+        self._devices: Dict[int, RemoteBackend] = {}  # index -> RemoteBackend
         self._next_index = 0
 
-    def register_device(self, device: BackendDevice) -> int:
+    def register_device(self, device: RemoteBackend) -> int:
         """
         Register a device and return its index.
 
         Args:
-            device: The BackendDevice to register
+            device: The RemoteBackend to register
 
         Returns:
             The assigned device index
@@ -203,25 +203,25 @@ class DeviceRegistry:
 
         return index
 
-    def get_device_by_index(self, index: int) -> Optional[BackendDevice]:
+    def get_device_by_index(self, index: int) -> Optional[RemoteBackend]:
         """Get device by its index."""
         return self._devices.get(index)
 
-    def get_device_by_id(self, device_id: str) -> Optional[BackendDevice]:
+    def get_device_by_id(self, device_id: str) -> Optional[RemoteBackend]:
         """Get device by its ID (for backwards compatibility)."""
         for device in self._devices.values():
             if device.device_id == device_id:
                 return device
         return None
 
-    def get_device_index(self, device: BackendDevice) -> Optional[int]:
+    def get_device_index(self, device: RemoteBackend) -> Optional[int]:
         """Get the index of a device."""
         for index, existing_device in self._devices.items():
             if existing_device is device:
                 return index
         return None
 
-    def devices_compatible(self, device1: BackendDevice, device2: BackendDevice) -> bool:
+    def devices_compatible(self, device1: RemoteBackend, device2: RemoteBackend) -> bool:
         """Check if two devices are compatible for operations."""
         # Devices are compatible if they are the same instance
         return device1 is device2
@@ -250,7 +250,7 @@ _device_registry = DeviceRegistry()
 # PyTorch extension architecture. The errors are cosmetic and can be suppressed with stderr redirection.
 
 
-def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> BackendDevice:
+def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:
     """
     Create a Modal backend device with the specified GPU type.
 
@@ -259,7 +259,7 @@ def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> BackendDevice:
         **kwargs: Additional Modal-specific configuration
 
     Returns:
-        BackendDevice instance for the specified GPU
+        RemoteBackend instance for the specified GPU
 
     Example:
         >>> device = create_modal_device("A100-40GB")
@@ -274,7 +274,7 @@ def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> BackendDevice:
     else:
         gpu_type = gpu
 
-    device = BackendDevice(
+    device = RemoteBackend(
         provider=BackendProvider.MODAL,
         gpu_type=gpu_type,
         **kwargs

@@ -155,4 +155,4 @@ def _patch_tensor_to_method():
 _patch_tensor_to_method()
 
 # Import device management
-from .device import create_modal_device, BackendDevice, GPUType, get_device_registry
+from .device import create_modal_device, RemoteBackend, GPUType, get_device_registry

@@ -232,7 +232,7 @@ def _kernel_fallback(op, *args, **kwargs):
                 pass  # Continue to normal processing below
             elif isinstance(device_arg, str) and (device_arg == "remote" or device_arg.startswith("remote")):
                 # Reject string-based remote devices
-                raise ValueError("Remote devices must be BackendDevice objects. Use create_modal_device() or similar to create a BackendDevice.")
+                raise ValueError("Remote devices must be RemoteBackend objects. Use create_modal_device() or similar to create a RemoteBackend.")
             else:
                 # Not a remote device factory function
                 raise RuntimeError(f"{op} not handled yet.")
