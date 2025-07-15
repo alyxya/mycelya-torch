@@ -434,15 +434,9 @@ class RemoteExecutor:
     
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor without triggering remote execution."""
-        try:
-            # Use the proper copy_from_device function from _aten_impl
-            from ._aten_impl import copy_from_device
-            return copy_from_device(remote_tensor)
-        except Exception as e:
-            # If that fails, create empty tensor with same shape/dtype
-            # This is a fallback that at least preserves tensor structure
-            log.warning(f"Failed to copy remote tensor data: {e}")
-            return torch.zeros_like(remote_tensor, device="cpu")
+        # Use the proper copy_from_device function from _aten_impl
+        from ._aten_impl import copy_from_device
+        return copy_from_device(remote_tensor)
     
     def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: "RemoteBackend") -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""

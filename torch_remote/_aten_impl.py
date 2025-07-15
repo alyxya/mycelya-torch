@@ -144,53 +144,60 @@ def _should_use_remote_execution(op, args, kwargs):
 
 
 def _remote_kernel_fallback(op, *args, **kwargs):
+    log.info("Calling kernel %s", op)
+
+    # 1) Check for mixed devices and validate device compatibility
+    try:
+        should_use_remote = _should_use_remote_execution(op, args, kwargs)
+    except RuntimeError as e:
+        # Re-raise mixed device errors with operation context
+        raise RuntimeError(f"Operation {op.overloadpacket._qualified_op_name}: {str(e)}")
+
+    # 2) For remote operations, execute remotely with standard execution model
+    if should_use_remote:
+        executor = _get_remote_executor()
+        if executor is not None:
+            log.info(f"🚀 Executing {op.overloadpacket._qualified_op_name} remotely")
+            return executor.execute_remote_operation(
+                op.overloadpacket._qualified_op_name, args, kwargs
+            )
+        else:
+            # 3) For unhandled operations (no remote executor), raise error with logging
+            op_name = op.overloadpacket._qualified_op_name
+            log.error(f"❌ Unhandled operation: {op_name} - Remote execution requested but not available")
+            raise RuntimeError(
+                f"Remote execution not available for operation {op_name}. "
+                f"Please ensure remote execution is properly configured."
+            )
+
+    # Handle non-remote operations (mixed non-remote tensors or no tensors)
     def get_tensor_device(*args):
         for arg in args:
             if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                 return arg.device
+        return None
 
     device = get_tensor_device(*args)
-    if device is None:
-        return _kernel_fallback(op, *args, **kwargs)
-
-    # Check if we should use remote execution
-    should_use_remote = _should_use_remote_execution(op, args, kwargs)
     
-    if should_use_remote:
-        executor = _get_remote_executor()
-        if executor is not None:
-            log.info(f"Using remote execution for {op}")
-            return executor.execute_remote_operation(
-                op.overloadpacket._qualified_op_name, args, kwargs
-            )
-        else:
-            log.warning(f"Remote execution requested but not available for {op}, using local execution")
-
-    # Mimicks the DeviceGuard system we have in aten
-    with torch.remote.device(device):  # type: ignore[misc]
-        return _kernel_fallback(op, *args, **kwargs)
+    # For local execution with device context
+    if device is not None:
+        with torch.remote.device(device):  # type: ignore[misc]
+            return _execute_local_operation(op, *args, **kwargs)
+    else:
+        return _execute_local_operation(op, *args, **kwargs)
 
 
-def _kernel_fallback(op, *args, **kwargs):
-    log.info("Calling kernel %s", op)
-
-    # Check if we should use remote execution for this operation
-    if _should_use_remote_execution(op, args, kwargs):
-        executor = _get_remote_executor()
-        if executor is not None:
-            log.info(f"Using remote execution for {op}")
-            return executor.execute_remote_operation(
-                op.overloadpacket._qualified_op_name, args, kwargs
-            )
-        else:
-            log.warning(f"Remote execution requested but not available for {op}, using local execution")
-
+def _execute_local_operation(op, *args, **kwargs):
+    """Execute operation locally using device simulation."""
     op_name = None
     post_process = None
+    
     if "out" in op._overloadname:
         # Note that all structured native op will call here
         if isinstance(kwargs["out"], tuple):
-            raise RuntimeError(f"out= variant {op} with tuple out= not supported")
+            op_name = op.overloadpacket._qualified_op_name
+            log.error(f"❌ Unhandled operation: {op_name} - out= variant with tuple out= not supported")
+            raise RuntimeError(f"out= variant {op_name} with tuple out= not supported")
         if kwargs["out"].nelement() == 0:
             # Out variant that needs a resize, convert to an out of place
             # and handle generically below
@@ -226,10 +233,14 @@ def _kernel_fallback(op, *args, **kwargs):
                 raise ValueError("Remote devices must be RemoteBackend objects. Use create_modal_device() or similar to create a RemoteBackend.")
             else:
                 # Not a remote device factory function
-                raise RuntimeError(f"{op} not handled yet.")
+                op_name = op.overloadpacket._qualified_op_name
+                log.error(f"❌ Unhandled operation: {op_name} - factory function for non-remote device")
+                raise RuntimeError(f"Operation {op_name} not handled yet.")
         else:
             # No device specified, not a remote factory function
-            raise RuntimeError(f"{op} not handled yet.")
+            op_name = op.overloadpacket._qualified_op_name
+            log.error(f"❌ Unhandled operation: {op_name} - factory function without device specification")
+            raise RuntimeError(f"Operation {op_name} not handled yet.")
         
         # For remote device factory functions, we'll let them fall through to normal processing
         # The meta computation and device allocation will handle the rest
@@ -245,7 +256,9 @@ def _kernel_fallback(op, *args, **kwargs):
         # View ops
         if op is torch.ops.aten.view.default:
             return torch.ops.aten._unsafe_view(*args, **kwargs)
-        raise RuntimeError(f"{op} view op is not handled yet")
+        op_name = op.overloadpacket._qualified_op_name
+        log.error(f"❌ Unhandled operation: {op_name} - view operation not implemented")
+        raise RuntimeError(f"View operation {op_name} is not handled yet")
 
     if op_name is None:
         # 1. Compute updated metadata
