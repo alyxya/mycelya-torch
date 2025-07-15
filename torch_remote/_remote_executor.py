@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Tuple, Optional
 import torch
 import time
 
-from .device import BackendDevice, get_device_registry
+from .device import RemoteBackend, get_device_registry
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class RemoteExecutor:
         self._device_apps: Dict[str, Any] = {}  # Cache for device-specific GPU machines
         self._last_heartbeat: Dict[str, float] = {}  # Track last successful communication per device
     
-    def _get_device_gpu_machine(self, device: "BackendDevice"):
+    def _get_device_gpu_machine(self, device: "RemoteBackend"):
         """Get the active RemoteGPUMachine for a specific device."""
         # Get the pre-started GPU machine from the device
         gpu_machine = device.get_gpu_machine()
@@ -115,7 +115,7 @@ class RemoteExecutor:
             
             # Get the pre-started GPU machine (device-specific)
             if device is None:
-                raise ValueError("BackendDevice is required for remote execution")
+                raise ValueError("RemoteBackend is required for remote execution")
             
             gpu_machine = self._get_device_gpu_machine(device)
             
@@ -197,7 +197,7 @@ class RemoteExecutor:
     def create_tensor_on_remote(
         self,
         tensor_data: bytes, 
-        device: "BackendDevice",
+        device: "RemoteBackend",
         tensor_id: Optional[str] = None
     ) -> str:
         """
@@ -240,7 +240,7 @@ class RemoteExecutor:
         tensor_ids: List[str],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-        device: "BackendDevice"
+        device: "RemoteBackend"
     ) -> List[str]:
         """
         Execute an operation using tensor IDs.
@@ -263,7 +263,7 @@ class RemoteExecutor:
         factory_op: str,
         args: List[Any],
         kwargs: Dict[str, Any],
-        device: "BackendDevice"
+        device: "RemoteBackend"
     ) -> str:
         """
         Create a tensor using a factory operation on remote machine.
@@ -280,7 +280,7 @@ class RemoteExecutor:
         gpu_machine = self._get_device_gpu_machine(device)
         return gpu_machine.factory_tensor(factory_op, args, kwargs)
     
-    def remove_tensor_from_remote(self, tensor_id: str, device: "BackendDevice") -> bool:
+    def remove_tensor_from_remote(self, tensor_id: str, device: "RemoteBackend") -> bool:
         """
         Remove a tensor from remote machine.
         
@@ -294,7 +294,7 @@ class RemoteExecutor:
         gpu_machine = self._get_device_gpu_machine(device)
         return gpu_machine.remove_tensor(tensor_id)
     
-    def check_tensor_exists(self, tensor_id: str, device: "BackendDevice") -> bool:
+    def check_tensor_exists(self, tensor_id: str, device: "RemoteBackend") -> bool:
         """
         Check if a tensor exists on the remote machine.
         
@@ -313,7 +313,7 @@ class RemoteExecutor:
         except Exception:
             return False
     
-    def validate_tensor_reference(self, tensor_id: str, device: "BackendDevice") -> bool:
+    def validate_tensor_reference(self, tensor_id: str, device: "RemoteBackend") -> bool:
         """
         Validate that a tensor reference is still valid.
         
@@ -329,7 +329,7 @@ class RemoteExecutor:
         
         return self.check_tensor_exists(tensor_id, device)
     
-    def is_device_connected(self, device: "BackendDevice") -> bool:
+    def is_device_connected(self, device: "RemoteBackend") -> bool:
         """
         Check if a device is connected and responsive.
         
@@ -359,7 +359,7 @@ class RemoteExecutor:
         """Get the timestamp of last successful communication with a device."""
         return self._last_heartbeat.get(device_id)
     
-    def reconnect_device(self, device: "BackendDevice") -> bool:
+    def reconnect_device(self, device: "RemoteBackend") -> bool:
         """
         Attempt to reconnect to a device.
         
@@ -394,7 +394,7 @@ class RemoteExecutor:
         tensor_ids: List[str],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-        device: "BackendDevice"
+        device: "RemoteBackend"
     ) -> List[str]:
         """
         Safely execute an operation using tensor IDs with error handling.
@@ -444,11 +444,11 @@ class RemoteExecutor:
             log.warning(f"Failed to copy remote tensor data: {e}")
             return torch.zeros_like(remote_tensor, device="cpu")
     
-    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: "BackendDevice") -> torch.Tensor:
+    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: "RemoteBackend") -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""
-        # Create a new remote tensor from the CPU tensor using the BackendDevice
+        # Create a new remote tensor from the CPU tensor using the RemoteBackend
         if device is None:
-            raise RuntimeError("BackendDevice must be specified for remote tensor creation")
+            raise RuntimeError("RemoteBackend must be specified for remote tensor creation")
         
         # Convert to remote device - no need to manually attach _device_id anymore
         result = cpu_tensor.to(device.device())
@@ -478,8 +478,8 @@ class RemoteExecutor:
             "element_size": tensor.element_size()
         }
     
-    def _detect_device_from_tensors(self, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Optional[BackendDevice]:
-        """Detect BackendDevice from tensors in arguments."""
+    def _detect_device_from_tensors(self, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Optional[RemoteBackend]:
+        """Detect RemoteBackend from tensors in arguments."""
         detected_device = None
         
         def check_tensor(tensor):
@@ -490,7 +490,7 @@ class RemoteExecutor:
                 device = registry.get_device_by_index(tensor.device.index)
                 
                 if device is None:
-                    raise RuntimeError(f"No BackendDevice found for remote device index {tensor.device.index}")
+                    raise RuntimeError(f"No RemoteBackend found for remote device index {tensor.device.index}")
                 
                 if detected_device is None:
                     detected_device = device

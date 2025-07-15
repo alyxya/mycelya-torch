@@ -259,12 +259,12 @@ def _kernel_fallback(op, *args, **kwargs):
     if op_name is None:
         # 1. Compute updated metadata
         if torch.Tag.dynamic_output_shape not in op.tags:
-            # Usual case: run the meta op to see the output metadata
-            meta_args, meta_kwargs = to_device_no_copy("meta", args, kwargs)
-            meta_res = op(*meta_args, **meta_kwargs)
+            # Use CPU tensors with same shape/dtype for shape inference
+            cpu_args, cpu_kwargs = to_device_no_copy("cpu", args, kwargs)
+            cpu_res = op(*cpu_args, **cpu_kwargs)
 
-            # 2. Allocate the output
-            real_res, _ = to_device_no_copy("remote", meta_res, {})
+            # 2. Allocate the output on remote device
+            real_res, _ = to_device_no_copy("remote", cpu_res, {})
         else:
             # Slow version for data-dependent functions:
             # Run the op on the device just to get the output shape

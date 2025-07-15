@@ -96,9 +96,6 @@ def receive_after_sending(allocator, args, kwargs):
 
 def to_device_no_copy(device, args, kwargs):
     def safe_to(t):
-        if device == "meta":
-            return t.to(device=device)
-        else:
-            return torch.empty_like(t, device=device)
+        return torch.empty_like(t, device=device)
 
     return tree_map_only(torch.Tensor, safe_to, (args, kwargs))

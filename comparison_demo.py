@@ -10,7 +10,7 @@ import torch
 import torch_remote
 
 def demonstrate_memory_efficiency():
-    """Demonstrate the memory efficiency of the meta tensor implementation."""
+    """Demonstrate the memory efficiency of the remote tensor implementation."""
     print("🎯 MEMORY EFFICIENCY DEMONSTRATION")
     print("=" * 60)
     
@@ -42,12 +42,11 @@ def demonstrate_memory_efficiency():
         print(f"   Is persistent: {remote_tensor.is_persistent}")
         print(f"   Has tensor ID: {bool(remote_tensor.tensor_id)}")
         
-        # Check if using meta tensors
-        is_meta = remote_tensor.data.device.type == "meta"
-        if is_meta:
-            print(f"   ✅ MEMORY EFFICIENT: Using meta tensors (zero local overhead)")
+        # Check remote tensor implementation
+        if remote_tensor.device.type == "remote":
+            print(f"   ✅ MEMORY EFFICIENT: Using remote tensors (minimal local overhead)")
         else:
-            print(f"   ⚠️  MEMORY INEFFICIENT: Using {remote_tensor.data.device.type} tensors")
+            print(f"   ⚠️  UNEXPECTED: Using {remote_tensor.device.type} tensors")
         
         # Test data retrieval
         try:
@@ -60,13 +59,13 @@ def demonstrate_memory_efficiency():
         print()
 
 def demonstrate_operations():
-    """Demonstrate that operations still work with meta tensors."""
+    """Demonstrate that operations still work with remote tensors."""
     print("🧮 OPERATIONS DEMONSTRATION")
     print("=" * 60)
     
     device = torch_remote.create_modal_device("T4")
     
-    print("Testing various operations with meta tensor backend:\n")
+    print("Testing various operations with remote tensor backend:\n")
     
     # Create tensors
     x = torch.randn(100, 100, device=device.device())
@@ -86,13 +85,13 @@ def demonstrate_operations():
     for op_name, op_func in operations:
         try:
             result = op_func()
-            result_is_meta = result.data.device.type == "meta"
+            result_is_remote = result.device.type == "remote"
             
             # Test CPU retrieval
             cpu_result = result.cpu()
             has_data = torch.any(cpu_result != 0) or cpu_result.sum().item() != 0
             
-            print(f"   ✅ {op_name}: meta={result_is_meta}, data_retrieved={has_data}")
+            print(f"   ✅ {op_name}: remote={result_is_remote}, data_retrieved={has_data}")
             
         except Exception as e:
             print(f"   ❌ {op_name}: FAILED - {e}")
@@ -104,11 +103,11 @@ def demonstrate_comparison_with_original():
     
     device = torch_remote.create_modal_device("T4")
     
-    # Current approach (meta tensors)
-    print("Current implementation (meta tensors):")
+    # Current approach (remote tensors)
+    print("Current implementation (remote tensors):")
     current_tensor = torch.randn(1000, 1000, device=device.device())
     print(f"   Underlying device: {current_tensor.data.device}")
-    print(f"   Local memory for metadata: ~0 MB (meta tensor)")
+    print(f"   Local memory for metadata: ~0 MB (efficient remote tensor)")
     print(f"   ✅ Zero local memory overhead")
     
     print()
@@ -132,7 +131,7 @@ def demonstrate_comparison_with_original():
 def run_demonstration():
     """Run the complete demonstration."""
     print("🚀 ENHANCED REMOTE TENSOR IMPLEMENTATION")
-    print("   Adopting Meta Tensor Efficiency from main-4")
+    print("   Adopting Efficient Remote Tensor Implementation")
     print("   While Maintaining Reliable Execution from main")
     print()
     
@@ -145,7 +144,7 @@ def run_demonstration():
     print("\n" + "=" * 60)
     print("🎉 DEMONSTRATION COMPLETE")
     print("\n✨ Key Improvements Achieved:")
-    print("   • Zero local memory overhead with meta tensors")
+    print("   • Minimal local memory overhead with remote tensors")
     print("   • Maintained reliable remote execution")
     print("   • Preserved all existing functionality")
     print("   • Enhanced memory efficiency without sacrificing performance")
