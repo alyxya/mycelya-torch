@@ -88,7 +88,7 @@ bool validate_device_index(c10::DeviceIndex device_index) {
 }
 
 // C++ implementation of empty_remote using direct allocator integration
-at::Tensor empty_remote_cpp(
+at::Tensor empty_remote(
     at::IntArrayRef size,
     c10::optional<at::ScalarType> dtype,
     c10::optional<at::Layout> layout,
@@ -124,7 +124,7 @@ at::Tensor empty_remote_cpp(
 }
 
 // C++ implementation of empty_strided_remote
-at::Tensor empty_strided_remote_cpp(
+at::Tensor empty_strided_remote(
     at::IntArrayRef size,
     at::IntArrayRef stride,
     c10::optional<at::ScalarType> dtype,
@@ -235,8 +235,8 @@ at::Tensor to_dtype_layout_cpp(
 TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // Register our C++ implementations for empty tensor creation
   // These will override the Python fallback for these specific operations
-  m.impl("empty.memory_format", empty_remote_cpp);
-  m.impl("empty_strided", empty_strided_remote_cpp);
+  m.impl("empty.memory_format", empty_remote);
+  m.impl("empty_strided", empty_strided_remote);
   
   // Register custom to implementations for proper .cpu() support
   m.impl("to.device", to_device_cpp);

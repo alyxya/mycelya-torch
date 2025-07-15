@@ -20,7 +20,7 @@ static constexpr char kCreateTensorMethod[] = "create_tensor_with_id";
 static constexpr char kFreeTensorMethod[] = "free_tensor_with_id";
 
 // C++ tensor creation functions
-at::Tensor empty_remote_cpp(
+at::Tensor empty_remote(
     at::IntArrayRef size,
     c10::optional<at::ScalarType> dtype,
     c10::optional<at::Layout> layout,
@@ -28,7 +28,7 @@ at::Tensor empty_remote_cpp(
     c10::optional<bool> pin_memory,
     c10::optional<at::MemoryFormat> memory_format);
 
-at::Tensor empty_strided_remote_cpp(
+at::Tensor empty_strided_remote(
     at::IntArrayRef size,
     at::IntArrayRef stride,
     c10::optional<at::ScalarType> dtype,
