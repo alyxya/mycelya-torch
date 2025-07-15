@@ -1,3 +1,6 @@
+# Copyright (C) 2025 alyxya
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 #!/usr/bin/env python3
 """
 Demonstration of memory efficiency improvements compared to previous implementation.

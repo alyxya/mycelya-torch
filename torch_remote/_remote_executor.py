@@ -1,3 +1,6 @@
+# Copyright (C) 2025 alyxya
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """
 Remote execution system for aten operations on remote GPUs.
 Supports multiple remote execution providers.

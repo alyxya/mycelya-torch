@@ -1,3 +1,6 @@
+# Copyright (C) 2025 alyxya
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 #!/usr/bin/env python3
 """
 Modal remote execution app for torch_remote extension.
