@@ -35,9 +35,6 @@ class RemoteTensorRegistry:
         # Track which remote device owns each tensor ID
         self.tensor_id_to_device = {}  # tensor_id -> device_index
         
-        # Device count for validation
-        self.device_count = 2
-        
         # Set for tracking all generated tensor IDs to avoid duplicates
         self.generated_tensor_ids = set()
 
@@ -176,7 +173,10 @@ class RemoteTensorRegistry:
 
     def device_count_method(self):
         """Return number of devices"""
-        return self.device_count
+        # Get actual device count from the device registry
+        from torch_remote.device import get_device_registry
+        registry = get_device_registry()
+        return len(registry._devices)
 
     def get_device(self):
         """Get current device index"""
@@ -184,14 +184,16 @@ class RemoteTensorRegistry:
 
     def set_device(self, device_idx):
         """Set current device index"""
-        if device_idx < 0 or device_idx >= self.device_count:
+        device_count = self.device_count_method()
+        if device_idx < 0 or device_idx >= device_count:
             raise ValueError(f"Invalid device index: {device_idx}")
         # For tensor ID system, device selection is handled by remote execution
         log.info(f"Device set to {device_idx}")
 
     def has_primary_context(self, device_idx):
         """Check if device has primary context"""
-        return device_idx >= 0 and device_idx < self.device_count
+        device_count = self.device_count_method()
+        return device_idx >= 0 and device_idx < device_count
 
 
 class Driver:

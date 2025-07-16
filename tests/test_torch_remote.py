@@ -26,8 +26,9 @@ def test_device_functions():
     """Test remote device functions."""
     import torch
     import torch_remote
-    assert (torch.remote.is_available() and
-            torch.remote.device_count() >= 1)
+    assert torch.remote.is_available()
+    # device_count should be >= 0 (could be 0 if no devices registered)
+    assert torch.remote.device_count() >= 0
 
 
 def test_tensor_to_method():
@@ -316,3 +317,131 @@ def test_backend_device_method(modal_t4_device):
     registry = torch_remote.get_device_registry()
     device_from_registry = registry.get_device_by_index(x.device.index)
     assert device_from_registry is backend_device
+
+
+def test_validate_device_index_basic():
+    """Test validate_device_index with valid and invalid indices."""
+    import torch_remote
+    
+    # Test with no devices registered
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    
+    # device_count should be 0 with no devices
+    assert torch.remote.device_count() == 0
+    
+    # Create one device
+    device1 = torch_remote.create_modal_device("T4")
+    assert torch.remote.device_count() == 1
+    
+    # Create second device  
+    device2 = torch_remote.create_modal_device("L4")
+    assert torch.remote.device_count() == 2
+    
+    # Valid indices should work
+    tensor1 = torch.randn(2, 2, device=device1.device())
+    tensor2 = torch.randn(2, 2, device=device2.device())
+    assert tensor1 is not None
+    assert tensor2 is not None
+
+
+def test_validate_device_index_invalid():
+    """Test validate_device_index with invalid device indices."""
+    import torch_remote
+    
+    # Clear registry
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    
+    # Create 2 devices (indices 0 and 1)
+    device1 = torch_remote.create_modal_device("T4")
+    device2 = torch_remote.create_modal_device("L4")
+    assert torch.remote.device_count() == 2
+    
+    # Test invalid device index (should fail at C++ level)
+    try:
+        # This should fail because device index 2 doesn't exist
+        invalid_device = torch.device("remote", 2)
+        tensor = torch.randn(2, 2, device=invalid_device)
+        assert False, "Expected device validation to fail for index 2"
+    except (RuntimeError, ValueError) as e:
+        # Expected failure
+        assert "Invalid device index" in str(e) or "device" in str(e).lower()
+
+
+def test_validate_device_index_negative():
+    """Test validate_device_index with negative device indices."""
+    import torch_remote
+    
+    # Create one device
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    device = torch_remote.create_modal_device("T4")
+    
+    # Test negative device index (should fail)
+    try:
+        invalid_device = torch.device("remote", -1)
+        tensor = torch.randn(2, 2, device=invalid_device)
+        assert False, "Expected device validation to fail for negative index"
+    except (RuntimeError, ValueError) as e:
+        # Expected failure
+        assert "Invalid device index" in str(e) or "device" in str(e).lower()
+
+
+def test_device_count_dynamic_tracking():
+    """Test that device_count properly tracks registered devices dynamically."""
+    import torch_remote
+    
+    # Clear registry and verify count is 0
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    assert torch.remote.device_count() == 0
+    
+    # Add devices one by one and verify count increases
+    devices = []
+    gpu_types = ["T4", "L4", "A10G"]
+    
+    for i, gpu_type in enumerate(gpu_types):
+        device = torch_remote.create_modal_device(gpu_type)
+        devices.append(device)
+        expected_count = i + 1
+        assert torch.remote.device_count() == expected_count
+        
+        # Verify the device index matches expectation
+        assert device.remote_index == i
+        
+        # Verify we can create tensors on each device
+        tensor = torch.randn(2, 2, device=device.device())
+        assert tensor is not None
+        assert tensor.device.index == i
+
+
+def test_validate_device_index_with_multiple_devices():
+    """Test validate_device_index edge case: creating exactly device_count devices."""
+    import torch_remote
+    
+    # Clear registry
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    
+    # Create 3 devices (indices 0, 1, 2)
+    devices = []
+    for i in range(3):
+        device = torch_remote.create_modal_device("T4")
+        devices.append(device)
+        assert torch.remote.device_count() == i + 1
+    
+    # All 3 devices should work
+    for i, device in enumerate(devices):
+        assert device.remote_index == i
+        tensor = torch.randn(2, 2, device=device.device())
+        assert tensor is not None
+        assert tensor.device.index == i
+    
+    # Device index 3 should fail (out of bounds)
+    try:
+        invalid_device = torch.device("remote", 3)
+        tensor = torch.randn(2, 2, device=invalid_device)
+        assert False, "Expected device validation to fail for index 3"
+    except (RuntimeError, ValueError) as e:
+        assert "Invalid device index" in str(e) or "device" in str(e).lower()
