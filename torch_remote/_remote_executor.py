@@ -572,7 +572,7 @@ class RemoteExecutor:
                     raise RuntimeError(
                         f"Cannot perform operations between tensors on different remote devices: "
                         f"\"{detected_device.machine_id}\" (index {detected_device.remote_index}) and "
-                        f"\"{device.machine_id}\" (index {device.remote_index})\")""
+                        f"\"{device.machine_id}\" (index {device.remote_index})\")"
                     )
         
         # Check args for remote tensors

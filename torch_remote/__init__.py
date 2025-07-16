@@ -124,35 +124,6 @@ def _create_module():
 torch.utils.rename_privateuse1_backend("remote")
 torch._register_device_module("remote", _create_module())
 
-# Patch tensor.to() method to support persistent remote tensors
-def _patch_tensor_to_method():
-    """Patch torch.Tensor.to() to handle CPU->remote transfers with persistent tensors."""
-    # Store original method
-    if not hasattr(torch.Tensor, "_original_to"):
-        torch.Tensor._original_to = torch.Tensor.to
-        
-        def enhanced_to(self, *args, **kwargs):
-            # Check if this is a CPU to remote transfer
-            if (len(args) == 1 and not kwargs and 
-                isinstance(args[0], torch.device) and 
-                args[0].type == "remote" and 
-                self.device.type == "cpu"):
-                
-                # Use persistent tensor creation for CPU->remote transfers
-                try:
-                    from ._aten_impl import cpu_tensor_to_persistent_remote
-                    return cpu_tensor_to_persistent_remote(self, args[0])
-                except Exception:
-                    # Fallback to original method if persistent creation fails
-                    pass
-            
-            # For all other cases, use original method
-            return self._original_to(*args, **kwargs)
-        
-        # Replace the method
-        torch.Tensor.to = enhanced_to
-
-_patch_tensor_to_method()
 
 # Import device management
 from .device import create_modal_device, RemoteBackend, GPUType, get_device_registry
