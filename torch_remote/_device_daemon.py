@@ -3,6 +3,7 @@
 
 import atexit
 import logging
+import random
 import weakref
 
 import torch
@@ -36,6 +37,37 @@ class RemoteTensorRegistry:
         
         # Device count for validation
         self.device_count = 2
+        
+        # Set for tracking all generated tensor IDs to avoid duplicates
+        self.generated_tensor_ids = set()
+
+    def generate_tensor_id(self):
+        """
+        Generate a unique tensor ID with duplicate validation.
+        
+        Returns:
+            int: A unique 64-bit tensor ID
+        """
+        # Generate unique 64-bit integer IDs
+        # Use non-zero values to avoid confusion with null pointers
+        max_attempts = 1000  # Prevent infinite loops
+        attempt = 0
+        
+        while attempt < max_attempts:
+            # Generate a random 64-bit integer
+            tensor_id = random.randint(1, 2**64 - 1)
+            
+            # Check if this ID is already used
+            if tensor_id not in self.generated_tensor_ids:
+                self.generated_tensor_ids.add(tensor_id)
+                log.debug(f"Generated unique tensor ID: {tensor_id}")
+                return tensor_id
+            
+            attempt += 1
+            log.warning(f"Generated duplicate tensor ID {tensor_id}, retrying (attempt {attempt})")
+        
+        # If we couldn't generate a unique ID after max_attempts, raise an error
+        raise RuntimeError(f"Failed to generate unique tensor ID after {max_attempts} attempts")
 
     def create_tensor_with_id(self, tensor_id, nbytes, device_index):
         """Create a tensor with the given ID and return success status"""
@@ -81,6 +113,7 @@ class RemoteTensorRegistry:
         self.tensor_id_to_device.pop(tensor_id_int, None)
         self.tensor_id_to_meta.pop(tensor_id_int, None)
         self.tensor_id_to_tensor.pop(tensor_id_int, None)
+        self.generated_tensor_ids.discard(tensor_id_int)
         
         log.info(f"Freed tensor ID {tensor_id_int}")
         return True

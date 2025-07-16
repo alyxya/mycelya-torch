@@ -6,7 +6,6 @@
 #include <c10/core/Allocator.h>
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <torch/library.h>
-#include <random>
 #include <sstream>
 #include <iomanip>
 
@@ -24,8 +23,8 @@ struct RemoteAllocator final : at::Allocator {
     void* data = nullptr;
     
     if (nbytes > 0) {
-      // Generate a unique tensor ID
-      tensor_id_t tensor_id = generate_tensor_id();
+      // Generate a unique tensor ID using Python method
+      tensor_id_t tensor_id = get_method(kGenerateTensorIdMethod)().cast<tensor_id_t>();
       
       // Call Python method to create tensor with ID and register it
       // This should create the tensor remotely and return success/failure
@@ -59,21 +58,6 @@ REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_remote_alloc);
 
 } // namespace
 
-// Utility function to generate unique tensor IDs
-tensor_id_t generate_tensor_id() {
-  static std::random_device rd;
-  static std::mt19937 gen(rd());
-  static std::uniform_int_distribution<uint64_t> dis;
-  
-  // Generate a unique 64-bit integer ID
-  // Use non-zero values to avoid confusion with null pointers
-  tensor_id_t id;
-  do {
-    id = dis(gen);
-  } while (id == 0);
-  
-  return id;
-}
 
 // Validate device index
 bool validate_device_index(c10::DeviceIndex device_index) {

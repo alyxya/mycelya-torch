@@ -110,6 +110,14 @@ def impl_factory(name):
         
         _IMPL_REGISTRY[name] = _
         return _
+    
+    elif name == "generate_tensor_id":
+        def _():
+            """Generate a unique tensor ID with duplicate validation."""
+            return driver.exec("generate_tensor_id")
+        
+        _IMPL_REGISTRY[name] = _
+        return _
 
     def _(*args, **kwargs):
         log.info("Calling hook %s", name)

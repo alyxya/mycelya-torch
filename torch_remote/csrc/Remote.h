@@ -20,6 +20,7 @@ py::function get_method(const char* name);
 static constexpr char kFreeMethod[] = "free";
 static constexpr char kCreateTensorMethod[] = "create_tensor_with_id";
 static constexpr char kFreeTensorMethod[] = "free_tensor_with_id";
+static constexpr char kGenerateTensorIdMethod[] = "generate_tensor_id";
 static constexpr char kMallocMethod[] = "malloc";  // Legacy method name for fallback
 
 // C++ tensor creation functions
@@ -40,7 +41,6 @@ at::Tensor empty_strided_remote(
     c10::optional<bool> pin_memory);
 
 // Utility functions for tensor ID management
-tensor_id_t generate_tensor_id();
 bool validate_device_index(c10::DeviceIndex device_index);
 
 template <const char* name>
