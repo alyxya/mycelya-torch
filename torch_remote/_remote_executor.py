@@ -119,11 +119,12 @@ class RemoteExecutor:
             
             gpu_machine = self._get_device_gpu_machine(device)
             
-            # Separate tensors from other arguments
+            # Separate tensors from other arguments and track output tensors
             tensors_data = []
             tensor_metadata = []
             processed_args = []
             processed_kwargs = {}
+            output_tensors = []  # Track pre-allocated output tensors
             
             # Process args
             for arg in args:
@@ -141,7 +142,7 @@ class RemoteExecutor:
                 else:
                     processed_args.append(arg)
             
-            # Process kwargs
+            # Process kwargs and detect output tensors
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == "remote":
                     # Convert remote tensor data to regular CPU tensor
@@ -154,6 +155,10 @@ class RemoteExecutor:
                     tensors_data.append(tensor_data)
                     tensor_metadata.append(metadata)
                     processed_kwargs[key] = f"__TENSOR_{len(tensors_data)-1}"
+                    
+                    # Check if this is an output tensor
+                    if key == "out":
+                        output_tensors.append(value)
                 else:
                     processed_kwargs[key] = value
             
@@ -176,25 +181,38 @@ class RemoteExecutor:
                 log.error(f"Traceback: {traceback.format_exc()}")
                 raise
             
-            # Deserialize results and create remote tensors with proper GPU machine registration
+            # Handle result tensor allocation - use pre-allocated output tensors when available
             results = []
             gpu_machine = self._get_device_gpu_machine(device)
             
-            for data, metadata in zip(serialized_results, result_metadata):
+            for i, (data, metadata) in enumerate(zip(serialized_results, result_metadata)):
                 cpu_tensor = self._deserialize_tensor(data)
                 
-                # Create a new remote tensor
-                remote_tensor = self._cpu_tensor_to_remote(cpu_tensor, device)
-                
-                # Register the tensor data with the GPU machine using the tensor's ID
-                tensor_id_int = remote_tensor.untyped_storage().data_ptr()
-                tensor_id_str = str(tensor_id_int)
-                
-                # Store the tensor data on the GPU machine so future operations can access it
-                gpu_machine.create_tensor(data, tensor_id_str)
-                log.info(f"Registered result tensor ID {tensor_id_int} with GPU machine")
-                
-                results.append(remote_tensor)
+                # Check if we have a pre-allocated output tensor for this result
+                if i < len(output_tensors):
+                    # Use the pre-allocated output tensor
+                    output_tensor = output_tensors[i]
+                    tensor_id_int = output_tensor.untyped_storage().data_ptr()
+                    tensor_id_str = str(tensor_id_int)
+                    
+                    # Store the result data in the pre-allocated tensor's ID
+                    gpu_machine.create_tensor(data, tensor_id_str)
+                    log.info(f"Updated pre-allocated output tensor ID {tensor_id_int} with result data")
+                    
+                    results.append(output_tensor)
+                else:
+                    # Create a new remote tensor for this result
+                    remote_tensor = self._cpu_tensor_to_remote(cpu_tensor, device)
+                    
+                    # Register the tensor data with the GPU machine using the tensor's ID
+                    tensor_id_int = remote_tensor.untyped_storage().data_ptr()
+                    tensor_id_str = str(tensor_id_int)
+                    
+                    # Store the tensor data on the GPU machine so future operations can access it
+                    gpu_machine.create_tensor(data, tensor_id_str)
+                    log.info(f"Registered new result tensor ID {tensor_id_int} with GPU machine")
+                    
+                    results.append(remote_tensor)
             
             # Return single tensor or tuple based on original operation
             if len(results) == 1:
@@ -465,11 +483,34 @@ class RemoteExecutor:
         tensor_id_int = remote_tensor.untyped_storage().data_ptr()
         tensor_id_str = str(tensor_id_int)
         
-        # Use GPU machine to get tensor data by ID
-        tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
-        
-        # Deserialize the tensor
-        return self._deserialize_tensor(tensor_data)
+        try:
+            # Use GPU machine to get tensor data by ID
+            tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
+            
+            # Deserialize the tensor
+            return self._deserialize_tensor(tensor_data)
+        except Exception as e:
+            if "not found in registry" in str(e):
+                # This is likely a pre-allocated output tensor that doesn't have data yet
+                # Create empty tensor data matching the tensor's shape and dtype
+                log.warning(f"Tensor ID {tensor_id_int} not found in registry, creating empty tensor data")
+                
+                # Create empty tensor with same properties as the remote tensor
+                empty_tensor = torch.empty(
+                    remote_tensor.shape, 
+                    dtype=remote_tensor.dtype,
+                    device="cpu"
+                )
+                
+                # Register this empty tensor data in the GPU machine
+                tensor_data = self._serialize_tensor(empty_tensor)
+                gpu_machine.create_tensor(tensor_data, tensor_id_str)
+                log.info(f"Registered empty tensor ID {tensor_id_int} with GPU machine")
+                
+                return empty_tensor
+            else:
+                # Re-raise other errors
+                raise
     
     def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: "RemoteBackend") -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""
