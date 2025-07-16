@@ -208,21 +208,14 @@ def _remote_kernel_fallback(op, *args, **kwargs):
                 f"Remote tensors must use remote execution - no fallback to local execution is allowed."
             )
 
-    # Handle non-remote operations (mixed non-remote tensors or no tensors)
-    def get_tensor_device(*args):
-        for arg in args:
-            if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-                return arg.device
-        return None
-
-    device = get_tensor_device(*args)
-    
-    # For local execution with device context
-    if device is not None:
-        with torch.remote.device(device):  # type: ignore[misc]
-            return _execute_local_operation(op, *args, **kwargs)
-    else:
-        return _execute_local_operation(op, *args, **kwargs)
+    # Operations that reach this point should not be handled by remote dispatch
+    # This indicates a configuration or logic error in the dispatch system
+    op_name = op.overloadpacket._qualified_op_name
+    log.error(f"❌ Unexpected operation dispatch: {op_name} - should not reach remote fallback")
+    raise RuntimeError(
+        f"Operation {op_name} was dispatched to remote kernel fallback but should not be handled remotely. "
+        f"This indicates an error in the dispatch system configuration."
+    )
 
 
 def _execute_local_operation(op, *args, **kwargs):
