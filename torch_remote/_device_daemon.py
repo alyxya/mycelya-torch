@@ -104,19 +104,61 @@ class RemoteTensorRegistry:
         return self.tensor_id_to_meta.get(tensor_id_int)
 
     def free_tensor_with_id(self, tensor_id):
-        """Free tensor by tensor ID"""
+        """Free tensor by tensor ID with remote cleanup"""
         tensor_id_int = int(tensor_id)
         if tensor_id_int == 0:  # Empty tensor
             return True
             
-        # Clean up all mappings
+        # Get device index before cleaning up mappings
+        device_idx = self.tensor_id_to_device.get(tensor_id_int)
+        
+        # Clean up all local mappings
         self.tensor_id_to_device.pop(tensor_id_int, None)
         self.tensor_id_to_meta.pop(tensor_id_int, None)
         self.tensor_id_to_tensor.pop(tensor_id_int, None)
         self.generated_tensor_ids.discard(tensor_id_int)
         
+        # Call remote cleanup if device is known
+        if device_idx is not None:
+            log.info(f"Initiating remote cleanup for tensor {tensor_id_int} on device {device_idx}")
+            self._cleanup_remote_tensor(tensor_id_int, device_idx)
+        else:
+            log.info(f"No device index found for tensor {tensor_id_int}, skipping remote cleanup")
+        
         log.info(f"Freed tensor ID {tensor_id_int}")
         return True
+
+    def _cleanup_remote_tensor(self, tensor_id: int, device_idx: int):
+        """Clean up tensor on remote GPU device"""
+        try:
+            # Import here to avoid circular imports
+            from ._remote_executor import _get_remote_executor
+            from .device import get_device_registry
+            
+            executor = _get_remote_executor()
+            if executor is None:
+                log.warning(f"No remote executor available for tensor {tensor_id} cleanup")
+                return
+            
+            registry = get_device_registry()
+            device = registry.get_device_by_index(device_idx)
+            
+            if device is None:
+                log.warning(f"No device found for index {device_idx} during tensor {tensor_id} cleanup")
+                return
+            
+            # Attempt remote cleanup
+            log.info(f"Calling remove_tensor_from_remote for tensor {tensor_id}")
+            success = executor.remove_tensor_from_remote(str(tensor_id), device)
+            if success:
+                log.info(f"✅ Successfully cleaned up remote tensor {tensor_id} on device {device_idx}")
+            else:
+                log.warning(f"❌ Remote cleanup returned false for tensor {tensor_id} on device {device_idx}")
+                
+        except Exception as e:
+            # Log but don't fail - local cleanup already completed
+            log.warning(f"Failed remote cleanup for tensor {tensor_id} on device {device_idx}: {e}")
+            # Continue execution since local cleanup is already done
 
     def copy_data_by_id(self, dest_id, src_id, count):
         """Copy data between tensors identified by their IDs"""
