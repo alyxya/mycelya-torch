@@ -54,14 +54,14 @@ def _execute_aten_operation_impl(
     tensor_metadata: List[Dict[str, Any]], 
     args: List[Any], 
     kwargs: Dict[str, Any],
-    device_id: str,
+    machine_id: str,
     gpu_type: str
 ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
     """Common implementation for executing an aten operation remotely."""
     import torch
     import io
     
-    print(f"🚀 Modal {gpu_type} (device {device_id}) executing: {op_name}")
+    print(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
     print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
     
     try:
@@ -166,9 +166,9 @@ class RemoteGPUMachine:
     state and connection management.
     """
     
-    def __init__(self, gpu_type: str, device_id: str):
+    def __init__(self, gpu_type: str, machine_id: str):
         self.gpu_type = gpu_type
-        self.device_id = device_id
+        self.machine_id = machine_id
         self._app = None
         self._executor_class = None
         self._executor_instance = None
@@ -180,7 +180,7 @@ class RemoteGPUMachine:
     def _initialize(self):
         """Initialize the Modal app and executor class."""
         self._app, self._executor_class = _create_modal_app_for_gpu(
-            self.gpu_type, self.device_id
+            self.gpu_type, self.machine_id
         )
     
     def start(self):
@@ -232,10 +232,10 @@ class RemoteGPUMachine:
             RuntimeError: If machine is not running
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.execute_aten_operation.remote(
-            op_name, tensors_data, tensor_metadata, args, kwargs, self.device_id
+            op_name, tensors_data, tensor_metadata, args, kwargs, self.machine_id
         )
     
     def create_tensor(self, tensor_data: bytes, tensor_id: Optional[str] = None) -> str:
@@ -250,7 +250,7 @@ class RemoteGPUMachine:
             The tensor ID
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.create_tensor.remote(tensor_data, tensor_id)
     
@@ -265,7 +265,7 @@ class RemoteGPUMachine:
             Serialized tensor data
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.get_tensor_data.remote(tensor_id)
     
@@ -280,7 +280,7 @@ class RemoteGPUMachine:
             Tensor metadata
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.get_tensor_metadata.remote(tensor_id)
     
@@ -304,10 +304,10 @@ class RemoteGPUMachine:
             Result tensor IDs
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.execute_aten_operation_with_ids.remote(
-            op_name, tensor_ids, args, kwargs, self.device_id
+            op_name, tensor_ids, args, kwargs, self.machine_id
         )
     
     def factory_tensor(
@@ -328,10 +328,10 @@ class RemoteGPUMachine:
             Created tensor ID
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.factory_tensor.remote(
-            factory_op, args, kwargs, self.device_id
+            factory_op, args, kwargs, self.machine_id
         )
     
     def remove_tensor(self, tensor_id: str) -> bool:
@@ -345,14 +345,14 @@ class RemoteGPUMachine:
             True if removed, False if not found
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.remove_tensor.remote(tensor_id)
     
     def get_registry_stats(self) -> Dict[str, Any]:
         """Get tensor registry statistics."""
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.get_registry_stats.remote()
     
@@ -367,21 +367,21 @@ class RemoteGPUMachine:
             Number of tensors removed
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.garbage_collect.remote(active_tensor_ids)
     
     def get_memory_pressure(self) -> Dict[str, Any]:
         """Get memory pressure information from remote machine."""
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.get_memory_pressure.remote()
     
     def auto_garbage_collect(self) -> int:
         """Perform automatic garbage collection based on memory pressure."""
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.device_id} is not running. Call start() first.")
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.auto_garbage_collect.remote()
     
@@ -397,49 +397,49 @@ class RemoteGPUMachine:
     
     def __repr__(self):
         status = "running" if self.is_running() else "stopped"
-        return f"RemoteGPUMachine(gpu_type=\"{self.gpu_type}\", device_id=\"{self.device_id}\", status=\"{status}\")"
+        return f"RemoteGPUMachine(gpu_type=\"{self.gpu_type}\", machine_id=\"{self.machine_id}\", status=\"{status}\")"
 
 
-def create_modal_app_for_gpu(gpu_type: str, device_id: str) -> RemoteGPUMachine:
+def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> RemoteGPUMachine:
     """
     Create a RemoteGPUMachine for a specific GPU type and device.
     
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
-        device_id: The device ID (e.g., "modal-t4-f3a7d67e")
+        machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
         
     Returns:
         RemoteGPUMachine instance representing the remote GPU
     """
     # Check cache first
-    if device_id in _gpu_machines:
-        return _gpu_machines[device_id]
+    if machine_id in _gpu_machines:
+        return _gpu_machines[machine_id]
     
     # Create new machine and cache it
-    machine = RemoteGPUMachine(gpu_type, device_id)
-    _gpu_machines[device_id] = machine
+    machine = RemoteGPUMachine(gpu_type, machine_id)
+    _gpu_machines[machine_id] = machine
     return machine
 
 
-def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App, Any]:
+def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and class for a specific GPU type and device.
     
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
-        device_id: The device ID (e.g., "modal-t4-f3a7d67e")
+        machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
         
     Returns:
         Tuple of (modal_app, executor_class) for the specified device
     """
-    if device_id in _gpu_apps:
-        return _gpu_apps[device_id]
+    if machine_id in _gpu_apps:
+        return _gpu_apps[machine_id]
     
     if gpu_type not in GPU_CONFIG:
         raise ValueError(f"GPU type \"{gpu_type}\" is not supported. Available types: {list(GPU_CONFIG.keys())}")
     
     config = GPU_CONFIG[gpu_type]
-    app = modal.App(f"torch-remote-{device_id}")
+    app = modal.App(f"torch-remote-{machine_id}")
     
     @app.cls(
         image=image,
@@ -650,7 +650,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
             tensor_ids: List[str],
             args: List[Any],
             kwargs: Dict[str, Any],
-            device_id: str
+            machine_id: str
         ) -> List[str]:
             """
             Execute an operation using tensor IDs and return result tensor IDs.
@@ -660,14 +660,14 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 tensor_ids: List of input tensor IDs
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
-                device_id: Device ID for logging
+                machine_id: Machine ID for logging
                 
             Returns:
                 List of result tensor IDs
             """
             import torch
             
-            print(f"🚀 Modal {gpu_type} (device {device_id}) executing: {op_name}")
+            print(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
             print(f"Using tensor IDs: {tensor_ids}")
             
             try:
@@ -752,7 +752,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
             factory_op: str,
             args: List[Any],
             kwargs: Dict[str, Any],
-            device_id: str
+            machine_id: str
         ) -> str:
             """
             Create a tensor using a factory operation (e.g., torch.randn).
@@ -761,14 +761,14 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 factory_op: The factory operation name (e.g., "randn", "zeros")
                 args: Factory operation arguments
                 kwargs: Factory operation keyword arguments
-                device_id: Device ID for logging
+                machine_id: Machine ID for logging
                 
             Returns:
                 The created tensor ID
             """
             import torch
             
-            print(f"🏭 Modal {gpu_type} (device {device_id}) creating tensor: {factory_op}")
+            print(f"🏭 Modal {gpu_type} (machine {machine_id}) creating tensor: {factory_op}")
             
             try:
                 # Get GPU device
@@ -851,12 +851,12 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
             tensor_metadata: List[Dict[str, Any]], 
             args: List[Any], 
             kwargs: Dict[str, Any],
-            device_id: str
+            machine_id: str
         ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
             import torch
             import io
             
-            print(f"🚀 Modal {gpu_type} (device {device_id}) executing: {op_name}")
+            print(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
             print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
             
             try:
@@ -965,7 +965,7 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 traceback.print_exc()
                 raise
     
-    _gpu_apps[device_id] = (app, PytorchOperationExecutor)
+    _gpu_apps[machine_id] = (app, PytorchOperationExecutor)
     return app, PytorchOperationExecutor
 
 
@@ -982,7 +982,7 @@ def get_modal_app_for_device(device) -> RemoteGPUMachine:
     if hasattr(device, "provider") and device.provider.value != "modal":
         raise ValueError(f"Device provider {device.provider.value} is not Modal")
     
-    return create_modal_app_for_gpu(device.gpu_type.value, device.device_id)
+    return create_modal_app_for_gpu(device.gpu_type.value, device.machine_id)
 
 
 def clear_app_cache():

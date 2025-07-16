@@ -232,7 +232,7 @@ def copy_from_device(from_):
         # Get the GPU machine for this device
         gpu_machine = device.get_gpu_machine()
         if gpu_machine is None or not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine not available for device {device.device_id}")
+            raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
         
         # Get tensor data using tensor ID (convert int to string for GPU machine)
         tensor_id_int = from_.untyped_storage().data_ptr()
@@ -272,7 +272,7 @@ def copy_from_host_to_device(from_, to_):
         # Get the GPU machine for this device
         gpu_machine = device.get_gpu_machine()
         if gpu_machine is None or not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine not available for device {device.device_id}")
+            raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
         
         # Send tensor data using tensor ID (convert int to string for GPU machine)
         tensor_id_int = to_.untyped_storage().data_ptr()

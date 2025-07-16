@@ -54,7 +54,7 @@ class RemoteBackend:
         """
         self.provider = provider
         self.gpu_type = gpu_type
-        self.device_id = self._generate_device_id()
+        self.machine_id = self._generate_machine_id()
         self.config = kwargs
         self._initialized = False
         self._gpu_machine = None
@@ -65,8 +65,8 @@ class RemoteBackend:
         # Create and start the GPU machine
         self._create_and_start_gpu_machine()
 
-    def _generate_device_id(self) -> str:
-        """Generate a human-readable device ID with provider and GPU info."""
+    def _generate_machine_id(self) -> str:
+        """Generate a human-readable machine ID with provider and GPU info."""
         # Get short UUID for uniqueness
         short_uuid = str(uuid.uuid4())[:8]
 
@@ -92,7 +92,7 @@ class RemoteBackend:
             if self.provider == BackendProvider.MODAL:
                 # Import here to avoid circular imports
                 from torch_remote_execution.modal_app import create_modal_app_for_gpu
-                self._gpu_machine = create_modal_app_for_gpu(self.gpu_type.value, self.device_id)
+                self._gpu_machine = create_modal_app_for_gpu(self.gpu_type.value, self.machine_id)
                 self._gpu_machine.start()
                 print(f"🚀 Started GPU machine: {self._gpu_machine}")
             else:
@@ -113,26 +113,26 @@ class RemoteBackend:
         if self._gpu_machine and self._gpu_machine.is_running():
             try:
                 self._gpu_machine.stop()
-                print(f"🛑 Stopped GPU machine: {self.device_id}")
+                print(f"🛑 Stopped GPU machine: {self.machine_id}")
             except Exception as e:
                 # Don't print full stack traces during shutdown
-                print(f"⚠️  Error stopping GPU machine {self.device_id}: {type(e).__name__}")
+                print(f"⚠️  Error stopping GPU machine {self.machine_id}: {type(e).__name__}")
         self._gpu_machine = None
 
     def __str__(self):
-        return f"RemoteBackend(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.device_id})"
+        return f"RemoteBackend(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.machine_id})"
 
     def __repr__(self):
         return self.__str__()
 
     def __eq__(self, other):
-        """Two devices are equal only if they have the same device_id."""
+        """Two devices are equal only if they have the same machine_id."""
         if not isinstance(other, RemoteBackend):
             return False
-        return self.device_id == other.device_id
+        return self.machine_id == other.machine_id
 
     def __hash__(self):
-        return hash(self.device_id)
+        return hash(self.machine_id)
     
 
     @property
@@ -208,10 +208,10 @@ class DeviceRegistry:
         """Get device by its index."""
         return self._devices.get(index)
 
-    def get_device_by_id(self, device_id: str) -> Optional[RemoteBackend]:
+    def get_device_by_id(self, machine_id: str) -> Optional[RemoteBackend]:
         """Get device by its ID (for backwards compatibility)."""
         for device in self._devices.values():
-            if device.device_id == device_id:
+            if device.machine_id == machine_id:
                 return device
         return None
 

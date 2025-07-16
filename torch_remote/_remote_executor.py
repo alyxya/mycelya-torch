@@ -85,10 +85,10 @@ class RemoteExecutor:
         gpu_machine = device.get_gpu_machine()
         
         if gpu_machine is None:
-            raise RuntimeError(f"No GPU machine available for device {device.device_id}")
+            raise RuntimeError(f"No GPU machine available for device {device.machine_id}")
         
         if not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine for device {device.device_id} is not running")
+            raise RuntimeError(f"GPU machine for device {device.machine_id} is not running")
         
         return gpu_machine
         
@@ -190,7 +190,7 @@ class RemoteExecutor:
             
             # Execute remotely using pre-started RemoteGPUMachine
             log.info(f"🚀 Using active GPU machine for {op_name}: {gpu_machine}")
-            log.info(f"📊 Args: op_name={op_name}, input_tensors={len(input_tensors_data)}, output_tensors={len(output_tensors)}, device_id={device.device_id}")
+            log.info(f"📊 Args: op_name={op_name}, input_tensors={len(input_tensors_data)}, output_tensors={len(output_tensors)}, machine_id={device.machine_id}")
             
             try:
                 serialized_results, result_metadata = gpu_machine.execute_operation(
@@ -367,7 +367,7 @@ class RemoteExecutor:
         try:
             gpu_machine = self._get_device_gpu_machine(device)
             metadata = gpu_machine.get_tensor_metadata(tensor_id)
-            self._update_heartbeat(device.device_id)
+            self._update_heartbeat(device.machine_id)
             return metadata is not None
         except Exception:
             return False
@@ -405,18 +405,18 @@ class RemoteExecutor:
             
             # Try to get registry stats as a ping
             stats = gpu_machine.get_registry_stats()
-            self._update_heartbeat(device.device_id)
+            self._update_heartbeat(device.machine_id)
             return True
         except Exception:
             return False
     
-    def _update_heartbeat(self, device_id: str) -> None:
+    def _update_heartbeat(self, machine_id: str) -> None:
         """Update the last successful communication timestamp for a device."""
-        self._last_heartbeat[device_id] = time.time()
+        self._last_heartbeat[machine_id] = time.time()
     
-    def get_last_heartbeat(self, device_id: str) -> Optional[float]:
+    def get_last_heartbeat(self, machine_id: str) -> Optional[float]:
         """Get the timestamp of last successful communication with a device."""
-        return self._last_heartbeat.get(device_id)
+        return self._last_heartbeat.get(machine_id)
     
     def reconnect_device(self, device: "RemoteBackend") -> bool:
         """
@@ -437,13 +437,13 @@ class RemoteExecutor:
                 
                 # Test connection
                 if self.is_device_connected(device):
-                    log.info(f"Successfully reconnected to device {device.device_id}")
+                    log.info(f"Successfully reconnected to device {device.machine_id}")
                     return True
                 else:
-                    log.warning(f"Failed to reconnect to device {device.device_id}")
+                    log.warning(f"Failed to reconnected to device {device.machine_id}")
                     return False
         except Exception as e:
-            log.error(f"Error during reconnection to device {device.device_id}: {e}")
+            log.error(f"Error during reconnection to device {device.machine_id}: {e}")
             return False
     
     @with_error_handling
@@ -475,12 +475,12 @@ class RemoteExecutor:
         """
         # Validate device connection
         if not self.is_device_connected(device):
-            raise ConnectionError(f"Device {device.device_id} is not connected")
+            raise ConnectionError(f"Device {device.machine_id} is not connected")
         
         # Validate tensor references
         for tensor_id in tensor_ids:
             if not self.check_tensor_exists(tensor_id, device):
-                raise StaleReferenceError(f"Tensor {tensor_id} not found on device {device.device_id}")
+                raise StaleReferenceError(f"Tensor {tensor_id} not found on device {device.machine_id}")
         
         # Execute operation
         return self.execute_remote_operation_with_ids(op_name, tensor_ids, args, kwargs, device)
@@ -505,7 +505,7 @@ class RemoteExecutor:
         # Get the GPU machine for this device
         gpu_machine = device.get_gpu_machine()
         if gpu_machine is None or not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine not available for device {device.device_id}")
+            raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
         
         # Get tensor data using tensor ID (convert int to string for GPU machine)
         tensor_id_int = remote_tensor.untyped_storage().data_ptr()
@@ -571,8 +571,8 @@ class RemoteExecutor:
                     # Different devices found - this is not allowed
                     raise RuntimeError(
                         f"Cannot perform operations between tensors on different remote devices: "
-                        f"\"{detected_device.device_id}\" (index {detected_device.remote_index}) and "
-                        f"\"{device.device_id}\" (index {device.remote_index})\")"
+                        f"\"{detected_device.machine_id}\" (index {detected_device.remote_index}) and "
+                        f"\"{device.machine_id}\" (index {device.remote_index})\")""
                     )
         
         # Check args for remote tensors
