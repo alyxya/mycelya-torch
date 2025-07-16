@@ -133,25 +133,6 @@ def _remote_kernel_fallback(op, *args, **kwargs):
     
     op_name = op.overloadpacket._qualified_op_name
     
-    # Device transfer operations are always handled locally to prevent recursion
-    device_transfer_ops = {
-        "aten.to",
-        "aten.to.device", 
-        "aten.to.dtype",
-        "aten.to.dtype_layout",
-        "aten.cpu",
-        "aten.cuda",
-        "aten._copy_from",
-    }
-    if any(transfer_op in op_name for transfer_op in device_transfer_ops):
-        # Operations that reach this point should not be handled by remote dispatch
-        # This indicates a configuration or logic error in the dispatch system
-        log.error(f"❌ Unexpected device transfer operation dispatch: {op_name} - should not reach remote fallback")
-        raise RuntimeError(
-            f"Device transfer operation {op_name} was dispatched to remote kernel fallback but should not be handled remotely. "
-            f"This indicates an error in the dispatch system configuration."
-        )
-    
     # Collect all tensor arguments
     remote_tensors = []
     non_remote_tensors = []
