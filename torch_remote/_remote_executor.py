@@ -434,9 +434,28 @@ class RemoteExecutor:
     
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor without triggering remote execution."""
-        # Use the proper copy_from_device function from _aten_impl
-        from ._aten_impl import copy_from_device
-        return copy_from_device(remote_tensor)
+        from .device import get_device_registry
+        
+        # Get the device backend
+        registry = get_device_registry()
+        device = registry.get_device_by_index(remote_tensor.device.index)
+        
+        if device is None:
+            raise RuntimeError(f"No RemoteBackend found for remote device index {remote_tensor.device.index}")
+        
+        # Get the GPU machine for this device
+        gpu_machine = device.get_gpu_machine()
+        if gpu_machine is None or not gpu_machine.is_running():
+            raise RuntimeError(f"GPU machine not available for device {device.device_id}")
+        
+        # Get tensor data using tensor ID
+        tensor_id = remote_tensor.untyped_storage().data_ptr()
+        
+        # Use GPU machine to get tensor data by ID
+        tensor_data = gpu_machine.get_tensor_data(tensor_id)
+        
+        # Deserialize the tensor
+        return self._deserialize_tensor(tensor_data)
     
     def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: "RemoteBackend") -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""

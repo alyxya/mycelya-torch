@@ -176,121 +176,88 @@ def _remote_kernel_fallback(op, *args, **kwargs):
 
 
 def _execute_local_operation(op, *args, **kwargs):
-    """Execute operation locally using device simulation."""
-    op_name = None
-    post_process = None
-    
-    if "out" in op._overloadname:
-        # Note that all structured native op will call here
-        if isinstance(kwargs["out"], tuple):
-            op_name = op.overloadpacket._qualified_op_name
-            log.error(f"❌ Unhandled operation: {op_name} - out= variant with tuple out= not supported")
-            raise RuntimeError(f"out= variant {op_name} with tuple out= not supported")
-        if kwargs["out"].nelement() == 0:
-            # Out variant that needs a resize, convert to an out of place
-            # and handle generically below
-            orig_out = kwargs["out"]
-            del kwargs["out"]
-            if op._overloadname != "out":
-                raise RuntimeError(
-                    "Cannot retranslate non-default out= variant form 0 size"
-                )
-            op = op.overloadpacket.default
-
-            def _post_process():
-                nonlocal real_res
-                orig_out.set_(real_res)
-                real_res = orig_out
-
-            post_process = _post_process
-
-        else:
-            # No metadata update to do, just run the op on the device
-            op_name = op.overloadpacket._qualified_op_name
-            real_res = kwargs["out"]
-    elif not tree_any(lambda obj: isinstance(obj, torch.Tensor), (args, kwargs)):
-        # No Tensor argument means factory function
-        # Check if this is a remote device factory function
-        device_arg = kwargs.get("device", None)
-        if device_arg is not None:
-            if isinstance(device_arg, torch.device) and device_arg.type == "remote":
-                # This is a remote device factory function - handle it
-                pass  # Continue to normal processing below
-            elif isinstance(device_arg, str) and (device_arg == "remote" or device_arg.startswith("remote")):
-                # Reject string-based remote devices
-                raise ValueError("Remote devices must be RemoteBackend objects. Use create_modal_device() or similar to create a RemoteBackend.")
-            else:
-                # Not a remote device factory function - this should not be handled by remote fallback
-                return op(*args, **kwargs)
-        else:
-            # No device specified, not a remote factory function - this should not be handled by remote fallback  
-            return op(*args, **kwargs)
-        
-        # For remote device factory functions, we'll let them fall through to normal processing
-        # The meta computation and device allocation will handle the rest
-    elif op._schema.is_mutable or op is torch.ops.aten._copy_from.default:
-        # Only handle inplace ops returning their first arg
-        assert len(args) >= 1, f"Inplace {op} needs at least one arg"
-        assert len(op._schema.returns) == 1, (
-            f"NYI Inplace {op} with more than one return"
-        )
-        op_name = op.overloadpacket._qualified_op_name
-        real_res = args[0]
-    elif any(r.alias_info is not None for r in op._schema.returns):
-        # View ops - no fallbacks, all view operations must be explicitly implemented
-        op_name = op.overloadpacket._qualified_op_name
-        log.error(f"❌ Unhandled operation: {op_name} - view operation not implemented")
-        raise RuntimeError(f"View operation {op_name} is not implemented for remote tensors")
-
-    if op_name is None:
-        # 1. Compute updated metadata
-        if torch.Tag.dynamic_output_shape not in op.tags:
-            # Use CPU tensors with same shape/dtype for shape inference
-            cpu_args, cpu_kwargs = to_device_no_copy("cpu", args, kwargs)
-            cpu_res = op(*cpu_args, **cpu_kwargs)
-
-            # 2. Allocate the output on remote device
-            real_res, _ = to_device_no_copy("remote", cpu_res, {})
-        else:
-            # Slow version for data-dependent functions:
-            # Run the op on the device just to get the output shape
-            args_, kwargs_ = prepare_for_sending(args, kwargs)
-            shape = driver.exec(
-                "get_op_output_shape",
-                op.overloadpacket._qualified_op_name,
-                args_,
-                kwargs_,
-            )
-
-            # 2. Allocate the output
-            real_res = args[0].new(shape)
-
-        # 3. Move to out variant
-        kwargs["out"] = real_res
-        # Let overload resolution find the out= overload
-        op_name = op.overloadpacket._qualified_op_name
-
-    # 4. Run the compute and populate the output on the device
-    args, kwargs = prepare_for_sending(args, kwargs)
-    driver.exec("run_op", op_name, args, kwargs)
-
-    if post_process is not None:
-        post_process()
-
-    return real_res
+    """
+    Handle operations that don't involve remote tensors.
+    Remote tensors should only be processed through remote execution.
+    """
+    # For non-remote operations, just execute normally
+    return op(*args, **kwargs)
 
 
 def copy_from_device(from_):
-    with torch.remote.device(from_.device):  # type: ignore[misc]
-        args, _ = prepare_for_sending((from_,), {})
-        return driver.exec("send_data", *args)
+    """Copy data from remote tensor to CPU tensor using remote execution"""
+    if from_.device.type != "remote":
+        raise ValueError("copy_from_device requires a remote tensor")
+    
+    # Use remote execution to get the tensor data
+    executor = _get_remote_executor()
+    if executor is not None:
+        from .device import get_device_registry
+        
+        # Get the device backend
+        registry = get_device_registry()
+        device = registry.get_device_by_index(from_.device.index)
+        
+        if device is None:
+            raise RuntimeError(f"No RemoteBackend found for remote device index {from_.device.index}")
+        
+        # Get the GPU machine for this device
+        gpu_machine = device.get_gpu_machine()
+        if gpu_machine is None or not gpu_machine.is_running():
+            raise RuntimeError(f"GPU machine not available for device {device.device_id}")
+        
+        # Get tensor data using tensor ID
+        tensor_id = from_.untyped_storage().data_ptr()
+        log.info(f"Copying tensor ID {tensor_id} from remote to CPU")
+        
+        # Use GPU machine to get tensor data by ID
+        tensor_data = gpu_machine.get_tensor_data(tensor_id)
+        
+        # Deserialize the tensor
+        result = executor._deserialize_tensor(tensor_data)
+        log.info(f"Successfully copied tensor ID {tensor_id} to CPU")
+        return result
+    else:
+        raise RuntimeError("Cannot copy from remote device: remote execution not available")
 
 
 def copy_from_host_to_device(from_, to_):
-    with torch.remote.device(to_.device):  # type: ignore[misc]
-        args, _ = prepare_for_sending((to_,), {})
-        driver.exec("recv_data", from_, *args)
-    return to_
+    """Copy data from CPU tensor to remote tensor using remote execution"""
+    if to_.device.type != "remote":
+        raise ValueError("copy_from_host_to_device requires a remote target tensor")
+    if from_.device.type != "cpu":
+        raise ValueError("copy_from_host_to_device requires a CPU source tensor")
+    
+    # Use remote execution to send the tensor data
+    executor = _get_remote_executor()
+    if executor is not None:
+        from .device import get_device_registry
+        
+        # Get the device backend
+        registry = get_device_registry()
+        device = registry.get_device_by_index(to_.device.index)
+        
+        if device is None:
+            raise RuntimeError(f"No RemoteBackend found for remote device index {to_.device.index}")
+        
+        # Get the GPU machine for this device
+        gpu_machine = device.get_gpu_machine()
+        if gpu_machine is None or not gpu_machine.is_running():
+            raise RuntimeError(f"GPU machine not available for device {device.device_id}")
+        
+        # Send tensor data using tensor ID
+        tensor_id = to_.untyped_storage().data_ptr()
+        log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
+        
+        # Serialize the CPU tensor
+        tensor_data = executor._serialize_tensor(from_)
+        
+        # Use GPU machine to set tensor data by ID
+        gpu_machine.set_tensor_data(tensor_id, tensor_data)
+        log.info(f"Successfully copied CPU tensor to remote tensor ID {tensor_id}")
+        return to_
+    else:
+        raise RuntimeError("Cannot copy to remote device: remote execution not available")
 
 
 def _copy_from(from_, to_):
