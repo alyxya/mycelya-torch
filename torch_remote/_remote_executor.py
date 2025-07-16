@@ -119,58 +119,72 @@ class RemoteExecutor:
             
             gpu_machine = self._get_device_gpu_machine(device)
             
-            # Separate tensors from other arguments and track output tensors
-            tensors_data = []
-            tensor_metadata = []
+            # Separate input tensors from output tensors
+            input_tensors_data = []
+            input_tensor_metadata = []
             processed_args = []
             processed_kwargs = {}
             output_tensors = []  # Track pre-allocated output tensors
             
-            # Process args
+            # Process args - these are always input tensors
             for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     # Convert remote tensor data to regular CPU tensor
-                    # Use proper remote-to-CPU conversion for all remote tensors
+                    # Use proper remote-to-CPU conversion for INPUT tensors only
                     cpu_tensor = self._remote_tensor_to_cpu(arg)
                     
                     tensor_data = self._serialize_tensor(cpu_tensor)
                     metadata = self._get_tensor_metadata(cpu_tensor)
                     
-                    tensors_data.append(tensor_data)
-                    tensor_metadata.append(metadata)
-                    processed_args.append(f"__TENSOR_{len(tensors_data)-1}")
+                    input_tensors_data.append(tensor_data)
+                    input_tensor_metadata.append(metadata)
+                    processed_args.append(f"__TENSOR_{len(input_tensors_data)-1}")
                 else:
                     processed_args.append(arg)
             
-            # Process kwargs and detect output tensors
+            # Process kwargs - distinguish between input and output tensors
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == "remote":
-                    # Convert remote tensor data to regular CPU tensor
-                    # Use proper remote-to-CPU conversion for all remote tensors
-                    cpu_tensor = self._remote_tensor_to_cpu(value)
-                    
-                    tensor_data = self._serialize_tensor(cpu_tensor)
-                    metadata = self._get_tensor_metadata(cpu_tensor)
-                    
-                    tensors_data.append(tensor_data)
-                    tensor_metadata.append(metadata)
-                    processed_kwargs[key] = f"__TENSOR_{len(tensors_data)-1}"
-                    
-                    # Check if this is an output tensor
                     if key == "out":
+                        # This is an OUTPUT tensor - don't read its data, just track it
                         output_tensors.append(value)
+                        
+                        # Create empty tensor placeholder for the remote operation
+                        empty_tensor = torch.empty(
+                            value.shape,
+                            dtype=value.dtype,
+                            device="cpu"
+                        )
+                        tensor_data = self._serialize_tensor(empty_tensor)
+                        metadata = self._get_tensor_metadata(empty_tensor)
+                        
+                        input_tensors_data.append(tensor_data)
+                        input_tensor_metadata.append(metadata)
+                        processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
+                        
+                        log.info(f"Detected output tensor with ID {value.untyped_storage().data_ptr()}")
+                    else:
+                        # This is an INPUT tensor - read its data
+                        cpu_tensor = self._remote_tensor_to_cpu(value)
+                        
+                        tensor_data = self._serialize_tensor(cpu_tensor)
+                        metadata = self._get_tensor_metadata(cpu_tensor)
+                        
+                        input_tensors_data.append(tensor_data)
+                        input_tensor_metadata.append(metadata)
+                        processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
                 else:
                     processed_kwargs[key] = value
             
-            log.info(f"Executing {op_name} remotely with {len(tensors_data)} tensors")
+            log.info(f"Executing {op_name} remotely with {len(input_tensors_data)} input tensors, {len(output_tensors)} output tensors")
             
             # Execute remotely using pre-started RemoteGPUMachine
             log.info(f"🚀 Using active GPU machine for {op_name}: {gpu_machine}")
-            log.info(f"📊 Args: op_name={op_name}, tensors={len(tensors_data)}, device_id={device.device_id}")
+            log.info(f"📊 Args: op_name={op_name}, input_tensors={len(input_tensors_data)}, output_tensors={len(output_tensors)}, device_id={device.device_id}")
             
             try:
                 serialized_results, result_metadata = gpu_machine.execute_operation(
-                    op_name, tensors_data, tensor_metadata, processed_args, processed_kwargs
+                    op_name, input_tensors_data, input_tensor_metadata, processed_args, processed_kwargs
                 )
                 log.info(f"✅ Remote operation completed for {op_name}")
                 log.info(f"📥 Received {len(serialized_results)} results")
@@ -483,34 +497,11 @@ class RemoteExecutor:
         tensor_id_int = remote_tensor.untyped_storage().data_ptr()
         tensor_id_str = str(tensor_id_int)
         
-        try:
-            # Use GPU machine to get tensor data by ID
-            tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
-            
-            # Deserialize the tensor
-            return self._deserialize_tensor(tensor_data)
-        except Exception as e:
-            if "not found in registry" in str(e):
-                # This is likely a pre-allocated output tensor that doesn't have data yet
-                # Create empty tensor data matching the tensor's shape and dtype
-                log.warning(f"Tensor ID {tensor_id_int} not found in registry, creating empty tensor data")
-                
-                # Create empty tensor with same properties as the remote tensor
-                empty_tensor = torch.empty(
-                    remote_tensor.shape, 
-                    dtype=remote_tensor.dtype,
-                    device="cpu"
-                )
-                
-                # Register this empty tensor data in the GPU machine
-                tensor_data = self._serialize_tensor(empty_tensor)
-                gpu_machine.create_tensor(tensor_data, tensor_id_str)
-                log.info(f"Registered empty tensor ID {tensor_id_int} with GPU machine")
-                
-                return empty_tensor
-            else:
-                # Re-raise other errors
-                raise
+        # Use GPU machine to get tensor data by ID
+        tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
+        
+        # Deserialize the tensor
+        return self._deserialize_tensor(tensor_data)
     
     def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: "RemoteBackend") -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""
