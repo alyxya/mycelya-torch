@@ -445,3 +445,76 @@ def test_validate_device_index_with_multiple_devices():
         assert False, "Expected device validation to fail for index 3"
     except (RuntimeError, ValueError) as e:
         assert "Invalid device index" in str(e) or "device" in str(e).lower()
+
+
+def test_cross_device_transfer_restriction():
+    """Test that transferring tensors between different remote devices is prohibited."""
+    import torch_remote
+    
+    # Clear registry to start fresh
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    
+    # Create two different remote devices
+    device1 = torch_remote.create_modal_device("T4")
+    device2 = torch_remote.create_modal_device("L4")
+    
+    # Verify they have different indices
+    assert device1.remote_index != device2.remote_index
+    
+    # Create tensor on first device
+    x = torch.randn(2, 2, device=device1.device())
+    
+    # Try to transfer to second device - should fail
+    with pytest.raises(RuntimeError, match="Cannot transfer tensor between different remote devices"):
+        y = x.to(device2.device())
+
+
+def test_cross_device_copy_restriction():
+    """Test that copy operations between different remote devices fail."""
+    import torch_remote
+    
+    # Clear registry to start fresh  
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    
+    # Create two different remote devices
+    device1 = torch_remote.create_modal_device("T4")
+    device2 = torch_remote.create_modal_device("A100")
+    
+    # Verify devices have different indices
+    assert device1.remote_index != device2.remote_index
+    
+    # Create tensor on first device  
+    x = torch.randn(2, 2, device=device1.device())
+    
+    # Create tensor on second device via CPU transfer  
+    cpu_tensor = torch.empty(2, 2)
+    y = cpu_tensor.to(device2.device())
+    
+    # Verify tensors are on different devices
+    if x.device.index == y.device.index:
+        pytest.skip("Could not create tensors on different devices - skipping cross-device copy test")
+    
+    # Direct copy should fail if they're on different remote devices
+    # However, the current copy_ implementation goes through CPU, so we need to test 
+    # the _copy_from function directly which is what copy_ eventually calls
+    with pytest.raises(RuntimeError, match="Cannot transfer tensor between different remote devices"):
+        # Test the underlying _copy_from function directly
+        import torch_remote._aten_impl
+        torch_remote._aten_impl._copy_from(x, y)
+
+
+def test_same_device_transfer_still_works(modal_t4_device):
+    """Test that transfers within the same device still work."""
+    # Create two tensors on the same device
+    x = torch.randn(2, 2, device=modal_t4_device.device())
+    y = torch.empty(2, 2, device=modal_t4_device.device())
+    
+    # Same device operations should work fine
+    result = x.to(modal_t4_device.device())
+    assert result.device == modal_t4_device.device()
+    
+    # Same device copy should work
+    y.copy_(x)
+    assert torch.allclose(x.cpu(), y.cpu())

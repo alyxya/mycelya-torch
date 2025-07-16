@@ -220,9 +220,18 @@ def _copy_from(from_, to_):
                 op = torch.ops.aten.copy_.default
                 result = _remote_kernel_fallback(op, to_, from_)
             else:
-                # Different remote devices: transfer via CPU
-                host_mem = copy_from_device(from_)
-                result = copy_from_host_to_device(host_mem, to_)
+                # Different remote devices: NOT ALLOWED
+                from torch_remote.device import get_device_registry
+                device_registry = get_device_registry()
+                from_device = device_registry.get_device_by_index(from_.device.index)
+                to_device = device_registry.get_device_by_index(to_.device.index)
+                
+                raise RuntimeError(
+                    f"Cannot transfer tensor between different remote devices. "
+                    f"Source device: \"{from_device.machine_id}\" (index {from_.device.index}), "
+                    f"Target device: \"{to_device.machine_id}\" (index {to_.device.index}). "
+                    f"Transfer tensors to CPU first: tensor.cpu().to(target_device)"
+                )
         else:
             # Both tensors on same non-remote device
             result = to_.copy_(from_)
@@ -240,6 +249,58 @@ def _copy_from(from_, to_):
     # Preserve autograd properties
     if should_preserve_grad and not result.requires_grad:
         result.requires_grad_(True)
+    
+    return result
+
+
+def _to_copy(input, *, dtype=None, layout=None, device=None, pin_memory=None, non_blocking=False, memory_format=None):
+    """Implementation of tensor.to() for remote tensors with cross-device transfer restriction."""
+    
+    # Handle device-specific transfers first
+    if device is not None:
+        target_device = torch.device(device) if not isinstance(device, torch.device) else device
+        
+        # Different device transfer - check if both are remote
+        if input.device.type == "remote" and target_device.type == "remote" and input.device != target_device:
+            # Cross-device remote transfer - NOT ALLOWED
+            from torch_remote.device import get_device_registry
+            device_registry = get_device_registry()
+            from_device = device_registry.get_device_by_index(input.device.index)
+            to_device = device_registry.get_device_by_index(target_device.index)
+            
+            raise RuntimeError(
+                f"Cannot transfer tensor between different remote devices. "
+                f"Source device: \"{from_device.machine_id}\" (index {input.device.index}), "
+                f"Target device: \"{to_device.machine_id}\" (index {target_device.index}). "
+                f"Transfer tensors to CPU first: tensor.cpu().to(target_device)"
+            )
+    
+    # For all other cases, create a new tensor and use _copy_from if needed
+    # This avoids infinite recursion by not calling back to the kernel fallback
+    
+    # Determine output parameters
+    output_dtype = dtype if dtype is not None else input.dtype
+    output_layout = layout if layout is not None else input.layout
+    output_device = torch.device(device) if device is not None else input.device
+    output_memory_format = memory_format if memory_format is not None else torch.contiguous_format
+    
+    # Create output tensor
+    if output_device.type == "remote":
+        # Create empty remote tensor - use contiguous format for remote tensors
+        result = torch.empty(input.size(), dtype=output_dtype, layout=output_layout, 
+                             device=output_device, memory_format=torch.contiguous_format)
+    else:
+        # Create empty tensor on target device
+        result = torch.empty(input.size(), dtype=output_dtype, layout=output_layout, 
+                             device=output_device, memory_format=output_memory_format)
+    
+    # Copy data if needed (different device or same device but different dtype)
+    if input.device != output_device or input.dtype != output_dtype:
+        # Use _copy_from to handle the actual data transfer
+        result = _copy_from(input, result)
+    else:
+        # Same device and dtype - just return input (no copy needed)
+        return input
     
     return result
 
@@ -270,6 +331,7 @@ _remote_lib.fallback(_remote_kernel_fallback, dispatch_key="PrivateUse1")
 
 _remote_lib_aten = torch.library.Library("aten", "IMPL")
 _remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
+_remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key="PrivateUse1")
 _remote_lib_aten.impl(
     "set_.source_Tensor", _set_source_tensor, dispatch_key="PrivateUse1"
 )
@@ -277,8 +339,6 @@ _remote_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
 )
 
-# Note: to.device and to.dtype_layout are now implemented in C++
-# via TORCH_LIBRARY_IMPL in RemoteMem.cpp for proper .cpu() support
 # Note: empty.memory_format and empty_strided are now implemented in C++
 # via TORCH_LIBRARY_IMPL in RemoteMem.cpp, so we don't register Python implementations
 
