@@ -77,6 +77,35 @@ class RemoteTensorRegistry:
         # Track which device owns this tensor ID
         self.tensor_id_to_device[tensor_id_int] = device_index
         
+        # Also register the tensor with the GPU machine immediately
+        # Create empty tensor data for the allocation
+        if nbytes > 0:
+            try:
+                # Import here to avoid circular imports
+                from ._remote_executor import _get_remote_executor
+                from .device import get_device_registry
+                
+                executor = _get_remote_executor()
+                if executor is not None:
+                    registry = get_device_registry()
+                    device = registry.get_device_by_index(device_index)
+                    
+                    if device is not None:
+                        gpu_machine = device.get_gpu_machine()
+                        if gpu_machine and gpu_machine.is_running():
+                            # Create empty tensor data of the right size
+                            import io
+                            empty_tensor = torch.empty(nbytes // 4, dtype=torch.float32)  # Assume float32 for now
+                            buffer = io.BytesIO()
+                            torch.save(empty_tensor, buffer)
+                            tensor_data = buffer.getvalue()
+                            
+                            tensor_id_str = str(tensor_id_int)
+                            gpu_machine.create_tensor(tensor_data, tensor_id_str)
+                            log.info(f"Pre-registered tensor ID {tensor_id_int} with GPU machine")
+            except Exception as e:
+                log.warning(f"Failed to pre-register tensor {tensor_id_int} with GPU machine: {e}")
+        
         log.info(f"Registered tensor ID {tensor_id_int} on device {device_index}")
         return True
     
@@ -124,6 +153,32 @@ class RemoteTensorRegistry:
         
         log.info(f"Freed tensor ID {tensor_id_int}")
         return True
+
+    def register_tensor_with_gpu(self, tensor_id, tensor_data):
+        """Register tensor data with GPU machine for immediate access"""
+        # This ensures that newly created tensors (including outputs) 
+        # are immediately available on the GPU machine
+        try:
+            # Import here to avoid circular imports
+            from ._remote_executor import _get_remote_executor
+            from .device import get_device_registry
+            
+            executor = _get_remote_executor()
+            if executor is not None:
+                # Get the current remote device (assumes single device for now)
+                registry = get_device_registry()
+                device = registry.get_device_by_index(0)  # Use device 0
+                
+                if device is not None:
+                    gpu_machine = device.get_gpu_machine()
+                    if gpu_machine and gpu_machine.is_running():
+                        tensor_id_str = str(tensor_id)
+                        gpu_machine.create_tensor(tensor_data, tensor_id_str)
+                        log.info(f"Registered tensor ID {tensor_id} with GPU machine")
+                        return True
+        except Exception as e:
+            log.warning(f"Failed to register tensor {tensor_id} with GPU machine: {e}")
+        return False
 
     def _cleanup_remote_tensor(self, tensor_id: int, device_idx: int):
         """Clean up tensor on remote GPU device"""
@@ -289,6 +344,10 @@ class Driver:
     @register(registry)
     def copy_data_by_id(self, dest_id, src_id, count):
         return self.registry_obj.copy_data_by_id(dest_id, src_id, count)
+
+    @register(registry)
+    def register_tensor_with_gpu(self, tensor_id, tensor_data):
+        return self.registry_obj.register_tensor_with_gpu(tensor_id, tensor_data)
 
 
 # Global driver instance

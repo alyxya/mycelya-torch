@@ -36,85 +36,19 @@ def impl_factory(name):
     if name in _IMPL_REGISTRY:
         return _IMPL_REGISTRY[name]
 
-    # Handle new ID-based tensor creation methods
-    if name == "create_tensor_with_id":
-        def _(tensor_id, nbytes, device_index):
-            """Create a tensor mapping with the given ID on the specified device."""
-            # Use the ID-based allocation system - no fallbacks
-            success = driver.exec("create_tensor_with_id", tensor_id, nbytes, device_index)
-            if not success:
-                raise RuntimeError(f"Failed to create tensor with ID {tensor_id} ({nbytes} bytes) on device {device_index}")
-            
-            # Also register the tensor with the GPU machine immediately
-            # Create empty tensor data for the allocation
-            if nbytes > 0:
-                executor = _get_remote_executor()
-                if executor is not None:
-                    from .device import get_device_registry
-                    
-                    registry = get_device_registry()
-                    device = registry.get_device_by_index(device_index)
-                    
-                    if device is not None:
-                        gpu_machine = device.get_gpu_machine()
-                        if gpu_machine and gpu_machine.is_running():
-                            # Create empty tensor data of the right size
-                            import io
-                            empty_tensor = torch.empty(nbytes // 4, dtype=torch.float32)  # Assume float32 for now
-                            buffer = io.BytesIO()
-                            torch.save(empty_tensor, buffer)
-                            tensor_data = buffer.getvalue()
-                            
-                            tensor_id_str = str(tensor_id)
-                            gpu_machine.create_tensor(tensor_data, tensor_id_str)
-                            log.info(f"Pre-registered tensor ID {tensor_id} with GPU machine")
-            
-            return success
-        
-        _IMPL_REGISTRY[name] = _
-        return _
-    
-    elif name == "free_tensor_with_id":
-        def _(tensor_id):
-            """Free the tensor associated with the given ID."""
-            # Use the ID-based cleanup system - no fallbacks
-            success = driver.exec("free_tensor_with_id", tensor_id)
-            if not success:
-                raise RuntimeError(f"Failed to free tensor with ID {tensor_id}")
-            return success
-        
-        _IMPL_REGISTRY[name] = _
-        return _
-    
-    elif name == "register_tensor_with_gpu":
-        def _(tensor_id, tensor_data):
-            """Register tensor data with GPU machine for immediate access"""
-            # This ensures that newly created tensors (including outputs) 
-            # are immediately available on the GPU machine
-            executor = _get_remote_executor()
-            if executor is not None:
-                from .device import get_device_registry
-                
-                # Get the current remote device (assumes single device for now)
-                registry = get_device_registry()
-                device = registry.get_device_by_index(0)  # Use device 0
-                
-                if device is not None:
-                    gpu_machine = device.get_gpu_machine()
-                    if gpu_machine and gpu_machine.is_running():
-                        tensor_id_str = str(tensor_id)
-                        gpu_machine.create_tensor(tensor_data, tensor_id_str)
-                        log.info(f"Registered tensor ID {tensor_id} with GPU machine")
-                        return True
-            return False
-        
-        _IMPL_REGISTRY[name] = _
-        return _
-    
-    elif name == "generate_tensor_id":
-        def _():
-            """Generate a unique tensor ID with duplicate validation."""
-            return driver.exec("generate_tensor_id")
+    # Handle operations that need special error handling
+    if name in ["create_tensor_with_id", "free_tensor_with_id"]:
+        def _(tensor_id, *args):
+            """Wrapper for tensor ID operations with error handling."""
+            result = driver.exec(name, tensor_id, *args)
+            if not result:
+                operation = name.replace("_", " ")
+                if name == "create_tensor_with_id":
+                    nbytes, device_index = args
+                    raise RuntimeError(f"Failed to create tensor with ID {tensor_id} ({nbytes} bytes) on device {device_index}")
+                elif name == "free_tensor_with_id":
+                    raise RuntimeError(f"Failed to free tensor with ID {tensor_id}")
+            return result
         
         _IMPL_REGISTRY[name] = _
         return _
