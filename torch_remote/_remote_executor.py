@@ -176,11 +176,24 @@ class RemoteExecutor:
                 log.error(f"Traceback: {traceback.format_exc()}")
                 raise
             
-            # Deserialize results and create remote tensors
+            # Deserialize results and create remote tensors with proper GPU machine registration
             results = []
+            gpu_machine = self._get_device_gpu_machine(device)
+            
             for data, metadata in zip(serialized_results, result_metadata):
                 cpu_tensor = self._deserialize_tensor(data)
+                
+                # Create a new remote tensor
                 remote_tensor = self._cpu_tensor_to_remote(cpu_tensor, device)
+                
+                # Register the tensor data with the GPU machine using the tensor's ID
+                tensor_id_int = remote_tensor.untyped_storage().data_ptr()
+                tensor_id_str = str(tensor_id_int)
+                
+                # Store the tensor data on the GPU machine so future operations can access it
+                gpu_machine.create_tensor(data, tensor_id_str)
+                log.info(f"Registered result tensor ID {tensor_id_int} with GPU machine")
+                
                 results.append(remote_tensor)
             
             # Return single tensor or tuple based on original operation
@@ -448,11 +461,12 @@ class RemoteExecutor:
         if gpu_machine is None or not gpu_machine.is_running():
             raise RuntimeError(f"GPU machine not available for device {device.device_id}")
         
-        # Get tensor data using tensor ID
-        tensor_id = remote_tensor.untyped_storage().data_ptr()
+        # Get tensor data using tensor ID (convert int to string for GPU machine)
+        tensor_id_int = remote_tensor.untyped_storage().data_ptr()
+        tensor_id_str = str(tensor_id_int)
         
         # Use GPU machine to get tensor data by ID
-        tensor_data = gpu_machine.get_tensor_data(tensor_id)
+        tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
         
         # Deserialize the tensor
         return self._deserialize_tensor(tensor_data)

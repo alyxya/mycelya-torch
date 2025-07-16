@@ -44,6 +44,31 @@ def impl_factory(name):
             success = driver.exec("create_tensor_with_id", tensor_id, nbytes, device_index)
             if not success:
                 raise RuntimeError(f"Failed to create tensor with ID {tensor_id} ({nbytes} bytes) on device {device_index}")
+            
+            # Also register the tensor with the GPU machine immediately
+            # Create empty tensor data for the allocation
+            if nbytes > 0:
+                executor = _get_remote_executor()
+                if executor is not None:
+                    from .device import get_device_registry
+                    
+                    registry = get_device_registry()
+                    device = registry.get_device_by_index(device_index)
+                    
+                    if device is not None:
+                        gpu_machine = device.get_gpu_machine()
+                        if gpu_machine and gpu_machine.is_running():
+                            # Create empty tensor data of the right size
+                            import io
+                            empty_tensor = torch.empty(nbytes // 4, dtype=torch.float32)  # Assume float32 for now
+                            buffer = io.BytesIO()
+                            torch.save(empty_tensor, buffer)
+                            tensor_data = buffer.getvalue()
+                            
+                            tensor_id_str = str(tensor_id)
+                            gpu_machine.create_tensor(tensor_data, tensor_id_str)
+                            log.info(f"Pre-registered tensor ID {tensor_id} with GPU machine")
+            
             return success
         
         _IMPL_REGISTRY[name] = _
@@ -57,6 +82,31 @@ def impl_factory(name):
             if not success:
                 raise RuntimeError(f"Failed to free tensor with ID {tensor_id}")
             return success
+        
+        _IMPL_REGISTRY[name] = _
+        return _
+    
+    elif name == "register_tensor_with_gpu":
+        def _(tensor_id, tensor_data):
+            """Register tensor data with GPU machine for immediate access"""
+            # This ensures that newly created tensors (including outputs) 
+            # are immediately available on the GPU machine
+            executor = _get_remote_executor()
+            if executor is not None:
+                from .device import get_device_registry
+                
+                # Get the current remote device (assumes single device for now)
+                registry = get_device_registry()
+                device = registry.get_device_by_index(0)  # Use device 0
+                
+                if device is not None:
+                    gpu_machine = device.get_gpu_machine()
+                    if gpu_machine and gpu_machine.is_running():
+                        tensor_id_str = str(tensor_id)
+                        gpu_machine.create_tensor(tensor_data, tensor_id_str)
+                        log.info(f"Registered tensor ID {tensor_id} with GPU machine")
+                        return True
+            return False
         
         _IMPL_REGISTRY[name] = _
         return _
@@ -206,16 +256,17 @@ def copy_from_device(from_):
         if gpu_machine is None or not gpu_machine.is_running():
             raise RuntimeError(f"GPU machine not available for device {device.device_id}")
         
-        # Get tensor data using tensor ID
-        tensor_id = from_.untyped_storage().data_ptr()
-        log.info(f"Copying tensor ID {tensor_id} from remote to CPU")
+        # Get tensor data using tensor ID (convert int to string for GPU machine)
+        tensor_id_int = from_.untyped_storage().data_ptr()
+        tensor_id_str = str(tensor_id_int)
+        log.info(f"Copying tensor ID {tensor_id_int} from remote to CPU")
         
         # Use GPU machine to get tensor data by ID
-        tensor_data = gpu_machine.get_tensor_data(tensor_id)
+        tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
         
         # Deserialize the tensor
         result = executor._deserialize_tensor(tensor_data)
-        log.info(f"Successfully copied tensor ID {tensor_id} to CPU")
+        log.info(f"Successfully copied tensor ID {tensor_id_int} to CPU")
         return result
     else:
         raise RuntimeError("Cannot copy from remote device: remote execution not available")
@@ -245,16 +296,18 @@ def copy_from_host_to_device(from_, to_):
         if gpu_machine is None or not gpu_machine.is_running():
             raise RuntimeError(f"GPU machine not available for device {device.device_id}")
         
-        # Send tensor data using tensor ID
-        tensor_id = to_.untyped_storage().data_ptr()
-        log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
+        # Send tensor data using tensor ID (convert int to string for GPU machine)
+        tensor_id_int = to_.untyped_storage().data_ptr()
+        tensor_id_str = str(tensor_id_int)
+        log.info(f"Copying CPU tensor to remote tensor ID {tensor_id_int}")
         
         # Serialize the CPU tensor
         tensor_data = executor._serialize_tensor(from_)
         
-        # Use GPU machine to set tensor data by ID
-        gpu_machine.set_tensor_data(tensor_id, tensor_data)
-        log.info(f"Successfully copied CPU tensor to remote tensor ID {tensor_id}")
+        # Use GPU machine to create/update tensor with specific ID
+        # This will overwrite any existing empty tensor with the actual data
+        created_id = gpu_machine.create_tensor(tensor_data, tensor_id_str)
+        log.info(f"Successfully created/updated remote tensor with ID {created_id}")
         return to_
     else:
         raise RuntimeError("Cannot copy to remote device: remote execution not available")
