@@ -119,16 +119,10 @@ def impl_factory(name):
     return _
 
 
-def _should_use_remote_execution(op, args, kwargs):
-    """
-    Determine whether to use remote GPU execution for this operation.
+
+def _remote_kernel_fallback(op, *args, **kwargs):
+    log.info("Calling kernel %s", op)
     
-    Fundamental principles:
-    1. Operations between remote tensors always execute remotely
-    2. Operations between non-remote tensors happen locally as usual  
-    3. Operations between remote and non-remote tensors are disallowed
-    4. Device movement for tensors is always explicit (handled elsewhere)
-    """
     op_name = op.overloadpacket._qualified_op_name
     
     # Device transfer operations are always handled locally to prevent recursion
@@ -142,7 +136,13 @@ def _should_use_remote_execution(op, args, kwargs):
         "aten._copy_from",
     }
     if any(transfer_op in op_name for transfer_op in device_transfer_ops):
-        return False
+        # Operations that reach this point should not be handled by remote dispatch
+        # This indicates a configuration or logic error in the dispatch system
+        log.error(f"❌ Unexpected device transfer operation dispatch: {op_name} - should not reach remote fallback")
+        raise RuntimeError(
+            f"Device transfer operation {op_name} was dispatched to remote kernel fallback but should not be handled remotely. "
+            f"This indicates an error in the dispatch system configuration."
+        )
     
     # Collect all tensor arguments
     remote_tensors = []
@@ -162,46 +162,24 @@ def _should_use_remote_execution(op, args, kwargs):
             else:
                 non_remote_tensors.append(value)
     
-    # Apply fundamental principles
+    # Validate device compatibility - mixed remote and non-remote tensors are disallowed
     if remote_tensors and non_remote_tensors:
-        # Mixed remote and non-remote tensors are disallowed
         remote_devices = [t.device for t in remote_tensors]
         non_remote_devices = [t.device for t in non_remote_tensors]
         raise RuntimeError(
-            f"Mixed remote and non-remote tensor operation not supported for {op_name}. "
+            f"Operation {op_name}: Mixed remote and non-remote tensor operation not supported. "
             f"Remote devices: {remote_devices}, Non-remote devices: {non_remote_devices}. "
             f"Use explicit .to() to move tensors to the same device first."
         )
     
+    # For remote operations, execute remotely with standard execution model
     if remote_tensors:
-        # Operations between remote tensors always execute remotely
-        return True
-    
-    # Operations between non-remote tensors happen locally as usual
-    return False
-
-
-def _remote_kernel_fallback(op, *args, **kwargs):
-    log.info("Calling kernel %s", op)
-
-    # 1) Check for mixed devices and validate device compatibility
-    try:
-        should_use_remote = _should_use_remote_execution(op, args, kwargs)
-    except RuntimeError as e:
-        # Re-raise mixed device errors with operation context
-        raise RuntimeError(f"Operation {op.overloadpacket._qualified_op_name}: {str(e)}")
-
-    # 2) For remote operations, execute remotely with standard execution model
-    if should_use_remote:
         executor = _get_remote_executor()
         if executor is not None:
-            log.info(f"🚀 Executing {op.overloadpacket._qualified_op_name} remotely")
-            return executor.execute_remote_operation(
-                op.overloadpacket._qualified_op_name, args, kwargs
-            )
+            log.info(f"🚀 Executing {op_name} remotely")
+            return executor.execute_remote_operation(op_name, args, kwargs)
         else:
             # No fallback for remote operations - they must work remotely or fail
-            op_name = op.overloadpacket._qualified_op_name
             log.error(f"❌ Remote operation failed: {op_name} - Remote execution not available")
             raise RuntimeError(
                 f"Operation {op_name} cannot be executed on remote tensors: remote execution not available. "
@@ -210,7 +188,6 @@ def _remote_kernel_fallback(op, *args, **kwargs):
 
     # Operations that reach this point should not be handled by remote dispatch
     # This indicates a configuration or logic error in the dispatch system
-    op_name = op.overloadpacket._qualified_op_name
     log.error(f"❌ Unexpected operation dispatch: {op_name} - should not reach remote fallback")
     raise RuntimeError(
         f"Operation {op_name} was dispatched to remote kernel fallback but should not be handled remotely. "
