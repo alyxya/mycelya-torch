@@ -11,8 +11,8 @@ torch-remote implements a custom PyTorch device that automatically routes comput
 ### 1. PyTorch Integration Layer (C++ Extension)
 Registers "remote" as a native PyTorch PrivateUse1 device with full integration into PyTorch's dispatch system.
 
-### 2. Local Device Simulation Layer (Python)
-Manages remote tensors using CPU memory with threading-based device simulation for local operations.
+### 2. Local Coordination Layer (Python)
+Manages remote tensors using pure tensor ID-based coordination with local metadata tracking and device registry management.
 
 ### 3. Remote Execution Layer (Multi-Provider)
 Automatically dispatches compute-intensive operations to cloud providers via a pluggable backend system. Currently supports Modal's A100 GPU infrastructure, with additional providers planned.
@@ -92,18 +92,17 @@ torch_remote_execution/        # Private package for remote execution
 - **Device handling**: Direct PyTorch device integration without wrapper classes
 - **Validation functions**: Ensures only valid data types pass through device boundaries
 
-**`torch_remote/_device_daemon.py`** - Device Management & Process Communication
-- **Driver class**: Main coordinator for device operations and memory management
-- **Threading-based execution**: Uses Python threads instead of multiprocessing to avoid hanging issues
-- **Memory allocators**: 
-  - `Allocator` - Base allocator class with malloc/free interface
-  - `HostAllocator` - Manages pinned host memory
-  - `DeviceAllocator` - Manages device memory and tensor reconstruction
-- **Device simulation**: Simulates 2 remote devices using CPU memory
+**`torch_remote/_device_daemon.py`** - Device Management & Tensor ID Registry
+- **Driver class**: Main coordinator for device operations and tensor ID management
+- **RemoteTensorRegistry**: Manages local tensor ID to metadata mapping
+- **Tensor ID coordination**: 
+  - Maps tensor IDs to RemoteTensorMeta objects with shape/dtype information
+  - Tracks tensor ID to device relationships for validation
+  - Maintains weak references to local tensor objects
+- **Device registry management**: Coordinates with DeviceRegistry for multi-device operations
 - **Stream and event management**: PyTorch CUDA-like stream semantics for remote device
 - **Cleanup handling**: Signal handlers and atexit hooks for proper resource cleanup
-- **Operation execution**: Routes operations to worker threads via queue-based communication
-- **_Executor class**: Worker thread that actually performs tensor operations
+- **Pure ID-based architecture**: No local tensor data storage, only metadata coordination
 
 #### Utility Files
 
@@ -253,8 +252,8 @@ Here's how a typical operation flows through the system:
 ### Private Package Isolation
 The most important architectural decision is separating the provider backend code into `torch_remote_execution`. This prevents import conflicts when cloud provider jobs execute, since providers would otherwise try to import the entire `torch_remote` extension and create circular dependencies. The execution package is isolated with minimal dependencies.
 
-### Threading vs Multiprocessing
-The system uses threading instead of multiprocessing for device simulation to avoid complex cleanup issues that were causing hanging processes.
+### Pure Tensor ID Coordination
+The system uses a pure tensor ID-based architecture without local device simulation. This eliminates the need for complex threading/multiprocessing decisions and provides cleaner coordination between local metadata tracking and remote execution.
 
 ### Lazy Remote Execution
 Remote execution is lazy-loaded and gracefully degrades when cloud providers are not available, allowing the extension to work in environments without specific providers. The multi-provider system allows fallback between different backends.
@@ -269,11 +268,18 @@ The system uses stateful RemoteGPUMachine instances for improved performance and
 - **Context management**: Automatic startup/shutdown of remote GPU resources
 - **Machine lifecycle**: Start, stop, and running state management for remote resources
 
+### Input/Output Tensor Separation
+The system implements intelligent separation between input and output tensors for optimal data transfer efficiency:
+- **Input tensors**: Data is read from local metadata and serialized for remote execution
+- **Output tensors**: Only metadata is used locally, data is written directly on remote GPU
+- **In-place operations**: Supported efficiently without unnecessary data transfers
+- **Pre-allocated outputs**: `out=` parameter tensors are handled as output tensors to avoid redundant transfers
+
 ### Multi-GPU Support
 The system supports multiple GPU types through device-specific RemoteGPUMachine instances, allowing automatic routing to the most appropriate GPU based on workload requirements and availability.
 
-### CPU Storage with Device Spoofing
-Remote tensors are stored in CPU memory but report as "remote" device to PyTorch, enabling seamless integration with PyTorch's device system while maintaining compatibility.
+### Tensor ID-Based Memory Architecture
+Remote tensors use a pure tensor ID system with no local data storage. Each tensor stores only a unique 64-bit ID and metadata (shape, dtype) locally, while actual tensor data resides exclusively on remote GPUs. This provides zero local memory overhead and seamless PyTorch integration.
 
 ### Device Validation and Isolation
 The system enforces strict device isolation to prevent operations between tensors on different remote devices:
