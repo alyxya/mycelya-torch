@@ -36,6 +36,7 @@ GPU_CONFIG = {
     "T4": {"timeout": 300, "retries": 2},
     "L4": {"timeout": 300, "retries": 2},
     "A10G": {"timeout": 450, "retries": 2},
+    "A100": {"timeout": 450, "retries": 2},
     "A100-40GB": {"timeout": 450, "retries": 2},
     "A100-80GB": {"timeout": 450, "retries": 2},
     "L40S": {"timeout": 450, "retries": 2},

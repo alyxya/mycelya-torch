@@ -18,6 +18,7 @@ class GPUType(Enum):
     T4 = "T4"
     L4 = "L4"
     A10G = "A10G"
+    A100 = "A100"
     A100_40GB = "A100-40GB"
     A100_80GB = "A100-80GB"
     L40S = "L40S"
