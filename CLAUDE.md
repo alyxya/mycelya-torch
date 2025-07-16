@@ -71,3 +71,28 @@ x = torch.randn(1000, 1000, device=device)
 y = torch.randn(1000, 1000, device=device)
 result = x @ y  # Matrix multiplication on remote A100
 ```
+
+## Documentation Maintenance
+
+**IMPORTANT**: This file should be updated whenever making significant changes to the codebase. 
+
+### Update This File When:
+- Adding new core modules or changing module responsibilities
+- Modifying the architecture (tensor ID system, execution flow, etc.)
+- Adding/removing provider backends or GPU support
+- Changing development commands (test, lint, typecheck)
+- Making breaking changes to the public API
+- Adding new important implementation details
+
+### Development Notes
+Use this section to track important learnings and implementation details that should be preserved:
+
+- **License Compliance**: All source files must maintain AGPL license headers at the top
+- **Tensor ID Architecture**: The system relies on 64-bit tensor IDs stored as data pointers in the C++ allocator
+- **Remote vs Local**: Never store actual tensor data locally for remote tensors - only metadata
+- **Provider Patterns**: New backends should follow the Modal implementation pattern in `torch_remote/backends/`
+
+### Recent Development Notes
+(Update this section as code evolves)
+
+Last updated: 2025-07-16
