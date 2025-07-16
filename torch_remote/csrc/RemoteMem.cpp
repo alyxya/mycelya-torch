@@ -13,7 +13,7 @@
 namespace remote {
 namespace {
 
-// Enhanced allocator that supports both legacy pointer-based and new ID-based allocation
+// ID-based allocator that stores tensor IDs as data pointers
 struct RemoteAllocator final : at::Allocator {
   RemoteAllocator() = default;
 
@@ -24,42 +24,33 @@ struct RemoteAllocator final : at::Allocator {
     void* data = nullptr;
     
     if (nbytes > 0) {
-      // Try ID-based allocation first
-      try {
-        // Generate a unique tensor ID
-        tensor_id_t tensor_id = generate_tensor_id();
-        
-        // Call Python method to create tensor mapping with ID, now returns pointer
-        auto ptr_result = get_method(kCreateTensorMethod)(tensor_id, nbytes, curr_device_idx).cast<remote_ptr_t>();
-        
-        if (ptr_result != 0) {
-          // Use the actual pointer returned from Python
-          data = reinterpret_cast<void*>(ptr_result);
-        } else {
-          throw std::runtime_error("ID-based allocation returned null pointer");
-        }
-      } catch (...) {
-        // Fallback to legacy pointer-based allocation
-        data = reinterpret_cast<void*>(
-            get_method("malloc")(nbytes).cast<remote_ptr_t>());
-      }
+      // Generate a unique tensor ID
+      tensor_id_t tensor_id = generate_tensor_id();
       
-      TORCH_CHECK(data, "Failed to allocate ", nbytes, " bytes on remote device.");
+      // Call Python method to create tensor with ID and register it
+      // This should create the tensor remotely and return success/failure
+      bool success = get_method(kCreateTensorMethod)(tensor_id, nbytes, curr_device_idx).cast<bool>();
+      
+      TORCH_CHECK(success, "Failed to allocate tensor with ID ", tensor_id, 
+                  " (", nbytes, " bytes) on remote device ", curr_device_idx);
+      
+      // Store the tensor ID as the data pointer
+      data = reinterpret_cast<void*>(tensor_id);
     }
     
-    return {data, data, &ReportAndDelete<kFreeMethod>, curr_device};
+    return {data, data, &ReportAndDelete<kFreeTensorMethod>, curr_device};
   }
 
   at::DeleterFnPtr raw_deleter() const override {
-    return &ReportAndDelete<kFreeMethod>;
+    return &ReportAndDelete<kFreeTensorMethod>;
   }
 
   void copy_data(void* dest, const void* src, std::size_t count) const final {
     py::gil_scoped_acquire acquire;
-    get_method("copy_data")(
-        reinterpret_cast<remote_ptr_t>(dest),
-        reinterpret_cast<remote_ptr_t>(src),
-        count);
+    // Convert data pointers back to tensor IDs for the copy operation
+    tensor_id_t dest_id = reinterpret_cast<tensor_id_t>(dest);
+    tensor_id_t src_id = reinterpret_cast<tensor_id_t>(src);
+    get_method("copy_data_by_id")(dest_id, src_id, count);
   }
 };
 
@@ -74,9 +65,14 @@ tensor_id_t generate_tensor_id() {
   static std::mt19937 gen(rd());
   static std::uniform_int_distribution<uint64_t> dis;
   
-  std::stringstream ss;
-  ss << "tensor_" << std::hex << dis(gen) << "_" << std::hex << dis(gen);
-  return ss.str();
+  // Generate a unique 64-bit integer ID
+  // Use non-zero values to avoid confusion with null pointers
+  tensor_id_t id;
+  do {
+    id = dis(gen);
+  } while (id == 0);
+  
+  return id;
 }
 
 // Validate device index

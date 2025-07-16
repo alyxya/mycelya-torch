@@ -29,21 +29,81 @@ import queue
 NUM_DEVICES = 2
 
 
-# Our allocator
+# Our allocator with tensor ID system
 class Allocator:
     def __init__(self):
-        self.allocated = {}
+        self.allocated = {}  # ptr -> (size, mem) for compatibility
+        self.tensor_id_counter = 0
+        self.tensor_id_to_ptr = {}  # tensor_id -> ptr mapping
+        self.ptr_to_tensor_id = {}  # ptr -> tensor_id mapping
+
+    def create_tensor_with_id(self, tensor_id, size):
+        """Create tensor with specified ID and return success status"""
+        if size == 0:
+            # Handle empty tensors - return success for zero-sized allocation
+            return True
+        
+        mem = ctypes.create_string_buffer(size)
+        ptr = ctypes.addressof(mem)
+        
+        # Store pointer mapping
+        self.allocated[ptr] = (size, mem)
+        
+        # Store tensor ID mapping
+        if isinstance(tensor_id, str):
+            # Convert string ID to int if needed (for backward compatibility)
+            try:
+                tensor_id_int = int(tensor_id.split('_')[1], 16) % (2**63)  # Use hex part
+            except:
+                self.tensor_id_counter += 1
+                tensor_id_int = self.tensor_id_counter
+        else:
+            tensor_id_int = int(tensor_id)
+        
+        self.tensor_id_to_ptr[tensor_id_int] = ptr
+        self.ptr_to_tensor_id[ptr] = tensor_id_int
+        
+        return True
 
     def malloc(self, size):
+        """Legacy malloc for compatibility"""
         mem = ctypes.create_string_buffer(size)
         ptr = ctypes.addressof(mem)
         self.allocated[ptr] = (size, mem)
         return ptr
 
+    def free_tensor_with_id(self, tensor_id):
+        """Free tensor by ID"""
+        tensor_id_int = int(tensor_id)
+        if tensor_id_int == 0:  # Empty tensor
+            return True
+            
+        if tensor_id_int not in self.tensor_id_to_ptr:
+            return False
+            
+        ptr = self.tensor_id_to_ptr[tensor_id_int]
+        
+        # Clean up mappings
+        del self.tensor_id_to_ptr[tensor_id_int]
+        del self.ptr_to_tensor_id[ptr]
+        
+        # Clean up allocated memory
+        if ptr in self.allocated:
+            del self.allocated[ptr]
+            
+        return True
+
     def free(self, ptr):
+        """Legacy free for compatibility"""
         if ptr not in self.allocated:
             return False
         else:
+            # Clean up tensor ID mappings if they exist
+            if ptr in self.ptr_to_tensor_id:
+                tensor_id = self.ptr_to_tensor_id[ptr]
+                del self.tensor_id_to_ptr[tensor_id]
+                del self.ptr_to_tensor_id[ptr]
+            
             del self.allocated[ptr]
             return True
 
@@ -59,14 +119,29 @@ class DeviceAllocator(Allocator):
             return torch.Tensor(storage)
 
         found_base = None
-        # Usual case, we're receiving a known Tensor
-        if meta.data_ptr in self.allocated:
+        
+        # Check if meta.data_ptr is a tensor ID (likely if it's a small integer)
+        tensor_id = meta.data_ptr
+        
+        # Handle empty tensors
+        if meta.nelem_in_bytes == 0:
+            found_base = torch.tensor((), dtype=torch.uint8)
+        
+        # Try to find by tensor ID first
+        elif tensor_id in self.tensor_id_to_ptr:
+            ptr = self.tensor_id_to_ptr[tensor_id]
+            if ptr in self.allocated:
+                found_base = create_tensor_from_data_ptr(
+                    ptr, self.allocated[ptr][0]
+                )
+        
+        # Fallback: treat as legacy pointer (for compatibility)
+        elif meta.data_ptr in self.allocated:
             found_base = create_tensor_from_data_ptr(
                 meta.data_ptr, self.allocated[meta.data_ptr][0]
             )
 
-        # Might be a rewrap of another storage at a different offset
-        # Slow path to try and find the corresponding storage
+        # Might be a rewrap of another storage at a different offset (legacy)
         if found_base is None:
             for tag, (size, _) in self.allocated.items():
                 # t is always a 1D uint8 storage!
@@ -75,15 +150,12 @@ class DeviceAllocator(Allocator):
                     slice_size = size - (meta.data_ptr - tag)
                     found_base = create_tensor_from_data_ptr(meta.data_ptr, slice_size)
 
-        # Might be an empty tensor
-        if found_base is None and meta.nelem_in_bytes == 0:
-            found_base = torch.tensor((), dtype=torch.uint8)
-
-        # This pointer is not allocated here, segfault !
+        # This tensor ID is not allocated here, error!
         if found_base is None:
             log.info("Currently allocated blocks:\n %s", safe_str(self.allocated))
+            log.info("Tensor ID mappings:\n %s", safe_str(self.tensor_id_to_ptr))
             log.info("Trying to access %s", meta)
-            raise RuntimeError("SEGFAULT!")
+            raise RuntimeError(f"TENSOR ID {tensor_id} NOT FOUND!")
 
         # Raw 1d uint8 data
         raw = found_base
@@ -123,6 +195,10 @@ class Driver:
         # Allocated memory belongs to which device
         self.memory_belong = {}
         self.event_belong = {}
+        
+        # Tensor ID to metadata mapping for efficient tensor operations
+        self.tensor_id_to_meta = {}  # tensor_id -> RemoteTensorMeta
+        self.tensor_id_to_tensor = {}  # tensor_id -> torch.Tensor (weak references)
 
         self.rlock = threading.RLock()
         
@@ -283,13 +359,85 @@ class Driver:
         return res
 
     @register(registry)
+    def create_tensor_with_id(self, tensor_id, nbytes, device_index):
+        """Create a tensor with the given ID and return success status"""
+        # Route to the specified device
+        success = self.run_on_executor(device_index, "create_tensor_with_id", tensor_id, nbytes)
+        
+        # Track which device owns this tensor ID (for cleanup)
+        if success and nbytes > 0:  # Don't track empty tensors
+            self.memory_belong[int(tensor_id)] = device_index
+            
+        return success
+    
+    @register(registry)
+    def register_tensor_mapping(self, tensor_id, tensor, meta):
+        """Register a tensor ID to tensor and metadata mapping"""
+        tensor_id_int = int(tensor_id)
+        self.tensor_id_to_meta[tensor_id_int] = meta
+        # Store weak reference to avoid circular references
+        import weakref
+        self.tensor_id_to_tensor[tensor_id_int] = weakref.ref(tensor)
+    
+    @register(registry)
+    def get_tensor_by_id(self, tensor_id):
+        """Get tensor by its ID"""
+        tensor_id_int = int(tensor_id)
+        if tensor_id_int in self.tensor_id_to_tensor:
+            tensor_ref = self.tensor_id_to_tensor[tensor_id_int]
+            return tensor_ref()  # Dereference weak reference
+        return None
+    
+    @register(registry)
+    def get_meta_by_id(self, tensor_id):
+        """Get tensor metadata by its ID"""
+        tensor_id_int = int(tensor_id)
+        return self.tensor_id_to_meta.get(tensor_id_int)
+
+    @register(registry)
+    def free_tensor_with_id(self, tensor_id):
+        """Free tensor by tensor ID"""
+        tensor_id_int = int(tensor_id)
+        if tensor_id_int == 0:  # Empty tensor
+            return True
+            
+        device_idx = self.memory_belong.pop(tensor_id_int, None)
+        if device_idx is None:
+            return False
+        
+        # Clean up tensor mappings
+        self.tensor_id_to_meta.pop(tensor_id_int, None)
+        self.tensor_id_to_tensor.pop(tensor_id_int, None)
+        
+        return self.run_on_executor(device_idx, "free_tensor_with_id", tensor_id_int)
+
+    @register(registry)
+    def copy_data_by_id(self, dest_id, src_id, count):
+        """Copy data between tensors identified by their IDs"""
+        # For now, this is a placeholder - actual copy implementation would need
+        # to look up the memory locations for both tensor IDs and perform the copy
+        dest_device = self.memory_belong.get(int(dest_id))
+        src_device = self.memory_belong.get(int(src_id))
+        
+        if dest_device is None or src_device is None:
+            raise RuntimeError(f"Copy failed: tensor IDs {dest_id} or {src_id} not found")
+        
+        # For now, assume same-device copy (actual implementation would handle cross-device)
+        if dest_device == src_device:
+            return self.run_on_executor(dest_device, "copy_data_by_id", dest_id, src_id, count)
+        else:
+            raise RuntimeError("Cross-device copy not yet implemented")
+
+    @register(registry)
     def malloc(self, size):
+        """Legacy malloc for compatibility"""
         ptr = self.run_on_executor(self.curr_device_idx, "malloc", size)
         self.memory_belong[ptr] = self.curr_device_idx
         return ptr
 
     @register(registry)
     def free(self, ptr):
+        """Legacy free for compatibility"""
         device_idx = self.memory_belong.pop(ptr, None)
         if device_idx is None:
             return False
@@ -389,11 +537,46 @@ class _Executor:
     registry = {}
 
     @register(registry)
+    def create_tensor_with_id(self, tensor_id, size):
+        """Create tensor with ID in executor"""
+        return self.allocator.create_tensor_with_id(tensor_id, size)
+
+    @register(registry)
+    def free_tensor_with_id(self, tensor_id):
+        """Free tensor by ID in executor"""
+        return self.allocator.free_tensor_with_id(tensor_id)
+
+    @register(registry)
+    def copy_data_by_id(self, dest_id, src_id, count):
+        """Copy data between tensors by ID in executor"""
+        dest_id_int = int(dest_id)
+        src_id_int = int(src_id)
+        
+        # Look up the memory pointers for both tensors
+        if (dest_id_int not in self.allocator.tensor_id_to_ptr or 
+            src_id_int not in self.allocator.tensor_id_to_ptr):
+            return False
+            
+        dest_ptr = self.allocator.tensor_id_to_ptr[dest_id_int]
+        src_ptr = self.allocator.tensor_id_to_ptr[src_id_int]
+        
+        # Get the memory buffers and perform the copy
+        dest_size, dest_mem = self.allocator.allocated[dest_ptr]
+        src_size, src_mem = self.allocator.allocated[src_ptr]
+        
+        # Ensure we don't copy more than available
+        copy_size = min(count, dest_size, src_size)
+        ctypes.memmove(dest_mem, src_mem, copy_size)
+        return True
+
+    @register(registry)
     def malloc(self, size):
+        """Legacy malloc for compatibility"""
         return self.allocator.malloc(size)
 
     @register(registry)
     def free(self, ptr):
+        """Legacy free for compatibility"""
         return self.allocator.free(ptr)
 
     def _run_op(self, op_name, args, kwargs):

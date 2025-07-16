@@ -36,19 +36,15 @@ def impl_factory(name):
     if name in _IMPL_REGISTRY:
         return _IMPL_REGISTRY[name]
 
-    # Handle new ID-based tensor creation methods - simplified to use traditional malloc
+    # Handle new ID-based tensor creation methods
     if name == "create_tensor_with_id":
         def _(tensor_id, nbytes, device_index):
             """Create a tensor mapping with the given ID on the specified device."""
-            # For now, just fall back to traditional malloc approach
-            # This ensures compatibility with tensor_from_meta
-            try:
-                # Use the traditional malloc method which properly populates allocated dict
-                ptr = driver.exec("malloc", nbytes)
-                return ptr  # Return the actual pointer instead of boolean
-            except Exception as e:
-                log.warning(f"Malloc fallback failed: {e}")
-                return 0  # Return null pointer on failure
+            # Use the ID-based allocation system - no fallbacks
+            success = driver.exec("create_tensor_with_id", tensor_id, nbytes, device_index)
+            if not success:
+                raise RuntimeError(f"Failed to create tensor with ID {tensor_id} ({nbytes} bytes) on device {device_index}")
+            return success
         
         _IMPL_REGISTRY[name] = _
         return _
@@ -56,19 +52,11 @@ def impl_factory(name):
     elif name == "free_tensor_with_id":
         def _(tensor_id):
             """Free the tensor associated with the given ID."""
-            try:
-                if hasattr(driver, "_tensor_id_mappings") and tensor_id in driver._tensor_id_mappings:
-                    # Get the actual remote tensor ID
-                    actual_id = driver._tensor_id_mappings[tensor_id]
-                    
-                    # Remove from mapping
-                    del driver._tensor_id_mappings[tensor_id]
-                    
-                    # TODO: Add remote cleanup logic here if needed
-                    return True
-            except Exception as e:
-                log.warning(f"ID-based tensor cleanup failed: {e}")
-            return False
+            # Use the ID-based cleanup system - no fallbacks
+            success = driver.exec("free_tensor_with_id", tensor_id)
+            if not success:
+                raise RuntimeError(f"Failed to free tensor with ID {tensor_id}")
+            return success
         
         _IMPL_REGISTRY[name] = _
         return _
@@ -162,12 +150,12 @@ def _remote_kernel_fallback(op, *args, **kwargs):
                 op.overloadpacket._qualified_op_name, args, kwargs
             )
         else:
-            # 3) For unhandled operations (no remote executor), raise error with logging
+            # No fallback for remote operations - they must work remotely or fail
             op_name = op.overloadpacket._qualified_op_name
-            log.error(f"❌ Unhandled operation: {op_name} - Remote execution requested but not available")
+            log.error(f"❌ Remote operation failed: {op_name} - Remote execution not available")
             raise RuntimeError(
-                f"Remote execution not available for operation {op_name}. "
-                f"Please ensure remote execution is properly configured."
+                f"Operation {op_name} cannot be executed on remote tensors: remote execution not available. "
+                f"Remote tensors must use remote execution - no fallback to local execution is allowed."
             )
 
     # Handle non-remote operations (mixed non-remote tensors or no tensors)
@@ -232,15 +220,11 @@ def _execute_local_operation(op, *args, **kwargs):
                 # Reject string-based remote devices
                 raise ValueError("Remote devices must be RemoteBackend objects. Use create_modal_device() or similar to create a RemoteBackend.")
             else:
-                # Not a remote device factory function
-                op_name = op.overloadpacket._qualified_op_name
-                log.error(f"❌ Unhandled operation: {op_name} - factory function for non-remote device")
-                raise RuntimeError(f"Operation {op_name} not handled yet.")
+                # Not a remote device factory function - this should not be handled by remote fallback
+                return op(*args, **kwargs)
         else:
-            # No device specified, not a remote factory function
-            op_name = op.overloadpacket._qualified_op_name
-            log.error(f"❌ Unhandled operation: {op_name} - factory function without device specification")
-            raise RuntimeError(f"Operation {op_name} not handled yet.")
+            # No device specified, not a remote factory function - this should not be handled by remote fallback  
+            return op(*args, **kwargs)
         
         # For remote device factory functions, we'll let them fall through to normal processing
         # The meta computation and device allocation will handle the rest
@@ -253,12 +237,10 @@ def _execute_local_operation(op, *args, **kwargs):
         op_name = op.overloadpacket._qualified_op_name
         real_res = args[0]
     elif any(r.alias_info is not None for r in op._schema.returns):
-        # View ops
-        if op is torch.ops.aten.view.default:
-            return torch.ops.aten._unsafe_view(*args, **kwargs)
+        # View ops - no fallbacks, all view operations must be explicitly implemented
         op_name = op.overloadpacket._qualified_op_name
         log.error(f"❌ Unhandled operation: {op_name} - view operation not implemented")
-        raise RuntimeError(f"View operation {op_name} is not handled yet")
+        raise RuntimeError(f"View operation {op_name} is not implemented for remote tensors")
 
     if op_name is None:
         # 1. Compute updated metadata

@@ -12,7 +12,7 @@
 namespace remote {
 
 using remote_ptr_t = uint64_t;
-using tensor_id_t = std::string;
+using tensor_id_t = uint64_t;  // Changed from string to integer for efficient storage as data pointer
 
 void set_impl_factory(PyObject* factory);
 py::function get_method(const char* name);
@@ -20,6 +20,7 @@ py::function get_method(const char* name);
 static constexpr char kFreeMethod[] = "free";
 static constexpr char kCreateTensorMethod[] = "create_tensor_with_id";
 static constexpr char kFreeTensorMethod[] = "free_tensor_with_id";
+static constexpr char kMallocMethod[] = "malloc";  // Legacy method name for fallback
 
 // C++ tensor creation functions
 at::Tensor empty_remote(
@@ -54,10 +55,20 @@ static void ReportAndDelete(void* ptr) {
   // Always stash, this will be a no-op if there is no error
   PyErr_Fetch(&type, &value, &traceback);
 
-  TORCH_CHECK(
-      get_method(name)(reinterpret_cast<remote_ptr_t>(ptr)).cast<bool>(),
-      "Failed to free memory pointer at ",
-      ptr);
+  // For tensor ID-based deletion, convert pointer back to tensor ID
+  if (name == kFreeTensorMethod) {
+    tensor_id_t tensor_id = reinterpret_cast<tensor_id_t>(ptr);
+    TORCH_CHECK(
+        get_method(name)(tensor_id).cast<bool>(),
+        "Failed to free tensor with ID ",
+        tensor_id);
+  } else {
+    // Legacy pointer-based deletion
+    TORCH_CHECK(
+        get_method(name)(reinterpret_cast<remote_ptr_t>(ptr)).cast<bool>(),
+        "Failed to free memory pointer at ",
+        ptr);
+  }
 
   // If that user code raised an error, just print it without raising it
   if (PyErr_Occurred()) {
