@@ -673,9 +673,15 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
             try:
                 # Get tensors from registry
                 tensors = []
-                for tensor_id in tensor_ids:
+                for i, tensor_id in enumerate(tensor_ids):
                     tensor = self.tensor_registry.get_tensor(tensor_id)
                     tensors.append(tensor)
+                    # Log input tensor details on modal side
+                    print(f"📥 MODAL INPUT tensor[{i}]: ID={tensor_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    
+                    # Log tensor data summary for debugging
+                    if tensor.numel() > 0:
+                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
                 
                 # Replace tensor placeholders in args with actual tensors
                 processed_args = []
@@ -721,9 +727,16 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 
                 # Register result tensors and return their IDs
                 result_ids = []
-                for tensor in results:
+                for i, tensor in enumerate(results):
                     tensor_id = self.tensor_registry.register_tensor(tensor)
                     result_ids.append(tensor_id)
+                    
+                    # Log output tensor details on modal side
+                    print(f"📤 MODAL OUTPUT tensor[{i}]: ID={tensor_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    
+                    # Log tensor data summary for debugging
+                    if tensor.numel() > 0:
+                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
                 
                 return result_ids
                 
@@ -865,6 +878,13 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                     # Move to GPU
                     tensor = tensor.to(device)
                     tensors.append(tensor)
+                    
+                    # Log input tensor details on modal side (legacy method)
+                    print(f"📥 MODAL INPUT tensor[{i}]: shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    
+                    # Log tensor data summary for debugging
+                    if tensor.numel() > 0:
+                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
                 
                 # Replace tensor placeholders in args with actual tensors
                 processed_args = []
@@ -915,6 +935,13 @@ def _create_modal_app_for_gpu(gpu_type: str, device_id: str) -> Tuple[modal.App,
                 for i, tensor in enumerate(results):
                     # Move back to CPU for serialization
                     cpu_tensor = tensor.cpu()
+                    
+                    # Log output tensor details on modal side (legacy method)
+                    print(f"📤 MODAL OUTPUT tensor[{i}]: shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    
+                    # Log tensor data summary for debugging
+                    if tensor.numel() > 0:
+                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
                     
                     # Serialize tensor
                     buffer = io.BytesIO()

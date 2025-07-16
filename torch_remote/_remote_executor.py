@@ -127,7 +127,7 @@ class RemoteExecutor:
             output_tensors = []  # Track pre-allocated output tensors
             
             # Process args - these are always input tensors
-            for arg in args:
+            for i, arg in enumerate(args):
                 if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     # Convert remote tensor data to regular CPU tensor
                     # Use proper remote-to-CPU conversion for INPUT tensors only
@@ -139,6 +139,10 @@ class RemoteExecutor:
                     input_tensors_data.append(tensor_data)
                     input_tensor_metadata.append(metadata)
                     processed_args.append(f"__TENSOR_{len(input_tensors_data)-1}")
+                    
+                    # Log input tensor details
+                    tensor_id = arg.untyped_storage().data_ptr()
+                    log.info(f"📥 INPUT tensor arg[{i}]: ID={tensor_id}, shape={arg.shape}, dtype={arg.dtype}, device={arg.device}")
                 else:
                     processed_args.append(arg)
             
@@ -162,7 +166,9 @@ class RemoteExecutor:
                         input_tensor_metadata.append(metadata)
                         processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
                         
-                        log.info(f"Detected output tensor with ID {value.untyped_storage().data_ptr()}")
+                        # Log output tensor details
+                        tensor_id = value.untyped_storage().data_ptr()
+                        log.info(f"📤 OUTPUT tensor kwarg[{key}]: ID={tensor_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
                     else:
                         # This is an INPUT tensor - read its data
                         cpu_tensor = self._remote_tensor_to_cpu(value)
@@ -173,6 +179,10 @@ class RemoteExecutor:
                         input_tensors_data.append(tensor_data)
                         input_tensor_metadata.append(metadata)
                         processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
+                        
+                        # Log input tensor details
+                        tensor_id = value.untyped_storage().data_ptr()
+                        log.info(f"📥 INPUT tensor kwarg[{key}]: ID={tensor_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
                 else:
                     processed_kwargs[key] = value
             
@@ -211,7 +221,9 @@ class RemoteExecutor:
                     
                     # Store the result data in the pre-allocated tensor's ID
                     gpu_machine.create_tensor(data, tensor_id_str)
-                    log.info(f"Updated pre-allocated output tensor ID {tensor_id_int} with result data")
+                    
+                    # Log output tensor result details
+                    log.info(f"📤 OUTPUT RESULT tensor[{i}]: ID={tensor_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
                     
                     results.append(output_tensor)
                 else:
@@ -224,7 +236,9 @@ class RemoteExecutor:
                     
                     # Store the tensor data on the GPU machine so future operations can access it
                     gpu_machine.create_tensor(data, tensor_id_str)
-                    log.info(f"Registered new result tensor ID {tensor_id_int} with GPU machine")
+                    
+                    # Log new result tensor details
+                    log.info(f"📤 NEW RESULT tensor[{i}]: ID={tensor_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
                     
                     results.append(remote_tensor)
             
