@@ -319,24 +319,16 @@ def test_backend_device_method(modal_t4_device):
     assert device_from_registry is backend_device
 
 
-def test_validate_device_index_basic():
+def test_validate_device_index_basic(shared_devices):
     """Test validate_device_index with valid and invalid indices."""
     import torch_remote
     
-    # Test with no devices registered
-    registry = torch_remote.get_device_registry()
-    registry.clear()
+    # Use the shared devices instead of creating new ones
+    device1 = shared_devices["t4"]
+    device2 = shared_devices["l4"]
     
-    # device_count should be 0 with no devices
-    assert torch.remote.device_count() == 0
-    
-    # Create one device
-    device1 = torch_remote.create_modal_device("T4")
-    assert torch.remote.device_count() == 1
-    
-    # Create second device  
-    device2 = torch_remote.create_modal_device("L4")
-    assert torch.remote.device_count() == 2
+    # Should have at least 2 devices from shared fixtures
+    assert torch.remote.device_count() >= 2
     
     # Valid indices should work
     tensor1 = torch.randn(2, 2, device=device1.device())
@@ -345,38 +337,31 @@ def test_validate_device_index_basic():
     assert tensor2 is not None
 
 
-def test_validate_device_index_invalid():
+def test_validate_device_index_invalid(shared_devices):
     """Test validate_device_index with invalid device indices."""
     import torch_remote
     
-    # Clear registry
-    registry = torch_remote.get_device_registry()
-    registry.clear()
-    
-    # Create 2 devices (indices 0 and 1)
-    device1 = torch_remote.create_modal_device("T4")
-    device2 = torch_remote.create_modal_device("L4")
-    assert torch.remote.device_count() == 2
+    # Use shared devices - should have at least 3 devices
+    current_count = torch.remote.device_count()
+    assert current_count >= 3
     
     # Test invalid device index (should fail at C++ level)
     try:
-        # This should fail because device index 2 doesn't exist
-        invalid_device = torch.device("remote", 2)
+        # This should fail because device index 99 doesn't exist
+        invalid_device = torch.device("remote", 99)
         tensor = torch.randn(2, 2, device=invalid_device)
-        assert False, "Expected device validation to fail for index 2"
+        assert False, "Expected device validation to fail for index 99"
     except (RuntimeError, ValueError) as e:
         # Expected failure
         assert "Invalid device index" in str(e) or "device" in str(e).lower()
 
 
-def test_validate_device_index_negative():
+def test_validate_device_index_negative(shared_devices):
     """Test validate_device_index with negative device indices."""
     import torch_remote
     
-    # Create one device
-    registry = torch_remote.get_device_registry()
-    registry.clear()
-    device = torch_remote.create_modal_device("T4")
+    # Use shared devices
+    assert torch.remote.device_count() >= 1
     
     # Test negative device index (should fail)
     try:
@@ -388,18 +373,16 @@ def test_validate_device_index_negative():
         assert "Invalid device index" in str(e) or "device" in str(e).lower()
 
 
-def test_device_count_dynamic_tracking():
+def test_device_count_dynamic_tracking(clean_registry):
     """Test that device_count properly tracks registered devices dynamically."""
     import torch_remote
     
-    # Clear registry and verify count is 0
-    registry = torch_remote.get_device_registry()
-    registry.clear()
+    # Registry starts clean (count = 0)
     assert torch.remote.device_count() == 0
     
     # Add devices one by one and verify count increases
     devices = []
-    gpu_types = ["T4", "L4", "A10G"]
+    gpu_types = ["T4", "L4"]  # Reduced to 2 devices to minimize GPU usage
     
     for i, gpu_type in enumerate(gpu_types):
         device = torch_remote.create_modal_device(gpu_type)
@@ -416,27 +399,25 @@ def test_device_count_dynamic_tracking():
         assert tensor.device.index == i
 
 
-def test_validate_device_index_with_multiple_devices():
-    """Test validate_device_index edge case: creating exactly device_count devices."""
+def test_validate_device_index_with_multiple_devices(shared_devices):
+    """Test validate_device_index with multiple devices from shared fixtures."""
     import torch_remote
     
-    # Clear registry
-    registry = torch_remote.get_device_registry()
-    registry.clear()
+    # Use shared devices instead of creating new ones
+    all_devices = list(shared_devices.values())
+    device_count = len(all_devices)
     
-    # Create 3 devices (indices 0, 1, 2)
-    devices = []
-    for i in range(3):
-        device = torch_remote.create_modal_device("T4")
-        devices.append(device)
-        assert torch.remote.device_count() == i + 1
+    # Should have at least 3 devices from shared fixtures  
+    assert device_count >= 3
+    assert torch.remote.device_count() >= device_count
     
-    # All 3 devices should work
-    for i, device in enumerate(devices):
-        assert device.remote_index == i
+    # All devices should work and have valid indices
+    for device in all_devices:
+        assert device.remote_index is not None
+        assert device.remote_index >= 0
         tensor = torch.randn(2, 2, device=device.device())
         assert tensor is not None
-        assert tensor.device.index == i
+        assert tensor.device.index == device.remote_index
     
     # Device index 3 should fail (out of bounds)
     try:
@@ -447,17 +428,13 @@ def test_validate_device_index_with_multiple_devices():
         assert "Invalid device index" in str(e) or "device" in str(e).lower()
 
 
-def test_cross_device_transfer_restriction():
+def test_cross_device_transfer_restriction(shared_devices):
     """Test that transferring tensors between different remote devices is prohibited."""
     import torch_remote
     
-    # Clear registry to start fresh
-    registry = torch_remote.get_device_registry()
-    registry.clear()
-    
-    # Create two different remote devices
-    device1 = torch_remote.create_modal_device("T4")
-    device2 = torch_remote.create_modal_device("L4")
+    # Use shared devices
+    device1 = shared_devices["t4"]
+    device2 = shared_devices["l4"]
     
     # Verify they have different indices
     assert device1.remote_index != device2.remote_index
@@ -470,17 +447,13 @@ def test_cross_device_transfer_restriction():
         y = x.to(device2.device())
 
 
-def test_cross_device_copy_restriction():
+def test_cross_device_copy_restriction(shared_devices):
     """Test that copy operations between different remote devices fail."""
     import torch_remote
     
-    # Clear registry to start fresh  
-    registry = torch_remote.get_device_registry()
-    registry.clear()
-    
-    # Create two different remote devices
-    device1 = torch_remote.create_modal_device("T4")
-    device2 = torch_remote.create_modal_device("A100")
+    # Use shared devices
+    device1 = shared_devices["t4"]
+    device2 = shared_devices["a100"]
     
     # Verify devices have different indices
     assert device1.remote_index != device2.remote_index

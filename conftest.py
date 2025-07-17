@@ -37,12 +37,24 @@ def shared_devices():
     """
     devices = {
         "t4": torch_remote.create_modal_device("T4"),
-        # Add more device types as needed:
-        # "a100": torch_remote.create_modal_device("A100"),
-        # "cpu": torch.device("cpu"),  # if CPU device testing is needed
+        "l4": torch_remote.create_modal_device("L4"),
+        "a100": torch_remote.create_modal_device("A100"),
     }
     yield devices
     # Cleanup if needed
+
+
+@pytest.fixture
+def clean_registry():
+    """
+    Function-scoped fixture that cleans the device registry before and after test.
+    
+    Use this for tests that need a clean registry state without creating real devices.
+    """
+    registry = torch_remote.get_device_registry()
+    registry.clear()
+    yield registry
+    registry.clear()
 
 
 @pytest.fixture
