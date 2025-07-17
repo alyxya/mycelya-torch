@@ -187,16 +187,16 @@ class RemoteTensorRegistry:
                 if device is not None:
                     gpu_machine = device.get_gpu_machine()
                     if gpu_machine and gpu_machine.is_running():
-                        tensor_id_str = str(tensor_id)
-                        gpu_machine.create_tensor(tensor_data, tensor_id_str)
-                        log.info(f"Registered tensor ID {tensor_id} with GPU machine")
+                        storage_id_str = str(tensor_id)
+                        gpu_machine.create_tensor(tensor_data, storage_id_str)
+                        log.info(f"Registered storage ID {tensor_id} with GPU machine")
                         return True
         except Exception as e:
-            log.warning(f"Failed to register tensor {tensor_id} with GPU machine: {e}")
+            log.warning(f"Failed to register storage {tensor_id} with GPU machine: {e}")
         return False
 
     def _cleanup_remote_tensor(self, tensor_id: int, device_idx: int) -> None:
-        """Clean up tensor on remote GPU device"""
+        """Clean up storage on remote GPU device"""
         try:
             # Import here to avoid circular imports
             from ._remote_executor import _get_remote_executor
@@ -204,27 +204,27 @@ class RemoteTensorRegistry:
             
             executor = _get_remote_executor()
             if executor is None:
-                log.warning(f"No remote executor available for tensor {tensor_id} cleanup")
+                log.warning(f"No remote executor available for storage {tensor_id} cleanup")
                 return
             
             registry = get_device_registry()
             device = registry.get_device_by_index(device_idx)
             
             if device is None:
-                log.warning(f"No device found for index {device_idx} during tensor {tensor_id} cleanup")
+                log.warning(f"No device found for index {device_idx} during storage {tensor_id} cleanup")
                 return
             
             # Attempt remote cleanup
-            log.info(f"Calling remove_tensor_from_remote for tensor {tensor_id}")
+            log.info(f"Calling remove_tensor_from_remote for storage {tensor_id}")
             success = executor.remove_tensor_from_remote(str(tensor_id), device)
             if success:
-                log.info(f"✅ Successfully cleaned up remote tensor {tensor_id} on device {device_idx}")
+                log.info(f"✅ Successfully cleaned up remote storage {tensor_id} on device {device_idx}")
             else:
-                log.warning(f"❌ Remote cleanup returned false for tensor {tensor_id} on device {device_idx}")
+                log.warning(f"❌ Remote cleanup returned false for storage {tensor_id} on device {device_idx}")
                 
         except Exception as e:
             # Log but don't fail - local cleanup already completed
-            log.warning(f"Failed remote cleanup for tensor {tensor_id} on device {device_idx}: {e}")
+            log.warning(f"Failed remote cleanup for storage {tensor_id} on device {device_idx}: {e}")
             # Continue execution since local cleanup is already done
 
     def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:

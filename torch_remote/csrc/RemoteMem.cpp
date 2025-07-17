@@ -14,7 +14,7 @@
 namespace remote {
 namespace {
 
-// ID-based allocator that stores tensor IDs as data pointers
+// ID-based allocator that stores storage IDs as data pointers
 struct RemoteAllocator final : at::Allocator {
   RemoteAllocator() = default;
 
@@ -25,32 +25,32 @@ struct RemoteAllocator final : at::Allocator {
     void* data = nullptr;
     
     if (nbytes > 0) {
-      // Generate a unique tensor ID using Python method
-      tensor_id_t tensor_id = get_method(kGenerateTensorIdMethod)().cast<tensor_id_t>();
+      // Generate a unique storage ID using Python method
+      storage_id_t storage_id = get_method(kGenerateStorageIdMethod)().cast<storage_id_t>();
       
-      // Call Python method to create tensor with ID and register it
-      // This should create the tensor remotely and return success/failure
-      bool success = get_method(kCreateTensorMethod)(tensor_id, nbytes, curr_device_idx).cast<bool>();
+      // Call Python method to create storage with ID and register it
+      // This should create the storage remotely and return success/failure
+      bool success = get_method(kCreateStorageMethod)(storage_id, nbytes, curr_device_idx).cast<bool>();
       
-      TORCH_CHECK(success, "Failed to allocate tensor with ID ", tensor_id, 
+      TORCH_CHECK(success, "Failed to allocate storage with ID ", storage_id, 
                   " (", nbytes, " bytes) on remote device ", curr_device_idx);
       
-      // Store the tensor ID as the data pointer
-      data = reinterpret_cast<void*>(tensor_id);
+      // Store the storage ID as the data pointer
+      data = reinterpret_cast<void*>(storage_id);
     }
     
-    return {data, data, &ReportAndDelete<kFreeTensorMethod>, curr_device};
+    return {data, data, &ReportAndDelete<kFreeStorageMethod>, curr_device};
   }
 
   at::DeleterFnPtr raw_deleter() const override {
-    return &ReportAndDelete<kFreeTensorMethod>;
+    return &ReportAndDelete<kFreeStorageMethod>;
   }
 
   void copy_data(void* dest, const void* src, std::size_t count) const final {
     py::gil_scoped_acquire acquire;
-    // Convert data pointers back to tensor IDs for the copy operation
-    tensor_id_t dest_id = reinterpret_cast<tensor_id_t>(dest);
-    tensor_id_t src_id = reinterpret_cast<tensor_id_t>(src);
+    // Convert data pointers back to storage IDs for the copy operation
+    storage_id_t dest_id = reinterpret_cast<storage_id_t>(dest);
+    storage_id_t src_id = reinterpret_cast<storage_id_t>(src);
     get_method("copy_data_by_id")(dest_id, src_id, count);
   }
 };

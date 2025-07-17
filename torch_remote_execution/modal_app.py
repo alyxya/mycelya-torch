@@ -238,13 +238,13 @@ class RemoteGPUMachine:
             op_name, tensors_data, tensor_metadata, args, kwargs, self.machine_id
         )
     
-    def create_tensor(self, tensor_data: bytes, tensor_id: Optional[str] = None) -> str:
+    def create_tensor(self, tensor_data: bytes, storage_id: Optional[str] = None) -> str:
         """
         Create a tensor on the remote machine.
         
         Args:
             tensor_data: Serialized tensor data
-            tensor_id: Optional specific ID to use
+            storage_id: Optional specific ID to use
             
         Returns:
             The tensor ID
@@ -252,14 +252,14 @@ class RemoteGPUMachine:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.create_tensor.remote(tensor_data, tensor_id)
+        return self._executor_instance.create_tensor.remote(tensor_data, storage_id)
     
-    def get_tensor_data(self, tensor_id: str) -> bytes:
+    def get_tensor_data(self, storage_id: str) -> bytes:
         """
         Get tensor data by ID for device transfer.
         
         Args:
-            tensor_id: The tensor ID
+            storage_id: The tensor ID
             
         Returns:
             Serialized tensor data
@@ -267,14 +267,14 @@ class RemoteGPUMachine:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.get_tensor_data.remote(tensor_id)
+        return self._executor_instance.get_tensor_data.remote(storage_id)
     
-    def get_tensor_metadata(self, tensor_id: str) -> Dict[str, Any]:
+    def get_tensor_metadata(self, storage_id: str) -> Dict[str, Any]:
         """
         Get tensor metadata by ID.
         
         Args:
-            tensor_id: The tensor ID
+            storage_id: The tensor ID
             
         Returns:
             Tensor metadata
@@ -282,12 +282,12 @@ class RemoteGPUMachine:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.get_tensor_metadata.remote(tensor_id)
+        return self._executor_instance.get_tensor_metadata.remote(storage_id)
     
     def execute_operation_with_ids(
         self,
         op_name: str,
-        tensor_ids: List[str],
+        storage_ids: List[str],
         args: List[Any],
         kwargs: Dict[str, Any]
     ) -> List[str]:
@@ -296,7 +296,7 @@ class RemoteGPUMachine:
         
         Args:
             op_name: The operation name
-            tensor_ids: Input tensor IDs
+            storage_ids: Input tensor IDs
             args: Operation arguments
             kwargs: Operation keyword arguments
             
@@ -307,7 +307,7 @@ class RemoteGPUMachine:
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.execute_aten_operation_with_ids.remote(
-            op_name, tensor_ids, args, kwargs, self.machine_id
+            op_name, storage_ids, args, kwargs, self.machine_id
         )
     
     def factory_tensor(
@@ -334,12 +334,12 @@ class RemoteGPUMachine:
             factory_op, args, kwargs, self.machine_id
         )
     
-    def remove_tensor(self, tensor_id: str) -> bool:
+    def remove_tensor(self, storage_id: str) -> bool:
         """
         Remove a tensor from the remote machine.
         
         Args:
-            tensor_id: The tensor ID
+            storage_id: The tensor ID
             
         Returns:
             True if removed, False if not found
@@ -347,7 +347,7 @@ class RemoteGPUMachine:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.remove_tensor.remote(tensor_id)
+        return self._executor_instance.remove_tensor.remote(storage_id)
     
     def get_registry_stats(self) -> Dict[str, Any]:
         """Get tensor registry statistics."""
@@ -356,12 +356,12 @@ class RemoteGPUMachine:
         
         return self._executor_instance.get_registry_stats.remote()
     
-    def garbage_collect(self, active_tensor_ids: Optional[List[str]] = None) -> int:
+    def garbage_collect(self, active_storage_ids: Optional[List[str]] = None) -> int:
         """
         Perform garbage collection on the remote machine.
         
         Args:
-            active_tensor_ids: Optional list of tensor IDs to keep alive
+            active_storage_ids: Optional list of tensor IDs to keep alive
             
         Returns:
             Number of tensors removed
@@ -369,7 +369,7 @@ class RemoteGPUMachine:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.garbage_collect.remote(active_tensor_ids)
+        return self._executor_instance.garbage_collect.remote(active_storage_ids)
     
     def get_memory_pressure(self) -> Dict[str, Any]:
         """Get memory pressure information from remote machine."""
@@ -468,13 +468,13 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                         self._ref_counts: Dict[str, int] = defaultdict(int)
                         self._lock = threading.RLock()
                         
-                    def register_tensor(self, tensor: Any, tensor_id: Optional[str] = None) -> str:
-                        if tensor_id is None:
-                            tensor_id = str(uuid.uuid4())
+                    def register_tensor(self, tensor: Any, storage_id: Optional[str] = None) -> str:
+                        if storage_id is None:
+                            storage_id = str(uuid.uuid4())
                             
                         with self._lock:
-                            self._tensors[tensor_id] = tensor
-                            self._metadata[tensor_id] = {
+                            self._tensors[storage_id] = tensor
+                            self._metadata[storage_id] = {
                                 "shape": list(tensor.shape),
                                 "dtype": str(tensor.dtype),
                                 "device": str(tensor.device),
@@ -482,31 +482,31 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                                 "element_size": tensor.element_size(),
                                 "requires_grad": tensor.requires_grad,
                             }
-                            self._ref_counts[tensor_id] += 1
+                            self._ref_counts[storage_id] += 1
                             
-                        return tensor_id
+                        return storage_id
                     
-                    def get_tensor(self, tensor_id: str) -> Any:
+                    def get_tensor(self, storage_id: str) -> Any:
                         with self._lock:
-                            if tensor_id not in self._tensors:
-                                raise KeyError(f"Tensor ID {tensor_id} not found in registry")
-                            return self._tensors[tensor_id]
+                            if storage_id not in self._tensors:
+                                raise KeyError(f"Tensor ID {storage_id} not found in registry")
+                            return self._tensors[storage_id]
                     
-                    def get_metadata(self, tensor_id: str) -> Dict[str, Any]:
+                    def get_metadata(self, storage_id: str) -> Dict[str, Any]:
                         with self._lock:
-                            if tensor_id not in self._metadata:
-                                raise KeyError(f"Tensor ID {tensor_id} not found in registry")
-                            return self._metadata[tensor_id].copy()
+                            if storage_id not in self._metadata:
+                                raise KeyError(f"Tensor ID {storage_id} not found in registry")
+                            return self._metadata[storage_id].copy()
                     
-                    def remove_tensor(self, tensor_id: str) -> bool:
+                    def remove_tensor(self, storage_id: str) -> bool:
                         with self._lock:
-                            if tensor_id not in self._tensors:
+                            if storage_id not in self._tensors:
                                 return False
                             
-                            del self._tensors[tensor_id]
-                            del self._metadata[tensor_id]
-                            if tensor_id in self._ref_counts:
-                                del self._ref_counts[tensor_id]
+                            del self._tensors[storage_id]
+                            del self._metadata[storage_id]
+                            if storage_id in self._ref_counts:
+                                del self._ref_counts[storage_id]
                             return True
                     
                     def get_stats(self) -> Dict[str, Any]:
@@ -520,7 +520,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                             return {
                                 "total_tensors": total_tensors,
                                 "total_memory_bytes": total_memory,
-                                "tensor_ids": list(self._tensors.keys())
+                                "storage_ids": list(self._tensors.keys())
                             }
                     
                     def clear(self):
@@ -533,17 +533,17 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                         """Remove tensors with zero reference counts."""
                         with self._lock:
                             to_remove = []
-                            for tensor_id, ref_count in self._ref_counts.items():
+                            for storage_id, ref_count in self._ref_counts.items():
                                 if ref_count <= 0:
-                                    to_remove.append(tensor_id)
+                                    to_remove.append(storage_id)
                             
-                            for tensor_id in to_remove:
-                                if tensor_id in self._tensors:
-                                    del self._tensors[tensor_id]
-                                if tensor_id in self._metadata:
-                                    del self._metadata[tensor_id]
-                                if tensor_id in self._ref_counts:
-                                    del self._ref_counts[tensor_id]
+                            for storage_id in to_remove:
+                                if storage_id in self._tensors:
+                                    del self._tensors[storage_id]
+                                if storage_id in self._metadata:
+                                    del self._metadata[storage_id]
+                                if storage_id in self._ref_counts:
+                                    del self._ref_counts[storage_id]
                             
                             return len(to_remove)
                 
@@ -560,14 +560,14 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         def create_tensor(
             self,
             tensor_data: bytes,
-            tensor_id: Optional[str] = None
+            storage_id: Optional[str] = None
         ) -> str:
             """
             Create a new tensor on the remote machine and return its ID.
             
             Args:
                 tensor_data: Serialized tensor data
-                tensor_id: Optional specific ID to use
+                storage_id: Optional specific ID to use
                 
             Returns:
                 The tensor ID
@@ -584,18 +584,18 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             tensor = tensor.to(device)
             
             # Register in tensor registry
-            tensor_id = self.tensor_registry.register_tensor(tensor, tensor_id)
-            print(f"📦 Created tensor {tensor_id} with shape {tensor.shape} on {device}")
+            storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
+            print(f"📦 Created tensor {storage_id} with shape {tensor.shape} on {device}")
             
-            return tensor_id
+            return storage_id
         
         @modal.method()
-        def get_tensor_data(self, tensor_id: str) -> bytes:
+        def get_tensor_data(self, storage_id: str) -> bytes:
             """
             Retrieve tensor data by ID for transfer to client.
             
             Args:
-                tensor_id: The tensor ID
+                storage_id: The tensor ID
                 
             Returns:
                 Serialized tensor data
@@ -603,7 +603,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             import torch
             import io
             
-            tensor = self.tensor_registry.get_tensor(tensor_id)
+            tensor = self.tensor_registry.get_tensor(storage_id)
             
             # Move to CPU for serialization
             cpu_tensor = tensor.cpu()
@@ -615,39 +615,39 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             return buffer.getvalue()
         
         @modal.method()
-        def get_tensor_metadata(self, tensor_id: str) -> Dict[str, Any]:
+        def get_tensor_metadata(self, storage_id: str) -> Dict[str, Any]:
             """
             Get metadata for a tensor by ID.
             
             Args:
-                tensor_id: The tensor ID
+                storage_id: The tensor ID
                 
             Returns:
                 Tensor metadata
             """
-            return self.tensor_registry.get_metadata(tensor_id)
+            return self.tensor_registry.get_metadata(storage_id)
         
         @modal.method()
-        def remove_tensor(self, tensor_id: str) -> bool:
+        def remove_tensor(self, storage_id: str) -> bool:
             """
             Remove a tensor from the registry.
             
             Args:
-                tensor_id: The tensor ID
+                storage_id: The tensor ID
                 
             Returns:
                 True if removed, False if not found
             """
-            removed = self.tensor_registry.remove_tensor(tensor_id)
+            removed = self.tensor_registry.remove_tensor(storage_id)
             if removed:
-                print(f"🗑️ Removed tensor {tensor_id}")
+                print(f"🗑️ Removed tensor {storage_id}")
             return removed
         
         @modal.method()
         def execute_aten_operation_with_ids(
             self,
             op_name: str,
-            tensor_ids: List[str],
+            storage_ids: List[str],
             args: List[Any],
             kwargs: Dict[str, Any],
             machine_id: str
@@ -657,7 +657,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             Args:
                 op_name: The operation name to execute
-                tensor_ids: List of input tensor IDs
+                storage_ids: List of input tensor IDs
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 machine_id: Machine ID for logging
@@ -668,16 +668,16 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             import torch
             
             print(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
-            print(f"Using tensor IDs: {tensor_ids}")
+            print(f"Using tensor IDs: {storage_ids}")
             
             try:
                 # Get tensors from registry
                 tensors = []
-                for i, tensor_id in enumerate(tensor_ids):
-                    tensor = self.tensor_registry.get_tensor(tensor_id)
+                for i, storage_id in enumerate(storage_ids):
+                    tensor = self.tensor_registry.get_tensor(storage_id)
                     tensors.append(tensor)
                     # Log input tensor details on modal side
-                    print(f"📥 MODAL INPUT tensor[{i}]: ID={tensor_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    print(f"📥 MODAL INPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
@@ -728,11 +728,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Register result tensors and return their IDs
                 result_ids = []
                 for i, tensor in enumerate(results):
-                    tensor_id = self.tensor_registry.register_tensor(tensor)
-                    result_ids.append(tensor_id)
+                    storage_id = self.tensor_registry.register_tensor(tensor)
+                    result_ids.append(storage_id)
                     
                     # Log output tensor details on modal side
-                    print(f"📤 MODAL OUTPUT tensor[{i}]: ID={tensor_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    print(f"📤 MODAL OUTPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
@@ -785,10 +785,10 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 tensor = factory_func(*args, **kwargs)
                 
                 # Register tensor and return ID
-                tensor_id = self.tensor_registry.register_tensor(tensor)
+                storage_id = self.tensor_registry.register_tensor(tensor)
                 
-                print(f"✅ Created {factory_op} tensor {tensor_id} with shape {tensor.shape}")
-                return tensor_id
+                print(f"✅ Created {factory_op} tensor {storage_id} with shape {tensor.shape}")
+                return storage_id
                 
             except Exception as e:
                 print(f"❌ Error creating {factory_op} tensor: {str(e)}")
@@ -802,17 +802,17 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             return self.tensor_registry.get_stats()
         
         @modal.method()
-        def garbage_collect(self, active_tensor_ids: Optional[List[str]] = None) -> int:
+        def garbage_collect(self, active_storage_ids: Optional[List[str]] = None) -> int:
             """
             Perform garbage collection on the tensor registry.
             
             Args:
-                active_tensor_ids: Optional list of tensor IDs to keep alive
+                active_storage_ids: Optional list of tensor IDs to keep alive
                 
             Returns:
                 Number of tensors removed
             """
-            removed_count = self.tensor_registry.garbage_collect(active_tensor_ids)
+            removed_count = self.tensor_registry.garbage_collect(active_storage_ids)
             if removed_count > 0:
                 print(f"🗑️ Garbage collected {removed_count} tensors")
             return removed_count

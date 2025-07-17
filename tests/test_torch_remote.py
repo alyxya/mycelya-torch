@@ -791,8 +791,8 @@ def test_flatten_operation(modal_t4_device):
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_view_operations_preserve_tensor_id(modal_t4_device):
-    """Test that view operations preserve the underlying tensor ID (if implemented correctly)."""
+def test_view_operations_preserve_storage_id(modal_t4_device):
+    """Test that view operations preserve the underlying storage ID (if implemented correctly)."""
     import torch_remote
     
     # Create a remote tensor

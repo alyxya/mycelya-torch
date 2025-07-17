@@ -38,12 +38,12 @@ Successfully implemented a pure tensor ID-based architecture that eliminates all
 #### 1. C++ Tensor ID Generation
 ```cpp
 // Custom allocator generates unique 64-bit tensor IDs
-tensor_id_t generate_tensor_id() {
+storage_id_t generate_storage_id() {
   static std::random_device rd;
   static std::mt19937 gen(rd());
   static std::uniform_int_distribution<uint64_t> dis;
   // Generate non-zero unique ID
-  tensor_id_t id;
+  storage_id_t id;
   do { id = dis(gen); } while (id == 0);
   return id;
 }
@@ -53,14 +53,14 @@ tensor_id_t generate_tensor_id() {
 ```python
 # Tensor creation stores only ID and metadata locally
 class RemoteTensorMeta:
-    def __init__(self, tensor_id, shape, dtype, device_index):
-        self.tensor_id = tensor_id  # 64-bit unique identifier
+    def __init__(self, storage_id, shape, dtype, device_index):
+        self.storage_id = storage_id  # 64-bit unique identifier
         self.shape = shape          # Shape metadata
         self.dtype = dtype          # Data type metadata
         self.device_index = device_index  # Device assignment
 
 # Registry maps IDs to metadata (no data storage)
-self.tensor_id_to_meta = {}  # tensor_id -> RemoteTensorMeta
+self.storage_id_to_meta = {}  # storage_id -> RemoteTensorMeta
 ```
 
 #### 3. Input/Output Tensor Separation

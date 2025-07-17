@@ -47,8 +47,8 @@ def with_error_handling(func):
             # Check for specific error patterns
             error_msg = str(e).lower()
             
-            if "tensor id" in error_msg and "not found" in error_msg:
-                raise StaleReferenceError(f"Tensor reference is stale: {e}")
+            if "storage id" in error_msg and "not found" in error_msg:
+                raise StaleReferenceError(f"Storage reference is stale: {e}")
             elif "machine" in error_msg and "not running" in error_msg:
                 raise ConnectionError(f"Remote machine connection lost: {e}")
             elif "remote execution failed" in error_msg:
@@ -141,8 +141,8 @@ class RemoteExecutor:
                     processed_args.append(f"__TENSOR_{len(input_tensors_data)-1}")
                     
                     # Log input tensor details
-                    tensor_id = arg.untyped_storage().data_ptr()
-                    log.info(f"📥 INPUT tensor arg[{i}]: ID={tensor_id}, shape={arg.shape}, dtype={arg.dtype}, device={arg.device}")
+                    storage_id = arg.untyped_storage().data_ptr()
+                    log.info(f"📥 INPUT tensor arg[{i}]: ID={storage_id}, shape={arg.shape}, dtype={arg.dtype}, device={arg.device}")
                 else:
                     processed_args.append(arg)
             
@@ -167,8 +167,8 @@ class RemoteExecutor:
                         processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
                         
                         # Log output tensor details
-                        tensor_id = value.untyped_storage().data_ptr()
-                        log.info(f"📤 OUTPUT tensor kwarg[{key}]: ID={tensor_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
+                        storage_id = value.untyped_storage().data_ptr()
+                        log.info(f"📤 OUTPUT tensor kwarg[{key}]: ID={storage_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
                     else:
                         # This is an INPUT tensor - read its data
                         cpu_tensor = self._remote_tensor_to_cpu(value)
@@ -181,8 +181,8 @@ class RemoteExecutor:
                         processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
                         
                         # Log input tensor details
-                        tensor_id = value.untyped_storage().data_ptr()
-                        log.info(f"📥 INPUT tensor kwarg[{key}]: ID={tensor_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
+                        storage_id = value.untyped_storage().data_ptr()
+                        log.info(f"📥 INPUT tensor kwarg[{key}]: ID={storage_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
                 else:
                     processed_kwargs[key] = value
             
@@ -216,14 +216,14 @@ class RemoteExecutor:
                 if i < len(output_tensors):
                     # Use the pre-allocated output tensor
                     output_tensor = output_tensors[i]
-                    tensor_id_int = output_tensor.untyped_storage().data_ptr()
-                    tensor_id_str = str(tensor_id_int)
+                    storage_id_int = output_tensor.untyped_storage().data_ptr()
+                    storage_id_str = str(storage_id_int)
                     
                     # Store the result data in the pre-allocated tensor's ID
-                    gpu_machine.create_tensor(data, tensor_id_str)
+                    gpu_machine.create_tensor(data, storage_id_str)
                     
                     # Log output tensor result details
-                    log.info(f"📤 OUTPUT RESULT tensor[{i}]: ID={tensor_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
+                    log.info(f"📤 OUTPUT RESULT tensor[{i}]: ID={storage_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
                     
                     results.append(output_tensor)
                 else:
@@ -231,14 +231,14 @@ class RemoteExecutor:
                     remote_tensor = self._cpu_tensor_to_remote(cpu_tensor, device)
                     
                     # Register the tensor data with the GPU machine using the tensor's ID
-                    tensor_id_int = remote_tensor.untyped_storage().data_ptr()
-                    tensor_id_str = str(tensor_id_int)
+                    storage_id_int = remote_tensor.untyped_storage().data_ptr()
+                    storage_id_str = str(storage_id_int)
                     
                     # Store the tensor data on the GPU machine so future operations can access it
-                    gpu_machine.create_tensor(data, tensor_id_str)
+                    gpu_machine.create_tensor(data, storage_id_str)
                     
                     # Log new result tensor details
-                    log.info(f"📤 NEW RESULT tensor[{i}]: ID={tensor_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
+                    log.info(f"📤 NEW RESULT tensor[{i}]: ID={storage_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
                     
                     results.append(remote_tensor)
             
@@ -257,7 +257,7 @@ class RemoteExecutor:
         self,
         tensor_data: bytes, 
         device: "RemoteBackend",
-        tensor_id: Optional[str] = None
+        storage_id: Optional[str] = None
     ) -> str:
         """
         Create a tensor on the remote machine and return its ID.
@@ -265,20 +265,20 @@ class RemoteExecutor:
         Args:
             tensor_data: Serialized tensor data
             device: Target device
-            tensor_id: Optional specific ID to use
+            storage_id: Optional specific ID to use
             
         Returns:
             The tensor ID
         """
         gpu_machine = self._get_device_gpu_machine(device)
-        return gpu_machine.create_tensor(tensor_data, tensor_id)
+        return gpu_machine.create_tensor(tensor_data, storage_id)
     
-    def get_tensor_data_from_remote(self, tensor_id: str, device_index: int) -> torch.Tensor:
+    def get_tensor_data_from_remote(self, storage_id: str, device_index: int) -> torch.Tensor:
         """
         Get tensor data from remote machine by ID.
         
         Args:
-            tensor_id: The tensor ID
+            storage_id: The tensor ID
             device_index: The remote device index
             
         Returns:
@@ -290,13 +290,13 @@ class RemoteExecutor:
             raise RuntimeError(f"No device found for index {device_index}")
         
         gpu_machine = self._get_device_gpu_machine(device)
-        tensor_data = gpu_machine.get_tensor_data(tensor_id)
+        tensor_data = gpu_machine.get_tensor_data(storage_id)
         return self._deserialize_tensor(tensor_data)
     
     def execute_remote_operation_with_ids(
         self,
         op_name: str,
-        tensor_ids: List[str],
+        storage_ids: List[str],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         device: "RemoteBackend"
@@ -306,7 +306,7 @@ class RemoteExecutor:
         
         Args:
             op_name: The operation name
-            tensor_ids: Input tensor IDs
+            storage_ids: Input tensor IDs
             args: Operation arguments
             kwargs: Operation keyword arguments
             device: Target device
@@ -315,7 +315,7 @@ class RemoteExecutor:
             Result tensor IDs
         """
         gpu_machine = self._get_device_gpu_machine(device)
-        return gpu_machine.execute_operation_with_ids(op_name, tensor_ids, list(args), kwargs)
+        return gpu_machine.execute_operation_with_ids(op_name, storage_ids, list(args), kwargs)
     
     def create_factory_tensor_on_remote(
         self,
@@ -339,26 +339,26 @@ class RemoteExecutor:
         gpu_machine = self._get_device_gpu_machine(device)
         return gpu_machine.factory_tensor(factory_op, args, kwargs)
     
-    def remove_tensor_from_remote(self, tensor_id: str, device: "RemoteBackend") -> bool:
+    def remove_tensor_from_remote(self, storage_id: str, device: "RemoteBackend") -> bool:
         """
         Remove a tensor from remote machine.
         
         Args:
-            tensor_id: The tensor ID
+            storage_id: The tensor ID
             device: The device
             
         Returns:
             True if removed, False if not found
         """
         gpu_machine = self._get_device_gpu_machine(device)
-        return gpu_machine.remove_tensor(tensor_id)
+        return gpu_machine.remove_tensor(storage_id)
     
-    def check_tensor_exists(self, tensor_id: str, device: "RemoteBackend") -> bool:
+    def check_tensor_exists(self, storage_id: str, device: "RemoteBackend") -> bool:
         """
         Check if a tensor exists on the remote machine.
         
         Args:
-            tensor_id: The tensor ID
+            storage_id: The tensor ID
             device: The device
             
         Returns:
@@ -366,18 +366,18 @@ class RemoteExecutor:
         """
         try:
             gpu_machine = self._get_device_gpu_machine(device)
-            metadata = gpu_machine.get_tensor_metadata(tensor_id)
+            metadata = gpu_machine.get_tensor_metadata(storage_id)
             self._update_heartbeat(device.machine_id)
             return metadata is not None
         except Exception:
             return False
     
-    def validate_tensor_reference(self, tensor_id: str, device: "RemoteBackend") -> bool:
+    def validate_tensor_reference(self, storage_id: str, device: "RemoteBackend") -> bool:
         """
         Validate that a tensor reference is still valid.
         
         Args:
-            tensor_id: The tensor ID to validate
+            storage_id: The tensor ID to validate
             device: The device
             
         Returns:
@@ -386,7 +386,7 @@ class RemoteExecutor:
         if not self.is_device_connected(device):
             return False
         
-        return self.check_tensor_exists(tensor_id, device)
+        return self.check_tensor_exists(storage_id, device)
     
     def is_device_connected(self, device: "RemoteBackend") -> bool:
         """
@@ -451,7 +451,7 @@ class RemoteExecutor:
     def safe_execute_remote_operation_with_ids(
         self,
         op_name: str,
-        tensor_ids: List[str],
+        storage_ids: List[str],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         device: "RemoteBackend"
@@ -461,7 +461,7 @@ class RemoteExecutor:
         
         Args:
             op_name: The operation name
-            tensor_ids: Input tensor IDs
+            storage_ids: Input tensor IDs
             args: Operation arguments
             kwargs: Operation keyword arguments
             device: Target device
@@ -479,12 +479,12 @@ class RemoteExecutor:
             raise ConnectionError(f"Device {device.machine_id} is not connected")
         
         # Validate tensor references
-        for tensor_id in tensor_ids:
-            if not self.check_tensor_exists(tensor_id, device):
-                raise StaleReferenceError(f"Tensor {tensor_id} not found on device {device.machine_id}")
+        for storage_id in storage_ids:
+            if not self.check_tensor_exists(storage_id, device):
+                raise StaleReferenceError(f"Tensor {storage_id} not found on device {device.machine_id}")
         
         # Execute operation
-        return self.execute_remote_operation_with_ids(op_name, tensor_ids, args, kwargs, device)
+        return self.execute_remote_operation_with_ids(op_name, storage_ids, args, kwargs, device)
     
     def cleanup(self):
         """Clean up the remote executor."""
@@ -509,11 +509,11 @@ class RemoteExecutor:
             raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
         
         # Get tensor data using tensor ID (convert int to string for GPU machine)
-        tensor_id_int = remote_tensor.untyped_storage().data_ptr()
-        tensor_id_str = str(tensor_id_int)
+        storage_id_int = remote_tensor.untyped_storage().data_ptr()
+        storage_id_str = str(storage_id_int)
         
         # Use GPU machine to get tensor data by ID
-        tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
+        tensor_data = gpu_machine.get_tensor_data(storage_id_str)
         
         # Deserialize the tensor
         return self._deserialize_tensor(tensor_data)

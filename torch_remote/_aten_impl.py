@@ -50,16 +50,16 @@ def impl_factory(name: str) -> Callable:
 
     # Handle operations that need special error handling
     if name in ["create_tensor_with_id", "free_tensor_with_id"]:
-        def _(tensor_id: int, *args: Any) -> Any:
+        def _(storage_id: int, *args: Any) -> Any:
             """Wrapper for tensor ID operations with error handling."""
-            result = driver.exec(name, tensor_id, *args)
+            result = driver.exec(name, storage_id, *args)
             if not result:
                 operation = name.replace("_", " ")
                 if name == "create_tensor_with_id":
                     nbytes, device_index = args
-                    raise RuntimeError(f"Failed to create tensor with ID {tensor_id} ({nbytes} bytes) on device {device_index}")
+                    raise RuntimeError(f"Failed to create tensor with ID {storage_id} ({nbytes} bytes) on device {device_index}")
                 elif name == "free_tensor_with_id":
-                    raise RuntimeError(f"Failed to free tensor with ID {tensor_id}")
+                    raise RuntimeError(f"Failed to free tensor with ID {storage_id}")
             return result
         
         _IMPL_REGISTRY[name] = _
@@ -253,16 +253,16 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
             raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
         
         # Send tensor data using tensor ID (convert int to string for GPU machine)
-        tensor_id_int = to_.untyped_storage().data_ptr()
-        tensor_id_str = str(tensor_id_int)
-        log.info(f"Copying CPU tensor to remote tensor ID {tensor_id_int}")
+        storage_id_int = to_.untyped_storage().data_ptr()
+        storage_id_str = str(storage_id_int)
+        log.info(f"Copying CPU tensor to remote tensor ID {storage_id_int}")
         
         # Serialize the CPU tensor
         tensor_data = executor._serialize_tensor(from_)
         
         # Use GPU machine to create/update tensor with specific ID
         # This will overwrite any existing empty tensor with the actual data
-        created_id = gpu_machine.create_tensor(tensor_data, tensor_id_str)
+        created_id = gpu_machine.create_tensor(tensor_data, storage_id_str)
         log.info(f"Successfully created/updated remote tensor with ID {created_id}")
         return to_
     else:

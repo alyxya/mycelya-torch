@@ -40,7 +40,7 @@ def demonstrate_memory_efficiency():
         print(f"   Reported device: {remote_tensor.device}")
         print(f"   Underlying storage device: {remote_tensor.data.device}")
         print(f"   Is persistent: {remote_tensor.is_persistent}")
-        print(f"   Has tensor ID: {bool(remote_tensor.tensor_id)}")
+        print(f"   Has storage ID: {bool(remote_tensor.untyped_storage().data_ptr())}")
         
         # Check remote tensor implementation
         if remote_tensor.device.type == "remote":
