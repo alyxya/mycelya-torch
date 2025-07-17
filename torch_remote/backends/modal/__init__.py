@@ -4,7 +4,8 @@
 """
 Modal backend implementation for torch_remote.
 
-This backend provides remote execution capabilities using Modal's A100 GPUs.
+This backend provides remote execution capabilities using Modal's cloud GPUs.
+Supports: T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200.
 """
 
 import torch
@@ -29,13 +30,13 @@ def is_available():
 
 def get_device_name(device=None):
     """Get the name of a remote device."""
-    return "Modal A100 GPU"
+    return "Modal GPU"
 
 def get_device_properties(device=None):
     """Get properties of a remote device."""
     class Properties:
         def __init__(self):
-            self.name = "Modal A100 GPU"
+            self.name = "Modal GPU"
             self.total_memory = 0  # Remote memory not directly accessible
             self.major = 8  # A100 compute capability
             self.minor = 0

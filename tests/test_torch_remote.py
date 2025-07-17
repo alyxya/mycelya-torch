@@ -115,7 +115,7 @@ def test_backend_tensor_device_properties(modal_t4_device):
     x_cpu = torch.randn(3, 3)
     x_remote = x_cpu.to(modal_t4_device.device())
     
-    # Check that backend tensor has the expected type (now regular torch.Tensor)
+    # Check that remote tensor maintains torch.Tensor interface
     assert type(x_remote).__name__ == "Tensor"
     
     # Test device property - backend tensors should identify as remote device
@@ -136,7 +136,7 @@ def test_backend_only_operations(modal_t4_device):
     result_add = x_remote + x_remote
     result_mm = x_remote.mm(y_remote)
     
-    # Verify results are correct and still backend tensors (now regular torch.Tensor)
+    # Verify results are correct and maintain torch.Tensor interface
     assert type(result_add).__name__ == "Tensor"
     assert type(result_mm).__name__ == "Tensor"
     assert result_add.shape == x_remote.shape
@@ -203,7 +203,7 @@ def test_cpu_to_backend_conversion(modal_t4_device):
     for cpu_tensor in test_cases:
         remote_tensor = cpu_tensor.to(modal_t4_device.device())
         
-        # Verify conversion (now regular torch.Tensor)
+        # Verify conversion maintains torch.Tensor interface
         assert type(remote_tensor).__name__ == "Tensor"
         assert remote_tensor.shape == cpu_tensor.shape
         assert remote_tensor.dtype == cpu_tensor.dtype
@@ -249,7 +249,7 @@ def test_multiple_backend_cpu_transfers(modal_t4_device):
     assert torch.allclose(step4_cpu, original, rtol=1e-4, atol=1e-6)
     assert step4_cpu.device.type == "cpu"
     
-    # Verify intermediate backend tensors have correct types (now regular torch.Tensor)
+    # Verify intermediate remote tensors maintain torch.Tensor interface
     assert type(step1_remote).__name__ == "Tensor"
     assert type(step3_remote).__name__ == "Tensor"
 
@@ -279,7 +279,7 @@ def test_backend_tensor_creation_with_dtypes(modal_t4_device):
 
 
 def test_backend_device_method(modal_t4_device):
-    """Test the new .device() method on RemoteBackend."""
+    """Test the .device() method on RemoteBackend for device access."""
     import torch_remote
     
     # Use the shared backend device

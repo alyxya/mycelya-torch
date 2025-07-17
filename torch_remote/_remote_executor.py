@@ -71,8 +71,8 @@ except Exception as e:
 class RemoteExecutor:
     """Handles remote execution of aten operations on remote GPUs.
     
-    This is the Modal provider implementation. Future providers can be added
-    by extending this class or creating provider-specific executors.
+    This is currently a Modal-specific implementation. Multi-provider support
+    would require significant refactoring to abstract provider-specific logic.
     """
     
     def __init__(self):
@@ -492,7 +492,7 @@ class RemoteExecutor:
         self._last_heartbeat.clear()
     
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
-        """Convert remote tensor to CPU tensor without triggering remote execution."""
+        """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         from .device import get_device_registry
         
         # Get the device backend

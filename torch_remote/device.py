@@ -40,7 +40,7 @@ class RemoteBackend:
     Represents a remote GPU device with specific provider and GPU type.
 
     Each RemoteBackend instance represents a unique remote GPU instance.
-    Operations between different RemoteBackend instances are not supported.
+    Operations between different RemoteBackend instances are blocked with explicit error messages.
     """
 
     def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs):
@@ -94,14 +94,14 @@ class RemoteBackend:
                 from torch_remote_execution.modal_app import create_modal_app_for_gpu
                 self._gpu_machine = create_modal_app_for_gpu(self.gpu_type.value, self.machine_id)
                 self._gpu_machine.start()
-                print(f"🚀 Started GPU machine: {self._gpu_machine}")
+                print(f"Started GPU machine: {self._gpu_machine}")
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
         except ImportError as e:
-            print(f"⚠️  Remote execution not available: {e}")
+            print(f"Remote execution not available: {e}")
             # Continue without remote execution capability
         except Exception as e:
-            print(f"⚠️  Failed to start GPU machine: {e}")
+            print(f"Failed to start GPU machine: {e}")
             # Continue without remote execution capability
     
     def get_gpu_machine(self):
@@ -113,10 +113,10 @@ class RemoteBackend:
         if self._gpu_machine and self._gpu_machine.is_running():
             try:
                 self._gpu_machine.stop()
-                print(f"🛑 Stopped GPU machine: {self.machine_id}")
+                print(f"Stopped GPU machine: {self.machine_id}")
             except Exception as e:
                 # Don't print full stack traces during shutdown
-                print(f"⚠️  Error stopping GPU machine {self.machine_id}: {type(e).__name__}")
+                print(f"Error stopping GPU machine {self.machine_id}: {type(e).__name__}")
         self._gpu_machine = None
 
     def __str__(self):
@@ -246,9 +246,9 @@ class DeviceRegistry:
 # Global device registry
 _device_registry = DeviceRegistry()
 
-# No explicit cleanup during exit - Modal handles its own async context cleanup
-# The atexit approach works for simple standalone cases but conflicts with the complex
-# PyTorch extension architecture. The errors are cosmetic and can be suppressed with stderr redirection.
+# Device cleanup is handled via atexit registration (see line 288)
+# Modal handles its own async context cleanup, but we still register explicit cleanup
+# for proper resource management in standalone usage scenarios.
 
 
 def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:

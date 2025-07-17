@@ -21,7 +21,7 @@ static constexpr char kFreeMethod[] = "free";
 static constexpr char kCreateTensorMethod[] = "create_tensor_with_id";
 static constexpr char kFreeTensorMethod[] = "free_tensor_with_id";
 static constexpr char kGenerateTensorIdMethod[] = "generate_tensor_id";
-static constexpr char kMallocMethod[] = "malloc";  // Legacy method name for fallback
+static constexpr char kMallocMethod[] = "malloc";  // Unused legacy method name
 
 // C++ tensor creation functions
 at::Tensor empty_remote(

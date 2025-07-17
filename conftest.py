@@ -20,7 +20,7 @@ def modal_t4_device():
     Session-scoped fixture providing a shared Modal T4 device.
     
     The device is created once per test session and reused across all tests.
-    This significantly reduces GPU resource usage and test execution time.
+    This reduces GPU resource usage by sharing device instances across tests.
     """
     device = torch_remote.create_modal_device("T4")
     yield device
@@ -69,8 +69,8 @@ def device_tensors(modal_t4_device, sample_tensors):
     """
     Function-scoped fixture providing tensors already on the remote device.
     
-    This creates remote versions of sample tensors to avoid repeated
-    CPU-to-device transfers in tests.
+    This provides pre-configured remote tensors for test convenience.
+    Note: Function-scoped, so tensors are recreated for each test function.
     """
     remote_tensors = {}
     for name, cpu_tensor in sample_tensors.items():
