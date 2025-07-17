@@ -169,14 +169,6 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
 
-def _execute_local_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
-    """
-    Handle operations that don't involve remote tensors.
-    Remote tensors should only be processed through remote execution.
-    """
-    # For non-remote operations, just execute normally
-    return op(*args, **kwargs)
-
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     """Copy data from remote tensor to CPU tensor using remote execution"""
