@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import logging
+import sys
 
 import torch
 from torch.utils._pytree import tree_any
@@ -11,6 +12,16 @@ log = logging.getLogger(__name__)
 
 from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending, to_device_no_copy
+
+
+# View operations that should be handled locally with shared storage IDs
+VIEW_OPERATIONS = {
+    "aten.view.default",
+    "aten.view",
+    "aten::view", 
+    "aten.as_strided.default",
+    "aten.as_strided",
+}
 
 
 # Lazy import to avoid import errors if remote execution is not available
@@ -61,61 +72,100 @@ def impl_factory(name):
     return _
 
 
+def _handle_view_operation(op, *args, **kwargs):
+    """
+    Handle view operations locally with shared storage IDs.
+    
+    View operations create new tensor views that share the same remote storage,
+    updating only local metadata (shape, stride, storage_offset).
+    """
+    op_name = op.overloadpacket._qualified_op_name
+    log.info(f"🔍 Handling view operation: {op_name}")
+    
+    # Get the base tensor (first argument for most view operations)
+    base_tensor = args[0]
+    
+    if base_tensor.device.type != "remote":
+        # Not a remote tensor - execute normally
+        return op(*args, **kwargs)
+    
+    # Get base tensor's storage ID (this is what data_ptr() returns)
+    storage_id = base_tensor.untyped_storage().data_ptr()
+    
+    # Verify storage exists on a remote device
+    device_idx = driver.exec("get_storage_device", storage_id)
+    if device_idx is None:
+        log.warning(f"No device found for storage {storage_id}, falling back to normal execution")
+        return op(*args, **kwargs)
+    
+    # Execute the view operation on a CPU meta tensor to get the new shape/stride
+    # This gives us the correct metadata without doing actual computation
+    meta_tensor = torch.empty(base_tensor.size(), dtype=base_tensor.dtype, device="meta")
+    meta_result = op(meta_tensor, *args[1:], **kwargs)
+    
+    # Extract new tensor metadata
+    new_shape = meta_result.size()
+    new_stride = meta_result.stride()
+    new_storage_offset = meta_result.storage_offset()
+    
+    # Now that we have C++ implementations for view operations,
+    # we can use PyTorch's native as_strided which will call our C++ implementation
+    result = torch.as_strided(base_tensor, new_shape, new_stride, new_storage_offset)
+    
+    # Verify the view was created correctly
+    assert result.size() == new_shape, f"View shape mismatch: expected {new_shape}, got {result.size()}"
+    assert result.stride() == new_stride, f"View stride mismatch: expected {new_stride}, got {result.stride()}"
+    assert result.storage_offset() == new_storage_offset, f"View offset mismatch: expected {new_storage_offset}, got {result.storage_offset()}"
+    assert result.untyped_storage().data_ptr() == base_tensor.untyped_storage().data_ptr(), "View should share storage"
+    
+    # PyTorch automatically manages storage reference counting
+    
+    log.info(f"✅ Created view tensor sharing storage {storage_id} for {op_name}")
+    return result
+
 
 def _remote_kernel_fallback(op, *args, **kwargs):
     log.info("Calling kernel %s", op)
     
-    op_name = op.overloadpacket._qualified_op_name
+    # Handle operations using pytorch-openreg-2 logic for operation classification
+    # but with remote execution for actual computation
     
-    # Collect all tensor arguments
-    remote_tensors = []
-    non_remote_tensors = []
-    
-    for arg in args:
-        if isinstance(arg, torch.Tensor):
-            if arg.device.type == "remote":
-                remote_tensors.append(arg)
-            else:
-                non_remote_tensors.append(arg)
-    
-    for value in kwargs.values():
-        if isinstance(value, torch.Tensor):
-            if value.device.type == "remote":
-                remote_tensors.append(value)
-            else:
-                non_remote_tensors.append(value)
-    
-    # Validate device compatibility - mixed remote and non-remote tensors are disallowed
-    if remote_tensors and non_remote_tensors:
-        remote_devices = [t.device for t in remote_tensors]
-        non_remote_devices = [t.device for t in non_remote_tensors]
-        raise RuntimeError(
-            f"Operation {op_name}: Mixed remote and non-remote tensor operation not supported. "
-            f"Remote devices: {remote_devices}, Non-remote devices: {non_remote_devices}. "
-            f"Use explicit .to() to move tensors to the same device first."
-        )
-    
-    # For remote operations, execute remotely with standard execution model
-    if remote_tensors:
+    # First check for inplace operations (mutable)
+    if op._schema.is_mutable or op is torch.ops.aten._copy_from.default:
+        # Inplace operations - execute remotely and return the mutated tensor
+        op_name = op.overloadpacket._qualified_op_name
+        log.info(f"🔄 Inplace operation: {op_name}")
+        
+        # For inplace ops, the result is the first argument (mutated in place)
+        result_tensor = args[0]
+        
+        # Execute remotely
         executor = _get_remote_executor()
         if executor is not None:
-            log.info(f"🚀 Executing {op_name} remotely")
+            log.info(f"🚀 Executing inplace operation {op_name} remotely")
             return executor.execute_remote_operation(op_name, args, kwargs)
         else:
-            # No fallback for remote operations - they must work remotely or fail
-            log.error(f"❌ Remote operation failed: {op_name} - Remote execution not available")
-            raise RuntimeError(
-                f"Operation {op_name} cannot be executed on remote tensors: remote execution not available. "
-                f"Remote tensors must use remote execution - no fallback to local execution is allowed."
-            )
-
-    # Operations that reach this point should not be handled by remote dispatch
-    # This indicates a configuration or logic error in the dispatch system
-    log.error(f"❌ Unexpected operation dispatch: {op_name} - should not reach remote fallback")
-    raise RuntimeError(
-        f"Operation {op_name} was dispatched to remote kernel fallback but should not be handled remotely. "
-        f"This indicates an error in the dispatch system configuration."
-    )
+            raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
+    
+    # Second check for view operations (alias_info)
+    elif any(r.alias_info is not None for r in op._schema.returns):
+        # View ops - handle exactly like pytorch-openreg-2
+        if op is torch.ops.aten.view.default:
+            return torch.ops.aten._unsafe_view(*args, **kwargs)
+        raise RuntimeError(f"{op} view op is not handled yet")
+    
+    # Everything else is a regular operation - execute remotely
+    else:
+        op_name = op.overloadpacket._qualified_op_name
+        log.info(f"🔧 Regular operation: {op_name}")
+        
+        # Execute remotely
+        executor = _get_remote_executor()
+        if executor is not None:
+            log.info(f"🚀 Executing regular operation {op_name} remotely")
+            return executor.execute_remote_operation(op_name, args, kwargs)
+        else:
+            raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
 
 def _execute_local_operation(op, *args, **kwargs):
@@ -149,17 +199,29 @@ def copy_from_device(from_):
         if gpu_machine is None or not gpu_machine.is_running():
             raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
         
-        # Get tensor data using tensor ID (convert int to string for GPU machine)
-        tensor_id_int = from_.untyped_storage().data_ptr()
-        tensor_id_str = str(tensor_id_int)
-        log.info(f"Copying tensor ID {tensor_id_int} from remote to CPU")
+        # Get storage data using storage ID (convert int to string for GPU machine)
+        storage_id_int = from_.untyped_storage().data_ptr()
+        storage_id_str = str(storage_id_int)
+        log.info(f"Copying storage ID {storage_id_int} from remote to CPU")
         
-        # Use GPU machine to get tensor data by ID
-        tensor_data = gpu_machine.get_tensor_data(tensor_id_str)
+        # Use GPU machine to get tensor data by storage ID
+        tensor_data = gpu_machine.get_tensor_data(storage_id_str)
         
-        # Deserialize the tensor
-        result = executor._deserialize_tensor(tensor_data)
-        log.info(f"Successfully copied tensor ID {tensor_id_int} to CPU")
+        # Deserialize the base tensor data
+        base_tensor = executor._deserialize_tensor(tensor_data)
+        
+        # Apply view transformation if this tensor has different metadata than the base
+        if (from_.size() != base_tensor.size() or 
+            from_.stride() != base_tensor.stride() or 
+            from_.storage_offset() != base_tensor.storage_offset()):
+            # This is a view tensor - apply the view transformation
+            result = base_tensor.as_strided(from_.size(), from_.stride(), from_.storage_offset())
+            log.info(f"Applied view transformation: {base_tensor.size()} -> {from_.size()}")
+        else:
+            # This is the base tensor - return as is
+            result = base_tensor
+            
+        log.info(f"Successfully copied storage ID {storage_id_int} to CPU")
         return result
     else:
         raise RuntimeError("Cannot copy from remote device: remote execution not available")

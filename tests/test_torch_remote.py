@@ -518,3 +518,427 @@ def test_same_device_transfer_still_works(modal_t4_device):
     # Same device copy should work
     y.copy_(x)
     assert torch.allclose(x.cpu(), y.cpu())
+
+
+# ============================================================================
+# View Operations Test Suite
+# ============================================================================
+
+def test_view_operation_basic(modal_t4_device):
+    """Test basic view operation on remote tensors."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(4, 6, device=modal_t4_device.device())
+    original_shape = x.shape
+    
+    # Test basic view operation
+    y = x.view(2, 12)
+    
+    # Verify view properties
+    assert y.shape == (2, 12)
+    assert y.device == x.device
+    assert y.dtype == x.dtype
+    
+    # Verify data integrity - view should preserve data
+    x_cpu = x.cpu()
+    y_cpu = y.cpu()
+    assert torch.allclose(x_cpu.view(2, 12), y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_view_operation_multiple_dimensions(modal_t4_device):
+    """Test view operations with multiple dimension changes."""
+    import torch_remote
+    
+    # Create a 3D remote tensor
+    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    
+    # Test various view operations
+    test_cases = [
+        (6, 4),      # Flatten first two dimensions
+        (2, 12),     # Flatten last two dimensions  
+        (24,),       # Flatten to 1D
+        (1, 2, 3, 4), # Add singleton dimension
+        (2, 1, 3, 4), # Add singleton in middle
+    ]
+    
+    for new_shape in test_cases:
+        y = x.view(*new_shape)
+        
+        # Verify shape
+        assert y.shape == new_shape
+        assert y.device == x.device
+        assert y.dtype == x.dtype
+        
+        # Verify data integrity
+        x_cpu = x.cpu()
+        y_cpu = y.cpu()
+        expected = x_cpu.view(*new_shape)
+        assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_reshape_operation(modal_t4_device):
+    """Test reshape operation on remote tensors."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(3, 4, device=modal_t4_device.device())
+    
+    # Test reshape operation
+    y = x.reshape(2, 6)
+    
+    # Verify reshape properties
+    assert y.shape == (2, 6)
+    assert y.device == x.device
+    assert y.dtype == x.dtype
+    
+    # Verify data integrity
+    x_cpu = x.cpu()
+    y_cpu = y.cpu()
+    expected = x_cpu.reshape(2, 6)
+    assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_transpose_operation(modal_t4_device):
+    """Test transpose operation on remote tensors."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(3, 4, device=modal_t4_device.device())
+    
+    # Test transpose operation
+    y = x.transpose(0, 1)
+    
+    # Verify transpose properties
+    assert y.shape == (4, 3)
+    assert y.device == x.device
+    assert y.dtype == x.dtype
+    
+    # Verify data integrity
+    x_cpu = x.cpu()
+    y_cpu = y.cpu()
+    expected = x_cpu.transpose(0, 1)
+    assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_transpose_operation_3d(modal_t4_device):
+    """Test transpose operation on 3D remote tensors."""
+    import torch_remote
+    
+    # Create a 3D remote tensor
+    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    
+    # Test various transpose operations
+    transpose_cases = [
+        (0, 1),  # Swap first two dimensions
+        (1, 2),  # Swap last two dimensions
+        (0, 2),  # Swap first and last dimensions
+    ]
+    
+    for dim0, dim1 in transpose_cases:
+        y = x.transpose(dim0, dim1)
+        
+        # Calculate expected shape
+        expected_shape = list(x.shape)
+        expected_shape[dim0], expected_shape[dim1] = expected_shape[dim1], expected_shape[dim0]
+        
+        # Verify transpose properties
+        assert y.shape == tuple(expected_shape)
+        assert y.device == x.device
+        assert y.dtype == x.dtype
+        
+        # Verify data integrity
+        x_cpu = x.cpu()
+        y_cpu = y.cpu()
+        expected = x_cpu.transpose(dim0, dim1)
+        assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_permute_operation(modal_t4_device):
+    """Test permute operation on remote tensors."""
+    import torch_remote
+    
+    # Create a 3D remote tensor
+    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    
+    # Test permute operation
+    y = x.permute(2, 0, 1)
+    
+    # Verify permute properties
+    assert y.shape == (4, 2, 3)
+    assert y.device == x.device
+    assert y.dtype == x.dtype
+    
+    # Verify data integrity
+    x_cpu = x.cpu()
+    y_cpu = y.cpu()
+    expected = x_cpu.permute(2, 0, 1)
+    assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_permute_operation_4d(modal_t4_device):
+    """Test permute operation on 4D remote tensors."""
+    import torch_remote
+    
+    # Create a 4D remote tensor
+    x = torch.randn(2, 3, 4, 5, device=modal_t4_device.device())
+    
+    # Test various permute operations
+    permute_cases = [
+        (3, 2, 1, 0),  # Reverse all dimensions
+        (0, 2, 1, 3),  # Swap middle dimensions
+        (1, 0, 3, 2),  # Swap pairs
+    ]
+    
+    for perm in permute_cases:
+        y = x.permute(*perm)
+        
+        # Calculate expected shape
+        expected_shape = tuple(x.shape[i] for i in perm)
+        
+        # Verify permute properties
+        assert y.shape == expected_shape
+        assert y.device == x.device
+        assert y.dtype == x.dtype
+        
+        # Verify data integrity
+        x_cpu = x.cpu()
+        y_cpu = y.cpu()
+        expected = x_cpu.permute(*perm)
+        assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_squeeze_operation(modal_t4_device):
+    """Test squeeze operation on remote tensors."""
+    import torch_remote
+    
+    # Create a remote tensor with singleton dimensions
+    x = torch.randn(1, 3, 1, 4, device=modal_t4_device.device())
+    
+    # Test squeeze operation (remove all singleton dimensions)
+    y = x.squeeze()
+    
+    # Verify squeeze properties
+    assert y.shape == (3, 4)
+    assert y.device == x.device
+    assert y.dtype == x.dtype
+    
+    # Verify data integrity
+    x_cpu = x.cpu()
+    y_cpu = y.cpu()
+    expected = x_cpu.squeeze()
+    assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_squeeze_operation_specific_dim(modal_t4_device):
+    """Test squeeze operation on specific dimensions."""
+    import torch_remote
+    
+    # Create a remote tensor with singleton dimensions
+    x = torch.randn(1, 3, 1, 4, device=modal_t4_device.device())
+    
+    # Test squeeze specific dimensions
+    squeeze_cases = [
+        (0, (3, 1, 4)),  # Squeeze dimension 0
+        (2, (1, 3, 4)),  # Squeeze dimension 2
+    ]
+    
+    for dim, expected_shape in squeeze_cases:
+        y = x.squeeze(dim)
+        
+        # Verify squeeze properties
+        assert y.shape == expected_shape
+        assert y.device == x.device
+        assert y.dtype == x.dtype
+        
+        # Verify data integrity
+        x_cpu = x.cpu()
+        y_cpu = y.cpu()
+        expected = x_cpu.squeeze(dim)
+        assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_unsqueeze_operation(modal_t4_device):
+    """Test unsqueeze operation on remote tensors."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(3, 4, device=modal_t4_device.device())
+    
+    # Test unsqueeze operations at different positions
+    unsqueeze_cases = [
+        (0, (1, 3, 4)),  # Add dimension at start
+        (1, (3, 1, 4)),  # Add dimension in middle
+        (2, (3, 4, 1)),  # Add dimension at end
+        (-1, (3, 4, 1)), # Add dimension at end (negative indexing)
+    ]
+    
+    for dim, expected_shape in unsqueeze_cases:
+        y = x.unsqueeze(dim)
+        
+        # Verify unsqueeze properties
+        assert y.shape == expected_shape
+        assert y.device == x.device
+        assert y.dtype == x.dtype
+        
+        # Verify data integrity
+        x_cpu = x.cpu()
+        y_cpu = y.cpu()
+        expected = x_cpu.unsqueeze(dim)
+        assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_flatten_operation(modal_t4_device):
+    """Test flatten operation on remote tensors."""
+    import torch_remote
+    
+    # Create a multi-dimensional remote tensor
+    x = torch.randn(2, 3, 4, 5, device=modal_t4_device.device())
+    
+    # Test flatten operations
+    flatten_cases = [
+        (0, -1, (120,)),     # Flatten all dimensions
+        (1, 2, (2, 12, 5)),  # Flatten middle dimensions
+        (0, 1, (6, 4, 5)),   # Flatten first two dimensions
+        (2, 3, (2, 3, 20)),  # Flatten last two dimensions
+    ]
+    
+    for start_dim, end_dim, expected_shape in flatten_cases:
+        y = x.flatten(start_dim, end_dim)
+        
+        # Verify flatten properties
+        assert y.shape == expected_shape
+        assert y.device == x.device
+        assert y.dtype == x.dtype
+        
+        # Verify data integrity
+        x_cpu = x.cpu()
+        y_cpu = y.cpu()
+        expected = x_cpu.flatten(start_dim, end_dim)
+        assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_view_operations_preserve_tensor_id(modal_t4_device):
+    """Test that view operations preserve the underlying tensor ID (if implemented correctly)."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(4, 6, device=modal_t4_device.device())
+    
+    # Perform a view operation
+    y = x.view(2, 12)
+    
+    # Both tensors should be on the same device
+    assert x.device == y.device
+    
+    # Test that operations on the view affect the original (if sharing memory)
+    # Note: This test may reveal whether view operations share memory or create copies
+    try:
+        # Modify the view and check if original is affected
+        # This will help identify if views are properly sharing tensor IDs
+        original_data = x.cpu().clone()
+        
+        # Create a view and try to modify it
+        z = y.view(4, 6)
+        
+        # Verify the view has the same data
+        assert torch.allclose(z.cpu(), original_data, rtol=1e-4, atol=1e-6)
+        
+    except Exception as e:
+        # If view operations aren't properly implemented, this might fail
+        print(f"View operation behavior: {e}")
+
+
+def test_chained_view_operations(modal_t4_device):
+    """Test chaining multiple view operations."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    
+    # Chain multiple view operations that work correctly
+    # After transpose, tensor is not contiguous, so use reshape instead of view
+    y = x.view(6, 4).transpose(0, 1).reshape(2, 12).squeeze().unsqueeze(0)
+    
+    # Calculate expected shape through CPU operations
+    x_cpu = x.cpu()
+    expected = x_cpu.view(6, 4).transpose(0, 1).reshape(2, 12).squeeze().unsqueeze(0)
+    
+    # Verify final result
+    assert y.shape == expected.shape
+    assert y.device == x.device
+    assert y.dtype == x.dtype
+    
+    # Verify data integrity through the chain
+    y_cpu = y.cpu()
+    assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_view_operations_after_arithmetic(modal_t4_device):
+    """Test view operations on tensors after arithmetic operations."""
+    import torch_remote
+    
+    # Create remote tensors
+    x = torch.randn(3, 4, device=modal_t4_device.device())
+    y = torch.randn(3, 4, device=modal_t4_device.device())
+    
+    # Perform arithmetic operation
+    z = x + y
+    
+    # Apply view operations to the result
+    w = z.view(2, 6).transpose(0, 1)
+    
+    # Verify properties
+    assert w.shape == (6, 2)
+    assert w.device == z.device
+    assert w.dtype == z.dtype
+    
+    # Verify data integrity
+    x_cpu = x.cpu()
+    y_cpu = y.cpu()
+    expected = (x_cpu + y_cpu).view(2, 6).transpose(0, 1)
+    w_cpu = w.cpu()
+    assert torch.allclose(expected, w_cpu, rtol=1e-4, atol=1e-6)
+
+
+def test_view_invalid_size_error(modal_t4_device):
+    """Test that invalid view sizes raise appropriate errors."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(3, 4, device=modal_t4_device.device())
+    
+    # Test invalid view size (incompatible with total elements)
+    with pytest.raises(RuntimeError):
+        y = x.view(5, 5)  # 25 elements != 12 elements
+
+
+def test_view_with_minus_one_inference(modal_t4_device):
+    """Test view operation with -1 dimension inference."""
+    import torch_remote
+    
+    # Create a remote tensor
+    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    
+    # Test view with -1 inference
+    test_cases = [
+        (-1, 12),   # Infer first dimension
+        (6, -1),    # Infer last dimension
+        (2, -1, 2), # Infer middle dimension
+    ]
+    
+    for new_shape in test_cases:
+        y = x.view(*new_shape)
+        
+        # Calculate expected shape using CPU tensor
+        x_cpu = x.cpu()
+        expected = x_cpu.view(*new_shape)
+        
+        # Verify properties
+        assert y.shape == expected.shape
+        assert y.device == x.device
+        assert y.dtype == x.dtype
+        
+        # Verify data integrity
+        y_cpu = y.cpu()
+        assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)

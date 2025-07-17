@@ -23,30 +23,31 @@ def register(registry):
 
 class RemoteTensorRegistry:
     """
-    Simple registry to track remote tensor IDs.
-    No local data storage - remote tensors exist purely as tensor IDs.
+    Simplified registry to track remote storage IDs only.
+    
+    Architecture:
+    - storage_id: Identifies remote memory allocation (what was "tensor_id")
+    - PyTorch tensors: Handle local identity and metadata naturally
+    - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset)
     """
     
     def __init__(self):
-        # Tensor ID to metadata mapping for efficient tensor operations
-        self.tensor_id_to_meta = {}  # tensor_id -> RemoteTensorMeta
-        self.tensor_id_to_tensor = {}  # tensor_id -> torch.Tensor (weak references)
+        # Storage ID tracking - maps storage to device and reference count
+        self.storage_id_to_device = {}  # storage_id -> device_index  
+        self.storage_id_ref_count = {}  # storage_id -> reference count
         
-        # Track which remote device owns each tensor ID
-        self.tensor_id_to_device = {}  # tensor_id -> device_index
-        
-        # Set for tracking all generated tensor IDs to avoid duplicates
-        self.generated_tensor_ids = set()
+        # Set for tracking all generated storage IDs to avoid duplicates
+        self.generated_storage_ids = set()
         
         # Current device tracking
         self._current_device = 0
 
-    def generate_tensor_id(self):
+    def generate_storage_id(self):
         """
-        Generate a unique tensor ID with duplicate validation.
+        Generate a unique storage ID with duplicate validation.
         
         Returns:
-            int: A unique 64-bit tensor ID
+            int: A unique 64-bit storage ID
         """
         # Generate unique 64-bit integer IDs
         # Use non-zero values to avoid confusion with null pointers
@@ -55,33 +56,38 @@ class RemoteTensorRegistry:
         
         while attempt < max_attempts:
             # Generate a random 64-bit integer
-            tensor_id = random.randint(1, 2**64 - 1)
+            storage_id = random.randint(1, 2**64 - 1)
             
             # Check if this ID is already used
-            if tensor_id not in self.generated_tensor_ids:
-                self.generated_tensor_ids.add(tensor_id)
-                log.debug(f"Generated unique tensor ID: {tensor_id}")
-                return tensor_id
+            if storage_id not in self.generated_storage_ids:
+                self.generated_storage_ids.add(storage_id)
+                log.debug(f"Generated unique storage ID: {storage_id}")
+                return storage_id
             
             attempt += 1
-            log.warning(f"Generated duplicate tensor ID {tensor_id}, retrying (attempt {attempt})")
+            log.warning(f"Generated duplicate storage ID {storage_id}, retrying (attempt {attempt})")
         
         # If we couldn't generate a unique ID after max_attempts, raise an error
-        raise RuntimeError(f"Failed to generate unique tensor ID after {max_attempts} attempts")
+        raise RuntimeError(f"Failed to generate unique storage ID after {max_attempts} attempts")
+    
+    # Backward compatibility - rename method but keep old name working
+    def generate_tensor_id(self):
+        """Legacy method name - now generates storage ID."""
+        return self.generate_storage_id()
 
-    def create_tensor_with_id(self, tensor_id, nbytes, device_index):
-        """Create a tensor with the given ID and return success status"""
-        tensor_id_int = int(tensor_id)
+    def create_storage_with_id(self, storage_id, nbytes, device_index):
+        """Create remote storage with the given ID and return success status"""
+        storage_id_int = int(storage_id)
         
         # For empty tensors, just return success
         if nbytes == 0:
             return True
             
-        # Track which device owns this tensor ID
-        self.tensor_id_to_device[tensor_id_int] = device_index
+        # Track which device owns this storage ID
+        self.storage_id_to_device[storage_id_int] = device_index
+        self.storage_id_ref_count[storage_id_int] = 1
         
-        # Also register the tensor with the GPU machine immediately
-        # Create empty tensor data for the allocation
+        # Register the storage with the GPU machine immediately
         if nbytes > 0:
             try:
                 # Import here to avoid circular imports
@@ -103,59 +109,64 @@ class RemoteTensorRegistry:
                             torch.save(empty_tensor, buffer)
                             tensor_data = buffer.getvalue()
                             
-                            tensor_id_str = str(tensor_id_int)
-                            gpu_machine.create_tensor(tensor_data, tensor_id_str)
-                            log.info(f"Pre-registered tensor ID {tensor_id_int} with GPU machine")
+                            storage_id_str = str(storage_id_int)
+                            gpu_machine.create_tensor(tensor_data, storage_id_str)
+                            log.info(f"Pre-registered storage ID {storage_id_int} with GPU machine")
             except Exception as e:
-                log.warning(f"Failed to pre-register tensor {tensor_id_int} with GPU machine: {e}")
+                log.warning(f"Failed to pre-register storage {storage_id_int} with GPU machine: {e}")
         
-        log.info(f"Registered tensor ID {tensor_id_int} on device {device_index}")
+        log.info(f"Registered storage ID {storage_id_int} on device {device_index}")
         return True
     
-    def register_tensor_mapping(self, tensor_id, tensor, meta):
-        """Register a tensor ID to tensor and metadata mapping"""
-        tensor_id_int = int(tensor_id)
-        self.tensor_id_to_meta[tensor_id_int] = meta
-        # Store weak reference to avoid circular references
-        self.tensor_id_to_tensor[tensor_id_int] = weakref.ref(tensor)
+    def get_storage_device(self, storage_id):
+        """Get device index for a storage ID"""
+        storage_id_int = int(storage_id)
+        return self.storage_id_to_device.get(storage_id_int)
     
-    def get_tensor_by_id(self, tensor_id):
-        """Get tensor by its ID"""
-        tensor_id_int = int(tensor_id)
-        if tensor_id_int in self.tensor_id_to_tensor:
-            tensor_ref = self.tensor_id_to_tensor[tensor_id_int]
-            return tensor_ref()  # Dereference weak reference
-        return None
-    
-    def get_meta_by_id(self, tensor_id):
-        """Get tensor metadata by its ID"""
-        tensor_id_int = int(tensor_id)
-        return self.tensor_id_to_meta.get(tensor_id_int)
+    # Legacy method for backward compatibility
+    def create_tensor_with_id(self, tensor_id, nbytes, device_index):
+        """Legacy method - now creates storage."""
+        return self.create_storage_with_id(tensor_id, nbytes, device_index)
 
-    def free_tensor_with_id(self, tensor_id):
-        """Free tensor by tensor ID with remote cleanup"""
-        tensor_id_int = int(tensor_id)
-        if tensor_id_int == 0:  # Empty tensor
+    def free_storage_with_id(self, storage_id):
+        """Free storage by storage ID with reference counting and remote cleanup"""
+        storage_id_int = int(storage_id)
+        if storage_id_int == 0:  # Empty storage
             return True
             
-        # Get device index before cleaning up mappings
-        device_idx = self.tensor_id_to_device.get(tensor_id_int)
-        
-        # Clean up all local mappings
-        self.tensor_id_to_device.pop(tensor_id_int, None)
-        self.tensor_id_to_meta.pop(tensor_id_int, None)
-        self.tensor_id_to_tensor.pop(tensor_id_int, None)
-        self.generated_tensor_ids.discard(tensor_id_int)
-        
-        # Call remote cleanup if device is known
-        if device_idx is not None:
-            log.info(f"Initiating remote cleanup for tensor {tensor_id_int} on device {device_idx}")
-            self._cleanup_remote_tensor(tensor_id_int, device_idx)
+        # Decrement reference count
+        if storage_id_int in self.storage_id_ref_count:
+            self.storage_id_ref_count[storage_id_int] -= 1
+            
+            # Only cleanup remote storage if this is the last reference
+            if self.storage_id_ref_count[storage_id_int] <= 0:
+                # Get device index before cleanup
+                device_idx = self.storage_id_to_device.get(storage_id_int)
+                
+                # Clean up storage tracking
+                del self.storage_id_ref_count[storage_id_int]
+                self.storage_id_to_device.pop(storage_id_int, None)
+                self.generated_storage_ids.discard(storage_id_int)
+                
+                # Call remote cleanup
+                if device_idx is not None:
+                    log.info(f"Last reference to storage {storage_id_int} freed, initiating remote cleanup")
+                    self._cleanup_remote_tensor(storage_id_int, device_idx)
+                else:
+                    log.info(f"No device index found for storage {storage_id_int}, skipping remote cleanup")
+                    
+                log.info(f"Freed storage ID {storage_id_int}")
+            else:
+                log.info(f"Storage {storage_id_int} still has {self.storage_id_ref_count[storage_id_int]} references, skipping cleanup")
         else:
-            log.info(f"No device index found for tensor {tensor_id_int}, skipping remote cleanup")
+            log.warning(f"Attempted to free unknown storage {storage_id_int}")
         
-        log.info(f"Freed tensor ID {tensor_id_int}")
         return True
+    
+    # Legacy method for backward compatibility
+    def free_tensor_with_id(self, tensor_id):
+        """Legacy method - now frees storage."""
+        return self.free_storage_with_id(tensor_id)
 
     def register_tensor_with_gpu(self, tensor_id, tensor_data):
         """Register tensor data with GPU machine for immediate access"""
@@ -266,10 +277,10 @@ class Driver:
         atexit.register(self._cleanup)
 
     def _cleanup(self):
-        """Clean up tensor ID mappings on exit"""
-        self.registry_obj.tensor_id_to_meta.clear()
-        self.registry_obj.tensor_id_to_tensor.clear()
-        self.registry_obj.tensor_id_to_device.clear()
+        """Clean up storage ID mappings on exit"""
+        self.registry_obj.storage_id_to_device.clear()
+        self.registry_obj.storage_id_ref_count.clear()
+        self.registry_obj.generated_storage_ids.clear()
 
     def exec(self, cmd, *args):
         """Execute a command on the tensor ID registry"""
@@ -353,6 +364,30 @@ class Driver:
     @register(registry)
     def register_tensor_with_gpu(self, tensor_id, tensor_data):
         return self.registry_obj.register_tensor_with_gpu(tensor_id, tensor_data)
+    
+    @register(registry)
+    def create_view_tensor_id(self, base_tensor_id, new_shape, new_stride, new_storage_offset):
+        return self.registry_obj.create_view_tensor_id(base_tensor_id, new_shape, new_stride, new_storage_offset)
+    
+    @register(registry)
+    def get_storage_id(self, tensor_id):
+        return self.registry_obj.get_storage_id(tensor_id)
+    
+    @register(registry)
+    def get_tensor_ids_for_storage(self, storage_id):
+        return self.registry_obj.get_tensor_ids_for_storage(storage_id)
+    
+    @register(registry)
+    def is_view_tensor(self, tensor_id):
+        return self.registry_obj.is_view_tensor(tensor_id)
+    
+    @register(registry)
+    def get_base_tensor_id(self, tensor_id):
+        return self.registry_obj.get_base_tensor_id(tensor_id)
+    
+    @register(registry)
+    def get_view_tensor_ids(self, base_tensor_id):
+        return self.registry_obj.get_view_tensor_ids(base_tensor_id)
 
 
 # Global driver instance

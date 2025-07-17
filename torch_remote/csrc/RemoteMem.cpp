@@ -6,6 +6,8 @@
 #include <c10/core/Allocator.h>
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <torch/library.h>
+#include <ATen/ops/as_strided_cpu_dispatch.h>
+#include <ATen/ops/set_cpu_dispatch.h>
 #include <sstream>
 #include <iomanip>
 
@@ -141,6 +143,36 @@ at::Tensor empty_strided_remote(
       size, stride, &global_remote_alloc, remote_dks, resolved_dtype);
 }
 
+// C++ implementation of as_strided for view operations
+at::Tensor as_strided_remote(
+    const at::Tensor& self,
+    at::IntArrayRef size,
+    at::IntArrayRef stride,
+    c10::optional<int64_t> storage_offset) {
+  
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1, 
+              "as_strided_remote expects a remote tensor");
+  
+  // Use the CPU implementation directly to avoid infinite recursion
+  // This creates a view tensor that shares storage without triggering remote calls
+  return at::cpu::as_strided(self, size, stride, storage_offset);
+}
+
+
+
+
+
+
+// C++ implementation of set_ for tensor metadata operations
+at::Tensor& set_remote(
+    at::Tensor& result,
+    at::Storage storage,
+    int64_t storage_offset,
+    at::IntArrayRef size,
+    at::IntArrayRef stride) {
+    // Use the CPU implementation directly to avoid infinite recursion
+    return at::cpu::set_(result, storage, storage_offset, size, stride);
+}
 
 // Register the C++ implementations directly with PyTorch's dispatch system
 // This follows the OpenReg pattern where empty operations are implemented in C++
@@ -149,6 +181,11 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // These will override the Python fallback for these specific operations
   m.impl("empty.memory_format", empty_remote);
   m.impl("empty_strided", empty_strided_remote);
+  
+  // Register as_strided and set_ like pytorch-openreg-2
+  // All other operations (transpose, squeeze, unsqueeze, view) go through Python fallback
+  m.impl("as_strided", as_strided_remote);
+  m.impl("set_.source_Storage_storage_offset", set_remote);
 }
 
 } // namespace remote
