@@ -140,11 +140,11 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         # For inplace ops, the result is the first argument (mutated in place)
         result_tensor = args[0]
         
-        # Execute remotely
+        # Execute remotely using efficient tensor ID system
         executor = _get_remote_executor()
         if executor is not None:
-            log.info(f"🚀 Executing inplace operation {op_name} remotely")
-            return executor.execute_remote_operation(op_name, args, kwargs)
+            log.info(f"🚀 Executing inplace operation {op_name} remotely (efficient)")
+            return executor.execute_remote_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
     
@@ -160,11 +160,11 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         op_name = op.overloadpacket._qualified_op_name
         log.info(f"🔧 Regular operation: {op_name}")
         
-        # Execute remotely
+        # Execute remotely using efficient tensor ID system
         executor = _get_remote_executor()
         if executor is not None:
-            log.info(f"🚀 Executing regular operation {op_name} remotely")
-            return executor.execute_remote_operation(op_name, args, kwargs)
+            log.info(f"🚀 Executing regular operation {op_name} remotely (efficient)")
+            return executor.execute_remote_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 

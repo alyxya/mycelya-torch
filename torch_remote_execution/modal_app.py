@@ -18,6 +18,7 @@ import os
 import uuid
 import weakref
 import threading
+import random
 from collections import defaultdict
 
 # Create simplified image with just PyTorch and CUDA support
@@ -46,115 +47,6 @@ GPU_CONFIG = {
 }
 
 
-
-# Common execution function implementation
-def _execute_aten_operation_impl(
-    op_name: str, 
-    tensors_data: List[bytes], 
-    tensor_metadata: List[Dict[str, Any]], 
-    args: List[Any], 
-    kwargs: Dict[str, Any],
-    machine_id: str,
-    gpu_type: str
-) -> Tuple[List[bytes], List[Dict[str, Any]]]:
-    """Common implementation for executing an aten operation remotely."""
-    import torch
-    import io
-    
-    print(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
-    print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
-    
-    try:
-        # Check GPU availability
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"Using device: {device}")
-        
-        if torch.cuda.is_available():
-            print(f"GPU: {torch.cuda.get_device_name()}")
-            print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
-        
-        # Deserialize tensors and move to GPU
-        tensors = []
-        for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
-            # Deserialize tensor
-            buffer = io.BytesIO(data)
-            tensor = torch.load(buffer, map_location="cpu", weights_only=True)
-            
-            # Move to GPU
-            tensor = tensor.to(device)
-            tensors.append(tensor)
-        
-        # Replace tensor placeholders in args with actual tensors
-        processed_args = []
-        for arg in args:
-            if isinstance(arg, str) and arg.startswith("__TENSOR_"):
-                idx = int(arg.split("_")[-1])
-                processed_args.append(tensors[idx])
-            else:
-                processed_args.append(arg)
-        
-        # Process kwargs similarly
-        processed_kwargs = {}
-        for key, value in kwargs.items():
-            if isinstance(value, str) and value.startswith("__TENSOR_"):
-                idx = int(value.split("_")[-1])
-                processed_kwargs[key] = tensors[idx]
-            else:
-                processed_kwargs[key] = value
-        
-        # Get the operation
-        # Convert aten::add.Tensor to aten.add.Tensor
-        op_name_fixed = op_name.replace("::", ".")
-        op_parts = op_name_fixed.split(".")
-        op = torch.ops
-        for part in op_parts:
-            op = getattr(op, part)
-        
-        print(f"Executing operation with {len(processed_args)} args")
-        
-        # Execute the operation
-        result = op(*processed_args, **processed_kwargs)
-        
-        print(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
-        
-        # Handle different result types
-        if isinstance(result, torch.Tensor):
-            results = [result]
-        elif isinstance(result, (list, tuple)):
-            results = [r for r in result if isinstance(r, torch.Tensor)]
-        else:
-            # For scalar results, convert to tensor
-            results = [torch.tensor(result, device=device)]
-        
-        # Serialize results
-        serialized_results = []
-        result_metadata = []
-        
-        for i, tensor in enumerate(results):
-            # Move back to CPU for serialization
-            cpu_tensor = tensor.cpu()
-            
-            # Serialize tensor
-            buffer = io.BytesIO()
-            torch.save(cpu_tensor, buffer)
-            serialized_results.append(buffer.getvalue())
-            
-            # Store metadata
-            metadata = {
-                "shape": list(cpu_tensor.shape),
-                "dtype": str(cpu_tensor.dtype),
-                "size": cpu_tensor.numel(),
-                "element_size": cpu_tensor.element_size()
-            }
-            result_metadata.append(metadata)
-        
-        return serialized_results, result_metadata
-        
-    except Exception as e:
-        print(f"❌ Error executing {op_name}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise
 
 
 class RemoteGPUMachine:
@@ -206,37 +98,6 @@ class RemoteGPUMachine:
     def is_running(self) -> bool:
         """Check if the machine is currently running."""
         return self._app_context is not None
-    
-    def execute_operation(
-        self,
-        op_name: str,
-        tensors_data: List[bytes],
-        tensor_metadata: List[Dict[str, Any]],
-        args: List[Any],
-        kwargs: Dict[str, Any]
-    ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
-        """
-        Execute an operation on this remote GPU machine (legacy method).
-        
-        Args:
-            op_name: The operation name to execute
-            tensors_data: Serialized tensor data
-            tensor_metadata: Tensor metadata
-            args: Operation arguments
-            kwargs: Operation keyword arguments
-            
-        Returns:
-            Tuple of (serialized_results, result_metadata)
-            
-        Raises:
-            RuntimeError: If machine is not running
-        """
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-        
-        return self._executor_instance.execute_aten_operation.remote(
-            op_name, tensors_data, tensor_metadata, args, kwargs, self.machine_id
-        )
     
     def create_tensor(self, tensor_data: bytes, storage_id: Optional[str] = None) -> str:
         """
@@ -726,9 +587,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     results = [torch.tensor(result, device=device)]
                 
                 # Register result tensors and return their IDs
+                # Generate integer storage IDs like the C++ allocator does
                 result_ids = []
                 for i, tensor in enumerate(results):
-                    storage_id = self.tensor_registry.register_tensor(tensor)
+                    # Generate integer storage ID (compatible with C++ allocator)
+                    storage_id = str(random.randint(1, 2**64 - 1))
+                    storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
                     result_ids.append(storage_id)
                     
                     # Log output tensor details on modal side
@@ -785,7 +649,9 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 tensor = factory_func(*args, **kwargs)
                 
                 # Register tensor and return ID
-                storage_id = self.tensor_registry.register_tensor(tensor)
+                # Generate integer storage ID (compatible with C++ allocator)
+                storage_id = str(random.randint(1, 2**64 - 1))
+                storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
                 
                 print(f"✅ Created {factory_op} tensor {storage_id} with shape {tensor.shape}")
                 return storage_id
@@ -842,128 +708,6 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 print(f"🧹 Auto-GC removed {removed_count} tensors")
             
             return removed_count
-        
-        @modal.method()
-        def execute_aten_operation(
-            self,
-            op_name: str, 
-            tensors_data: List[bytes], 
-            tensor_metadata: List[Dict[str, Any]], 
-            args: List[Any], 
-            kwargs: Dict[str, Any],
-            machine_id: str
-        ) -> Tuple[List[bytes], List[Dict[str, Any]]]:
-            import torch
-            import io
-            
-            print(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
-            print(f"Received {len(tensors_data)} tensors, {len(args)} args, {len(kwargs)} kwargs")
-            
-            try:
-                # Check GPU availability
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                print(f"Using device: {device}")
-                
-                if torch.cuda.is_available():
-                    print(f"GPU: {torch.cuda.get_device_name()}")
-                    print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
-                
-                # Deserialize tensors and move to GPU
-                tensors = []
-                for i, (data, metadata) in enumerate(zip(tensors_data, tensor_metadata)):
-                    # Deserialize tensor
-                    buffer = io.BytesIO(data)
-                    tensor = torch.load(buffer, map_location="cpu", weights_only=True)
-                    
-                    # Move to GPU
-                    tensor = tensor.to(device)
-                    tensors.append(tensor)
-                    
-                    # Log input tensor details on modal side (legacy method)
-                    print(f"📥 MODAL INPUT tensor[{i}]: shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
-                    
-                    # Log tensor data summary for debugging
-                    if tensor.numel() > 0:
-                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
-                
-                # Replace tensor placeholders in args with actual tensors
-                processed_args = []
-                for arg in args:
-                    if isinstance(arg, str) and arg.startswith("__TENSOR_"):
-                        idx = int(arg.split("_")[-1])
-                        processed_args.append(tensors[idx])
-                    else:
-                        processed_args.append(arg)
-                
-                # Process kwargs similarly
-                processed_kwargs = {}
-                for key, value in kwargs.items():
-                    if isinstance(value, str) and value.startswith("__TENSOR_"):
-                        idx = int(value.split("_")[-1])
-                        processed_kwargs[key] = tensors[idx]
-                    else:
-                        processed_kwargs[key] = value
-                
-                # Get the operation
-                # Convert aten::add.Tensor to aten.add.Tensor
-                op_name_fixed = op_name.replace("::", ".")
-                op_parts = op_name_fixed.split(".")
-                op = torch.ops
-                for part in op_parts:
-                    op = getattr(op, part)
-                
-                print(f"Executing operation with {len(processed_args)} args")
-                
-                # Execute the operation
-                result = op(*processed_args, **processed_kwargs)
-                
-                print(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
-                
-                # Handle different result types
-                if isinstance(result, torch.Tensor):
-                    results = [result]
-                elif isinstance(result, (list, tuple)):
-                    results = [r for r in result if isinstance(r, torch.Tensor)]
-                else:
-                    # For scalar results, convert to tensor
-                    results = [torch.tensor(result, device=device)]
-                
-                # Serialize results
-                serialized_results = []
-                result_metadata = []
-                
-                for i, tensor in enumerate(results):
-                    # Move back to CPU for serialization
-                    cpu_tensor = tensor.cpu()
-                    
-                    # Log output tensor details on modal side (legacy method)
-                    print(f"📤 MODAL OUTPUT tensor[{i}]: shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
-                    
-                    # Log tensor data summary for debugging
-                    if tensor.numel() > 0:
-                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
-                    
-                    # Serialize tensor
-                    buffer = io.BytesIO()
-                    torch.save(cpu_tensor, buffer)
-                    serialized_results.append(buffer.getvalue())
-                    
-                    # Store metadata
-                    metadata = {
-                        "shape": list(cpu_tensor.shape),
-                        "dtype": str(cpu_tensor.dtype),
-                        "size": cpu_tensor.numel(),
-                        "element_size": cpu_tensor.element_size()
-                    }
-                    result_metadata.append(metadata)
-                
-                return serialized_results, result_metadata
-                
-            except Exception as e:
-                print(f"❌ Error executing {op_name}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                raise
     
     _gpu_apps[machine_id] = (app, PytorchOperationExecutor)
     return app, PytorchOperationExecutor

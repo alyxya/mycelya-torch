@@ -92,14 +92,17 @@ class RemoteExecutor:
         
         return gpu_machine
         
-    def execute_remote_operation(
+    def execute_remote_operation_efficient(
         self, 
         op_name: str, 
         args: Tuple[Any, ...], 
         kwargs: Dict[str, Any]
     ) -> Any:
         """
-        Execute an aten operation remotely on GPU.
+        Execute an aten operation remotely using the efficient storage ID system.
+        
+        This method extracts storage IDs directly without downloading/re-uploading data,
+        implements the pure storage ID architecture for maximum efficiency.
         
         Args:
             op_name: The aten operation name
@@ -107,150 +110,103 @@ class RemoteExecutor:
             kwargs: Operation keyword arguments (may contain tensors)
             
         Returns:
-            Result of the operation (tensors moved back to remote device)
+            Result of the operation (tensors as remote tensors with new IDs)
         """
         try:
             # Detect device from tensors
             device = self._detect_device_from_tensors(args, kwargs)
-            
-            # Get the pre-started GPU machine (device-specific)
             if device is None:
                 raise ValueError("RemoteBackend is required for remote execution")
             
-            gpu_machine = self._get_device_gpu_machine(device)
-            
-            # Separate input tensors from output tensors
-            input_tensors_data = []
-            input_tensor_metadata = []
+            # Extract storage IDs and build args for remote execution
+            storage_ids = []
             processed_args = []
             processed_kwargs = {}
-            output_tensors = []  # Track pre-allocated output tensors
             
-            # Process args - these are always input tensors
-            for i, arg in enumerate(args):
+            # Process args - extract storage IDs
+            for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-                    # Convert remote tensor data to regular CPU tensor
-                    # Use proper remote-to-CPU conversion for INPUT tensors only
-                    cpu_tensor = self._remote_tensor_to_cpu(arg)
-                    
-                    tensor_data = self._serialize_tensor(cpu_tensor)
-                    metadata = self._get_tensor_metadata(cpu_tensor)
-                    
-                    input_tensors_data.append(tensor_data)
-                    input_tensor_metadata.append(metadata)
-                    processed_args.append(f"__TENSOR_{len(input_tensors_data)-1}")
-                    
-                    # Log input tensor details
-                    storage_id = arg.untyped_storage().data_ptr()
-                    log.info(f"📥 INPUT tensor arg[{i}]: ID={storage_id}, shape={arg.shape}, dtype={arg.dtype}, device={arg.device}")
+                    storage_id = str(arg.untyped_storage().data_ptr())
+                    storage_ids.append(storage_id)
+                    processed_args.append(f"__TENSOR_{len(storage_ids)-1}")
                 else:
                     processed_args.append(arg)
             
-            # Process kwargs - distinguish between input and output tensors
+            # Process kwargs - extract storage IDs  
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == "remote":
-                    if key == "out":
-                        # This is an OUTPUT tensor - don't read its data, just track it
-                        output_tensors.append(value)
-                        
-                        # Create empty tensor placeholder for the remote operation
-                        empty_tensor = torch.empty(
-                            value.shape,
-                            dtype=value.dtype,
-                            device="cpu"
-                        )
-                        tensor_data = self._serialize_tensor(empty_tensor)
-                        metadata = self._get_tensor_metadata(empty_tensor)
-                        
-                        input_tensors_data.append(tensor_data)
-                        input_tensor_metadata.append(metadata)
-                        processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
-                        
-                        # Log output tensor details
-                        storage_id = value.untyped_storage().data_ptr()
-                        log.info(f"📤 OUTPUT tensor kwarg[{key}]: ID={storage_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
-                    else:
-                        # This is an INPUT tensor - read its data
-                        cpu_tensor = self._remote_tensor_to_cpu(value)
-                        
-                        tensor_data = self._serialize_tensor(cpu_tensor)
-                        metadata = self._get_tensor_metadata(cpu_tensor)
-                        
-                        input_tensors_data.append(tensor_data)
-                        input_tensor_metadata.append(metadata)
-                        processed_kwargs[key] = f"__TENSOR_{len(input_tensors_data)-1}"
-                        
-                        # Log input tensor details
-                        storage_id = value.untyped_storage().data_ptr()
-                        log.info(f"📥 INPUT tensor kwarg[{key}]: ID={storage_id}, shape={value.shape}, dtype={value.dtype}, device={value.device}")
+                    storage_id = str(value.untyped_storage().data_ptr())
+                    storage_ids.append(storage_id)
+                    processed_kwargs[key] = f"__TENSOR_{len(storage_ids)-1}"
                 else:
                     processed_kwargs[key] = value
             
-            log.info(f"Executing {op_name} remotely with {len(input_tensors_data)} input tensors, {len(output_tensors)} output tensors")
+            # Execute remotely using storage IDs
+            result_storage_ids = self.execute_remote_operation_with_ids(
+                op_name, storage_ids, tuple(processed_args), processed_kwargs, device
+            )
             
-            # Execute remotely using pre-started RemoteGPUMachine
-            log.info(f"🚀 Using active GPU machine for {op_name}: {gpu_machine}")
-            log.info(f"📊 Args: op_name={op_name}, input_tensors={len(input_tensors_data)}, output_tensors={len(output_tensors)}, machine_id={device.machine_id}")
-            
-            try:
-                serialized_results, result_metadata = gpu_machine.execute_operation(
-                    op_name, input_tensors_data, input_tensor_metadata, processed_args, processed_kwargs
-                )
-                log.info(f"✅ Remote operation completed for {op_name}")
-                log.info(f"📥 Received {len(serialized_results)} results")
-            except Exception as remote_ex:
-                log.error(f"❌ Remote operation failed for {op_name}: {remote_ex}")
-                log.error(f"Exception type: {type(remote_ex).__name__}")
-                import traceback
-                log.error(f"Traceback: {traceback.format_exc()}")
-                raise
-            
-            # Handle result tensor allocation - use pre-allocated output tensors when available
-            results = []
-            gpu_machine = self._get_device_gpu_machine(device)
-            
-            for i, (data, metadata) in enumerate(zip(serialized_results, result_metadata)):
-                cpu_tensor = self._deserialize_tensor(data)
-                
-                # Check if we have a pre-allocated output tensor for this result
-                if i < len(output_tensors):
-                    # Use the pre-allocated output tensor
-                    output_tensor = output_tensors[i]
-                    storage_id_int = output_tensor.untyped_storage().data_ptr()
-                    storage_id_str = str(storage_id_int)
-                    
-                    # Store the result data in the pre-allocated tensor's ID
-                    gpu_machine.create_tensor(data, storage_id_str)
-                    
-                    # Log output tensor result details
-                    log.info(f"📤 OUTPUT RESULT tensor[{i}]: ID={storage_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
-                    
-                    results.append(output_tensor)
-                else:
-                    # Create a new remote tensor for this result
-                    remote_tensor = self._cpu_tensor_to_remote(cpu_tensor, device)
-                    
-                    # Register the tensor data with the GPU machine using the tensor's ID
-                    storage_id_int = remote_tensor.untyped_storage().data_ptr()
-                    storage_id_str = str(storage_id_int)
-                    
-                    # Store the tensor data on the GPU machine so future operations can access it
-                    gpu_machine.create_tensor(data, storage_id_str)
-                    
-                    # Log new result tensor details
-                    log.info(f"📤 NEW RESULT tensor[{i}]: ID={storage_id_int}, shape={metadata.get('shape', 'unknown')}, dtype={metadata.get('dtype', 'unknown')}, size={cpu_tensor.numel()}")
-                    
-                    results.append(remote_tensor)
-            
-            # Return single tensor or tuple based on original operation
-            if len(results) == 1:
-                return results[0]
+            # Create result tensors from returned storage IDs
+            if len(result_storage_ids) == 1:
+                # Single tensor result
+                result_storage_id = result_storage_ids[0]
+                result_tensor = self._create_remote_tensor_from_id(result_storage_id, device)
+                return result_tensor
             else:
-                return tuple(results)
+                # Multiple tensor results  
+                result_tensors = []
+                for result_storage_id in result_storage_ids:
+                    result_tensor = self._create_remote_tensor_from_id(result_storage_id, device)
+                    result_tensors.append(result_tensor)
+                return tuple(result_tensors)
                 
         except Exception as e:
-            log.error(f"Remote execution failed for {op_name}: {str(e)}")
-            raise RuntimeError(f"Remote execution failed: {str(e)}")
+            log.error(f"❌ Error in efficient remote execution of {op_name}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
+    
+    def _create_remote_tensor_from_id(self, storage_id: str, device: "RemoteBackend") -> torch.Tensor:
+        """
+        Create a remote tensor from an existing storage ID.
+        
+        This method gets metadata from the remote GPU and creates a local remote tensor
+        that references the existing data via the storage ID.
+        
+        Args:
+            storage_id: The remote storage ID
+            device: The device where the tensor exists
+            
+        Returns:
+            Remote tensor that references the existing data
+        """
+        gpu_machine = self._get_device_gpu_machine(device)
+        
+        # Get tensor metadata from remote
+        metadata = gpu_machine.get_tensor_metadata(storage_id)
+        
+        # Extract shape and dtype
+        shape = tuple(metadata['shape'])
+        dtype_str = metadata['dtype'].replace('torch.', '')
+        dtype = getattr(torch, dtype_str)
+        
+        # Create a CPU tensor with the correct shape and dtype first
+        cpu_tensor = torch.empty(shape, dtype=dtype, device='cpu')
+        
+        # Convert to remote device - this will call the C++ allocator and generate a new ID
+        remote_tensor = cpu_tensor.to(device.device())
+        
+        # Now we need to override the generated storage ID with our existing one
+        # The C++ allocator stores storage IDs as data pointers
+        storage_id_int = int(storage_id)
+        
+        # Replace the storage's data pointer with our existing storage ID
+        # This is a hack but necessary to reuse the existing remote tensor data
+        storage = remote_tensor.untyped_storage()
+        original_data_ptr = storage.data_ptr
+        storage.data_ptr = lambda: storage_id_int
+        
+        return remote_tensor
     
     
     def create_tensor_on_remote(
@@ -316,6 +272,122 @@ class RemoteExecutor:
         """
         gpu_machine = self._get_device_gpu_machine(device)
         return gpu_machine.execute_operation_with_ids(op_name, storage_ids, list(args), kwargs)
+    
+    def execute_remote_operation_efficient(
+        self, 
+        op_name: str, 
+        args: Tuple[Any, ...], 
+        kwargs: Dict[str, Any]
+    ) -> Any:
+        """
+        Execute an aten operation remotely using the efficient tensor ID system.
+        
+        This method extracts tensor IDs directly without downloading/re-uploading data,
+        implements the pure tensor ID architecture for maximum efficiency.
+        
+        Args:
+            op_name: The aten operation name
+            args: Operation arguments (may contain tensors)
+            kwargs: Operation keyword arguments (may contain tensors)
+            
+        Returns:
+            Result of the operation (tensors as remote tensors with new IDs)
+        """
+        try:
+            # Detect device from tensors
+            device = self._detect_device_from_tensors(args, kwargs)
+            if device is None:
+                raise ValueError("RemoteBackend is required for remote execution")
+            
+            # Extract tensor IDs and build args for remote execution
+            tensor_ids = []
+            processed_args = []
+            processed_kwargs = {}
+            
+            # Process args - extract tensor IDs
+            for arg in args:
+                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
+                    tensor_id = str(arg.untyped_storage().data_ptr())
+                    tensor_ids.append(tensor_id)
+                    processed_args.append(f"__TENSOR_{len(tensor_ids)-1}")
+                else:
+                    processed_args.append(arg)
+            
+            # Process kwargs - extract tensor IDs  
+            for key, value in kwargs.items():
+                if isinstance(value, torch.Tensor) and value.device.type == "remote":
+                    tensor_id = str(value.untyped_storage().data_ptr())
+                    tensor_ids.append(tensor_id)
+                    processed_kwargs[key] = f"__TENSOR_{len(tensor_ids)-1}"
+                else:
+                    processed_kwargs[key] = value
+            
+            # Execute remotely using tensor IDs
+            result_tensor_ids = self.execute_remote_operation_with_ids(
+                op_name, tensor_ids, tuple(processed_args), processed_kwargs, device
+            )
+            
+            # Create result tensors from returned tensor IDs
+            if len(result_tensor_ids) == 1:
+                # Single tensor result
+                result_tensor_id = result_tensor_ids[0]
+                result_tensor = self._create_remote_tensor_from_id(result_tensor_id, device)
+                return result_tensor
+            else:
+                # Multiple tensor results  
+                result_tensors = []
+                for result_tensor_id in result_tensor_ids:
+                    result_tensor = self._create_remote_tensor_from_id(result_tensor_id, device)
+                    result_tensors.append(result_tensor)
+                return tuple(result_tensors)
+                
+        except Exception as e:
+            log.error(f"❌ Error in efficient remote execution of {op_name}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
+    
+    def _create_remote_tensor_from_id(self, tensor_id: str, device: "RemoteBackend") -> torch.Tensor:
+        """
+        Create a remote tensor from an existing tensor ID.
+        
+        This method gets metadata from the remote GPU and creates a local remote tensor
+        that references the existing data via the tensor ID.
+        
+        Args:
+            tensor_id: The remote tensor ID
+            device: The device where the tensor exists
+            
+        Returns:
+            Remote tensor that references the existing data
+        """
+        gpu_machine = self._get_device_gpu_machine(device)
+        
+        # Get tensor metadata from remote
+        metadata = gpu_machine.get_tensor_metadata(tensor_id)
+        
+        # Extract shape and dtype
+        shape = tuple(metadata['shape'])
+        dtype_str = metadata['dtype'].replace('torch.', '')
+        dtype = getattr(torch, dtype_str)
+        
+        # Create a CPU tensor with the correct shape and dtype first
+        cpu_tensor = torch.empty(shape, dtype=dtype, device='cpu')
+        
+        # Convert to remote device - this will call the C++ allocator and generate a new ID
+        remote_tensor = cpu_tensor.to(device.device())
+        
+        # Now we need to override the generated tensor ID with our existing one
+        # The C++ allocator stores tensor IDs as data pointers
+        tensor_id_int = int(tensor_id)
+        
+        # Replace the storage's data pointer with our existing tensor ID
+        # This is a hack but necessary to reuse the existing remote tensor data
+        storage = remote_tensor.untyped_storage()
+        original_data_ptr = storage.data_ptr
+        storage.data_ptr = lambda: tensor_id_int
+        
+        return remote_tensor
     
     def create_factory_tensor_on_remote(
         self,
