@@ -21,11 +21,11 @@ def main():
     print("\n1. Creating different GPU devices:")
     
     # Create T4 and L4 devices (cheaper options)
-    t4_device = torch_remote.create_modal_device("T4")
-    l4_device = torch_remote.create_modal_device("L4")
+    t4_device = torch_remote.create_modal_machine("T4")
+    l4_device = torch_remote.create_modal_machine("L4")
     
     # Create A10G device (mid-range option)
-    a10g_device = torch_remote.create_modal_device("A10G")
+    a10g_device = torch_remote.create_modal_machine("A10G")
     
     print(f"   T4:   {t4_device}")
     print(f"   L4:   {l4_device}")

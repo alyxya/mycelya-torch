@@ -124,7 +124,7 @@ torch_remote_execution/        # Private package for remote execution
   - Enforces single-device constraint for tensor operations
 - **GPUType enum**: Supported GPU types (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
 - **BackendProvider enum**: Supported cloud providers (Modal, with future providers planned)
-- **Factory functions**: `create_modal_device()` for easy Modal device creation
+- **Factory functions**: `create_modal_machine()` for easy Modal device creation
 - **Global registry**: Shared device registry for system-wide device management
 
 #### Backend System Files

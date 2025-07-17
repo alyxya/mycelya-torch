@@ -153,7 +153,7 @@ ValueError: Invalid GPU type 'RTX4090'. Valid types: ['T4', 'L4', 'A10G', 'A100-
        print(gpu_type.value)
    
    # Create device with valid GPU type
-   device = torch_remote.create_modal_device("A100-40GB")
+   device = torch_remote.create_modal_machine("A100-40GB")
    ```
 
 2. **Case-sensitive GPU types**: Ensure exact spelling and case.
@@ -171,7 +171,7 @@ TimeoutError: Device initialization timed out after 300 seconds
 
 2. **Try smaller GPU type** (T4/L4 start faster than A100/H100):
    ```python
-   device = torch_remote.create_modal_device("T4")  # Faster startup
+   device = torch_remote.create_modal_machine("T4")  # Faster startup
    ```
 
 3. **Increase timeout** by modifying GPU config if needed.
@@ -208,7 +208,7 @@ TimeoutError: Remote operation timed out after 450 seconds
 4. **Use simpler operations** to test connectivity:
    ```python
    import torch
-   device = torch_remote.create_modal_device("T4")
+   device = torch_remote.create_modal_machine("T4")
    x = torch.randn(10, 10, device=device)
    y = x + 1  # Simple operation
    ```
@@ -259,7 +259,7 @@ This is **by design** - each remote device represents a separate GPU instance.
 
 1. **Use same device for all tensors**:
    ```python
-   device = torch_remote.create_modal_device("A100-40GB")
+   device = torch_remote.create_modal_machine("A100-40GB")
    x = torch.randn(10, 10, device=device)
    y = torch.randn(10, 10, device=device)
    z = x + y  # ✅ Works - same device
@@ -267,8 +267,8 @@ This is **by design** - each remote device represents a separate GPU instance.
 
 2. **Transfer tensors if needed**:
    ```python
-   device1 = torch_remote.create_modal_device("T4")
-   device2 = torch_remote.create_modal_device("L4")
+   device1 = torch_remote.create_modal_machine("T4")
+   device2 = torch_remote.create_modal_machine("L4")
    
    x = torch.randn(10, 10, device=device1)
    y = torch.randn(10, 10, device=device2)
@@ -284,7 +284,7 @@ This is **by design** - each remote device represents a separate GPU instance.
 
 #### **Problem**: String-based device specification
 ```
-ValueError: Remote devices must be RemoteBackend objects. Use create_modal_device() or similar to create a RemoteBackend.
+ValueError: Remote devices must be RemoteBackend objects. Use create_modal_machine() or similar to create a RemoteBackend.
 ```
 
 **Solution**:
@@ -296,7 +296,7 @@ x = torch.randn(10, 10, device="remote")
 x = torch.randn(10, 10, device="remote:0")
 
 # ✅ Correct
-device = torch_remote.create_modal_device("A100-40GB")
+device = torch_remote.create_modal_machine("A100-40GB")
 x = torch.randn(10, 10, device=device)
 ```
 
@@ -365,8 +365,8 @@ RuntimeError: CUDA out of memory. Tried to allocate X GiB
 2. **Choose appropriate GPU type**:
    ```python
    # For large models, use high-memory GPUs
-   device = torch_remote.create_modal_device("A100-80GB")  # 80GB memory
-   device = torch_remote.create_modal_device("H100")       # 80GB memory
+   device = torch_remote.create_modal_machine("A100-80GB")  # 80GB memory
+   device = torch_remote.create_modal_machine("H100")       # 80GB memory
    ```
 
 3. **Process in batches**:
@@ -428,11 +428,11 @@ RuntimeError: CUDA out of memory. Tried to allocate X GiB
 3. **Choose appropriate GPU**:
    ```python
    # For compute-heavy workloads
-   device = torch_remote.create_modal_device("H100")  # Fastest
-   device = torch_remote.create_modal_device("A100-40GB")  # Good performance
+   device = torch_remote.create_modal_machine("H100")  # Fastest
+   device = torch_remote.create_modal_machine("A100-40GB")  # Good performance
    
    # For testing/light workloads
-   device = torch_remote.create_modal_device("T4")  # Cheaper, adequate
+   device = torch_remote.create_modal_machine("T4")  # Cheaper, adequate
    ```
 
 ### Container Startup Delays
@@ -444,10 +444,10 @@ This is **normal behavior** - Modal containers have cold start time.
 **Solutions**:
 1. **Use smaller GPU types** for faster startup:
    ```python
-   device = torch_remote.create_modal_device("T4")  # ~30-60 seconds
-   device = torch_remote.create_modal_device("L4")  # ~30-60 seconds
+   device = torch_remote.create_modal_machine("T4")  # ~30-60 seconds
+   device = torch_remote.create_modal_machine("L4")  # ~30-60 seconds
    # vs
-   device = torch_remote.create_modal_device("H100")  # ~2-5 minutes
+   device = torch_remote.create_modal_machine("H100")  # ~2-5 minutes
    ```
 
 2. **Keep containers warm** by doing periodic operations:
@@ -486,7 +486,7 @@ def choose_gpu(model_size_gb, workload_type):
 
 # Example usage
 gpu_type = choose_gpu(model_size_gb=15, workload_type="training")
-device = torch_remote.create_modal_device(gpu_type)
+device = torch_remote.create_modal_machine(gpu_type)
 ```
 
 ---
@@ -566,8 +566,8 @@ def test_device(device):
 
 # Test all your devices
 devices = [
-    torch_remote.create_modal_device("T4"),
-    torch_remote.create_modal_device("L4"),
+    torch_remote.create_modal_machine("T4"),
+    torch_remote.create_modal_machine("L4"),
 ]
 
 for device in devices:
@@ -638,7 +638,7 @@ def validate_torch_remote_setup():
     
     # 4. Check device creation
     try:
-        device = torch_remote.create_modal_device("T4")
+        device = torch_remote.create_modal_machine("T4")
         print(f"✅ Device creation: {device}")
     except Exception as e:
         print(f"❌ Device creation failed: {e}")
@@ -716,7 +716,7 @@ If you're still experiencing issues after trying these solutions:
    import torch
    import torch_remote
    
-   device = torch_remote.create_modal_device("T4")
+   device = torch_remote.create_modal_machine("T4")
    x = torch.randn(10, 10, device=device)
    y = x + 1  # Your failing operation here
    ```

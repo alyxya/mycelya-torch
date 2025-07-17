@@ -385,7 +385,7 @@ def test_device_count_dynamic_tracking(clean_registry):
     gpu_types = ["T4", "L4"]  # Reduced to 2 devices to minimize GPU usage
     
     for i, gpu_type in enumerate(gpu_types):
-        device = torch_remote.create_modal_device(gpu_type)
+        device = torch_remote.create_modal_machine(gpu_type)
         devices.append(device)
         expected_count = i + 1
         assert torch.remote.device_count() == expected_count

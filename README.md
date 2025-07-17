@@ -30,10 +30,10 @@ This will install both the main `torch_remote` package and the private `torch_re
 ```python
 import torch
 import torch_remote
-from torch_remote import create_modal_device
+from torch_remote import create_modal_machine
 
 # Create a Modal device with A100-40GB GPU
-device = create_modal_device("A100-40GB")
+device = create_modal_machine("A100-40GB")
 
 # Create tensors on the remote device
 x = torch.randn(3, 3, device=device.device())
@@ -53,7 +53,7 @@ import torch
 import torch_remote
 
 # Create a backend device
-backend_device = torch_remote.create_modal_device("A100-40GB")
+backend_device = torch_remote.create_modal_machine("A100-40GB")
 
 # Get PyTorch device object
 torch_device = backend_device.device()
@@ -70,17 +70,17 @@ z = torch.ones(2, 2).to(backend_device)
 ### Available GPU Types
 
 ```python
-from torch_remote import create_modal_device, GPUType
+from torch_remote import create_modal_machine, GPUType
 
 # Create devices with different GPU types
-t4_device = create_modal_device("T4")           # Entry-level GPU
-l4_device = create_modal_device("L4")           # Mid-range GPU
-a100_40_device = create_modal_device("A100-40GB")  # High-end GPU
-a100_80_device = create_modal_device("A100-80GB")  # High-memory GPU
-h100_device = create_modal_device("H100")       # Latest high-end GPU
+t4_device = create_modal_machine("T4")           # Entry-level GPU
+l4_device = create_modal_machine("L4")           # Mid-range GPU
+a100_40_device = create_modal_machine("A100-40GB")  # High-end GPU
+a100_80_device = create_modal_machine("A100-80GB")  # High-memory GPU
+h100_device = create_modal_machine("H100")       # Latest high-end GPU
 
 # Or use the GPUType enum
-device = create_modal_device(GPUType.A100_40GB)
+device = create_modal_machine(GPUType.A100_40GB)
 
 # Supported GPU types: T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200
 ```
@@ -90,21 +90,21 @@ device = create_modal_device(GPUType.A100_40GB)
 ```python
 import torch
 import torch_remote
-from torch_remote import create_modal_device
+from torch_remote import create_modal_machine
 
 # Check device availability
 print(f"Remote available: {torch.remote.is_available()}")
 print(f"Device count: {torch.remote.device_count()}")
 
 # Create device and get device info
-device = create_modal_device("A100-40GB")
+device = create_modal_machine("A100-40GB")
 print(f"Device: {device}")
 print(f"Device name: {device.device_name}")
 print(f"GPU type: {device.gpu_type.value}")
 
 # Device validation - tensors must be on the same device instance
-device1 = create_modal_device("A100-40GB")
-device2 = create_modal_device("A100-40GB")  # Different device instance
+device1 = create_modal_machine("A100-40GB")
+device2 = create_modal_machine("A100-40GB")  # Different device instance
 
 x = torch.randn(3, 3, device=device1.device())
 y = torch.randn(3, 3, device=device2.device())

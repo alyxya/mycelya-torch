@@ -161,7 +161,7 @@ class RemoteBackend:
             torch.device: A PyTorch device object with type "remote" and the device's index
             
         Example:
-            >>> backend_device = create_modal_device("A100-40GB")
+            >>> backend_device = create_modal_machine("A100-40GB")
             >>> torch_device = backend_device.device()
             >>> tensor = torch.randn(3, 3, device=torch_device)
         """
@@ -254,7 +254,7 @@ _device_registry = DeviceRegistry()
 # for proper resource management in standalone usage scenarios.
 
 
-def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:
+def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:
     """
     Create a Modal backend device with the specified GPU type.
 
@@ -266,7 +266,7 @@ def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:
         RemoteBackend instance for the specified GPU
 
     Example:
-        >>> device = create_modal_device("A100-40GB")
+        >>> device = create_modal_machine("A100-40GB")
         >>> tensor = torch.randn(3, 3, device=device)
     """
     if isinstance(gpu, str):

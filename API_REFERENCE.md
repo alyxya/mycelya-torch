@@ -4,7 +4,7 @@
 
 - [Overview](#overview)
 - [Core Device Functions](#core-device-functions)
-  - [create_modal_device()](#create_modal_device)
+  - [create_modal_machine()](#create_modal_machine)
   - [get_device_registry()](#get_device_registry)
 - [Classes](#classes)
   - [RemoteBackend](#backenddevice)
@@ -25,12 +25,12 @@ The torch-remote library provides seamless remote GPU execution for PyTorch tens
 
 ## Core Device Functions
 
-### `create_modal_device()`
+### `create_modal_machine()`
 
 Creates a Modal backend device with the specified GPU type.
 
 ```python
-def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend
+def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend
 ```
 
 **Parameters:**
@@ -50,12 +50,12 @@ def create_modal_device(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend
 import torch_remote
 
 # Create devices using string specification
-t4_device = torch_remote.create_modal_device("T4")
-a100_device = torch_remote.create_modal_device("A100-40GB")
+t4_device = torch_remote.create_modal_machine("T4")
+a100_device = torch_remote.create_modal_machine("A100-40GB")
 
 # Create device using enum
 from torch_remote import GPUType
-h100_device = torch_remote.create_modal_device(GPUType.H100)
+h100_device = torch_remote.create_modal_machine(GPUType.H100)
 
 # Create tensor on remote device
 tensor = torch.randn(3, 3, device=t4_device.device())
@@ -142,7 +142,7 @@ Get a PyTorch device object for this RemoteBackend.
 
 **Example:**
 ```python
-backend_device = torch_remote.create_modal_device("A100-40GB")
+backend_device = torch_remote.create_modal_machine("A100-40GB")
 torch_device = backend_device.device()
 tensor = torch.randn(3, 3, device=torch_device)
 ```
@@ -167,7 +167,7 @@ import torch_remote
 from torch_remote import GPUType, BackendProvider
 
 # Create device
-device = torch_remote.create_modal_device("A100-40GB")
+device = torch_remote.create_modal_machine("A100-40GB")
 
 print(device.device_id)        # "modal-a10040gb-abc12345"
 print(device.device_name)      # "Modal A100-40GB"
@@ -258,7 +258,7 @@ Clear all registered devices from the registry.
 import torch_remote
 
 registry = torch_remote.get_device_registry()
-device = torch_remote.create_modal_device("T4")
+device = torch_remote.create_modal_machine("T4")
 
 # Device is automatically registered
 index = registry.get_device_index(device)
@@ -303,7 +303,7 @@ from torch_remote import GPUType
 # Iterate through all GPU types
 for gpu_type in GPUType:
     print(f"GPU: {gpu_type.value}")
-    device = torch_remote.create_modal_device(gpu_type)
+    device = torch_remote.create_modal_machine(gpu_type)
 ```
 
 ### `BackendProvider`
@@ -344,7 +344,7 @@ torch.tensor(data, device=backend_device.device(), **kwargs) -> Tensor
 import torch
 import torch_remote
 
-backend_device = torch_remote.create_modal_device("A100-40GB")
+backend_device = torch_remote.create_modal_machine("A100-40GB")
 
 # Create tensors on remote device using .device() method
 x = torch.randn(100, 100, device=backend_device.device())
@@ -374,7 +374,7 @@ import torch_remote
 x = torch.randn(5, 5)
 
 # Move to remote device
-device = torch_remote.create_modal_device("T4")
+device = torch_remote.create_modal_machine("T4")
 x_remote = x.to(device)
 
 # Move back to CPU
@@ -450,7 +450,7 @@ The library uses standard PyTorch exceptions and adds specific validation:
 Raised for invalid GPU types or provider configurations:
 ```python
 # Invalid GPU type
-torch_remote.create_modal_device("InvalidGPU")  # Raises ValueError
+torch_remote.create_modal_machine("InvalidGPU")  # Raises ValueError
 
 # Using raw remote device strings (not allowed)
 torch.randn(3, 3, device="remote")  # Raises ValueError
@@ -459,8 +459,8 @@ torch.randn(3, 3, device="remote")  # Raises ValueError
 #### `RuntimeError`
 Standard PyTorch runtime errors for tensor operations:
 ```python
-device1 = torch_remote.create_modal_device("T4")
-device2 = torch_remote.create_modal_device("A100-40GB")
+device1 = torch_remote.create_modal_machine("T4")
+device2 = torch_remote.create_modal_machine("A100-40GB")
 
 x = torch.randn(3, 3, device=device1)
 y = torch.randn(3, 3, device=device2)
@@ -486,7 +486,7 @@ import torch
 import torch_remote
 
 # Create a device
-device = torch_remote.create_modal_device("A100-40GB")
+device = torch_remote.create_modal_machine("A100-40GB")
 
 # Create tensors
 x = torch.randn(1000, 1000, device=device.device())
@@ -506,8 +506,8 @@ import torch
 import torch_remote
 
 # Create different devices
-t4_device = torch_remote.create_modal_device("T4")
-a100_device = torch_remote.create_modal_device("A100-40GB")
+t4_device = torch_remote.create_modal_machine("T4")
+a100_device = torch_remote.create_modal_machine("A100-40GB")
 
 # Create tensors on different devices
 x_t4 = torch.randn(100, 100, device=t4_device.device())
@@ -527,8 +527,8 @@ y_a100 = x_a100 * 2    # Works - same device
 import torch_remote
 
 # Create devices
-device1 = torch_remote.create_modal_device("T4")
-device2 = torch_remote.create_modal_device("L4")
+device1 = torch_remote.create_modal_machine("T4")
+device2 = torch_remote.create_modal_machine("L4")
 
 # Check registry
 registry = torch_remote.get_device_registry()
@@ -550,7 +550,7 @@ print(f"Devices compatible: {compatible}")  # False
 import torch
 import torch_remote
 
-device = torch_remote.create_modal_device("H100")
+device = torch_remote.create_modal_machine("H100")
 x = torch.randn(5, 5, device=device.device())
 
 # Use remote device context
