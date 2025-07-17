@@ -14,15 +14,15 @@ This script works with both pytest and standalone execution:
 
 import torch
 import pytest
+from typing import Any
 
-
-def test_basic_imports():
+def test_basic_imports() -> None:
     """Test basic torch and torch_remote imports."""
     import torch_remote
     assert True
 
 
-def test_device_functions():
+def test_device_functions() -> None:
     """Test remote device functions."""
     import torch
     import torch_remote
@@ -31,7 +31,7 @@ def test_device_functions():
     assert torch.remote.device_count() >= 0
 
 
-def test_tensor_to_method():
+def test_tensor_to_method() -> None:
     """Test that tensors have to() method that works with RemoteBackend."""
     import torch_remote
     x = torch.randn(2, 2)

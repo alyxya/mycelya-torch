@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pprint
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 from torch.utils._pytree import tree_map, tree_map_only
 
 
 class RemoteTensorMeta:
-    def __init__(self, tensor=None, checked=True, data_ptr=None, size=None, stride=None, 
-                 storage_offset=None, dtype=None, nelem_in_bytes=None, requires_grad=None, storage_id=None):
+    def __init__(self, tensor: Optional[torch.Tensor] = None, checked: bool = True, data_ptr: Optional[int] = None, size: Optional[torch.Size] = None, stride: Optional[Tuple[int, ...]] = None, 
+                 storage_offset: Optional[int] = None, dtype: Optional[torch.dtype] = None, nelem_in_bytes: Optional[int] = None, requires_grad: Optional[bool] = None, storage_id: Optional[int] = None) -> None:
         """
         Create RemoteTensorMeta from either a tensor or explicit metadata.
         
@@ -43,16 +44,16 @@ class RemoteTensorMeta:
             # Explicit metadata - for view operations
             if any(param is None for param in [data_ptr, size, stride, storage_offset, dtype, nelem_in_bytes, requires_grad]):
                 raise ValueError("When not providing tensor, all metadata parameters must be specified")
-            self.data_ptr = data_ptr
-            self.size = size
-            self.stride = stride
-            self.storage_offset = storage_offset
-            self.dtype = dtype
-            self.nelem_in_bytes = nelem_in_bytes
-            self.requires_grad = requires_grad
+            self.data_ptr = data_ptr  # type: ignore
+            self.size = size  # type: ignore
+            self.stride = stride  # type: ignore
+            self.storage_offset = storage_offset  # type: ignore
+            self.dtype = dtype  # type: ignore
+            self.nelem_in_bytes = nelem_in_bytes  # type: ignore
+            self.requires_grad = requires_grad  # type: ignore
             self.storage_id = storage_id
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"RemoteTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
             f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=}, {self.requires_grad=})"
@@ -68,8 +69,8 @@ VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}
 VALID_QUEUE_TYPES_OUT = {RemoteTensorMeta, int, float, str, torch.dtype}
 
 
-def safe_str(args):
-    def convert(obj):
+def safe_str(args: Any) -> str:
+    def convert(obj: Any) -> Any:
         if isinstance(obj, torch.Tensor):
             return str(RemoteTensorMeta(obj, checked=False))
         else:
@@ -79,8 +80,8 @@ def safe_str(args):
     return pprint.pformat(new_args)
 
 
-def validate_send_queue_args(cmd, args):
-    def check(obj):
+def validate_send_queue_args(cmd: str, args: Any) -> None:
+    def check(obj: Any) -> None:
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             if (
                 cmd == "recv_data"
@@ -96,8 +97,8 @@ def validate_send_queue_args(cmd, args):
     tree_map(check, args)
 
 
-def prepare_for_sending(args, kwargs):
-    def convert(obj):
+def prepare_for_sending(args: Any, kwargs: Any) -> Any:
+    def convert(obj: Any) -> Any:
         if type(obj) not in VALID_QUEUE_TYPES_IN:
             raise RuntimeError(
                 f"Cannot send object of type {type(obj)} over remote device pipe."
@@ -126,8 +127,8 @@ def prepare_for_sending(args, kwargs):
     return tree_map(convert, (args, kwargs))
 
 
-def receive_after_sending(allocator, args, kwargs):
-    def convert(obj):
+def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
+    def convert(obj: Any) -> Any:
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             raise RuntimeError(
                 f"Received invalid object of type {type(obj)} over remote device pipe."
@@ -141,8 +142,8 @@ def receive_after_sending(allocator, args, kwargs):
     return tree_map(convert, (args, kwargs))
 
 
-def to_device_no_copy(device, args, kwargs):
-    def safe_to(t):
+def to_device_no_copy(device: Union[torch.device, str], args: Any, kwargs: Any) -> Any:
+    def safe_to(t: torch.Tensor) -> torch.Tensor:
         return torch.empty_like(t, device=device, requires_grad=t.requires_grad)
 
     return tree_map_only(torch.Tensor, safe_to, (args, kwargs))

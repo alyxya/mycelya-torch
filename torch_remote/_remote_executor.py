@@ -442,6 +442,7 @@ class RemoteExecutor:
                 else:
                     log.warning(f"Failed to reconnected to device {device.machine_id}")
                     return False
+            return False
         except Exception as e:
             log.error(f"Error during reconnection to device {device.machine_id}: {e}")
             return False

@@ -3,6 +3,7 @@
 
 import logging
 import sys
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 from torch.utils._pytree import tree_any
@@ -25,9 +26,9 @@ VIEW_OPERATIONS = {
 
 
 # Lazy import to avoid import errors if remote execution is not available
-_remote_executor = None
+_remote_executor: Optional[Any] = None
 
-def _get_remote_executor():
+def _get_remote_executor() -> Optional[Any]:
     """Get remote executor, importing lazily."""
     global _remote_executor
     if _remote_executor is None:
@@ -40,16 +41,16 @@ def _get_remote_executor():
     return _remote_executor
 
 
-_IMPL_REGISTRY = {}
+_IMPL_REGISTRY: Dict[str, Callable] = {}
 
 
-def impl_factory(name):
+def impl_factory(name: str) -> Callable:
     if name in _IMPL_REGISTRY:
         return _IMPL_REGISTRY[name]
 
     # Handle operations that need special error handling
     if name in ["create_tensor_with_id", "free_tensor_with_id"]:
-        def _(tensor_id, *args):
+        def _(tensor_id: int, *args: Any) -> Any:
             """Wrapper for tensor ID operations with error handling."""
             result = driver.exec(name, tensor_id, *args)
             if not result:
@@ -64,7 +65,7 @@ def impl_factory(name):
         _IMPL_REGISTRY[name] = _
         return _
 
-    def _(*args, **kwargs):
+    def _(*args: Any, **kwargs: Any) -> Any:
         log.info("Calling hook %s", name)
         return driver.exec(name, *args, **kwargs)
 
@@ -72,7 +73,7 @@ def impl_factory(name):
     return _
 
 
-def _handle_view_operation(op, *args, **kwargs):
+def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> torch.Tensor:
     """
     Handle view operations locally with shared storage IDs.
     
@@ -124,7 +125,7 @@ def _handle_view_operation(op, *args, **kwargs):
     return result
 
 
-def _remote_kernel_fallback(op, *args, **kwargs):
+def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
     log.info("Calling kernel %s", op)
     
     # Handle operations using pytorch-openreg-2 logic for operation classification
@@ -168,7 +169,7 @@ def _remote_kernel_fallback(op, *args, **kwargs):
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
 
-def _execute_local_operation(op, *args, **kwargs):
+def _execute_local_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
     """
     Handle operations that don't involve remote tensors.
     Remote tensors should only be processed through remote execution.
@@ -177,7 +178,7 @@ def _execute_local_operation(op, *args, **kwargs):
     return op(*args, **kwargs)
 
 
-def copy_from_device(from_):
+def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     """Copy data from remote tensor to CPU tensor using remote execution"""
     if from_.device.type != "remote":
         raise ValueError("copy_from_device requires a remote tensor")
@@ -227,7 +228,7 @@ def copy_from_device(from_):
         raise RuntimeError("Cannot copy from remote device: remote execution not available")
 
 
-def copy_from_host_to_device(from_, to_):
+def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     """Copy data from CPU tensor to remote tensor using remote execution"""
     if to_.device.type != "remote":
         raise ValueError("copy_from_host_to_device requires a remote target tensor")
@@ -268,7 +269,7 @@ def copy_from_host_to_device(from_, to_):
         raise RuntimeError("Cannot copy to remote device: remote execution not available")
 
 
-def _copy_from(from_, to_):
+def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     # Simplified copy implementation - remote tensors are now regular torch.Tensor
     # with proper device handling via C++ allocator
     
@@ -315,7 +316,7 @@ def _copy_from(from_, to_):
     return result
 
 
-def _to_copy(input, *, dtype=None, layout=None, device=None, pin_memory=None, non_blocking=False, memory_format=None):
+def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout: Optional[torch.layout] = None, device: Optional[Union[torch.device, str, int]] = None, pin_memory: Optional[bool] = None, non_blocking: bool = False, memory_format: Optional[torch.memory_format] = None) -> torch.Tensor:
     """Implementation of tensor.to() for remote tensors with cross-device transfer restriction."""
     
     # Handle device-specific transfers first
@@ -367,7 +368,7 @@ def _to_copy(input, *, dtype=None, layout=None, device=None, pin_memory=None, no
     return result
 
 
-def _set_source_tensor(ten1, ten2):
+def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
     return torch.ops.aten.set_.source_Storage_storage_offset(
         ten1,
         ten2.untyped_storage(),
@@ -377,7 +378,7 @@ def _set_source_tensor(ten1, ten2):
     )
 
 
-def _local_scalar_dense(ten):
+def _local_scalar_dense(ten: torch.Tensor) -> Union[int, float, complex, bool]:
     host_mem = copy_from_device(ten)
     return host_mem.item()
 
@@ -412,7 +413,7 @@ _remote_lib_aten.impl(
 # when we add them to TORCH_LIBRARY_IMPL in RemoteMem.cpp
 
 
-def cleanup_library_registrations():
+def cleanup_library_registrations() -> None:
     """Clean up library registrations to prevent hanging."""
     global _remote_lib, _remote_lib_aten
     try:

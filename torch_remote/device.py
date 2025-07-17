@@ -43,7 +43,7 @@ class RemoteBackend:
     Operations between different RemoteBackend instances are blocked with explicit error messages.
     """
 
-    def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs):
+    def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs: Any) -> None:
         """
         Initialize a backend device.
 
@@ -76,7 +76,7 @@ class RemoteBackend:
         # Format: provider-gpu-uuid
         return f"{self.provider.value}-{gpu_clean}-{short_uuid}"
 
-    def _validate_gpu_support(self):
+    def _validate_gpu_support(self) -> None:
         """Validate that the GPU type is supported by the provider."""
         if self.provider == BackendProvider.MODAL:
             # Modal supports all current GPU types
@@ -86,7 +86,7 @@ class RemoteBackend:
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
     
-    def _create_and_start_gpu_machine(self):
+    def _create_and_start_gpu_machine(self) -> None:
         """Create and start the GPU machine for this device."""
         try:
             if self.provider == BackendProvider.MODAL:
@@ -104,11 +104,11 @@ class RemoteBackend:
             print(f"Failed to start GPU machine: {e}")
             # Continue without remote execution capability
     
-    def get_gpu_machine(self):
+    def get_gpu_machine(self) -> Optional[Any]:
         """Get the active GPU machine for this device."""
         return self._gpu_machine
     
-    def stop_gpu_machine(self):
+    def stop_gpu_machine(self) -> None:
         """Stop the GPU machine for this device."""
         if self._gpu_machine and self._gpu_machine.is_running():
             try:
@@ -119,41 +119,41 @@ class RemoteBackend:
                 print(f"Error stopping GPU machine {self.machine_id}: {type(e).__name__}")
         self._gpu_machine = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"RemoteBackend(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.machine_id})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """Two devices are equal only if they have the same machine_id."""
         if not isinstance(other, RemoteBackend):
             return False
         return self.machine_id == other.machine_id
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.machine_id)
     
 
     @property
-    def device_name(self):
+    def device_name(self) -> str:
         """Get a human-readable device name."""
         return f"{self.provider.value.title()} {self.gpu_type.value}"
 
     @property
-    def modal_gpu_spec(self):
+    def modal_gpu_spec(self) -> str:
         """Get the Modal GPU specification string."""
         if self.provider != BackendProvider.MODAL:
             raise ValueError("modal_gpu_spec only available for Modal provider")
         return self.gpu_type.value
 
     @property
-    def remote_index(self):
+    def remote_index(self) -> Optional[int]:
         """Get the device's index in the device registry."""
         registry = get_device_registry()
         return registry.get_device_index(self)
     
-    def device(self):
+    def device(self) -> torch.device:
         """
         Get a PyTorch device object for this RemoteBackend.
         
@@ -165,7 +165,10 @@ class RemoteBackend:
             >>> torch_device = backend_device.device()
             >>> tensor = torch.randn(3, 3, device=torch_device)
         """
-        return torch.device("remote", self.remote_index)
+        remote_index = self.remote_index
+        if remote_index is None:
+            raise RuntimeError("Device not registered in device registry")
+        return torch.device("remote", remote_index)
 
 
 
@@ -176,7 +179,7 @@ class DeviceRegistry:
     Maps device indices directly to RemoteBackend instances for simple lookups.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._devices: Dict[int, RemoteBackend] = {}  # index -> RemoteBackend
         self._next_index = 0
 
@@ -227,12 +230,12 @@ class DeviceRegistry:
         # Devices are compatible if they are the same instance
         return device1 is device2
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all registered devices."""
         self._devices.clear()
         self._next_index = 0
     
-    def shutdown_all_machines(self):
+    def shutdown_all_machines(self) -> None:
         """Stop all GPU machines without clearing the registry."""
         for device in self._devices.values():
             if device._gpu_machine and device._gpu_machine.is_running():

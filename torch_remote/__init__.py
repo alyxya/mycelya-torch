@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import types
+from typing import Any, Union, Optional
 
 import torch
 
@@ -15,7 +16,7 @@ from ._device_daemon import driver
 import torch_remote._C  # isort:skip # type: ignore[import] # noqa: F401
 
 
-def _create_module():
+def _create_module() -> types.ModuleType:
     module = types.ModuleType("_RemoteMod")
 
     class device:
@@ -26,27 +27,26 @@ def _create_module():
                 this argument is a negative integer or ``None``.
         """
 
-        def __init__(self, device):
+        def __init__(self, device: Union[torch.device, int, str]) -> None:
             self.idx = torch.accelerator._get_device_index(device, optional=True)
             self.prev_idx = -1
 
-        def __enter__(self):
+        def __enter__(self) -> None:
             self.prev_idx = driver.exec("exchangeDevice", self.idx)
 
-        def __exit__(self, type, value, traceback):
+        def __exit__(self, type: Any, value: Any, traceback: Any) -> None:
             self.idx = driver.exec("uncheckedSetDevice", self.prev_idx)
-            return False
 
     def device_count() -> int:
         return driver.exec("deviceCount")
 
-    def is_available():
+    def is_available() -> bool:
         return True
 
-    def current_device():
+    def current_device() -> int:
         return torch.accelerator.current_device_index()
 
-    def get_rng_state(device="remote"):
+    def get_rng_state(device: Union[str, int, torch.device] = "remote") -> torch.Tensor:
         if isinstance(device, str):
             device = torch.device(device)
         elif isinstance(device, int):
@@ -57,7 +57,7 @@ def _create_module():
         default_generator = torch_remote._C._get_default_generator(idx)
         return default_generator.get_state()
 
-    def set_rng_state(new_state, device="remote"):
+    def set_rng_state(new_state: torch.Tensor, device: Union[str, int, torch.device] = "remote") -> None:
         if isinstance(device, str):
             device = torch.device(device)
         elif isinstance(device, int):
@@ -88,13 +88,13 @@ def _create_module():
             default_generator = torch_remote._C._get_default_generator(idx)
             default_generator.manual_seed(seed)
 
-    def is_initialized():
+    def is_initialized() -> bool:
         return module._initialized
 
-    def _is_in_bad_fork():
+    def _is_in_bad_fork() -> bool:
         return False
 
-    def _lazy_init():
+    def _lazy_init() -> None:
         if is_initialized():
             return
         torch_remote._C._init()
