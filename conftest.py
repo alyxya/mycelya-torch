@@ -47,14 +47,36 @@ def shared_devices():
 @pytest.fixture
 def clean_registry():
     """
-    Function-scoped fixture that cleans the device registry before and after test.
+    Function-scoped fixture that provides a clean registry for isolated testing.
+    
+    Preserves any session-scoped devices that may have been created by other fixtures
+    to avoid breaking tests that depend on shared_devices or modal_t4_device.
     
     Use this for tests that need a clean registry state without creating real devices.
     """
     registry = torch_remote.get_device_registry()
+    
+    # Save existing devices from session-scoped fixtures before clearing
+    existing_devices = list(registry._devices.values())
+    
+    # Clear for clean state
     registry.clear()
+    
+    # Re-register any session devices that were previously registered
+    # This preserves session fixture devices while giving a clean slate for the test
+    for device in existing_devices:
+        # Only re-register if this looks like a session device (has a running GPU machine)
+        try:
+            if hasattr(device, 'get_gpu_machine') and device.get_gpu_machine() and device.get_gpu_machine().is_running():
+                registry.register_device(device)
+        except:
+            # If there's any issue checking device state, skip re-registration
+            pass
+    
     yield registry
-    registry.clear()
+    
+    # Don't clear after test to preserve session devices for other tests
+    # The pytest session cleanup will handle session device cleanup
 
 
 @pytest.fixture
