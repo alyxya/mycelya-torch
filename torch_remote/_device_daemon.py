@@ -37,6 +37,9 @@ class RemoteTensorRegistry:
         
         # Set for tracking all generated tensor IDs to avoid duplicates
         self.generated_tensor_ids = set()
+        
+        # Current device tracking
+        self._current_device = 0
 
     def generate_tensor_id(self):
         """
@@ -235,15 +238,17 @@ class RemoteTensorRegistry:
 
     def get_device(self):
         """Get current device index"""
-        return 0  # Default device
+        return self._current_device
 
     def set_device(self, device_idx):
         """Set current device index"""
         device_count = self.device_count_method()
         if device_idx < 0 or device_idx >= device_count:
             raise ValueError(f"Invalid device index: {device_idx}")
-        # For tensor ID system, device selection is handled by remote execution
-        log.info(f"Device set to {device_idx}")
+        old_device = self._current_device
+        self._current_device = device_idx
+        log.info(f"Device set from {old_device} to {device_idx}")
+        return old_device
 
     def has_primary_context(self, device_idx):
         """Check if device has primary context"""
