@@ -41,7 +41,7 @@ class ModalClient(ClientInterface):
     def _initialize(self):
         """Initialize the Modal app and server class."""
         # Import here to avoid circular imports
-        from torch_remote_modal.modal_app import create_modal_app_for_gpu
+        from _torch_remote_modal.modal_app import create_modal_app_for_gpu
         self._app, self._server_class = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id
         )
@@ -188,7 +188,7 @@ def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> ModalClient:
     return client
 
 
-# PytorchServer and app creation logic is in torch_remote_modal.modal_app
+# PytorchServer and app creation logic is in _torch_remote_modal.modal_app
 
 
 def get_modal_app_for_device(device) -> ModalClient:
