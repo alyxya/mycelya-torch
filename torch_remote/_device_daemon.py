@@ -22,14 +22,14 @@ MAX_ID_GENERATION_ATTEMPTS = 1000
 
 def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
     """Decorator to register functions in a registry dictionary.
-    
+
     This decorator adds the decorated function to the provided registry
     using the function's name as the key. Used for registering driver
     commands that can be called by name.
-    
+
     Args:
         registry: Dictionary to register the function in
-        
+
     Returns:
         Decorator function that registers and returns the original function
     """
@@ -42,78 +42,78 @@ def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
 class RemoteStorageRegistry:
     """
     Simplified registry to track remote storage IDs only.
-    
+
     Architecture:
     - storage_id: Identifies remote memory allocation on GPU machines
     - PyTorch tensors: Handle local identity and metadata naturally
     - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
     - Reference counting: Manages storage lifetime across multiple tensor views
     """
-    
+
     def __init__(self) -> None:
         # Storage ID tracking - maps storage to device and reference count
-        self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index  
+        self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
         self.storage_id_ref_count: Dict[int, int] = {}  # storage_id -> reference count
-        
+
         # Set for tracking all generated storage IDs to avoid duplicates
         self.generated_storage_ids: Set[int] = set()
-        
+
         # Current device tracking
         self._current_device: int = 0
 
     def generate_storage_id(self) -> int:
         """
         Generate a unique storage ID with duplicate validation.
-        
+
         Returns:
             int: A unique 64-bit storage ID
         """
         # Generate unique 64-bit integer IDs
         # Use non-zero values to avoid confusion with null pointers
         attempt = 0
-        
+
         while attempt < MAX_ID_GENERATION_ATTEMPTS:
             # Generate a random 64-bit integer
             storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
-            
+
             # Check if this ID is already used
             if storage_id not in self.generated_storage_ids:
                 self.generated_storage_ids.add(storage_id)
                 log.debug(f"Generated unique storage ID: {storage_id}")
                 return storage_id
-            
+
             attempt += 1
             log.warning(f"Generated duplicate storage ID {storage_id}, retrying (attempt {attempt})")
-        
+
         # If we couldn't generate a unique ID after MAX_ID_GENERATION_ATTEMPTS, raise an error
         raise RuntimeError(f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts")
-    
+
 
     def create_storage_with_id(self, storage_id: int, nbytes: int, device_index: int) -> bool:
         """Create remote storage with the given ID and return success status"""
         storage_id_int = int(storage_id)
-        
+
         # Always track the storage ID, even for empty tensors
         self.storage_id_to_device[storage_id_int] = device_index
         self.storage_id_ref_count[storage_id_int] = 1
-        
+
         # For empty tensors (0 bytes), only track locally - do NOT register with remote GPU
         if nbytes == 0:
             log.info(f"Registered empty storage ID {storage_id_int} on device {device_index} (local tracking only)")
             return True
-        
+
         # Register the storage with the GPU machine immediately
         if nbytes > 0:
             try:
                 # Import here to avoid circular imports
                 from ._remote_orchestrator import remote_orchestrator
                 from .device import get_device_registry
-                
+
                 orchestrator = remote_orchestrator
                 if orchestrator is not None:
                     registry = get_device_registry()
                     device = registry.get_device_by_index(device_index)
-                    
+
                     if device is not None:
                         gpu_machine = device.get_gpu_machine()
                         if gpu_machine and gpu_machine.is_running():
@@ -122,57 +122,57 @@ class RemoteStorageRegistry:
                             buffer = io.BytesIO()
                             torch.save(empty_tensor, buffer)
                             tensor_data = buffer.getvalue()
-                            
+
                             storage_id_str = str(storage_id_int)
                             gpu_machine.create_storage(tensor_data, storage_id_str)
                             log.info(f"Pre-registered storage ID {storage_id_int} with GPU machine")
             except Exception as e:
                 log.warning(f"Failed to pre-register storage {storage_id_int} with GPU machine: {e}")
-        
+
         log.info(f"Registered storage ID {storage_id_int} on device {device_index}")
         return True
-    
+
     def get_storage_device(self, storage_id: int) -> Optional[int]:
         """Get device index for a storage ID"""
         storage_id_int = int(storage_id)
         return self.storage_id_to_device.get(storage_id_int)
-    
+
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID with reference counting and remote cleanup"""
         storage_id_int = int(storage_id)
         if storage_id_int == 0:  # Empty storage
             return True
-            
+
         # Decrement reference count
         if storage_id_int in self.storage_id_ref_count:
             self.storage_id_ref_count[storage_id_int] -= 1
-            
+
             # Only cleanup remote storage if this is the last reference
             if self.storage_id_ref_count[storage_id_int] <= 0:
                 # Get device index before cleanup
                 device_idx = self.storage_id_to_device.get(storage_id_int)
-                
+
                 # Clean up storage tracking
                 del self.storage_id_ref_count[storage_id_int]
                 self.storage_id_to_device.pop(storage_id_int, None)
                 self.generated_storage_ids.discard(storage_id_int)
-                
+
                 # Call remote cleanup
                 if device_idx is not None:
                     log.info(f"Last reference to storage {storage_id_int} freed, initiating remote cleanup")
                     self._cleanup_remote_storage(storage_id_int, device_idx)
                 else:
                     log.info(f"No device index found for storage {storage_id_int}, skipping remote cleanup")
-                    
+
                 log.info(f"Freed storage ID {storage_id_int}")
             else:
                 log.info(f"Storage {storage_id_int} still has {self.storage_id_ref_count[storage_id_int]} references, skipping cleanup")
         else:
             log.warning(f"Attempted to free unknown storage {storage_id_int}")
-        
+
         return True
-    
+
 
     # Note: GPU registration is now handled directly in create_storage_with_id
 
@@ -182,19 +182,18 @@ class RemoteStorageRegistry:
             # Import here to avoid circular imports
             from ._remote_orchestrator import remote_orchestrator
             from .device import get_device_registry
-            
             orchestrator = remote_orchestrator
             if orchestrator is None:
                 log.warning(f"No remote orchestrator available for storage {storage_id} cleanup")
                 return
-            
+
             registry = get_device_registry()
             device = registry.get_device_by_index(device_idx)
-            
+
             if device is None:
                 log.warning(f"No device found for index {device_idx} during storage {storage_id} cleanup")
                 return
-            
+
             # Attempt remote cleanup
             log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
             success = orchestrator.remove_tensor_from_remote(str(storage_id), device)
@@ -202,7 +201,7 @@ class RemoteStorageRegistry:
                 log.info(f"✅ Successfully cleaned up remote storage {storage_id} on device {device_idx}")
             else:
                 log.warning(f"❌ Remote cleanup returned false for storage {storage_id} on device {device_idx}")
-                
+
         except Exception as e:
             # Log but don't fail - local cleanup already completed
             log.warning(f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}")
@@ -213,15 +212,15 @@ class RemoteStorageRegistry:
         # This is a placeholder - actual copy operations should go through remote execution
         dest_device = self.storage_id_to_device.get(int(dest_id))
         src_device = self.storage_id_to_device.get(int(src_id))
-        
+
         if dest_device is None or src_device is None:
             raise RuntimeError(f"Copy failed: storage IDs {dest_id} or {src_id} not found")
-        
+
         # For storage ID system, copy operations should go through remote aten execution
         # This is just a placeholder to indicate the operation was requested
         log.info(f"Storage copy requested: {src_id} -> {dest_id} ({count} bytes)")
         return True
-    
+
 
     def device_count_method(self) -> int:
         """Return number of devices"""
@@ -252,10 +251,10 @@ class RemoteStorageRegistry:
 
 class Driver:
     """Simplified driver that only manages storage IDs without local simulation"""
-    
+
     def __init__(self) -> None:
         self.registry_obj = RemoteStorageRegistry()
-        
+
         # Register this instance for cleanup
         atexit.register(self._cleanup)
 
@@ -268,7 +267,7 @@ class Driver:
     def exec(self, cmd: str, *args: Any) -> Any:
         """Execute a command on the storage ID registry"""
         log.info(f"Executing command: {cmd}(*{args[:2]}...)")  # Limit args in log
-        
+
         # Handle operations that need special error handling
         if cmd in ["create_storage_with_id", "free_storage_with_id"]:
             if hasattr(self.registry_obj, cmd):
@@ -277,7 +276,7 @@ class Driver:
                 if not result:
                     storage_id = args[0]
                     if cmd == "create_storage_with_id":
-                        nbytes, device_index = args[1], args[2] 
+                        nbytes, device_index = args[1], args[2]
                         raise RuntimeError(f"Failed to create storage with ID {storage_id} ({nbytes} bytes) on device {device_index}")
                     elif cmd == "free_storage_with_id":
                         raise RuntimeError(f"Failed to free storage with ID {storage_id}")

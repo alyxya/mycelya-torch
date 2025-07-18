@@ -42,7 +42,7 @@ def get_device_properties(device: Optional[int] = None) -> Any:
             self.total_memory = 0  # Remote memory not directly accessible
             self.major = 8  # A100 compute capability
             self.minor = 0
-            
+
     return Properties()
 
 def synchronize() -> None:

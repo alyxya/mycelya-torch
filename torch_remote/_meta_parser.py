@@ -9,11 +9,11 @@ from torch.utils._pytree import tree_map, tree_map_only
 
 
 class RemoteTensorMeta:
-    def __init__(self, tensor: Optional[torch.Tensor] = None, checked: bool = True, data_ptr: Optional[int] = None, size: Optional[torch.Size] = None, stride: Optional[Tuple[int, ...]] = None, 
+    def __init__(self, tensor: Optional[torch.Tensor] = None, checked: bool = True, data_ptr: Optional[int] = None, size: Optional[torch.Size] = None, stride: Optional[Tuple[int, ...]] = None,
                  storage_offset: Optional[int] = None, dtype: Optional[torch.dtype] = None, nelem_in_bytes: Optional[int] = None, storage_id: Optional[int] = None) -> None:
         """
         Create RemoteTensorMeta from either a tensor or explicit metadata.
-        
+
         Args:
             tensor: Extract metadata from this tensor (original behavior)
             checked: Whether to check tensor is on remote device
@@ -68,13 +68,13 @@ VALID_QUEUE_TYPES_OUT = {RemoteTensorMeta, int, float, str, torch.dtype}
 
 def safe_str(args: Any) -> str:
     """Convert arguments to a safe string representation for logging.
-    
+
     Converts torch.Tensor objects to RemoteTensorMeta strings to avoid
     potential issues with remote tensor string representation.
-    
+
     Args:
         args: Arguments to convert to string
-        
+
     Returns:
         Safe string representation of the arguments
     """
@@ -90,14 +90,14 @@ def safe_str(args: Any) -> str:
 
 def validate_send_queue_args(cmd: str, args: Any) -> None:
     """Validate that arguments are safe to send through the remote queue.
-    
+
     Ensures that only supported object types are sent over the remote
     communication channel to prevent serialization errors.
-    
+
     Args:
         cmd: Command name for context in error messages
         args: Arguments to validate
-        
+
     Raises:
         RuntimeError: If invalid object types are found
     """
@@ -119,18 +119,18 @@ def validate_send_queue_args(cmd: str, args: Any) -> None:
 
 def prepare_for_sending(args: Any, kwargs: Any) -> Any:
     """Prepare arguments for sending to remote device.
-    
+
     Converts torch.Tensor objects to RemoteTensorMeta for efficient
     transmission. Remote tensors are converted to metadata only,
     while CPU tensors include full tensor data.
-    
+
     Args:
         args: Positional arguments to prepare
         kwargs: Keyword arguments to prepare
-        
+
     Returns:
         Converted arguments ready for remote transmission
-        
+
     Raises:
         RuntimeError: If unsupported object types are found
     """
@@ -147,7 +147,7 @@ def prepare_for_sending(args: Any, kwargs: Any) -> Any:
                 return RemoteTensorMeta(
                     data_ptr=storage_id,
                     size=obj.size(),
-                    stride=obj.stride(), 
+                    stride=obj.stride(),
                     storage_offset=obj.storage_offset(),
                     dtype=obj.dtype,
                     nelem_in_bytes=obj.numel() * obj.element_size(),
@@ -164,19 +164,19 @@ def prepare_for_sending(args: Any, kwargs: Any) -> Any:
 
 def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
     """Process arguments received from remote device.
-    
+
     Converts RemoteTensorMeta objects back to torch.Tensor using
     the provided allocator. Handles reconstruction of tensor objects
     from metadata.
-    
+
     Args:
         allocator: Allocator to create tensors from metadata
         args: Received positional arguments
         kwargs: Received keyword arguments
-        
+
     Returns:
         Reconstructed arguments with tensor objects
-        
+
     Raises:
         RuntimeError: If invalid object types are received
     """
@@ -196,16 +196,16 @@ def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
 
 def to_device_no_copy(device: Union[torch.device, str], args: Any, kwargs: Any) -> Any:
     """Create empty tensors on target device without copying data.
-    
+
     Creates tensor placeholders with the same shape and properties
     as input tensors but on the specified device. Useful for setting
     up tensor structures before actual data transfer.
-    
+
     Args:
         device: Target device for new tensors
         args: Input arguments containing tensors
         kwargs: Input keyword arguments containing tensors
-        
+
     Returns:
         Arguments with empty tensors on target device
     """

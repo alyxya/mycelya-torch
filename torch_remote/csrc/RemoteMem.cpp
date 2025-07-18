@@ -79,13 +79,13 @@ at::Tensor empty_remote(
     c10::optional<at::Device> device,
     c10::optional<bool> pin_memory,
     c10::optional<at::MemoryFormat> memory_format) {
-  
+
   // Handle device resolution
   c10::Device target_device = device.value_or(c10::Device(c10::DeviceType::PrivateUse1, 0));
   if (target_device.type() != c10::DeviceType::PrivateUse1) {
     target_device = c10::Device(c10::DeviceType::PrivateUse1, target_device.index());
   }
-  
+
   // Validate device index
   TORCH_CHECK(validate_device_index(target_device.index()), 
               "Invalid device index: ", target_device.index());
@@ -115,13 +115,13 @@ at::Tensor empty_strided_remote(
     c10::optional<at::Layout> layout,
     c10::optional<at::Device> device,
     c10::optional<bool> pin_memory) {
-  
+
   // Handle device resolution
   c10::Device target_device = device.value_or(c10::Device(c10::DeviceType::PrivateUse1, 0));
   if (target_device.type() != c10::DeviceType::PrivateUse1) {
     target_device = c10::Device(c10::DeviceType::PrivateUse1, target_device.index());
   }
-  
+
   // Validate device index
   TORCH_CHECK(validate_device_index(target_device.index()), 
               "Invalid device index: ", target_device.index());
@@ -156,11 +156,6 @@ at::Tensor as_strided_remote(
   // This creates a view tensor that shares storage without triggering remote calls
   return at::cpu::as_strided(self, size, stride, storage_offset);
 }
-
-
-
-
-
 
 // C++ implementation of set_ for tensor metadata operations
 at::Tensor& set_remote(

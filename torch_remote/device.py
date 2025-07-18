@@ -65,7 +65,7 @@ class RemoteMachine:
 
         # Validate GPU type is supported by provider
         self._validate_gpu_support()
-        
+
         # Create and start the GPU machine
         self._create_and_start_gpu_machine()
 
@@ -89,7 +89,7 @@ class RemoteMachine:
                 raise ValueError(f"GPU type {self.gpu_type.value} not supported by {self.provider.value}")
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
-    
+
     def _create_and_start_gpu_machine(self) -> None:
         """Create and start the GPU machine for this device."""
         try:
@@ -107,11 +107,11 @@ class RemoteMachine:
         except Exception as e:
             log.error(f"Failed to start GPU machine: {e}")
             # Continue without remote execution capability
-    
+
     def get_gpu_machine(self) -> Optional[Any]:
         """Get the active GPU machine for this device."""
         return self._gpu_machine
-    
+
     def stop_gpu_machine(self) -> None:
         """Stop the GPU machine for this device."""
         if self._gpu_machine and self._gpu_machine.is_running():
@@ -137,7 +137,7 @@ class RemoteMachine:
 
     def __hash__(self) -> int:
         return hash(self.machine_id)
-    
+
 
     @property
     def device_name(self) -> str:
@@ -156,14 +156,14 @@ class RemoteMachine:
         """Get the device's index in the device registry."""
         registry = get_device_registry()
         return registry.get_device_index(self)
-    
+
     def device(self) -> torch.device:
         """
         Get a PyTorch device object for this RemoteMachine.
-        
+
         Returns:
             torch.device: A PyTorch device object with type "remote" and the device's index
-            
+
         Example:
             >>> backend_device = create_modal_machine("A100-40GB")
             >>> torch_device = backend_device.device()
@@ -232,7 +232,7 @@ class DeviceRegistry:
         """Clear all registered machines."""
         self._devices.clear()
         self._next_index = 0
-    
+
     def shutdown_all_machines(self) -> None:
         """Stop all GPU machines without clearing the registry."""
         for machine in self._devices.values():
@@ -284,7 +284,7 @@ def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine:
 
     # Register the machine
     _device_registry.register_device(machine)
-    
+
     # Register atexit cleanup for this specific machine
     atexit.register(machine.stop_gpu_machine)
 

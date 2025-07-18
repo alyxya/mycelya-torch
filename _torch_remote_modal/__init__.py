@@ -4,7 +4,7 @@
 """
 Private package for torch_remote execution.
 
-This package contains remote execution apps for multiple cloud providers 
+This package contains remote execution apps for multiple cloud providers
 and should not be imported directly. It's used internally by torch_remote.
 """
 

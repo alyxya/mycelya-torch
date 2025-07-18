@@ -36,7 +36,7 @@ image = (
     .pip_install("numpy", "torch")
 )
 
-# Cache for GPU-specific apps and their functions  
+# Cache for GPU-specific apps and their functions
 _gpu_apps: Dict[str, Tuple[modal.App, Any]] = {}
 
 # GPU configuration mapping
@@ -52,8 +52,6 @@ GPU_CONFIG = {
     "H200": {"timeout": 450, "retries": 2},
     "B200": {"timeout": 450, "retries": 2},
 }
-
-
 
 
 def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
@@ -98,7 +96,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         serialized=True
     )
     class PytorchServer:
-        
+
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
             if not hasattr(self, "_storages"):
@@ -106,11 +104,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 from typing import Dict, Any, Union, Tuple
                 
                 # storage_id -> Union[torch.Storage, (scalar_value, dtype_str)]
-                self._storages: Dict[str, Union[Any, Tuple[Any, str]]] = {}  
+                self._storages: Dict[str, Union[Any, Tuple[Any, str]]] = {}
                 self._storage_lock = threading.RLock()
             
             return self._storages, self._storage_lock
-        
+
         @modal.method()
         def create_storage(
             self,
@@ -150,7 +148,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 log.info(f"📦 Created storage {storage_id} for tensor with shape {tensor.shape} on {device}")
             
             return storage_id
-        
+
         @modal.method()
         def get_storage_data(self, storage_id: str, shape=None, stride=None, storage_offset=0, dtype=None) -> bytes:
             """
@@ -194,8 +192,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 buffer = io.BytesIO()
                 torch.save(tensor, buffer)
                 return buffer.getvalue()
-        
-        
+
         @modal.method()
         def remove_storage(self, storage_id: str) -> bool:
             """
@@ -215,7 +212,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     del storages[storage_id]
                     log.info(f"🗑️ Removed storage {storage_id}")
                 return removed
-        
+
         @modal.method()
         def execute_aten_operation(
             self,
@@ -362,18 +359,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 import traceback
                 traceback.print_exc()
                 raise
-        
-        
-    
+
     _gpu_apps[machine_id] = (app, PytorchServer)
     return app, PytorchServer
-
-
 
 
 def clear_app_cache():
     """Clear the app cache."""
     global _gpu_apps
     _gpu_apps.clear()
-
-
