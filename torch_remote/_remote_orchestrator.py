@@ -63,10 +63,10 @@ def with_error_handling(func):
 
 # Try to load the remote execution module (Modal provider implementation)
 try:
-    import torch_remote_execution.modal_app
-    log.info("Loaded torch_remote_execution app")
+    from .backends.modal import client as modal_client
+    log.info("Loaded modal client")
 except Exception as e:
-    log.warning(f"Remote execution not available: {e}")
+    log.warning(f"Modal client not available: {e}")
 
 
 class RemoteOrchestrator:

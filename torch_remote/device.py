@@ -95,7 +95,7 @@ class RemoteMachine:
         try:
             if self.provider == BackendProvider.MODAL:
                 # Import here to avoid circular imports
-                from torch_remote_execution.modal_app import create_modal_app_for_gpu
+                from .backends.modal.client import create_modal_app_for_gpu
                 self._gpu_machine = create_modal_app_for_gpu(self.gpu_type.value, self.machine_id)
                 self._gpu_machine.start()
                 log.info(f"Started GPU machine: {self._gpu_machine}")
