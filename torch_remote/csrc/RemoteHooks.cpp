@@ -14,7 +14,7 @@
 namespace remote {
 namespace {
 
-// Python driver_exec function for direct driver access
+// Python driver_exec function for direct operation execution
 PyObject* py_driver_exec;
 
 
@@ -235,14 +235,11 @@ void set_driver_exec(PyObject* driver_exec_fn) {
 
 py::function get_method(const char* name) {
   auto driver_exec = py::cast<py::function>(py_driver_exec);
-  // Create a lambda that calls driver_exec with the given name
+  // Create a function that calls driver_exec with the operation name
   return py::cpp_function([driver_exec, name](py::args args) {
-    py::list args_list;
-    args_list.append(py::str(name));
-    for (auto arg : args) {
-      args_list.append(arg);
-    }
-    return driver_exec(*args_list);
+    // Call driver_exec(name, *args)
+    py::tuple args_with_name = py::make_tuple(py::str(name)) + args;
+    return driver_exec(*args_with_name);
   });
 }
 

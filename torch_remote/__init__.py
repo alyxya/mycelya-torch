@@ -6,12 +6,12 @@ from typing import Any, Union, Optional
 
 import torch
 
-# Direct driver access for C++ - eliminates need for impl_factory
+# Direct driver access for C++ - eliminates impl_factory pattern entirely
 from ._device_daemon import driver
 
-def driver_exec(name: str, *args):
-    """Direct driver access for C++ code"""
-    return driver.exec(name, *args)
+def driver_exec(name: str, *args, **kwargs):
+    """Direct driver execution - no factory pattern needed"""
+    return driver.exec(name, *args, **kwargs)
 
 
 # Load the C++ Module
