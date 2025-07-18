@@ -237,7 +237,7 @@ Here's how a typical operation flows through the system:
    - Tensors are serialized to bytes
    - ModalClient context is started (Modal app)
    - Appropriate GPU-specific function is called based on device configuration
-   - `PytorchOperationExecutor.execute_aten_operation()` runs on cloud GPU
+   - `PytorchServer.execute_aten_operation()` runs on cloud GPU
    - Results are serialized and returned
    - Results are deserialized back to remote tensors with original device ID preserved
 

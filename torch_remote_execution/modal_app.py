@@ -62,7 +62,7 @@ class ModalClient:
     Client interface for Modal cloud GPU execution.
     
     This class provides a client-side interface to Modal's cloud GPU infrastructure,
-    encapsulating Modal app management, executor instances, and communication
+    encapsulating Modal app management, server instances, and communication
     protocols while maintaining state and connection management.
     """
     
@@ -70,16 +70,16 @@ class ModalClient:
         self.gpu_type = gpu_type
         self.machine_id = machine_id
         self._app = None
-        self._executor_class = None
-        self._executor_instance = None
+        self._server_class = None
+        self._server_instance = None
         self._app_context = None
         
-        # Initialize the Modal app and executor
+        # Initialize the Modal app and server
         self._initialize()
     
     def _initialize(self):
-        """Initialize the Modal app and executor class."""
-        self._app, self._executor_class = _create_modal_app_for_gpu(
+        """Initialize the Modal app and server class."""
+        self._app, self._server_class = _create_modal_app_for_gpu(
             self.gpu_type, self.machine_id
         )
     
@@ -88,8 +88,8 @@ class ModalClient:
         if self._app_context is None:
             self._app_context = self._app.run()
             self._app_context.__enter__()
-            # Create executor instance when app starts
-            self._executor_instance = self._executor_class()
+            # Create server instance when app starts
+            self._server_instance = self._server_class()
     
     def stop(self):
         """Stop the Modal app context for this machine."""
@@ -101,7 +101,7 @@ class ModalClient:
                 pass
             finally:
                 self._app_context = None
-                self._executor_instance = None
+                self._server_instance = None
     
     def is_running(self) -> bool:
         """Check if the machine is currently running."""
@@ -121,7 +121,7 @@ class ModalClient:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.create_storage.remote(tensor_data, storage_id)
+        return self._server_instance.create_storage.remote(tensor_data, storage_id)
     
     def get_storage_data(self, storage_id: str) -> bytes:
         """
@@ -136,7 +136,7 @@ class ModalClient:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.get_storage_data.remote(storage_id)
+        return self._server_instance.get_storage_data.remote(storage_id)
     
     
     def execute_operation_with_ids(
@@ -163,7 +163,7 @@ class ModalClient:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.execute_aten_operation_with_ids.remote(
+        return self._server_instance.execute_aten_operation_with_ids.remote(
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
     
@@ -180,7 +180,7 @@ class ModalClient:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.remove_storage.remote(storage_id)
+        return self._server_instance.remove_storage.remote(storage_id)
     
     
     
@@ -229,7 +229,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
         
     Returns:
-        Tuple of (modal_app, executor_class) for the specified device
+        Tuple of (modal_app, server_class) for the specified device
     """
     if machine_id in _gpu_apps:
         return _gpu_apps[machine_id]
@@ -247,10 +247,10 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         retries=config["retries"],
         serialized=True
     )
-    class PytorchOperationExecutor:
+    class PytorchServer:
         
         def _get_storages(self):
-            """Get or create storage mapping for this executor instance."""
+            """Get or create storage mapping for this server instance."""
             if not hasattr(self, "_storages"):
                 import threading
                 from typing import Dict, Any
@@ -485,8 +485,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         
         
     
-    _gpu_apps[machine_id] = (app, PytorchOperationExecutor)
-    return app, PytorchOperationExecutor
+    _gpu_apps[machine_id] = (app, PytorchServer)
+    return app, PytorchServer
 
 
 def get_modal_app_for_device(device) -> ModalClient:
