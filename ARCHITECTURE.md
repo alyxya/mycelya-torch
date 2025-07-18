@@ -231,7 +231,7 @@ Here's how a typical operation flows through the system:
    - For simple ops: handles locally
 
 4. **Remote Execution Path** (if enabled):
-   - `RemoteOrchestrator.execute_remote_operation()` is called
+   - `RemoteOrchestrator.execute_remote_aten_operation_efficient()` is called
    - **Device detection and validation**: `_detect_device_from_tensors()` ensures single-device operation
    - Device-specific ModalClient is retrieved or created
    - Tensors are serialized to bytes

@@ -94,7 +94,7 @@ class RemoteOrchestrator:
         
         return gpu_machine
         
-    def execute_remote_operation_efficient(
+    def execute_remote_aten_operation_efficient(
         self, 
         op_name: str, 
         args: Tuple[Any, ...], 
@@ -112,7 +112,7 @@ class RemoteOrchestrator:
             kwargs: Operation keyword arguments (may contain tensors)
             
         Returns:
-            Result of the operation (tensors as remote tensors with new IDs)
+            Result of the aten operation (tensors as remote tensors with new IDs)
         """
         try:
             # Detect machine from tensors
@@ -169,7 +169,7 @@ class RemoteOrchestrator:
                     processed_kwargs[key] = value
             
             # Execute remotely using storage IDs and tensor metadata
-            result_storage_ids = self.execute_remote_operation_with_ids(
+            result_storage_ids = self.execute_remote_aten_operation(
                 op_name, storage_ids, tensor_metadata, tuple(processed_args), processed_kwargs, machine
             )
             
@@ -188,7 +188,7 @@ class RemoteOrchestrator:
                 return tuple(result_tensors)
                 
         except Exception as e:
-            log.error(f"❌ Error in efficient remote execution of {op_name}: {str(e)}")
+            log.error(f"❌ Error in efficient remote aten execution of {op_name}: {str(e)}")
             import traceback
             traceback.print_exc()
             raise
@@ -265,7 +265,7 @@ class RemoteOrchestrator:
         tensor_data = gpu_machine.get_storage_data(storage_id)
         return self._deserialize_tensor(tensor_data)
     
-    def execute_remote_operation_with_ids(
+    def execute_remote_aten_operation(
         self,
         op_name: str,
         storage_ids: List[str],
@@ -275,10 +275,10 @@ class RemoteOrchestrator:
         machine: "RemoteMachine"
     ) -> List[str]:
         """
-        Execute an operation using tensor IDs and metadata.
+        Execute an aten operation using tensor IDs and metadata.
         
         Args:
-            op_name: The operation name
+            op_name: The aten operation name
             storage_ids: Input tensor storage IDs
             tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
             args: Operation arguments
@@ -289,7 +289,7 @@ class RemoteOrchestrator:
             Result tensor IDs
         """
         gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.execute_operation_with_ids(op_name, storage_ids, tensor_metadata, list(args), kwargs)
+        return gpu_machine.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
     def remove_tensor_from_remote(self, storage_id: str, machine: "RemoteMachine") -> bool:
         """
         Remove a tensor from remote machine.
@@ -399,23 +399,25 @@ class RemoteOrchestrator:
             return False
     
     @with_error_handling
-    def safe_execute_remote_operation_with_ids(
+    def safe_execute_remote_aten_operation(
         self,
         op_name: str,
         storage_ids: List[str],
+        tensor_metadata: List[Dict[str, Any]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         machine: "RemoteMachine"
     ) -> List[str]:
         """
-        Safely execute an operation using tensor IDs with error handling.
+        Safely execute an aten operation using tensor IDs with error handling.
         
         Args:
-            op_name: The operation name
+            op_name: The aten operation name
             storage_ids: Input tensor IDs
+            tensor_metadata: Metadata for reconstructing tensors
             args: Operation arguments
             kwargs: Operation keyword arguments
-            device: Target device
+            machine: Target machine
             
         Returns:
             Result tensor IDs
@@ -426,16 +428,16 @@ class RemoteOrchestrator:
             RemoteExecutionError: If execution fails
         """
         # Validate device connection
-        if not self.is_device_connected(device):
-            raise ConnectionError(f"Device {device.machine_id} is not connected")
+        if not self.is_device_connected(machine):
+            raise ConnectionError(f"Device {machine.machine_id} is not connected")
         
         # Validate tensor references
         for storage_id in storage_ids:
-            if not self.check_tensor_exists(storage_id, device):
-                raise StaleReferenceError(f"Tensor {storage_id} not found on device {device.machine_id}")
+            if not self.check_tensor_exists(storage_id, machine):
+                raise StaleReferenceError(f"Tensor {storage_id} not found on device {machine.machine_id}")
         
         # Execute operation
-        return self.execute_remote_operation_with_ids(op_name, storage_ids, args, kwargs, device)
+        return self.execute_remote_aten_operation(op_name, storage_ids, tensor_metadata, args, kwargs, machine)
     
     def cleanup(self):
         """Clean up the remote executor."""

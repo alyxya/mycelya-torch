@@ -119,7 +119,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         executor = _get_remote_orchestrator()
         if executor is not None:
             log.info(f"🚀 Executing inplace operation {op_name} remotely (efficient)")
-            return executor.execute_remote_operation_efficient(op_name, args, kwargs)
+            return executor.execute_remote_aten_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
     
@@ -135,7 +135,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         executor = _get_remote_orchestrator()
         if executor is not None:
             log.info(f"🚀 Executing as_strided operation {op_name} remotely (efficient)")
-            return executor.execute_remote_operation_efficient(op_name, args, kwargs)
+            return executor.execute_remote_aten_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
     
@@ -153,7 +153,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         executor = _get_remote_orchestrator()
         if executor is not None:
             log.info(f"🚀 Executing regular operation {op_name} remotely (efficient)")
-            return executor.execute_remote_operation_efficient(op_name, args, kwargs)
+            return executor.execute_remote_aten_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 

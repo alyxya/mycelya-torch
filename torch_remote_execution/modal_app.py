@@ -139,7 +139,7 @@ class ModalClient:
         return self._server_instance.get_storage_data.remote(storage_id)
     
     
-    def execute_operation_with_ids(
+    def execute_aten_operation(
         self,
         op_name: str,
         storage_ids: List[str],
@@ -148,10 +148,10 @@ class ModalClient:
         kwargs: Dict[str, Any]
     ) -> List[str]:
         """
-        Execute an operation using tensor IDs and metadata.
+        Execute an aten operation using tensor IDs and metadata.
         
         Args:
-            op_name: The operation name
+            op_name: The aten operation name
             storage_ids: Input tensor storage IDs
             tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
             args: Operation arguments
@@ -163,7 +163,7 @@ class ModalClient:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._server_instance.execute_aten_operation_with_ids.remote(
+        return self._server_instance.execute_aten_operation.remote(
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
     
@@ -347,7 +347,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 return removed
         
         @modal.method()
-        def execute_aten_operation_with_ids(
+        def execute_aten_operation(
             self,
             op_name: str,
             storage_ids: List[str],
