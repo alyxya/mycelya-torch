@@ -281,7 +281,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
-                        log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                        # Only compute mean for floating point tensors
+                        if tensor.dtype.is_floating_point:
+                            log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                        else:
+                            log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
                 
                 # Replace tensor placeholders in args with actual tensors
                 processed_args = []
@@ -343,7 +347,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
-                        log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                        # Only compute mean for floating point tensors
+                        if tensor.dtype.is_floating_point:
+                            log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                        else:
+                            log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
                 
                 return result_ids
                 

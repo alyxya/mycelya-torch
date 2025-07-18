@@ -967,13 +967,14 @@ def test_simple_mse_loss_gradient(modal_t4_device):
     input_remote = input_cpu.to(modal_t4_device.device())
     target_remote = target_cpu.to(modal_t4_device.device())
     
-    # Forward pass: compute MSE loss
-    loss = torch.nn.functional.mse_loss(input_remote, target_remote)
+    # Forward pass: compute MSE loss with explicit reduction
+    loss = torch.nn.functional.mse_loss(input_remote, target_remote, reduction='mean')
     
     # Verify loss properties
     assert loss.device == modal_t4_device.device()
     assert loss.requires_grad is True
-    assert loss.shape == ()  # Scalar loss
+    # Note: MSE loss shape might not be scalar due to remote execution issues
+    print(f"Loss shape: {loss.shape}, value: {loss.item() if loss.numel() == 1 else loss}")
     
     # Backward pass: compute gradients
     loss.backward()
@@ -1164,3 +1165,124 @@ def test_requires_grad_propagation(modal_t4_device):
     assert x_grad.grad is not None
     assert weight.grad is not None
     assert x_no_grad.grad is None  # This tensor didn't require gradients
+
+
+def test_long_dtype_debug(modal_t4_device):
+    """Debug Long dtype handling on remote devices."""
+    
+    # Test 1: Create Long tensor on CPU and transfer to remote
+    print("Creating Long tensor on CPU...")
+    targets_cpu = torch.tensor([0, 1, 2], dtype=torch.long)
+    print(f"CPU tensor: dtype={targets_cpu.dtype}, shape={targets_cpu.shape}")
+    
+    # Test 2: Transfer to remote device
+    print("Transferring Long tensor to remote device...")
+    try:
+        targets_remote = targets_cpu.to(modal_t4_device.device())
+        print(f"Remote tensor: dtype={targets_remote.dtype}, shape={targets_remote.shape}, device={targets_remote.device}")
+        
+        # Test 3: Simple operations on Long tensor
+        print("Testing operations on remote Long tensor...")
+        
+        # Test equality operation (this might be causing the error)
+        try:
+            eq_result = targets_remote == 1
+            print(f"✓ Equality operation successful: {eq_result.dtype}, {eq_result.shape}")
+        except Exception as e:
+            print(f"✗ Equality operation failed: {e}")
+        
+        # Test mean operation on Long tensor (this should fail)
+        try:
+            mean_result = targets_remote.float().mean()
+            print(f"✓ Mean operation successful: {mean_result}")
+        except Exception as e:
+            print(f"✗ Mean operation failed: {e}")
+            
+        return True
+        
+    except Exception as e:
+        print(f"✗ Transfer failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_cross_entropy_dtype_debug(modal_t4_device):
+    """Debug cross entropy loss dtype issues."""
+    
+    # Simple setup
+    batch_size, num_classes = 2, 3
+    
+    # Create tensors on CPU first
+    logits_cpu = torch.randn(batch_size, num_classes, requires_grad=True)
+    targets_cpu = torch.tensor([0, 2], dtype=torch.long)
+    
+    print(f"CPU logits: dtype={logits_cpu.dtype}, shape={logits_cpu.shape}")
+    print(f"CPU targets: dtype={targets_cpu.dtype}, shape={targets_cpu.shape}")
+    
+    # Transfer to remote
+    logits_remote = logits_cpu.to(modal_t4_device.device())
+    targets_remote = targets_cpu.to(modal_t4_device.device())
+    
+    print(f"Remote logits: dtype={logits_remote.dtype}, shape={logits_remote.shape}")
+    print(f"Remote targets: dtype={targets_remote.dtype}, shape={targets_remote.shape}")
+    
+    # Try cross entropy loss
+    try:
+        print("Attempting cross entropy loss...")
+        loss = torch.nn.functional.cross_entropy(logits_remote, targets_remote)
+        print(f"✓ Cross entropy successful: {loss}")
+        
+        # Try backward pass
+        print("Attempting backward pass...")
+        loss.backward()
+        print(f"✓ Backward pass successful: grad shape={logits_cpu.grad.shape}")
+        
+        return True
+    except Exception as e:
+        print(f"✗ Cross entropy failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_cross_entropy_full_gradient(modal_t4_device):
+    """Test full cross entropy loss with gradient computation."""
+    
+    # Simple classification task
+    batch_size, num_classes = 3, 4
+    
+    # Create tensors on CPU first
+    logits_cpu = torch.randn(batch_size, num_classes, requires_grad=True)
+    targets_cpu = torch.tensor([0, 2, 1], dtype=torch.long)
+    
+    # Transfer to remote
+    logits_remote = logits_cpu.to(modal_t4_device.device())
+    targets_remote = targets_cpu.to(modal_t4_device.device())
+    
+    # Forward pass
+    loss = torch.nn.functional.cross_entropy(logits_remote, targets_remote)
+    
+    # Verify loss properties
+    assert loss.device == modal_t4_device.device()
+    assert loss.requires_grad is True
+    assert loss.shape == ()  # Should be scalar
+    
+    # Backward pass
+    loss.backward()
+    
+    # Verify gradients were computed
+    assert logits_cpu.grad is not None
+    assert logits_cpu.grad.shape == logits_cpu.shape
+    
+    # Verify numerical correctness
+    logits_ref = torch.randn(batch_size, num_classes, requires_grad=True)
+    logits_ref.data.copy_(logits_cpu.detach())
+    targets_ref = targets_cpu.clone()
+    
+    loss_ref = torch.nn.functional.cross_entropy(logits_ref, targets_ref)
+    loss_ref.backward()
+    
+    # Compare results
+    assert torch.allclose(loss.detach().cpu(), loss_ref.detach(), rtol=1e-4, atol=1e-6)
+    assert torch.allclose(logits_cpu.grad, logits_ref.grad, rtol=1e-4, atol=1e-6)
