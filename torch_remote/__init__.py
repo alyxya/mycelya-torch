@@ -190,3 +190,6 @@ torch._register_device_module("remote", _create_module())
 
 # Import device management
 from .device import create_modal_machine, RemoteMachine, GPUType, get_device_registry
+
+# Import ATen implementations to ensure PyTorch registrations are executed
+import torch_remote._aten_impl  # noqa: F401
