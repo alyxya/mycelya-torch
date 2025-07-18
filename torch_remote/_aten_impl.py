@@ -27,7 +27,16 @@ VIEW_OPERATIONS = {
 _remote_executor: Optional[Any] = None
 
 def _get_remote_executor() -> Optional[Any]:
-    """Get remote executor, importing lazily."""
+    """Get the global remote executor instance with lazy initialization.
+    
+    The remote executor handles communication with remote GPU machines
+    and coordinates tensor operations across devices. This function
+    imports the executor lazily to avoid circular imports and gracefully
+    handles cases where remote execution is not available.
+    
+    Returns:
+        RemoteExecutor instance if available, None otherwise
+    """
     global _remote_executor
     if _remote_executor is None:
         try:
@@ -249,6 +258,22 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
 
 
 def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
+    """Copy data from one tensor to another, handling remote device transfers.
+    
+    This function implements the core copy operation for remote tensors,
+    supporting CPU↔remote transfers and preventing cross-device transfers
+    between different remote devices.
+    
+    Args:
+        from_: Source tensor to copy from
+        to_: Target tensor to copy to
+        
+    Returns:
+        Target tensor with copied data
+        
+    Raises:
+        RuntimeError: If attempting to transfer between different remote devices
+    """
     # Simplified copy implementation - remote tensors are now regular torch.Tensor
     # with proper device handling via C++ allocator
     
@@ -348,6 +373,18 @@ def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout
 
 
 def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
+    """Set one tensor to point to another tensor's storage.
+    
+    This creates a view relationship where ten1 shares ten2's storage,
+    shape, stride, and offset. Used for tensor aliasing operations.
+    
+    Args:
+        ten1: Tensor to modify
+        ten2: Source tensor to point to
+        
+    Returns:
+        Modified tensor ten1 pointing to ten2's data
+    """
     return torch.ops.aten.set_.source_Storage_storage_offset(
         ten1,
         ten2.untyped_storage(),
@@ -358,6 +395,20 @@ def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
 
 
 def _local_scalar_dense(ten: torch.Tensor) -> Union[int, float, complex, bool]:
+    """Extract a scalar value from a remote tensor.
+    
+    Downloads the tensor data from the remote device and extracts
+    the scalar value. The tensor must contain exactly one element.
+    
+    Args:
+        ten: Remote tensor containing a single scalar value
+        
+    Returns:
+        The scalar value as a Python primitive type
+        
+    Raises:
+        RuntimeError: If tensor contains more than one element
+    """
     host_mem = copy_from_device(ten)
     return host_mem.item()
 

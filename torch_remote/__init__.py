@@ -10,7 +10,20 @@ import torch
 from ._device_daemon import driver
 
 def driver_exec(name: str, *args, **kwargs):
-    """Direct driver execution - no factory pattern needed"""
+    """Execute a command on the remote device driver.
+    
+    This function provides direct access to the remote device driver,
+    eliminating the need for factory patterns. Used internally by
+    the C++ extension and remote execution system.
+    
+    Args:
+        name: Command name to execute
+        *args: Command arguments
+        **kwargs: Command keyword arguments
+        
+    Returns:
+        Result of the driver command
+    """
     return driver.exec(name, *args, **kwargs)
 
 
@@ -19,6 +32,15 @@ import torch_remote._C  # isort:skip # type: ignore[import] # noqa: F401
 
 
 def _create_module() -> types.ModuleType:
+    """Create the remote device module for PyTorch backend registration.
+    
+    This function creates a module that implements the PyTorch accelerator
+    backend interface for remote devices. It provides device context
+    management, RNG state handling, and other core device operations.
+    
+    Returns:
+        Module implementing the remote device backend interface
+    """
     module = types.ModuleType("_RemoteMod")
 
     class device:
@@ -40,15 +62,38 @@ def _create_module() -> types.ModuleType:
             self.idx = driver.exec("uncheckedSetDevice", self.prev_idx)
 
     def device_count() -> int:
+        """Get the number of available remote devices.
+        
+        Returns:
+            Number of remote devices available
+        """
         return driver.exec("deviceCount")
 
     def is_available() -> bool:
+        """Check if remote device support is available.
+        
+        Returns:
+            True if remote devices are available, False otherwise
+        """
         return True
 
     def current_device() -> int:
+        """Get the current remote device index.
+        
+        Returns:
+            Index of the currently selected remote device
+        """
         return torch.accelerator.current_device_index()
 
     def get_rng_state(device: Union[str, int, torch.device] = "remote") -> torch.Tensor:
+        """Get the random number generator state for a remote device.
+        
+        Args:
+            device: Remote device to get RNG state from
+            
+        Returns:
+            Tensor containing the RNG state
+        """
         if isinstance(device, str):
             device = torch.device(device)
         elif isinstance(device, int):
@@ -60,6 +105,12 @@ def _create_module() -> types.ModuleType:
         return default_generator.get_state()
 
     def set_rng_state(new_state: torch.Tensor, device: Union[str, int, torch.device] = "remote") -> None:
+        """Set the random number generator state for a remote device.
+        
+        Args:
+            new_state: Tensor containing the new RNG state
+            device: Remote device to set RNG state for
+        """
         if isinstance(device, str):
             device = torch.device(device)
         elif isinstance(device, int):
@@ -77,6 +128,11 @@ def _create_module() -> types.ModuleType:
         return default_generator.initial_seed()
 
     def manual_seed(seed: int) -> None:
+        """Set the random seed for the current remote device.
+        
+        Args:
+            seed: Random seed value
+        """
         seed = int(seed)
 
         idx = current_device()
@@ -84,6 +140,11 @@ def _create_module() -> types.ModuleType:
         default_generator.manual_seed(seed)
 
     def manual_seed_all(seed: int) -> None:
+        """Set the random seed for all remote devices.
+        
+        Args:
+            seed: Random seed value
+        """
         seed = int(seed)
 
         for idx in range(device_count()):

@@ -20,6 +20,18 @@ MAX_ID_GENERATION_ATTEMPTS = 1000
 
 
 def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
+    """Decorator to register functions in a registry dictionary.
+    
+    This decorator adds the decorated function to the provided registry
+    using the function's name as the key. Used for registering driver
+    commands that can be called by name.
+    
+    Args:
+        registry: Dictionary to register the function in
+        
+    Returns:
+        Decorator function that registers and returns the original function
+    """
     def func(fn: Callable) -> Callable:
         registry[fn.__name__] = fn
         return fn

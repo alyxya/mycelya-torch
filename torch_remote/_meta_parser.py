@@ -70,6 +70,17 @@ VALID_QUEUE_TYPES_OUT = {RemoteTensorMeta, int, float, str, torch.dtype}
 
 
 def safe_str(args: Any) -> str:
+    """Convert arguments to a safe string representation for logging.
+    
+    Converts torch.Tensor objects to RemoteTensorMeta strings to avoid
+    potential issues with remote tensor string representation.
+    
+    Args:
+        args: Arguments to convert to string
+        
+    Returns:
+        Safe string representation of the arguments
+    """
     def convert(obj: Any) -> Any:
         if isinstance(obj, torch.Tensor):
             return str(RemoteTensorMeta(obj, checked=False))
@@ -81,6 +92,18 @@ def safe_str(args: Any) -> str:
 
 
 def validate_send_queue_args(cmd: str, args: Any) -> None:
+    """Validate that arguments are safe to send through the remote queue.
+    
+    Ensures that only supported object types are sent over the remote
+    communication channel to prevent serialization errors.
+    
+    Args:
+        cmd: Command name for context in error messages
+        args: Arguments to validate
+        
+    Raises:
+        RuntimeError: If invalid object types are found
+    """
     def check(obj: Any) -> None:
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             if (
@@ -98,6 +121,22 @@ def validate_send_queue_args(cmd: str, args: Any) -> None:
 
 
 def prepare_for_sending(args: Any, kwargs: Any) -> Any:
+    """Prepare arguments for sending to remote device.
+    
+    Converts torch.Tensor objects to RemoteTensorMeta for efficient
+    transmission. Remote tensors are converted to metadata only,
+    while CPU tensors include full tensor data.
+    
+    Args:
+        args: Positional arguments to prepare
+        kwargs: Keyword arguments to prepare
+        
+    Returns:
+        Converted arguments ready for remote transmission
+        
+    Raises:
+        RuntimeError: If unsupported object types are found
+    """
     def convert(obj: Any) -> Any:
         if type(obj) not in VALID_QUEUE_TYPES_IN:
             raise RuntimeError(
@@ -128,6 +167,23 @@ def prepare_for_sending(args: Any, kwargs: Any) -> Any:
 
 
 def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
+    """Process arguments received from remote device.
+    
+    Converts RemoteTensorMeta objects back to torch.Tensor using
+    the provided allocator. Handles reconstruction of tensor objects
+    from metadata.
+    
+    Args:
+        allocator: Allocator to create tensors from metadata
+        args: Received positional arguments
+        kwargs: Received keyword arguments
+        
+    Returns:
+        Reconstructed arguments with tensor objects
+        
+    Raises:
+        RuntimeError: If invalid object types are received
+    """
     def convert(obj: Any) -> Any:
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             raise RuntimeError(
@@ -143,6 +199,20 @@ def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
 
 
 def to_device_no_copy(device: Union[torch.device, str], args: Any, kwargs: Any) -> Any:
+    """Create empty tensors on target device without copying data.
+    
+    Creates tensor placeholders with the same shape and properties
+    as input tensors but on the specified device. Useful for setting
+    up tensor structures before actual data transfer.
+    
+    Args:
+        device: Target device for new tensors
+        args: Input arguments containing tensors
+        kwargs: Input keyword arguments containing tensors
+        
+    Returns:
+        Arguments with empty tensors on target device
+    """
     def safe_to(t: torch.Tensor) -> torch.Tensor:
         return torch.empty_like(t, device=device, requires_grad=t.requires_grad)
 
