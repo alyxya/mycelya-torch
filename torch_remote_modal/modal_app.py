@@ -21,6 +21,7 @@ import threading
 import random
 import logging
 from collections import defaultdict
+import torch
 
 # Import constants from torch_remote
 import sys
