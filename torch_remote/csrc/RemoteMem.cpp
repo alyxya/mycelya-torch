@@ -24,20 +24,19 @@ struct RemoteAllocator final : at::Allocator {
     auto curr_device = c10::Device(c10::DeviceType::PrivateUse1, curr_device_idx);
     void* data = nullptr;
     
-    if (nbytes > 0) {
-      // Generate a unique storage ID using Python method
-      storage_id_t storage_id = get_method(kGenerateStorageIdMethod)().cast<storage_id_t>();
-      
-      // Call Python method to create storage with ID and register it
-      // This should create the storage remotely and return success/failure
-      bool success = get_method(kCreateStorageMethod)(storage_id, nbytes, curr_device_idx).cast<bool>();
-      
-      TORCH_CHECK(success, "Failed to allocate storage with ID ", storage_id, 
-                  " (", nbytes, " bytes) on remote device ", curr_device_idx);
-      
-      // Store the storage ID as the data pointer
-      data = reinterpret_cast<void*>(storage_id);
-    }
+    // Always generate a unique storage ID, even for empty tensors
+    // This ensures scalars and empty tensors get unique IDs
+    storage_id_t storage_id = get_method(kGenerateStorageIdMethod)().cast<storage_id_t>();
+    
+    // Call Python method to create storage with ID and register it
+    // This should create the storage remotely and return success/failure
+    bool success = get_method(kCreateStorageMethod)(storage_id, nbytes, curr_device_idx).cast<bool>();
+    
+    TORCH_CHECK(success, "Failed to allocate storage with ID ", storage_id, 
+                " (", nbytes, " bytes) on remote device ", curr_device_idx);
+    
+    // Store the storage ID as the data pointer (always non-zero)
+    data = reinterpret_cast<void*>(storage_id);
     
     return {data, data, &ReportAndDelete<kFreeStorageMethod>, curr_device};
   }

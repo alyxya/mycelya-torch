@@ -208,6 +208,14 @@ class RemoteOrchestrator:
         Returns:
             Remote tensor that references the existing data
         """
+        # DEBUG: Check for storage ID 0 issue
+        storage_id_int = int(storage_id)
+        log.debug(f"_create_remote_tensor_from_id called with storage_id={storage_id} (int={storage_id_int})")
+        
+        if storage_id_int == 0:
+            log.error(f"ERROR: Attempting to create remote tensor with storage ID 0! This will fail.")
+            raise ValueError(f"Storage ID 0 is invalid - this indicates a bug in storage ID generation")
+        
         # Create a minimal CPU tensor first - shape doesn't matter since it will be reshaped
         # when used in operations that have proper metadata
         cpu_tensor = torch.empty(1, dtype=torch.float32, device=CPU_DEVICE_TYPE)
@@ -217,12 +225,12 @@ class RemoteOrchestrator:
         
         # Override the generated storage ID with our existing one
         # The C++ allocator stores storage IDs as data pointers
-        storage_id_int = int(storage_id)
         
         # Replace the storage's data pointer with our existing storage ID
         storage = remote_tensor.untyped_storage()
         storage.data_ptr = lambda: storage_id_int
         
+        log.debug(f"Created remote tensor with overridden storage_id={storage_id_int}")
         return remote_tensor
     
     

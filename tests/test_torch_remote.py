@@ -1347,6 +1347,69 @@ def test_various_tensor_creation_functions(modal_t4_device):
     return results
 
 
+def test_mse_loss_shape_debug(modal_t4_device):
+    """Debug MSE loss reduction shape issue."""
+    
+    print("=== MSE Loss Shape Debug ===")
+    
+    # Simple test case
+    batch_size = 3
+    
+    # Create tensors
+    input_tensor = torch.randn(batch_size, device=modal_t4_device.device())
+    target_tensor = torch.randn(batch_size, device=modal_t4_device.device())
+    
+    print(f"Input shape: {input_tensor.shape}")
+    print(f"Target shape: {target_tensor.shape}")
+    
+    # Test different reduction modes
+    reductions = ['mean', 'sum', 'none']
+    
+    for reduction in reductions:
+        try:
+            loss = torch.nn.functional.mse_loss(input_tensor, target_tensor, reduction=reduction)
+            print(f"✓ MSE loss with reduction='{reduction}': shape={loss.shape}, value={loss}")
+            
+            # Compare with CPU
+            input_cpu = input_tensor.cpu()
+            target_cpu = target_tensor.cpu()
+            loss_cpu = torch.nn.functional.mse_loss(input_cpu, target_cpu, reduction=reduction)
+            print(f"  CPU reference: shape={loss_cpu.shape}, value={loss_cpu}")
+            
+            # Check if shapes match
+            if loss.shape == loss_cpu.shape:
+                print(f"  ✓ Shapes match")
+            else:
+                print(f"  ✗ Shape mismatch: remote={loss.shape} vs CPU={loss_cpu.shape}")
+                
+        except Exception as e:
+            print(f"✗ MSE loss with reduction='{reduction}' failed: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    print("\n=== Testing Manual Reduction ===")
+    
+    # Test manual reduction operations
+    try:
+        # Manual MSE calculation
+        diff = input_tensor - target_tensor
+        squared_diff = diff * diff
+        print(f"Squared diff shape: {squared_diff.shape}")
+        
+        # Manual mean
+        manual_mean = squared_diff.mean()
+        print(f"Manual mean shape: {manual_mean.shape}, value: {manual_mean}")
+        
+        # Manual sum
+        manual_sum = squared_diff.sum()
+        print(f"Manual sum shape: {manual_sum.shape}, value: {manual_sum}")
+        
+    except Exception as e:
+        print(f"Manual reduction failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def test_direct_tensor_creation(modal_t4_device):
     """Test direct tensor creation on remote device vs CPU-first workaround."""
     
