@@ -119,12 +119,30 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
     
-    # Second check for view operations (alias_info)
+    # Handle as_strided separately from other view operations
+    elif op is torch.ops.aten.as_strided.default:
+        # as_strided should be handled by C++ but if it reaches here, 
+        # treat it as a regular operation (not a view operation)
+        log.warning(f"as_strided reached Python fallback, executing remotely")
+        op_name = op.overloadpacket._qualified_op_name
+        log.info(f"🔧 as_strided operation: {op_name}")
+        
+        # Execute remotely using efficient storage ID system
+        executor = _get_remote_executor()
+        if executor is not None:
+            log.info(f"🚀 Executing as_strided operation {op_name} remotely (efficient)")
+            return executor.execute_remote_operation_efficient(op_name, args, kwargs)
+        else:
+            raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
+    
+    # Second check for view operations (alias_info) - excluding as_strided
     elif any(r.alias_info is not None for r in op._schema.returns):
         # View ops - handle exactly like pytorch-openreg-2
         if op is torch.ops.aten.view.default:
             return torch.ops.aten._unsafe_view(*args, **kwargs)
-        raise RuntimeError(f"{op} view op is not handled yet")
+        else:
+            # For other view operations, try using the view handler
+            return _handle_view_operation(op, *args, **kwargs)
     
     # Everything else is a regular operation - execute remotely
     else:
