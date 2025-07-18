@@ -19,7 +19,10 @@ import uuid
 import weakref
 import threading
 import random
+import logging
 from collections import defaultdict
+
+log = logging.getLogger(__name__)
 
 # Create simplified image with just PyTorch and CUDA support
 image = (
@@ -446,7 +449,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             # Register in tensor registry
             storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
-            print(f"📦 Created tensor {storage_id} with shape {tensor.shape} on {device}")
+            log.info(f"📦 Created tensor {storage_id} with shape {tensor.shape} on {device}")
             
             return storage_id
         
@@ -501,7 +504,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             """
             removed = self.tensor_registry.remove_tensor(storage_id)
             if removed:
-                print(f"🗑️ Removed tensor {storage_id}")
+                log.info(f"🗑️ Removed tensor {storage_id}")
             return removed
         
         @modal.method()
@@ -528,8 +531,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             """
             import torch
             
-            print(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
-            print(f"Using tensor IDs: {storage_ids}")
+            log.info(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
+            log.debug(f"Using storage IDs: {storage_ids}")
             
             try:
                 # Get tensors from registry
@@ -538,11 +541,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     tensor = self.tensor_registry.get_tensor(storage_id)
                     tensors.append(tensor)
                     # Log input tensor details on modal side
-                    print(f"📥 MODAL INPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    log.debug(f"📥 MODAL INPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
-                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                        log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
                 
                 # Replace tensor placeholders in args with actual tensors
                 processed_args = []
@@ -569,12 +572,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 for part in op_parts:
                     op = getattr(op, part)
                 
-                print(f"Executing operation with {len(processed_args)} args")
+                log.debug(f"Executing operation with {len(processed_args)} args")
                 
                 # Execute the operation
                 result = op(*processed_args, **processed_kwargs)
                 
-                print(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
+                log.info(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
                 
                 # Handle different result types
                 if isinstance(result, torch.Tensor):
@@ -596,16 +599,16 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     result_ids.append(storage_id)
                     
                     # Log output tensor details on modal side
-                    print(f"📤 MODAL OUTPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    log.debug(f"📤 MODAL OUTPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
-                        print(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                        log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
                 
                 return result_ids
                 
             except Exception as e:
-                print(f"❌ Error executing {op_name}: {str(e)}")
+                log.error(f"❌ Error executing {op_name}: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 raise
@@ -632,7 +635,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             """
             import torch
             
-            print(f"🏭 Modal {gpu_type} (machine {machine_id}) creating tensor: {factory_op}")
+            log.info(f"🏭 Modal {gpu_type} (machine {machine_id}) creating tensor: {factory_op}")
             
             try:
                 # Get GPU device
@@ -653,11 +656,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 storage_id = str(random.randint(1, 2**64 - 1))
                 storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
                 
-                print(f"✅ Created {factory_op} tensor {storage_id} with shape {tensor.shape}")
+                log.info(f"✅ Created {factory_op} tensor {storage_id} with shape {tensor.shape}")
                 return storage_id
                 
             except Exception as e:
-                print(f"❌ Error creating {factory_op} tensor: {str(e)}")
+                log.error(f"❌ Error creating {factory_op} tensor: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 raise
@@ -680,7 +683,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             """
             removed_count = self.tensor_registry.garbage_collect(active_storage_ids)
             if removed_count > 0:
-                print(f"🗑️ Garbage collected {removed_count} tensors")
+                log.info(f"🗑️ Garbage collected {removed_count} tensors")
             return removed_count
         
         @modal.method()
@@ -705,7 +708,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             removed_count = self.tensor_registry.garbage_collect()
             
             if removed_count > 0:
-                print(f"🧹 Auto-GC removed {removed_count} tensors")
+                log.info(f"🧹 Auto-GC removed {removed_count} tensors")
             
             return removed_count
     

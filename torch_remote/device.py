@@ -8,9 +8,12 @@ This module provides device abstraction for different GPU cloud providers and GP
 """
 import uuid
 import atexit
+import logging
 from typing import Dict, Any, Optional, Union
 from enum import Enum
 import torch
+
+log = logging.getLogger(__name__)
 
 
 class GPUType(Enum):
@@ -94,14 +97,14 @@ class RemoteBackend:
                 from torch_remote_execution.modal_app import create_modal_app_for_gpu
                 self._gpu_machine = create_modal_app_for_gpu(self.gpu_type.value, self.machine_id)
                 self._gpu_machine.start()
-                print(f"Started GPU machine: {self._gpu_machine}")
+                log.info(f"Started GPU machine: {self._gpu_machine}")
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
         except ImportError as e:
-            print(f"Remote execution not available: {e}")
+            log.warning(f"Remote execution not available: {e}")
             # Continue without remote execution capability
         except Exception as e:
-            print(f"Failed to start GPU machine: {e}")
+            log.error(f"Failed to start GPU machine: {e}")
             # Continue without remote execution capability
     
     def get_gpu_machine(self) -> Optional[Any]:
@@ -113,10 +116,10 @@ class RemoteBackend:
         if self._gpu_machine and self._gpu_machine.is_running():
             try:
                 self._gpu_machine.stop()
-                print(f"Stopped GPU machine: {self.machine_id}")
+                log.info(f"Stopped GPU machine: {self.machine_id}")
             except Exception as e:
-                # Don't print full stack traces during shutdown
-                print(f"Error stopping GPU machine {self.machine_id}: {type(e).__name__}")
+                # Don't log full stack traces during shutdown
+                log.warning(f"Error stopping GPU machine {self.machine_id}: {type(e).__name__}")
         self._gpu_machine = None
 
     def __str__(self) -> str:
