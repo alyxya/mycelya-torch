@@ -26,28 +26,23 @@ VIEW_OPERATIONS = {
 
 
 # Lazy import to avoid import errors if remote execution is not available
-_remote_executor: Optional[Any] = None
-
-def _get_remote_executor() -> Optional[Any]:
-    """Get the global remote executor instance with lazy initialization.
+def _get_remote_orchestrator() -> Optional[Any]:
+    """Get the global remote orchestrator instance.
     
-    The remote executor handles communication with remote GPU machines
+    The remote orchestrator handles communication with remote GPU machines
     and coordinates tensor operations across devices. This function
-    imports the executor lazily to avoid circular imports and gracefully
-    handles cases where remote execution is not available.
+    imports the orchestrator and gracefully handles cases where remote 
+    execution is not available.
     
     Returns:
         RemoteOrchestrator instance if available, None otherwise
     """
-    global _remote_executor
-    if _remote_executor is None:
-        try:
-            from ._remote_orchestrator import remote_orchestrator
-            _remote_executor = remote_orchestrator
-        except ImportError as e:
-            log.warning(f"Remote execution not available: {e}")
-            _remote_executor = None
-    return _remote_executor
+    try:
+        from ._remote_orchestrator import remote_orchestrator
+        return remote_orchestrator
+    except ImportError as e:
+        log.warning(f"Remote execution not available: {e}")
+        return None
 
 
 # impl_factory and _IMPL_REGISTRY removed - C++ now uses driver_exec directly
@@ -121,7 +116,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         result_tensor = args[0]
         
         # Execute remotely using efficient tensor ID system
-        executor = _get_remote_executor()
+        executor = _get_remote_orchestrator()
         if executor is not None:
             log.info(f"🚀 Executing inplace operation {op_name} remotely (efficient)")
             return executor.execute_remote_operation_efficient(op_name, args, kwargs)
@@ -137,7 +132,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         log.info(f"🔧 as_strided operation: {op_name}")
         
         # Execute remotely using efficient storage ID system
-        executor = _get_remote_executor()
+        executor = _get_remote_orchestrator()
         if executor is not None:
             log.info(f"🚀 Executing as_strided operation {op_name} remotely (efficient)")
             return executor.execute_remote_operation_efficient(op_name, args, kwargs)
@@ -159,7 +154,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         log.info(f"🔧 Regular operation: {op_name}")
         
         # Execute remotely using efficient tensor ID system
-        executor = _get_remote_executor()
+        executor = _get_remote_orchestrator()
         if executor is not None:
             log.info(f"🚀 Executing regular operation {op_name} remotely (efficient)")
             return executor.execute_remote_operation_efficient(op_name, args, kwargs)
@@ -174,7 +169,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         raise ValueError("copy_from_device requires a remote tensor")
     
     # Use remote execution to get the tensor data
-    executor = _get_remote_executor()
+    executor = _get_remote_orchestrator()
     if executor is not None:
         from .device import get_device_registry
         
@@ -226,7 +221,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
     
     # Use remote execution to send the tensor data
-    executor = _get_remote_executor()
+    executor = _get_remote_orchestrator()
     if executor is not None:
         from .device import get_device_registry
         

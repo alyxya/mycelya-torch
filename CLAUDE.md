@@ -31,7 +31,7 @@ To run type checking:
 ### Core Modules
 - `torch_remote/__init__.py` - Registers "remote" as PyTorch PrivateUse1 backend
 - `torch_remote/_aten_impl.py` - Main operation dispatch system
-- `torch_remote/_remote_executor.py` - Remote execution coordination
+- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration
 - `torch_remote/_device_daemon.py` - Local tensor ID registry and device simulation
 - `torch_remote/device.py` - Device abstraction and backend management
 

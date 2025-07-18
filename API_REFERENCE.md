@@ -210,17 +210,6 @@ Retrieve device by its registry index.
 **Returns:**
 - `Optional[RemoteMachine]`: Device instance or None if not found
 
-#### `get_device_by_id()`
-```python
-def get_device_by_id(self, device_id: str) -> Optional[RemoteMachine]
-```
-Retrieve device by its unique ID.
-
-**Parameters:**
-- `device_id` (str): Device identifier
-
-**Returns:**
-- `Optional[RemoteMachine]`: Device instance or None if not found
 
 #### `get_device_index()`
 ```python

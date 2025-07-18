@@ -215,12 +215,6 @@ class DeviceRegistry:
         """Get device by its index."""
         return self._devices.get(index)
 
-    def get_device_by_id(self, machine_id: str) -> Optional[RemoteMachine]:
-        """Get device by its ID (for backwards compatibility)."""
-        for device in self._devices.values():
-            if device.machine_id == machine_id:
-                return device
-        return None
 
     def get_device_index(self, machine: RemoteMachine) -> Optional[int]:
         """Get the index of a machine."""

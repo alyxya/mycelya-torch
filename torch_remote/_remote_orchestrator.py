@@ -547,14 +547,4 @@ class RemoteOrchestrator:
 # Global orchestrator instance (Modal provider implementation)
 remote_orchestrator = RemoteOrchestrator()
 
-def _get_remote_orchestrator() -> Optional[RemoteOrchestrator]:
-    """Get the global remote orchestrator instance."""
-    return remote_orchestrator
 
-# Backward compatibility alias
-def _get_remote_executor() -> Optional[RemoteOrchestrator]:
-    """Get the global remote orchestrator instance (legacy name)."""
-    return remote_orchestrator
-
-# Legacy alias for the global instance
-remote_executor = remote_orchestrator

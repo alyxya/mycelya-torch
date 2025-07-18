@@ -86,13 +86,6 @@ class RemoteTensorRegistry:
         # If we couldn't generate a unique ID after max_attempts, raise an error
         raise RuntimeError(f"Failed to generate unique storage ID after {max_attempts} attempts")
     
-    # Backward compatibility - rename method but keep old name working
-    def generate_tensor_id(self) -> int:
-        """Legacy method name - now generates storage ID. 
-        
-        Note: Use generate_storage_id() for new code. storage_id is the preferred terminology.
-        """
-        return self.generate_storage_id()
 
     def create_storage_with_id(self, storage_id: int, nbytes: int, device_index: int) -> bool:
         """Create remote storage with the given ID and return success status"""
@@ -110,10 +103,10 @@ class RemoteTensorRegistry:
         if nbytes > 0:
             try:
                 # Import here to avoid circular imports
-                from ._remote_orchestrator import _get_remote_executor
+                from ._remote_orchestrator import remote_orchestrator
                 from .device import get_device_registry
                 
-                executor = _get_remote_executor()
+                executor = remote_orchestrator
                 if executor is not None:
                     registry = get_device_registry()
                     device = registry.get_device_by_index(device_index)
@@ -142,13 +135,6 @@ class RemoteTensorRegistry:
         storage_id_int = int(storage_id)
         return self.storage_id_to_device.get(storage_id_int)
     
-    # Legacy method for backward compatibility
-    def create_tensor_with_id(self, tensor_id: int, nbytes: int, device_index: int) -> bool:
-        """Legacy method - now creates storage.
-        
-        Note: Use create_storage_with_id() for new code. storage_id is the preferred terminology.
-        """
-        return self.create_storage_with_id(tensor_id, nbytes, device_index)
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID with reference counting and remote cleanup"""
@@ -185,13 +171,6 @@ class RemoteTensorRegistry:
         
         return True
     
-    # Legacy method for backward compatibility
-    def free_tensor_with_id(self, tensor_id: int) -> bool:
-        """Legacy method - now frees storage.
-        
-        Note: Use free_storage_with_id() for new code. storage_id is the preferred terminology.
-        """
-        return self.free_storage_with_id(tensor_id)
 
     def register_tensor_with_gpu(self, storage_id: int, tensor_data: bytes) -> bool:
         """Register tensor data with GPU machine for immediate access"""
@@ -199,10 +178,10 @@ class RemoteTensorRegistry:
         # are immediately available on the GPU machine
         try:
             # Import here to avoid circular imports
-            from ._remote_orchestrator import _get_remote_executor
+            from ._remote_orchestrator import remote_orchestrator
             from .device import get_device_registry
             
-            executor = _get_remote_executor()
+            executor = remote_orchestrator
             if executor is not None:
                 # Get the current remote device (assumes single device for now)
                 registry = get_device_registry()
@@ -223,10 +202,10 @@ class RemoteTensorRegistry:
         """Clean up storage on remote GPU device"""
         try:
             # Import here to avoid circular imports
-            from ._remote_orchestrator import _get_remote_executor
+            from ._remote_orchestrator import remote_orchestrator
             from .device import get_device_registry
             
-            executor = _get_remote_executor()
+            executor = remote_orchestrator
             if executor is None:
                 log.warning(f"No remote executor available for storage {storage_id} cleanup")
                 return
@@ -265,42 +244,6 @@ class RemoteTensorRegistry:
         log.info(f"Copy requested: {src_id} -> {dest_id} ({count} bytes)")
         return True
     
-    # Placeholder methods for backward compatibility (these may not be fully implemented)
-    def register_tensor_mapping(self, tensor_id: int, tensor: torch.Tensor, meta: Any) -> bool:
-        """Placeholder method for backward compatibility"""
-        return True
-    
-    def get_tensor_by_id(self, tensor_id: int) -> Optional[torch.Tensor]:
-        """Placeholder method for backward compatibility"""
-        return None
-    
-    def get_meta_by_id(self, tensor_id: int) -> Optional[Any]:
-        """Placeholder method for backward compatibility"""
-        return None
-    
-    def create_view_tensor_id(self, base_tensor_id: int, new_shape: Any, new_stride: Any, new_storage_offset: int) -> int:
-        """Placeholder method for backward compatibility"""
-        return self.generate_storage_id()
-    
-    def get_storage_id(self, tensor_id: int) -> int:
-        """Placeholder method for backward compatibility"""
-        return tensor_id
-    
-    def get_tensor_ids_for_storage(self, storage_id: int) -> list:
-        """Placeholder method for backward compatibility"""
-        return [storage_id]
-    
-    def is_view_tensor(self, tensor_id: int) -> bool:
-        """Placeholder method for backward compatibility"""
-        return False
-    
-    def get_base_tensor_id(self, tensor_id: int) -> int:
-        """Placeholder method for backward compatibility"""
-        return tensor_id
-    
-    def get_view_tensor_ids(self, base_tensor_id: int) -> list:
-        """Placeholder method for backward compatibility"""
-        return []
 
     def device_count_method(self) -> int:
         """Return number of devices"""
@@ -385,7 +328,7 @@ class Driver:
         else:
             raise RuntimeError(f"Unknown command: {cmd}")
 
-    # Registry methods (for backward compatibility)
+    # Registry methods for C++ driver interface
     registry: Dict[str, Callable] = {}
 
     @register(registry)
@@ -415,24 +358,8 @@ class Driver:
         return self.registry_obj.has_primary_context(device_idx)
 
     @register(registry)
-    def create_tensor_with_id(self, tensor_id: int, nbytes: int, device_index: int) -> bool:
-        return self.registry_obj.create_tensor_with_id(tensor_id, nbytes, device_index)
-
-    @register(registry)
-    def register_tensor_mapping(self, tensor_id: int, tensor: torch.Tensor, meta: Any) -> bool:
-        return self.registry_obj.register_tensor_mapping(tensor_id, tensor, meta)
-
-    @register(registry)
-    def get_tensor_by_id(self, tensor_id: int) -> Optional[torch.Tensor]:
-        return self.registry_obj.get_tensor_by_id(tensor_id)
-
-    @register(registry)
-    def get_meta_by_id(self, tensor_id: int) -> Optional[Any]:
-        return self.registry_obj.get_meta_by_id(tensor_id)
-
-    @register(registry)
-    def free_tensor_with_id(self, tensor_id: int) -> bool:
-        return self.registry_obj.free_tensor_with_id(tensor_id)
+    def create_storage_with_id(self, storage_id: int, nbytes: int, device_index: int) -> bool:
+        return self.registry_obj.create_storage_with_id(storage_id, nbytes, device_index)
 
     @register(registry)
     def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
@@ -441,30 +368,7 @@ class Driver:
     @register(registry)
     def register_tensor_with_gpu(self, storage_id: int, tensor_data: bytes) -> bool:
         return self.registry_obj.register_tensor_with_gpu(storage_id, tensor_data)
-    
-    @register(registry)
-    def create_view_tensor_id(self, base_tensor_id: int, new_shape: Any, new_stride: Any, new_storage_offset: int) -> int:
-        return self.registry_obj.create_view_tensor_id(base_tensor_id, new_shape, new_stride, new_storage_offset)
-    
-    @register(registry)
-    def get_storage_id(self, tensor_id: int) -> int:
-        return self.registry_obj.get_storage_id(tensor_id)
-    
-    @register(registry)
-    def get_tensor_ids_for_storage(self, storage_id: int) -> list:
-        return self.registry_obj.get_tensor_ids_for_storage(storage_id)
-    
-    @register(registry)
-    def is_view_tensor(self, tensor_id: int) -> bool:
-        return self.registry_obj.is_view_tensor(tensor_id)
-    
-    @register(registry)
-    def get_base_tensor_id(self, tensor_id: int) -> int:
-        return self.registry_obj.get_base_tensor_id(tensor_id)
-    
-    @register(registry)
-    def get_view_tensor_ids(self, base_tensor_id: int) -> list:
-        return self.registry_obj.get_view_tensor_ids(base_tensor_id)
+
 
 
 # Global driver instance

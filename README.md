@@ -149,7 +149,7 @@ The test suite includes comprehensive coverage of:
 ### Backend Implementation
 
 - **`torch_remote/_aten_impl.py`** - ATen operator implementations for remote device with cloud execution
-- **`torch_remote/_remote_executor.py`** - Remote execution system for cloud GPU operations
+- **`torch_remote/_remote_orchestrator.py`** - Remote execution orchestration for cloud GPU operations
 - **`torch_remote/_meta_parser.py`** - Metadata parsing for tensor operations
 - **`torch_remote/_device_daemon.py`** - Device lifecycle and memory management
 

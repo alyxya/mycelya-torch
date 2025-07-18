@@ -76,7 +76,7 @@ torch_remote_execution/        # Private package for remote execution
 - **Factory function support**: Handles tensor creation operations on remote device
 - **Library registration**: Registers remote device implementations for specific PyTorch operations
 
-**`torch_remote/_remote_executor.py`** - Remote Execution System
+**`torch_remote/_remote_orchestrator.py`** - Remote Execution Orchestration
 - **RemoteOrchestrator class**: Manages remote execution across cloud providers using stateful ModalClient instances
 - **Tensor serialization/deserialization**: Converts remote tensors to/from bytes for network transport
 - **Provider backend integration**: Interfaces with the `torch_remote_execution` package
