@@ -12,6 +12,9 @@ for each test, improving test efficiency and reducing GPU resource usage.
 import pytest
 import torch
 import torch_remote
+import logging
+
+log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
@@ -69,7 +72,7 @@ def clean_registry():
         try:
             if hasattr(device, 'get_gpu_machine') and device.get_gpu_machine() and device.get_gpu_machine().is_running():
                 registry.register_device(device)
-        except:
+        except Exception:
             # If there's any issue checking device state, skip re-registration
             pass
     
@@ -112,7 +115,7 @@ def device_tensors(modal_t4_device, sample_tensors):
             remote_tensors[name] = cpu_tensor.to(modal_t4_device.device())
         except Exception as e:
             # Some tensor types might not be supported, skip them
-            print(f"Warning: Could not create remote tensor for {name}: {e}")
+            log.warning(f"Could not create remote tensor for {name}: {e}")
     
     return remote_tensors
 
