@@ -70,7 +70,7 @@ def clean_registry():
     for device in existing_devices:
         # Only re-register if this looks like a session device (has a running GPU machine)
         try:
-            if hasattr(device, 'get_gpu_machine') and device.get_gpu_machine() and device.get_gpu_machine().is_running():
+            if hasattr(device, "get_gpu_machine") and device.get_gpu_machine() and device.get_gpu_machine().is_running():
                 registry.register_device(device)
         except Exception:
             # If there's any issue checking device state, skip re-registration

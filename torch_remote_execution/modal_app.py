@@ -410,19 +410,19 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                         storage = storages[storage_id]
                     
                     # Parse dtype string back to torch.dtype
-                    dtype_str = metadata['dtype'].replace('torch.', '')
+                    dtype_str = metadata["dtype"].replace("torch.", "")
                     dtype = getattr(torch, dtype_str)
                     
                     # Reconstruct tensor using storage + metadata
                     tensor = torch.empty(0, dtype=dtype).set_(
                         storage,
-                        metadata['storage_offset'],
-                        metadata['shape'],
-                        metadata['stride']
+                        metadata["storage_offset"],
+                        metadata["shape"],
+                        metadata["stride"]
                     )
                     
                     # Set requires_grad if needed
-                    if metadata.get('requires_grad', False):
+                    if metadata.get("requires_grad", False):
                         tensor.requires_grad_(True)
                     
                     tensors.append(tensor)
@@ -464,7 +464,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Execute the operation
                 result = op(*processed_args, **processed_kwargs)
                 
-                log.info(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, 'shape') else type(result).__name__}")
+                log.info(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, "shape") else type(result).__name__}")
                 
                 # Handle different result types
                 if isinstance(result, torch.Tensor):
