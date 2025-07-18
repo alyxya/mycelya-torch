@@ -145,17 +145,9 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             storages, lock = self._get_storages()
             with lock:
-                # Check if this is a scalar tensor (no meaningful storage)
-                if tensor.numel() == 1 and tensor.dim() == 0:
-                    # Store scalar value and dtype instead of storage
-                    scalar_value = tensor.item()
-                    dtype_str = str(tensor.dtype)
-                    storages[storage_id] = (scalar_value, dtype_str)
-                    log.info(f"📦 Created scalar storage {storage_id} for value {scalar_value} (dtype={dtype_str}) on {device}")
-                else:
-                    # Store regular tensor storage
-                    storages[storage_id] = tensor.untyped_storage()
-                    log.info(f"📦 Created storage {storage_id} for tensor with shape {tensor.shape} on {device}")
+                # Store tensor storage for all tensors (including scalars)
+                storages[storage_id] = tensor.untyped_storage()
+                log.info(f"📦 Created storage {storage_id} for tensor with shape {tensor.shape} on {device}")
             
             return storage_id
         
@@ -183,36 +175,21 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 if storage_id not in storages:
                     raise KeyError(f"Storage ID {storage_id} not found")
                 
-                storage_or_scalar = storages[storage_id]
+                storage = storages[storage_id]
                 
-                # Check if this is a scalar value or a storage object
-                if isinstance(storage_or_scalar, tuple):
-                    # This is a scalar value stored as (scalar_value, dtype_str)
-                    scalar_value, dtype_str = storage_or_scalar
-                    
-                    # Parse dtype string back to torch.dtype
-                    dtype_parsed = getattr(torch, dtype_str.replace("torch.", ""))
-                    
-                    # Create scalar tensor on GPU
-                    tensor = torch.tensor(scalar_value, dtype=dtype_parsed, device=CUDA_DEVICE_TYPE)
-                    log.info(f"📦 Serializing scalar storage {storage_id}: value={scalar_value}, dtype={dtype_str}")
+                # If view parameters are provided, create the view and make it contiguous
+                if shape is not None:
+                    # Create tensor from storage with view parameters
+                    tensor = torch.empty(0, device=storage.device).set_(
+                        storage, storage_offset, shape, stride or []
+                    )
+                    # Make contiguous to get only the view's data
+                    tensor = tensor.contiguous()
+                    log.info(f"📦 Serializing view of storage {storage_id}: shape={shape}, stride={stride}, offset={storage_offset}")
                 else:
-                    # This is a regular storage object
-                    storage = storage_or_scalar
-                    
-                    # If view parameters are provided, create the view and make it contiguous
-                    if shape is not None:
-                        # Create tensor from storage with view parameters
-                        tensor = torch.empty(0, device=storage.device).set_(
-                            storage, storage_offset, shape, stride or []
-                        )
-                        # Make contiguous to get only the view's data
-                        tensor = tensor.contiguous()
-                        log.info(f"📦 Serializing view of storage {storage_id}: shape={shape}, stride={stride}, offset={storage_offset}")
-                    else:
-                        # Return full storage as before (backward compatibility)
-                        tensor = torch.empty(0, device=storage.device).set_(storage)
-                        log.info(f"📦 Serializing full storage {storage_id}")
+                    # Return full storage as before (backward compatibility)
+                    tensor = torch.empty(0, device=storage.device).set_(storage)
+                    log.info(f"📦 Serializing full storage {storage_id}")
                 
                 buffer = io.BytesIO()
                 torch.save(tensor, buffer)
@@ -289,36 +266,25 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     dtype_str = metadata["dtype"].replace("torch.", "")
                     dtype = getattr(torch, dtype_str)
                     
-                    # Check if this is a scalar value or a storage object
-                    if isinstance(storage_or_scalar, tuple):
-                        # This is a scalar value stored as (scalar_value, dtype_str)
-                        scalar_value, stored_dtype_str = storage_or_scalar
-                        
-                        # Create scalar tensor on GPU with the stored value
-                        tensor = torch.tensor(scalar_value, dtype=dtype, device=CUDA_DEVICE_TYPE)
-                        log.debug(f"📥 MODAL INPUT scalar tensor[{i}]: ID={storage_id}, value={scalar_value}, dtype={tensor.dtype}, device={tensor.device}")
-                    else:
-                        # This is a regular storage object
-                        storage = storage_or_scalar
-                        
-                        # Reconstruct tensor using storage + metadata (on CUDA device)
-                        tensor = torch.empty(0, dtype=dtype, device=CUDA_DEVICE_TYPE).set_(
-                            storage,
-                            metadata["storage_offset"],
-                            metadata["shape"],
-                            metadata["stride"]
-                        )
-                        
-                        # Log input tensor details on modal side
-                        log.debug(f"📥 MODAL INPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
-                        
-                        # Log tensor data summary for debugging
-                        if tensor.numel() > 0:
-                            # Only compute mean for floating point tensors
-                            if tensor.dtype.is_floating_point:
-                                log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
-                            else:
-                                log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
+                    # Reconstruct tensor using storage + metadata (on CUDA device)
+                    storage = storage_or_scalar
+                    tensor = torch.empty(0, dtype=dtype, device=CUDA_DEVICE_TYPE).set_(
+                        storage,
+                        metadata["storage_offset"],
+                        metadata["shape"],
+                        metadata["stride"]
+                    )
+                    
+                    # Log input tensor details on modal side
+                    log.debug(f"📥 MODAL INPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    
+                    # Log tensor data summary for debugging
+                    if tensor.numel() > 0:
+                        # Only compute mean for floating point tensors
+                        if tensor.dtype.is_floating_point:
+                            log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                        else:
+                            log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
                     
                     # Note: requires_grad is no longer sent in metadata
                     # Autograd computation happens locally, remote tensors never have requires_grad=True
@@ -374,26 +340,18 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     # Generate integer storage ID (compatible with C++ allocator)
                     storage_id = str(random.randint(1, 2**64 - 1))
                     
-                    # Store scalar values or storage objects depending on tensor type
+                    # Store tensor storage for all tensors (including scalars)
                     with lock:
-                        if tensor.numel() == 1 and tensor.dim() == 0:
-                            # This is a scalar tensor - store the value and dtype
-                            scalar_value = tensor.item()
-                            dtype_str = str(tensor.dtype)
-                            storages[storage_id] = (scalar_value, dtype_str)
-                            log.debug(f"📤 MODAL OUTPUT scalar tensor[{i}]: ID={storage_id}, value={scalar_value}, dtype={tensor.dtype}, device={tensor.device}")
-                        else:
-                            # This is a regular tensor - store the storage
-                            storages[storage_id] = tensor.untyped_storage()
-                            log.debug(f"📤 MODAL OUTPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
-                            
-                            # Log tensor data summary for debugging
-                            if tensor.numel() > 0:
-                                # Only compute mean for floating point tensors
-                                if tensor.dtype.is_floating_point:
-                                    log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
-                                else:
-                                    log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
+                        storages[storage_id] = tensor.untyped_storage()
+                        log.debug(f"📤 MODAL OUTPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                        
+                        # Log tensor data summary for debugging
+                        if tensor.numel() > 0:
+                            # Only compute mean for floating point tensors
+                            if tensor.dtype.is_floating_point:
+                                log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
+                            else:
+                                log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
                     
                     result_ids.append(storage_id)
                 

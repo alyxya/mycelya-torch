@@ -97,35 +97,9 @@ class RemoteStorageRegistry:
         self.storage_id_to_device[storage_id_int] = device_index
         self.storage_id_ref_count[storage_id_int] = 1
         
-        # For empty tensors, still register with GPU machine but with minimal data
+        # For empty tensors (0 bytes), only track locally - do NOT register with remote GPU
         if nbytes == 0:
-            # Create a minimal tensor for empty storage
-            try:
-                # Import here to avoid circular imports
-                from ._remote_orchestrator import remote_orchestrator
-                from .device import get_device_registry
-                
-                executor = remote_orchestrator
-                if executor is not None:
-                    registry = get_device_registry()
-                    device = registry.get_device_by_index(device_index)
-                    
-                    if device is not None:
-                        gpu_machine = device.get_gpu_machine()
-                        if gpu_machine and gpu_machine.is_running():
-                            # Create empty scalar tensor for zero-byte storage
-                            empty_tensor = torch.empty([], dtype=torch.float32)  # Empty scalar tensor
-                            buffer = io.BytesIO()
-                            torch.save(empty_tensor, buffer)
-                            tensor_data = buffer.getvalue()
-                            
-                            storage_id_str = str(storage_id_int)
-                            gpu_machine.create_storage(tensor_data, storage_id_str)
-                            log.info(f"Pre-registered empty storage ID {storage_id_int} with GPU machine")
-            except Exception as e:
-                log.warning(f"Failed to pre-register empty storage {storage_id_int} with GPU machine: {e}")
-            
-            log.info(f"Registered empty storage ID {storage_id_int} on device {device_index}")
+            log.info(f"Registered empty storage ID {storage_id_int} on device {device_index} (local tracking only)")
             return True
         
         # Register the storage with the GPU machine immediately

@@ -131,7 +131,16 @@ class RemoteOrchestrator:
             # Process args - extract storage IDs and metadata
             for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
-                    storage_id = str(arg.untyped_storage().data_ptr())
+                    storage_id_int = arg.untyped_storage().data_ptr()
+                    
+                    # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
+                    if storage_id_int == 0:
+                        log.warning(f"Skipping empty tensor with data_ptr=0 in remote operation {op_name}. This may cause unexpected behavior.")
+                        # For now, replace with a placeholder - in the future we should handle this properly
+                        processed_args.append(None)
+                        continue
+                    
+                    storage_id = str(storage_id_int)
                     storage_ids.append(storage_id)
                     
                     # Collect tensor metadata for proper reconstruction
@@ -152,7 +161,16 @@ class RemoteOrchestrator:
             # Process kwargs - extract storage IDs and metadata
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
-                    storage_id = str(value.untyped_storage().data_ptr())
+                    storage_id_int = value.untyped_storage().data_ptr()
+                    
+                    # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
+                    if storage_id_int == 0:
+                        log.warning(f"Skipping empty tensor with data_ptr=0 in remote operation {op_name} kwarg '{key}'. This may cause unexpected behavior.")
+                        # For now, replace with a placeholder - in the future we should handle this properly
+                        processed_kwargs[key] = None
+                        continue
+                    
+                    storage_id = str(storage_id_int)
                     storage_ids.append(storage_id)
                     
                     # Collect tensor metadata for proper reconstruction
