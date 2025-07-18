@@ -115,10 +115,10 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         result_tensor = args[0]
         
         # Execute remotely using efficient tensor ID system
-        executor = _get_remote_orchestrator()
-        if executor is not None:
+        orchestrator = _get_remote_orchestrator()
+        if orchestrator is not None:
             log.info(f"🚀 Executing inplace operation {op_name} remotely (efficient)")
-            return executor.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            return orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
     
@@ -131,10 +131,10 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         log.info(f"🔧 as_strided operation: {op_name}")
         
         # Execute remotely using efficient storage ID system
-        executor = _get_remote_orchestrator()
-        if executor is not None:
+        orchestrator = _get_remote_orchestrator()
+        if orchestrator is not None:
             log.info(f"🚀 Executing as_strided operation {op_name} remotely (efficient)")
-            return executor.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            return orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
     
@@ -149,10 +149,10 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         log.info(f"🔧 Regular operation: {op_name}")
         
         # Execute remotely using efficient tensor ID system
-        executor = _get_remote_orchestrator()
-        if executor is not None:
+        orchestrator = _get_remote_orchestrator()
+        if orchestrator is not None:
             log.info(f"🚀 Executing regular operation {op_name} remotely (efficient)")
-            return executor.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            return orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
@@ -164,8 +164,8 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         raise ValueError("copy_from_device requires a remote tensor")
     
     # Use remote execution to get the tensor data
-    executor = _get_remote_orchestrator()
-    if executor is not None:
+    orchestrator = _get_remote_orchestrator()
+    if orchestrator is not None:
         from .device import get_device_registry
         
         # Get the device backend
@@ -198,7 +198,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         # Deserialize the tensor data as contiguous representation
         # Since we now serialize with .contiguous(), the deserialized tensor contains exactly
         # the data that should be in the result tensor - no view reconstruction needed
-        result = executor._deserialize_tensor(tensor_data)
+        result = orchestrator._deserialize_tensor(tensor_data)
         
         # Verify the result has the expected shape (it should match the remote tensor's shape)
         if result.size() != from_.size():
@@ -218,8 +218,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
     
     # Use remote execution to send the tensor data
-    executor = _get_remote_orchestrator()
-    if executor is not None:
+    orchestrator = _get_remote_orchestrator()
+    if orchestrator is not None:
         from .device import get_device_registry
         
         # Get the device backend
@@ -240,7 +240,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         log.info(f"Copying CPU tensor to remote tensor ID {storage_id_int}")
         
         # Serialize the CPU tensor
-        tensor_data = executor._serialize_tensor(from_)
+        tensor_data = orchestrator._serialize_tensor(from_)
         
         # Use GPU machine to create/update tensor with specific ID
         # This will overwrite any existing empty tensor with the actual data

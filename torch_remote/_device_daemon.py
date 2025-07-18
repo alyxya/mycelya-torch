@@ -109,8 +109,8 @@ class RemoteStorageRegistry:
                 from ._remote_orchestrator import remote_orchestrator
                 from .device import get_device_registry
                 
-                executor = remote_orchestrator
-                if executor is not None:
+                orchestrator = remote_orchestrator
+                if orchestrator is not None:
                     registry = get_device_registry()
                     device = registry.get_device_by_index(device_index)
                     
@@ -183,9 +183,9 @@ class RemoteStorageRegistry:
             from ._remote_orchestrator import remote_orchestrator
             from .device import get_device_registry
             
-            executor = remote_orchestrator
-            if executor is None:
-                log.warning(f"No remote executor available for storage {storage_id} cleanup")
+            orchestrator = remote_orchestrator
+            if orchestrator is None:
+                log.warning(f"No remote orchestrator available for storage {storage_id} cleanup")
                 return
             
             registry = get_device_registry()
@@ -197,7 +197,7 @@ class RemoteStorageRegistry:
             
             # Attempt remote cleanup
             log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
-            success = executor.remove_tensor_from_remote(str(storage_id), device)
+            success = orchestrator.remove_tensor_from_remote(str(storage_id), device)
             if success:
                 log.info(f"✅ Successfully cleaned up remote storage {storage_id} on device {device_idx}")
             else:

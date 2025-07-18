@@ -467,7 +467,7 @@ class RemoteOrchestrator:
         return self.execute_remote_aten_operation(op_name, storage_ids, tensor_metadata, args, kwargs, machine)
     
     def cleanup(self):
-        """Clean up the remote executor."""
+        """Clean up the remote orchestrator."""
         # No longer needed since machines are managed by devices
         self._device_apps.clear()
         self._last_heartbeat.clear()

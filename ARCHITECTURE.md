@@ -184,7 +184,7 @@ torch_remote_modal/            # Private package for Modal execution
 
 **`torch_remote_modal/modal_app.py`** - Modal Multi-GPU Execution App
 - **ModalClient class**: Stateful wrapper representing a remote GPU machine running on Modal
-  - Encapsulates Modal app and executor with connection management
+  - Encapsulates Modal app and orchestrator with connection management
   - Context manager support for automatic resource cleanup
   - Device-specific initialization and state management
   - Machine lifecycle operations (start, stop, is_running)
