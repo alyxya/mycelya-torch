@@ -6,10 +6,12 @@ from typing import Any, Union, Optional
 
 import torch
 
-# Create our python implementation dict so that the C++ module
-# can access it during its initialization and also register aten impls.
-from ._aten_impl import impl_factory as impl_factory  # noqa: F401
+# Direct driver access for C++ - eliminates need for impl_factory
 from ._device_daemon import driver
+
+def driver_exec(name: str, *args):
+    """Direct driver access for C++ code"""
+    return driver.exec(name, *args)
 
 
 # Load the C++ Module

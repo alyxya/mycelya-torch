@@ -48,7 +48,7 @@ PyMODINIT_FUNC PyInit__C(void) {
 
   py::object remote_mod = py::module_::import("torch_remote");
   // Only borrowed from the python side!
-  remote::set_impl_factory(remote_mod.attr("impl_factory").ptr());
+  remote::set_driver_exec(remote_mod.attr("driver_exec").ptr());
 
   return mod;
 }

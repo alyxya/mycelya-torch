@@ -14,8 +14,8 @@
 namespace remote {
 namespace {
 
-// Python factory function where real implementations can be found
-PyObject* py_factory;
+// Python driver_exec function for direct driver access
+PyObject* py_driver_exec;
 
 
 static c10::DeviceIndex device_count() {
@@ -228,14 +228,22 @@ C10_REGISTER_GUARD_IMPL(PrivateUse1, RemoteGuardImpl);
 
 } // namespace
 
-// Setter for the python dictionary with implementations
-void set_impl_factory(PyObject* factory) {
-  py_factory = factory;
+// Setter for the python driver_exec function
+void set_driver_exec(PyObject* driver_exec_fn) {
+  py_driver_exec = driver_exec_fn;
 }
 
 py::function get_method(const char* name) {
-  auto factory = py::cast<py::function>(py_factory);
-  return factory(name);
+  auto driver_exec = py::cast<py::function>(py_driver_exec);
+  // Create a lambda that calls driver_exec with the given name
+  return py::cpp_function([driver_exec, name](py::args args) {
+    py::list args_list;
+    args_list.append(py::str(name));
+    for (auto arg : args) {
+      args_list.append(arg);
+    }
+    return driver_exec(*args_list);
+  });
 }
 
 } // namespace remote

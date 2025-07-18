@@ -41,19 +41,7 @@ def _get_remote_executor() -> Optional[Any]:
     return _remote_executor
 
 
-_IMPL_REGISTRY: Dict[str, Callable] = {}
-
-
-def impl_factory(name: str) -> Callable:
-    if name in _IMPL_REGISTRY:
-        return _IMPL_REGISTRY[name]
-
-    def _(*args: Any, **kwargs: Any) -> Any:
-        log.info("Calling hook %s", name)
-        return driver.exec(name, *args, **kwargs)
-
-    _IMPL_REGISTRY[name] = _
-    return _
+# impl_factory and _IMPL_REGISTRY removed - C++ now uses driver_exec directly
 
 
 def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> torch.Tensor:
