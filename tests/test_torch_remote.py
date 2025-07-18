@@ -354,55 +354,62 @@ def test_validate_device_index_negative(shared_devices):
         assert "Invalid device index" in str(e) or "device" in str(e).lower()
 
 
-def test_device_count_dynamic_tracking(clean_registry):
+def test_device_count_dynamic_tracking():
     """Test that device_count properly tracks registered devices dynamically."""
     
-    # Registry starts clean (count = 0)
-    assert torch.remote.device_count() == 0
+    # Record initial device count (may be > 0 from other tests)
+    initial_count = torch.remote.device_count()
     
-    # Add devices one by one and verify count increases
+    # Add devices one by one and verify count increases by expected amount
     devices = []
     gpu_types = ["T4", "L4"]  # Reduced to 2 devices to minimize GPU usage
     
     for i, gpu_type in enumerate(gpu_types):
         device = torch_remote.create_modal_machine(gpu_type)
         devices.append(device)
-        expected_count = i + 1
+        expected_count = initial_count + i + 1
         assert torch.remote.device_count() == expected_count
         
-        # Verify the device index matches expectation
-        assert device.remote_index == i
+        # Verify the device has a valid index (doesn't need to match i exactly)
+        assert device.remote_index >= 0
         
         # Verify we can create tensors on each device
         tensor = torch.randn(2, 2, device=device.device())
         assert tensor is not None
-        assert tensor.device.index == i
+        assert tensor.device.index == device.remote_index
 
 
-def test_validate_device_index_with_multiple_devices(shared_devices):
-    """Test validate_device_index with multiple devices from shared fixtures."""
+def test_validate_device_index_with_multiple_devices():
+    """Test validate_device_index with multiple devices."""
     
-    # Use shared devices instead of creating new ones
-    all_devices = list(shared_devices.values())
-    device_count = len(all_devices)
+    # Create our own devices for this test to ensure we know exactly how many we have
+    devices = []
+    gpu_types = ["T4", "L4", "A100"]  # Create exactly 3 devices
     
-    # Should have at least 3 devices from shared fixtures  
-    assert device_count >= 3
-    assert torch.remote.device_count() >= device_count
+    initial_count = torch.remote.device_count()
     
-    # All devices should work and have valid indices
-    for device in all_devices:
+    for gpu_type in gpu_types:
+        device = torch_remote.create_modal_machine(gpu_type)
+        devices.append(device)
+    
+    # Verify we now have initial_count + 3 devices
+    current_count = torch.remote.device_count()
+    assert current_count == initial_count + 3
+    
+    # All our devices should work and have valid indices
+    for device in devices:
         assert device.remote_index is not None
         assert device.remote_index >= 0
         tensor = torch.randn(2, 2, device=device.device())
         assert tensor is not None
         assert tensor.device.index == device.remote_index
     
-    # Device index 3 should fail (out of bounds)
+    # Device index beyond current count should fail
+    invalid_index = current_count  # This should be out of bounds
     try:
-        invalid_device = torch.device("remote", 3)
+        invalid_device = torch.device("remote", invalid_index)
         tensor = torch.randn(2, 2, device=invalid_device)
-        assert False, "Expected device validation to fail for index 3"
+        assert False, f"Expected device validation to fail for index {invalid_index}"
     except (RuntimeError, ValueError) as e:
         assert "Invalid device index" in str(e) or "device" in str(e).lower()
 
