@@ -140,7 +140,7 @@ class RemoteOrchestrator:
                         "stride": list(arg.stride()),
                         "storage_offset": arg.storage_offset(),
                         "dtype": str(arg.dtype),
-                        "requires_grad": arg.requires_grad,
+                        # Note: requires_grad is NOT sent to remote - autograd happens locally
                         "storage_id": storage_id
                     }
                     tensor_metadata.append(metadata)
@@ -161,7 +161,7 @@ class RemoteOrchestrator:
                         "stride": list(value.stride()),
                         "storage_offset": value.storage_offset(),
                         "dtype": str(value.dtype),
-                        "requires_grad": value.requires_grad,
+                        # Note: requires_grad is NOT sent to remote - autograd happens locally
                         "storage_id": storage_id
                     }
                     tensor_metadata.append(metadata)

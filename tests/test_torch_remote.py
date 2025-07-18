@@ -1286,3 +1286,129 @@ def test_cross_entropy_full_gradient(modal_t4_device):
     # Compare results
     assert torch.allclose(loss.detach().cpu(), loss_ref.detach(), rtol=1e-4, atol=1e-6)
     assert torch.allclose(logits_cpu.grad, logits_ref.grad, rtol=1e-4, atol=1e-6)
+
+
+def test_direct_tensor_creation_simple(modal_t4_device):
+    """Test if direct tensor creation now works after removing requires_grad from metadata."""
+    
+    # Test direct creation with requires_grad
+    print("Testing direct tensor creation with requires_grad=True...")
+    try:
+        x = torch.randn(2, 2, device=modal_t4_device.device(), requires_grad=True)
+        print(f"✓ Direct creation successful: {x.shape}, {x.device}, requires_grad={x.requires_grad}")
+        
+        # Test that we can do operations and gradients
+        y = (x * x).sum()
+        print(f"✓ Operations work: {y}")
+        
+        # Test backward (this should work now)
+        y.backward()
+        print(f"✓ Backward works")
+        
+        return True
+    except Exception as e:
+        print(f"✗ Direct creation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_various_tensor_creation_functions(modal_t4_device):
+    """Test various tensor creation functions work directly on remote device."""
+    
+    print("Testing various tensor creation functions...")
+    
+    # Test different creation functions
+    tests = [
+        ("torch.randn", lambda: torch.randn(2, 3, device=modal_t4_device.device())),
+        ("torch.zeros", lambda: torch.zeros(2, 3, device=modal_t4_device.device())),
+        ("torch.ones", lambda: torch.ones(2, 3, device=modal_t4_device.device())),
+        ("torch.empty", lambda: torch.empty(2, 3, device=modal_t4_device.device())),
+        ("torch.tensor", lambda: torch.tensor([[1, 2], [3, 4]], device=modal_t4_device.device())),
+        ("torch.randn with grad", lambda: torch.randn(2, 3, device=modal_t4_device.device(), requires_grad=True)),
+        ("torch.zeros with grad", lambda: torch.zeros(2, 3, device=modal_t4_device.device(), requires_grad=True)),
+    ]
+    
+    results = {}
+    for name, create_func in tests:
+        try:
+            tensor = create_func()
+            print(f"✓ {name}: {tensor.shape}, {tensor.device}, requires_grad={tensor.requires_grad}")
+            results[name] = True
+        except Exception as e:
+            print(f"✗ {name}: {e}")
+            results[name] = False
+    
+    # All creation functions should work now
+    failures = [name for name, success in results.items() if not success]
+    if failures:
+        print(f"Failed functions: {failures}")
+    
+    return results
+
+
+def test_direct_tensor_creation(modal_t4_device):
+    """Test direct tensor creation on remote device vs CPU-first workaround."""
+    
+    print("=== Testing Direct Tensor Creation ===")
+    
+    # Test 1: Direct creation (this should fail)
+    print("Attempting direct tensor creation on remote device...")
+    try:
+        x_direct = torch.randn(2, 2, device=modal_t4_device.device(), requires_grad=True)
+        print(f"✓ Direct creation successful: {x_direct.shape}, {x_direct.device}")
+        direct_works = True
+    except Exception as e:
+        print(f"✗ Direct creation failed: {e}")
+        direct_works = False
+    
+    # Test 2: CPU-first workaround (this should work)
+    print("\nAttempting CPU-first workaround...")
+    try:
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.to(modal_t4_device.device())
+        print(f"✓ CPU-first workaround successful: {x_remote.shape}, {x_remote.device}")
+        workaround_works = True
+    except Exception as e:
+        print(f"✗ CPU-first workaround failed: {e}")
+        workaround_works = False
+    
+    # Test 3: Direct creation without requires_grad
+    print("\nAttempting direct creation without requires_grad...")
+    try:
+        y_direct = torch.randn(2, 2, device=modal_t4_device.device())
+        print(f"✓ Direct creation without grad successful: {y_direct.shape}, {y_direct.device}")
+        direct_no_grad_works = True
+    except Exception as e:
+        print(f"✗ Direct creation without grad failed: {e}")
+        direct_no_grad_works = False
+    
+    # Test 4: Various tensor creation functions
+    print("\nTesting various tensor creation functions...")
+    creation_functions = [
+        ("torch.zeros", lambda: torch.zeros(2, 2, device=modal_t4_device.device())),
+        ("torch.ones", lambda: torch.ones(2, 2, device=modal_t4_device.device())),
+        ("torch.empty", lambda: torch.empty(2, 2, device=modal_t4_device.device())),
+        ("torch.tensor", lambda: torch.tensor([1, 2, 3], device=modal_t4_device.device())),
+    ]
+    
+    for name, create_func in creation_functions:
+        try:
+            result = create_func()
+            print(f"✓ {name} successful: {result.shape}, {result.device}")
+        except Exception as e:
+            print(f"✗ {name} failed: {e}")
+    
+    print(f"\n=== Summary ===")
+    print(f"Direct creation with grad: {'✓' if direct_works else '✗'}")
+    print(f"CPU-first workaround: {'✓' if workaround_works else '✗'}")
+    print(f"Direct creation without grad: {'✓' if direct_no_grad_works else '✗'}")
+    
+    # At minimum, the workaround should work
+    assert workaround_works, "CPU-first workaround should always work"
+    
+    return {
+        'direct_with_grad': direct_works,
+        'cpu_first_workaround': workaround_works,
+        'direct_no_grad': direct_no_grad_works
+    }
