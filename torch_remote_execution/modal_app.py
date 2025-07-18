@@ -22,6 +22,11 @@ import random
 import logging
 from collections import defaultdict
 
+# Import constants from torch_remote
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from torch_remote.constants import TENSOR_PLACEHOLDER_PREFIX, CPU_DEVICE_TYPE, CUDA_DEVICE_TYPE
+
 log = logging.getLogger(__name__)
 
 # Create simplified image with just PyTorch and CUDA support
@@ -441,10 +446,10 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
-            tensor = torch.load(buffer, map_location="cpu", weights_only=True)
+            tensor = torch.load(buffer, map_location=CPU_DEVICE_TYPE, weights_only=True)
             
             # Move to GPU if available
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
             tensor = tensor.to(device)
             
             # Register in tensor registry
@@ -550,7 +555,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Replace tensor placeholders in args with actual tensors
                 processed_args = []
                 for arg in args:
-                    if isinstance(arg, str) and arg.startswith("__TENSOR_"):
+                    if isinstance(arg, str) and arg.startswith(TENSOR_PLACEHOLDER_PREFIX):
                         idx = int(arg.split("_")[-1])
                         processed_args.append(tensors[idx])
                     else:
@@ -559,7 +564,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Process kwargs similarly
                 processed_kwargs = {}
                 for key, value in kwargs.items():
-                    if isinstance(value, str) and value.startswith("__TENSOR_"):
+                    if isinstance(value, str) and value.startswith(TENSOR_PLACEHOLDER_PREFIX):
                         idx = int(value.split("_")[-1])
                         processed_kwargs[key] = tensors[idx]
                     else:
@@ -586,7 +591,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     results = [r for r in result if isinstance(r, torch.Tensor)]
                 else:
                     # For scalar results, convert to tensor
-                    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                    device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
                     results = [torch.tensor(result, device=device)]
                 
                 # Register result tensors and return their IDs
@@ -639,7 +644,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             try:
                 # Get GPU device
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
                 
                 # Update kwargs to use local device
                 if "device" in kwargs:

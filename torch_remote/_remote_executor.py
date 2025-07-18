@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Tuple, Optional
 import torch
 import time
 
+from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE
 from .device import RemoteBackend, get_device_registry
 
 log = logging.getLogger(__name__)
@@ -125,7 +126,7 @@ class RemoteExecutor:
             
             # Process args - extract storage IDs
             for arg in args:
-                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
+                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
                     storage_id = str(arg.untyped_storage().data_ptr())
                     storage_ids.append(storage_id)
                     processed_args.append(f"__TENSOR_{len(storage_ids)-1}")
@@ -134,7 +135,7 @@ class RemoteExecutor:
             
             # Process kwargs - extract storage IDs  
             for key, value in kwargs.items():
-                if isinstance(value, torch.Tensor) and value.device.type == "remote":
+                if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
                     storage_id = str(value.untyped_storage().data_ptr())
                     storage_ids.append(storage_id)
                     processed_kwargs[key] = f"__TENSOR_{len(storage_ids)-1}"
@@ -191,7 +192,7 @@ class RemoteExecutor:
         dtype = getattr(torch, dtype_str)
         
         # Create a CPU tensor with the correct shape and dtype first
-        cpu_tensor = torch.empty(shape, dtype=dtype, device='cpu')
+        cpu_tensor = torch.empty(shape, dtype=dtype, device=CPU_DEVICE_TYPE)
         
         # Convert to remote device - this will call the C++ allocator and generate a new ID
         remote_tensor = cpu_tensor.to(device.device())
@@ -496,7 +497,7 @@ class RemoteExecutor:
         """Deserialize tensor from bytes."""
         import io
         buffer = io.BytesIO(data)
-        return torch.load(buffer, map_location="cpu")
+        return torch.load(buffer, map_location=CPU_DEVICE_TYPE)
     
     def _get_tensor_metadata(self, tensor: torch.Tensor) -> Dict[str, Any]:
         """Get tensor metadata."""
@@ -513,7 +514,7 @@ class RemoteExecutor:
         
         def check_tensor(tensor):
             nonlocal detected_device
-            if isinstance(tensor, torch.Tensor) and tensor.device.type == "remote":
+            if isinstance(tensor, torch.Tensor) and tensor.device.type == REMOTE_DEVICE_TYPE:
                 # Get device from registry using device index
                 registry = get_device_registry()
                 device = registry.get_device_by_index(tensor.device.index)

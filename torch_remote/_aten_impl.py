@@ -6,6 +6,8 @@ from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 
+from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE, META_DEVICE_TYPE, PRIVATEUSE1_DISPATCH_KEY
+
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +66,7 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
     # Get the base tensor (first argument for most view operations)
     base_tensor = args[0]
     
-    if base_tensor.device.type != "remote":
+    if base_tensor.device.type != REMOTE_DEVICE_TYPE:
         # Not a remote tensor - execute normally
         return op(*args, **kwargs)
     
@@ -79,7 +81,7 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
     
     # Execute the view operation on a CPU meta tensor to get the new shape/stride
     # This gives us the correct metadata without doing actual computation
-    meta_tensor = torch.empty(base_tensor.size(), dtype=base_tensor.dtype, device="meta")
+    meta_tensor = torch.empty(base_tensor.size(), dtype=base_tensor.dtype, device=META_DEVICE_TYPE)
     meta_result = op(meta_tensor, *args[1:], **kwargs)
     
     # Extract new tensor metadata
@@ -168,7 +170,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     """Copy data from remote tensor to CPU tensor using remote execution"""
-    if from_.device.type != "remote":
+    if from_.device.type != REMOTE_DEVICE_TYPE:
         raise ValueError("copy_from_device requires a remote tensor")
     
     # Use remote execution to get the tensor data
@@ -218,9 +220,9 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     """Copy data from CPU tensor to remote tensor using remote execution"""
-    if to_.device.type != "remote":
+    if to_.device.type != REMOTE_DEVICE_TYPE:
         raise ValueError("copy_from_host_to_device requires a remote target tensor")
-    if from_.device.type != "cpu":
+    if from_.device.type != CPU_DEVICE_TYPE:
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
     
     # Use remote execution to send the tensor data
@@ -281,7 +283,7 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     should_preserve_grad = from_.requires_grad
     
     if from_.device.type == to_.device.type:
-        if from_.device.type == "remote":
+        if from_.device.type == REMOTE_DEVICE_TYPE:
             if from_.device.index == to_.device.index:
                 # Same remote device - use direct copy
                 op = torch.ops.aten.copy_.default
@@ -302,11 +304,11 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
         else:
             # Both tensors on same non-remote device
             result = to_.copy_(from_)
-    elif from_.device.type == "remote":
+    elif from_.device.type == REMOTE_DEVICE_TYPE:
         # Remote to non-remote
         host_mem = copy_from_device(from_)
         result = to_.copy_(host_mem)
-    elif to_.device.type == "remote":
+    elif to_.device.type == REMOTE_DEVICE_TYPE:
         # Non-remote to remote
         result = copy_from_host_to_device(from_, to_)
     else:
@@ -328,7 +330,7 @@ def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout
         target_device = torch.device(device) if not isinstance(device, torch.device) else device
         
         # Different device transfer - check if both are remote
-        if input.device.type == "remote" and target_device.type == "remote" and input.device != target_device:
+        if input.device.type == REMOTE_DEVICE_TYPE and target_device.type == REMOTE_DEVICE_TYPE and input.device != target_device:
             # Cross-device remote transfer - NOT ALLOWED
             from torch_remote.device import get_device_registry
             device_registry = get_device_registry()
@@ -352,7 +354,7 @@ def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout
     output_memory_format = memory_format if memory_format is not None else torch.contiguous_format
     
     # Create output tensor
-    if output_device.type == "remote":
+    if output_device.type == REMOTE_DEVICE_TYPE:
         # Create empty remote tensor - use contiguous format for remote tensors
         result = torch.empty(input.size(), dtype=output_dtype, layout=output_layout, 
                              device=output_device, memory_format=torch.contiguous_format)
@@ -420,16 +422,16 @@ def _local_scalar_dense(ten: torch.Tensor) -> Union[int, float, complex, bool]:
 
 
 _remote_lib = torch.library.Library("_", "IMPL")
-_remote_lib.fallback(_remote_kernel_fallback, dispatch_key="PrivateUse1")
+_remote_lib.fallback(_remote_kernel_fallback, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
 
 _remote_lib_aten = torch.library.Library("aten", "IMPL")
-_remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
-_remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key="PrivateUse1")
+_remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
+_remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
 _remote_lib_aten.impl(
-    "set_.source_Tensor", _set_source_tensor, dispatch_key="PrivateUse1"
+    "set_.source_Tensor", _set_source_tensor, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
 )
 _remote_lib_aten.impl(
-    "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
+    "_local_scalar_dense", _local_scalar_dense, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
 )
 
 # Note: empty.memory_format and empty_strided are now implemented in C++
