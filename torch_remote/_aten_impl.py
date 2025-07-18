@@ -141,12 +141,8 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
     
     # Second check for view operations (alias_info) - excluding as_strided
     elif any(r.alias_info is not None for r in op._schema.returns):
-        # View ops - handle exactly like pytorch-openreg-2
-        if op is torch.ops.aten.view.default:
-            return torch.ops.aten._unsafe_view(*args, **kwargs)
-        else:
-            # For other view operations, try using the view handler
-            return _handle_view_operation(op, *args, **kwargs)
+        # View ops - handle consistently using the view handler
+        return _handle_view_operation(op, *args, **kwargs)
     
     # Everything else is a regular operation - execute remotely
     else:
