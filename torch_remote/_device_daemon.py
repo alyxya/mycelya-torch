@@ -324,7 +324,22 @@ class Driver:
         """Execute a command on the tensor ID registry"""
         log.info(f"Executing command: {cmd}(*{args[:2]}...)")  # Limit args in log
         
-        if hasattr(self.registry_obj, cmd):
+        # Handle operations that need special error handling
+        if cmd in ["create_tensor_with_id", "free_tensor_with_id"]:
+            if hasattr(self.registry_obj, cmd):
+                method = getattr(self.registry_obj, cmd)
+                result = method(*args)
+                if not result:
+                    storage_id = args[0]
+                    if cmd == "create_tensor_with_id":
+                        nbytes, device_index = args[1], args[2] 
+                        raise RuntimeError(f"Failed to create tensor with ID {storage_id} ({nbytes} bytes) on device {device_index}")
+                    elif cmd == "free_tensor_with_id":
+                        raise RuntimeError(f"Failed to free tensor with ID {storage_id}")
+                return result
+            else:
+                raise RuntimeError(f"Unknown command: {cmd}")
+        elif hasattr(self.registry_obj, cmd):
             method = getattr(self.registry_obj, cmd)
             result = method(*args)
             log.info(f"Command {cmd} result: {result}")

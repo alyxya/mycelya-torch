@@ -48,23 +48,6 @@ def impl_factory(name: str) -> Callable:
     if name in _IMPL_REGISTRY:
         return _IMPL_REGISTRY[name]
 
-    # Handle operations that need special error handling
-    if name in ["create_tensor_with_id", "free_tensor_with_id"]:
-        def _(storage_id: int, *args: Any) -> Any:
-            """Wrapper for tensor ID operations with error handling."""
-            result = driver.exec(name, storage_id, *args)
-            if not result:
-                operation = name.replace("_", " ")
-                if name == "create_tensor_with_id":
-                    nbytes, device_index = args
-                    raise RuntimeError(f"Failed to create tensor with ID {storage_id} ({nbytes} bytes) on device {device_index}")
-                elif name == "free_tensor_with_id":
-                    raise RuntimeError(f"Failed to free tensor with ID {storage_id}")
-            return result
-        
-        _IMPL_REGISTRY[name] = _
-        return _
-
     def _(*args: Any, **kwargs: Any) -> Any:
         log.info("Calling hook %s", name)
         return driver.exec(name, *args, **kwargs)
