@@ -369,6 +369,14 @@ class Driver:
     def register_tensor_with_gpu(self, storage_id: int, tensor_data: bytes) -> bool:
         return self.registry_obj.register_tensor_with_gpu(storage_id, tensor_data)
 
+    @register(registry)
+    def generate_storage_id(self) -> int:
+        return self.registry_obj.generate_storage_id()
+
+    @register(registry)
+    def free_storage_with_id(self, storage_id: int) -> bool:
+        return self.registry_obj.free_storage_with_id(storage_id)
+
 
 
 # Global driver instance
