@@ -882,3 +882,285 @@ def test_view_with_minus_one_inference(modal_t4_device):
         # Verify data integrity
         y_cpu = y.cpu()
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
+
+
+# ============================================================================
+# Autograd and Loss Function Test Suite
+# ============================================================================
+
+def test_basic_tensor_creation_debug(modal_t4_device):
+    """Debug basic tensor creation step by step."""
+    
+    # Test 1: Basic tensor creation without requires_grad
+    print("Creating basic tensor without requires_grad...")
+    x_basic = torch.randn(2, 2)
+    x_remote_basic = x_basic.to(modal_t4_device.device())
+    assert x_remote_basic.requires_grad is False
+    print(f"✓ Basic tensor created successfully: device={x_remote_basic.device}, requires_grad={x_remote_basic.requires_grad}")
+    
+    # Test 2: Create CPU tensor with requires_grad
+    print("Creating CPU tensor with requires_grad=True...")
+    x_cpu = torch.randn(2, 2, requires_grad=True)
+    assert x_cpu.requires_grad is True
+    print(f"✓ CPU tensor with grad created: device={x_cpu.device}, requires_grad={x_cpu.requires_grad}")
+    
+    # Test 3: Try transferring to remote device
+    print("Transferring CPU tensor with requires_grad to remote device...")
+    try:
+        x_remote = x_cpu.to(modal_t4_device.device())
+        print(f"✓ Transfer successful: device={x_remote.device}, requires_grad={x_remote.requires_grad}")
+        
+        # Test 4: Simple operation
+        print("Testing simple operation on remote tensor with grad...")
+        y = x_remote + 1.0
+        print(f"✓ Addition successful: device={y.device}, requires_grad={y.requires_grad}")
+        
+        return True
+    except Exception as e:
+        print(f"✗ Transfer failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_simple_gradient_computation(modal_t4_device):
+    """Test basic gradient computation on remote tensors."""
+    
+    # Create tensor on CPU first then move to remote
+    x_cpu = torch.randn(2, 2, requires_grad=True)
+    x = x_cpu.to(modal_t4_device.device())
+    
+    # Verify requires_grad is preserved
+    assert x.requires_grad is True
+    assert x.device == modal_t4_device.device()
+    
+    # Simple computation: y = sum(x^2)
+    y = (x * x).sum()
+    
+    # Verify y requires grad and is on remote device
+    assert y.requires_grad is True
+    assert y.device == modal_t4_device.device()
+    
+    # Backward pass
+    y.backward()
+    
+    # The gradient should be computed on the original leaf tensor (x_cpu)
+    # since x is a non-leaf tensor created by the .to() operation
+    assert x_cpu.grad is not None
+    assert x_cpu.grad.shape == x_cpu.shape
+    
+    # Expected gradient: dy/dx = 2x for each element
+    expected_grad = 2 * x_cpu.detach()
+    assert torch.allclose(x_cpu.grad, expected_grad, rtol=1e-4, atol=1e-6)
+
+
+def test_simple_mse_loss_gradient(modal_t4_device):
+    """Test forward and backward pass with MSE loss on remote tensors."""
+    
+    # Create input and target tensors
+    batch_size = 3
+    
+    # Create tensors on CPU first then move to remote
+    input_cpu = torch.randn(batch_size, requires_grad=True)
+    target_cpu = torch.randn(batch_size)
+    
+    input_remote = input_cpu.to(modal_t4_device.device())
+    target_remote = target_cpu.to(modal_t4_device.device())
+    
+    # Forward pass: compute MSE loss
+    loss = torch.nn.functional.mse_loss(input_remote, target_remote)
+    
+    # Verify loss properties
+    assert loss.device == modal_t4_device.device()
+    assert loss.requires_grad is True
+    assert loss.shape == ()  # Scalar loss
+    
+    # Backward pass: compute gradients
+    loss.backward()
+    
+    # Verify gradients were computed on the original leaf tensor
+    assert input_cpu.grad is not None
+    assert input_cpu.grad.shape == input_cpu.shape
+    
+    # Verify numerical correctness against CPU computation
+    input_ref = torch.randn(batch_size, requires_grad=True)
+    input_ref.data.copy_(input_cpu.detach())
+    target_ref = target_cpu.clone()
+    
+    loss_ref = torch.nn.functional.mse_loss(input_ref, target_ref)
+    loss_ref.backward()
+    
+    # Compare loss values and gradients
+    assert torch.allclose(loss.detach().cpu(), loss_ref.detach(), rtol=1e-4, atol=1e-6)
+    assert torch.allclose(input_cpu.grad, input_ref.grad, rtol=1e-4, atol=1e-6)
+
+
+def test_cross_entropy_linear_model(modal_t4_device):
+    """Test forward/backward pass with a simple linear model and cross entropy loss."""
+    
+    # Model parameters: simple linear layer
+    input_size, hidden_size, num_classes = 4, 8, 3
+    batch_size = 5
+    
+    # Create model parameters on remote device
+    weight = torch.randn(hidden_size, input_size, device=modal_t4_device.device(), requires_grad=True)
+    bias = torch.randn(hidden_size, device=modal_t4_device.device(), requires_grad=True)
+    classifier_weight = torch.randn(num_classes, hidden_size, device=modal_t4_device.device(), requires_grad=True)
+    classifier_bias = torch.randn(num_classes, device=modal_t4_device.device(), requires_grad=True)
+    
+    # Create input data and targets
+    x = torch.randn(batch_size, input_size, device=modal_t4_device.device())
+    targets = torch.randint(0, num_classes, (batch_size,), device=modal_t4_device.device(), dtype=torch.long)
+    
+    # Forward pass: simple two-layer model
+    # Hidden layer with ReLU activation
+    hidden = torch.relu(torch.mm(x, weight.t()) + bias)
+    
+    # Output layer (logits)
+    logits = torch.mm(hidden, classifier_weight.t()) + classifier_bias
+    
+    # Compute cross entropy loss
+    loss = torch.nn.functional.cross_entropy(logits, targets)
+    
+    # Verify forward pass properties
+    assert hidden.device == modal_t4_device.device()
+    assert logits.device == modal_t4_device.device()
+    assert loss.device == modal_t4_device.device()
+    assert hidden.shape == (batch_size, hidden_size)
+    assert logits.shape == (batch_size, num_classes)
+    assert loss.shape == ()
+    
+    # Backward pass
+    loss.backward()
+    
+    # Verify all parameters have gradients
+    params_with_grads = [weight, bias, classifier_weight, classifier_bias]
+    for param in params_with_grads:
+        assert param.grad is not None
+        assert param.grad.device == modal_t4_device.device()
+        assert param.grad.shape == param.shape
+        # Verify gradients are not all zeros (learning should happen)
+        assert not torch.allclose(param.grad, torch.zeros_like(param.grad))
+    
+    # Verify numerical correctness by comparing with CPU computation
+    # Copy all tensors to CPU and repeat computation
+    x_cpu = x.detach().cpu()
+    targets_cpu = targets.cpu()
+    
+    weight_cpu = torch.empty_like(weight.cpu(), requires_grad=True)
+    weight_cpu.data.copy_(weight.detach().cpu())
+    bias_cpu = torch.empty_like(bias.cpu(), requires_grad=True)
+    bias_cpu.data.copy_(bias.detach().cpu())
+    classifier_weight_cpu = torch.empty_like(classifier_weight.cpu(), requires_grad=True)
+    classifier_weight_cpu.data.copy_(classifier_weight.detach().cpu())
+    classifier_bias_cpu = torch.empty_like(classifier_bias.cpu(), requires_grad=True)
+    classifier_bias_cpu.data.copy_(classifier_bias.detach().cpu())
+    
+    # CPU forward pass
+    hidden_cpu = torch.relu(torch.mm(x_cpu, weight_cpu.t()) + bias_cpu)
+    logits_cpu = torch.mm(hidden_cpu, classifier_weight_cpu.t()) + classifier_bias_cpu
+    loss_cpu = torch.nn.functional.cross_entropy(logits_cpu, targets_cpu)
+    
+    # CPU backward pass
+    loss_cpu.backward()
+    
+    # Compare results
+    assert torch.allclose(hidden.detach().cpu(), hidden_cpu.detach(), rtol=1e-4, atol=1e-6)
+    assert torch.allclose(logits.detach().cpu(), logits_cpu.detach(), rtol=1e-4, atol=1e-6)
+    assert torch.allclose(loss.detach().cpu(), loss_cpu.detach(), rtol=1e-4, atol=1e-6)
+    
+    # Compare gradients
+    assert torch.allclose(weight.grad.cpu(), weight_cpu.grad, rtol=1e-4, atol=1e-6)
+    assert torch.allclose(bias.grad.cpu(), bias_cpu.grad, rtol=1e-4, atol=1e-6)
+    assert torch.allclose(classifier_weight.grad.cpu(), classifier_weight_cpu.grad, rtol=1e-4, atol=1e-6)
+    assert torch.allclose(classifier_bias.grad.cpu(), classifier_bias_cpu.grad, rtol=1e-4, atol=1e-6)
+
+
+def test_multiple_backward_passes(modal_t4_device):
+    """Test multiple forward/backward passes to verify gradient accumulation."""
+    
+    batch_size, num_classes = 3, 4
+    
+    # Create a simple linear layer
+    weight = torch.randn(num_classes, 2, device=modal_t4_device.device(), requires_grad=True)
+    bias = torch.randn(num_classes, device=modal_t4_device.device(), requires_grad=True)
+    
+    # First forward/backward pass
+    x1 = torch.randn(batch_size, 2, device=modal_t4_device.device())
+    targets1 = torch.randint(0, num_classes, (batch_size,), device=modal_t4_device.device(), dtype=torch.long)
+    
+    logits1 = torch.mm(x1, weight.t()) + bias
+    loss1 = torch.nn.functional.cross_entropy(logits1, targets1)
+    loss1.backward()
+    
+    # Store gradients from first pass
+    weight_grad1 = weight.grad.clone()
+    bias_grad1 = bias.grad.clone()
+    
+    # Second forward/backward pass (gradients should accumulate)
+    x2 = torch.randn(batch_size, 2, device=modal_t4_device.device())
+    targets2 = torch.randint(0, num_classes, (batch_size,), device=modal_t4_device.device(), dtype=torch.long)
+    
+    logits2 = torch.mm(x2, weight.t()) + bias
+    loss2 = torch.nn.functional.cross_entropy(logits2, targets2)
+    loss2.backward()
+    
+    # Verify gradients have accumulated
+    assert not torch.allclose(weight.grad, weight_grad1)
+    assert not torch.allclose(bias.grad, bias_grad1)
+    
+    # Verify gradients are the sum of individual gradients
+    # Reset gradients and compute individually
+    weight.grad.zero_()
+    bias.grad.zero_()
+    
+    # Recompute first loss and gradients
+    logits1_new = torch.mm(x1, weight.t()) + bias
+    loss1_new = torch.nn.functional.cross_entropy(logits1_new, targets1)
+    loss1_new.backward(retain_graph=True)
+    grad1_weight = weight.grad.clone()
+    grad1_bias = bias.grad.clone()
+    
+    # Recompute second loss and gradients
+    logits2_new = torch.mm(x2, weight.t()) + bias
+    loss2_new = torch.nn.functional.cross_entropy(logits2_new, targets2)
+    loss2_new.backward()
+    
+    # Final gradients should be sum of individual gradients
+    expected_weight_grad = grad1_weight + (weight.grad - grad1_weight)
+    expected_bias_grad = grad1_bias + (bias.grad - grad1_bias)
+    
+    assert torch.allclose(weight.grad, expected_weight_grad, rtol=1e-4, atol=1e-6)
+    assert torch.allclose(bias.grad, expected_bias_grad, rtol=1e-4, atol=1e-6)
+
+
+def test_requires_grad_propagation(modal_t4_device):
+    """Test that requires_grad is properly propagated through operations."""
+    
+    # Create tensors with and without requires_grad
+    x_grad = torch.randn(2, 3, device=modal_t4_device.device(), requires_grad=True)
+    x_no_grad = torch.randn(2, 3, device=modal_t4_device.device(), requires_grad=False)
+    weight = torch.randn(4, 3, device=modal_t4_device.device(), requires_grad=True)
+    
+    # Operations with requires_grad=True should propagate gradient requirement
+    y_grad = torch.mm(x_grad, weight.t())
+    assert y_grad.requires_grad is True
+    assert y_grad.device == modal_t4_device.device()
+    
+    # Operations with mixed requires_grad should require gradients if any input requires them
+    y_mixed = torch.mm(x_no_grad, weight.t())
+    assert y_mixed.requires_grad is True  # weight requires gradients
+    
+    # Operations with no requires_grad should not require gradients
+    y_no_grad = x_no_grad + 1.0
+    assert y_no_grad.requires_grad is False
+    
+    # Test that gradients flow correctly through the computational graph
+    targets = torch.randint(0, 4, (2,), device=modal_t4_device.device(), dtype=torch.long)
+    loss = torch.nn.functional.cross_entropy(y_grad, targets)
+    loss.backward()
+    
+    # Only tensors with requires_grad=True should have gradients
+    assert x_grad.grad is not None
+    assert weight.grad is not None
+    assert x_no_grad.grad is None  # This tensor didn't require gradients

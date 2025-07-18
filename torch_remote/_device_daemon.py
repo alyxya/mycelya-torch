@@ -302,6 +302,65 @@ class Driver:
             return old_device
         elif cmd == "hasPrimaryContext":
             return self.registry_obj.has_primary_context(*args)
+        elif cmd == "getStream":
+            # Return current stream ID for the device (default 0)
+            device_idx = args[0] if args else self.registry_obj.get_device()
+            return getattr(self.registry_obj, '_current_streams', {}).get(device_idx, 0)
+        elif cmd == "getNewStream":
+            # Create a new stream ID
+            device_idx, priority = args[0], args[1] if len(args) > 1 else 0
+            if not hasattr(self.registry_obj, '_stream_counter'):
+                self.registry_obj._stream_counter = {}
+            counter = self.registry_obj._stream_counter.get(device_idx, 0) + 1
+            self.registry_obj._stream_counter[device_idx] = counter
+            return counter
+        elif cmd == "exchangeStream":
+            # Exchange current stream with new stream
+            stream = args[0]
+            device_idx = stream.device_index
+            if not hasattr(self.registry_obj, '_current_streams'):
+                self.registry_obj._current_streams = {}
+            old_stream = self.registry_obj._current_streams.get(device_idx, 0)
+            self.registry_obj._current_streams[device_idx] = stream.stream_id
+            return old_stream
+        elif cmd == "queryStream":
+            # Always return True (stream is ready)
+            return True
+        elif cmd == "synchronizeStream":
+            # No-op for remote streams
+            return None
+        elif cmd == "synchronizeEvent":
+            # No-op for remote events
+            return None
+        elif cmd == "getDefaultStream":
+            # Return default stream (0) for device
+            device_idx = args[0] if args else self.registry_obj.get_device()
+            import torch
+            return torch.Stream(torch.device("remote", device_idx), 0)
+        elif cmd == "getStreamFromGlobalPool":
+            # Return a stream from global pool (just use default stream for now)
+            device_idx = args[0] if args else self.registry_obj.get_device()
+            is_high_priority = args[1] if len(args) > 1 else False
+            import torch
+            return torch.Stream(torch.device("remote", device_idx), 0)
+        elif cmd == "record":
+            # No-op for event recording on remote
+            return None
+        elif cmd == "destroyEvent":
+            # No-op for event destruction on remote
+            return None
+        elif cmd == "block":
+            # No-op for event blocking on remote
+            return None
+        elif cmd == "queryEvent":
+            # Always return True (event is ready)
+            return True
+        elif cmd == "elapsedTime":
+            # Return 0 for elapsed time between events
+            return 0.0
+        elif cmd == "recordDataPtrOnStream":
+            # No-op for data pointer recording
+            return None
         else:
             raise RuntimeError(f"Unknown command: {cmd}")
 

@@ -270,8 +270,9 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     )
                     
                     # Set requires_grad if needed
-                    if metadata.get("requires_grad", False):
-                        tensor.requires_grad_(True)
+                    # NOTE: Disabled for autograd compatibility - gradient computation happens locally
+                    # if metadata.get("requires_grad", False):
+                    #     tensor.requires_grad_(True)
                     
                     tensors.append(tensor)
                     
