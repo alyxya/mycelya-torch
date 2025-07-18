@@ -11,13 +11,15 @@ along with related functionality for creating and managing Modal applications.
 from typing import Any, Dict, List, Optional
 import logging
 
+from ..client_interface import ClientInterface
+
 log = logging.getLogger(__name__)
 
 # Cache for ModalClient instances
 _gpu_machines: Dict[str, "ModalClient"] = {}
 
 
-class ModalClient:
+class ModalClient(ClientInterface):
     """
     Client interface for Modal cloud GPU execution.
     
@@ -27,8 +29,7 @@ class ModalClient:
     """
     
     def __init__(self, gpu_type: str, machine_id: str):
-        self.gpu_type = gpu_type
-        self.machine_id = machine_id
+        super().__init__(gpu_type, machine_id)
         self._app = None
         self._server_class = None
         self._server_instance = None
@@ -156,7 +157,7 @@ class ModalClient:
         self.stop()
     
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
         return f"ModalClient(gpu_type=\"{self.gpu_type}\", machine_id=\"{self.machine_id}\", status=\"{status}\")"
 
