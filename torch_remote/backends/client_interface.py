@@ -101,19 +101,20 @@ class ClientInterface(ABC):
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
-    ) -> List[str]:
+    ) -> None:
         """
         Execute an aten operation on the remote machine.
+        All tensors (input and output) are pre-allocated and passed as arguments.
 
         Args:
             op_name: The aten operation name to execute
-            storage_ids: List of input tensor storage IDs
-            tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, etc.)
-            args: Operation arguments
-            kwargs: Operation keyword arguments
+            storage_ids: List of all tensor storage IDs (both input and output tensors)
+            tensor_metadata: Metadata for reconstructing all tensors (shape, stride, offset, etc.)
+            args: Operation arguments (may contain tensor placeholders)
+            kwargs: Operation keyword arguments (may contain tensor placeholders)
 
         Returns:
-            List of result tensor storage IDs
+            None (operation is executed in-place on pre-allocated tensors)
         """
         pass
 

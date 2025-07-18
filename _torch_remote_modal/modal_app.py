@@ -222,20 +222,21 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             args: List[Any],
             kwargs: Dict[str, Any],
             machine_id: str
-        ) -> List[str]:
+        ) -> None:
             """
             Execute an operation using storage IDs and tensor metadata.
+            All tensors (input and output) are pre-allocated and passed as arguments.
             
             Args:
                 op_name: The operation name to execute
-                storage_ids: List of input tensor storage IDs
+                storage_ids: List of all tensor storage IDs (both input and output tensors)
                 tensor_metadata: List of tensor metadata for reconstruction (shape, stride, offset, storage_id)
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 machine_id: Machine ID for logging
                 
             Returns:
-                List of result tensor storage IDs
+                None (operation is executed on pre-allocated tensors)
             """
             import torch
             
@@ -246,25 +247,24 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Get storage mapping
                 storages, lock = self._get_storages()
                 
-                # Reconstruct tensors from storage and metadata
+                # Reconstruct all tensors from storage and metadata
                 tensors = []
                 for i, (storage_id, metadata) in enumerate(zip(storage_ids, tensor_metadata)):
                     # DEBUG: Log what storage ID is being requested
                     log.debug(f"Modal app looking for storage_id={storage_id} (type={type(storage_id)})")
                     
-                    # Get storage object or scalar value
+                    # Get storage object
                     with lock:
                         if storage_id not in storages:
                             log.error(f"Storage ID {storage_id} not found. Available storage IDs: {list(storages.keys())}")
                             raise KeyError(f"Storage ID {storage_id} not found")
-                        storage_or_scalar = storages[storage_id]
+                        storage = storages[storage_id]
                     
                     # Parse dtype string back to torch.dtype
                     dtype_str = metadata["dtype"].replace("torch.", "")
                     dtype = getattr(torch, dtype_str)
                     
                     # Reconstruct tensor using storage + metadata (on CUDA device)
-                    storage = storage_or_scalar
                     tensor = torch.empty(0, dtype=dtype, device=CUDA_DEVICE_TYPE).set_(
                         storage,
                         metadata["storage_offset"],
@@ -272,8 +272,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                         metadata["stride"]
                     )
                     
-                    # Log input tensor details on modal side
-                    log.debug(f"📥 MODAL INPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    # Log tensor details on modal side
+                    log.debug(f"📥 MODAL tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
@@ -282,9 +282,6 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                             log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
                         else:
                             log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
-                    
-                    # Note: requires_grad is no longer sent in metadata
-                    # Autograd computation happens locally, remote tensors never have requires_grad=True
                     
                     tensors.append(tensor)
                 
@@ -313,46 +310,15 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 for part in op_parts:
                     op = getattr(op, part)
                 
-                log.debug(f"Executing operation with {len(processed_args)} args")
+                log.debug(f"Executing operation with {len(processed_args)} args and {len(tensors)} tensors")
                 
-                # Execute the operation
+                # Execute the operation - results are written directly to pre-allocated tensors
                 result = op(*processed_args, **processed_kwargs)
                 
-                log.info(f"✅ Completed: {op_name} -> {result.shape if hasattr(result, "shape") else type(result).__name__}")
+                log.info(f"✅ Completed: {op_name} - operation executed on pre-allocated tensors")
                 
-                # Handle different result types
-                if isinstance(result, torch.Tensor):
-                    results = [result]
-                elif isinstance(result, (list, tuple)):
-                    results = [r for r in result if isinstance(r, torch.Tensor)]
-                else:
-                    # For scalar results, convert to tensor (on CUDA device)
-                    device = torch.device(CUDA_DEVICE_TYPE)
-                    results = [torch.tensor(result, device=device)]
-                
-                # Register result tensors and return their storage IDs
-                # Generate integer storage IDs like the C++ allocator does
-                result_ids = []
-                for i, tensor in enumerate(results):
-                    # Generate integer storage ID (compatible with C++ allocator)
-                    storage_id = str(random.randint(1, 2**64 - 1))
-                    
-                    # Store tensor storage for all tensors (including scalars)
-                    with lock:
-                        storages[storage_id] = tensor.untyped_storage()
-                        log.debug(f"📤 MODAL OUTPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
-                        
-                        # Log tensor data summary for debugging
-                        if tensor.numel() > 0:
-                            # Only compute mean for floating point tensors
-                            if tensor.dtype.is_floating_point:
-                                log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
-                            else:
-                                log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
-                    
-                    result_ids.append(storage_id)
-                
-                return result_ids
+                # Operation completed successfully - any output tensors have been modified in-place
+                return
                 
             except Exception as e:
                 log.error(f"❌ Error executing {op_name}: {str(e)}")

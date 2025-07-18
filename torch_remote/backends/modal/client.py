@@ -114,19 +114,20 @@ class ModalClient(ClientInterface):
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
-    ) -> List[str]:
+    ) -> None:
         """
         Execute an aten operation using tensor IDs and metadata.
+        All tensors (input and output) are pre-allocated and passed as arguments.
 
         Args:
             op_name: The aten operation name
-            storage_ids: Input tensor storage IDs
+            storage_ids: All tensor storage IDs (both input and output tensors)
             tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
             args: Operation arguments
             kwargs: Operation keyword arguments
 
         Returns:
-            Result tensor IDs
+            None (operation is executed on pre-allocated tensors)
         """
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
