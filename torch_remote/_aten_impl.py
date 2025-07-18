@@ -189,21 +189,30 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         # Use GPU machine to get tensor data by storage ID
         tensor_data = gpu_machine.get_storage_data(storage_id_str)
         
-        # Deserialize the base tensor data
-        base_tensor = executor._deserialize_tensor(tensor_data)
-        
-        # Apply view transformation if this tensor has different metadata than the base
-        if (from_.size() != base_tensor.size() or 
-            from_.stride() != base_tensor.stride() or 
-            from_.storage_offset() != base_tensor.storage_offset()):
-            # This is a view tensor - apply the view transformation
-            result = base_tensor.as_strided(from_.size(), from_.stride(), from_.storage_offset())
-            log.info(f"Applied view transformation: {base_tensor.size()} -> {from_.size()}")
+        # Deserialize the storage data directly (not a tensor)
+        import io
+        buffer = io.BytesIO(tensor_data)
+        storage = torch.load(buffer, map_location=CPU_DEVICE_TYPE)
+
+        # Create tensor from storage using the view metadata from from_
+        # Convert to untyped storage if needed (torch.load might create typed storage)
+        if hasattr(storage, 'untyped'):
+            untyped_storage = storage.untyped()
         else:
-            # This is the base tensor - return as is
-            result = base_tensor
+            untyped_storage = storage
             
-        log.info(f"Successfully copied storage ID {storage_id_int} to CPU")
+        result = torch.empty(0, dtype=from_.dtype, device=CPU_DEVICE_TYPE).set_(
+            untyped_storage,
+            from_.storage_offset(),
+            from_.size(),
+            from_.stride()
+        )
+        
+        # Preserve gradient properties
+        if from_.requires_grad:
+            result.requires_grad_(True)
+        
+        log.info(f"Successfully copied storage ID {storage_id_int} from remote to CPU with shape {result.shape}")
         return result
     else:
         raise RuntimeError("Cannot copy from remote device: remote execution not available")
