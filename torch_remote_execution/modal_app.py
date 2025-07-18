@@ -284,8 +284,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             buffer = io.BytesIO(tensor_data)
             tensor = torch.load(buffer, map_location=CPU_DEVICE_TYPE, weights_only=True)
             
-            # Move to GPU if available
-            device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
+            # Move to GPU (Modal environment always has CUDA)
+            device = torch.device(CUDA_DEVICE_TYPE)
             tensor = tensor.to(device)
             
             # Store storage and original tensor data
@@ -392,8 +392,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     dtype_str = metadata["dtype"].replace("torch.", "")
                     dtype = getattr(torch, dtype_str)
                     
-                    # Reconstruct tensor using storage + metadata
-                    tensor = torch.empty(0, dtype=dtype).set_(
+                    # Reconstruct tensor using storage + metadata (on CUDA device)
+                    tensor = torch.empty(0, dtype=dtype, device=CUDA_DEVICE_TYPE).set_(
                         storage,
                         metadata["storage_offset"],
                         metadata["shape"],
@@ -451,8 +451,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 elif isinstance(result, (list, tuple)):
                     results = [r for r in result if isinstance(r, torch.Tensor)]
                 else:
-                    # For scalar results, convert to tensor
-                    device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
+                    # For scalar results, convert to tensor (on CUDA device)
+                    device = torch.device(CUDA_DEVICE_TYPE)
                     results = [torch.tensor(result, device=device)]
                 
                 # Register result tensors and return their storage IDs
