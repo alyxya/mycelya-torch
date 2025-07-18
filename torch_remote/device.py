@@ -199,7 +199,7 @@ class DeviceRegistry:
         """
         # Check if device is already registered
         for index, existing_device in self._devices.items():
-            if existing_device is device:
+            if existing_device is machine:
                 return index
 
         # Assign new index
@@ -207,7 +207,7 @@ class DeviceRegistry:
         self._next_index += 1
 
         # Store direct mapping
-        self._devices[index] = device
+        self._devices[index] = machine
 
         return index
 

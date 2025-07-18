@@ -509,10 +509,26 @@ class RemoteOrchestrator:
         return buffer.getvalue()
     
     def _deserialize_tensor(self, data: bytes) -> torch.Tensor:
-        """Deserialize tensor from bytes."""
+        """Deserialize tensor from bytes and ensure untyped storage."""
         import io
         buffer = io.BytesIO(data)
-        return torch.load(buffer, map_location=CPU_DEVICE_TYPE)
+        tensor = torch.load(buffer, map_location=CPU_DEVICE_TYPE)
+        
+        # Ensure storage is untyped after loading (torch.load may create typed storage)
+        if hasattr(tensor, 'untyped_storage'):
+            # Force recreation with untyped storage if needed
+            untyped_storage = tensor.untyped_storage()
+            # Create a new tensor with the untyped storage to ensure consistency
+            tensor = torch.empty(0, dtype=tensor.dtype, device=tensor.device).set_(
+                untyped_storage, 
+                tensor.storage_offset(), 
+                tensor.shape, 
+                tensor.stride()
+            )
+            if tensor.requires_grad:
+                tensor.requires_grad_(True)
+        
+        return tensor
     
     def _get_tensor_metadata(self, tensor: torch.Tensor) -> Dict[str, Any]:
         """Get tensor metadata."""

@@ -280,10 +280,9 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 from typing import Dict, Any
                 
                 self._storages: Dict[str, Any] = {}  # storage_id -> torch.Storage
-                self._tensor_data: Dict[str, bytes] = {}  # storage_id -> original serialized bytes
                 self._storage_lock = threading.RLock()
             
-            return self._storages, self._tensor_data, self._storage_lock
+            return self._storages, self._storage_lock
         
         @modal.method()
         def create_storage(
@@ -317,10 +316,9 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             if storage_id is None:
                 storage_id = str(uuid.uuid4())
             
-            storages, tensor_data_cache, lock = self._get_storages()
+            storages, lock = self._get_storages()
             with lock:
                 storages[storage_id] = tensor.untyped_storage()
-                tensor_data_cache[storage_id] = tensor_data  # Store original bytes for get_tensor_data
             
             log.info(f"📦 Created storage {storage_id} for tensor with shape {tensor.shape} on {device}")
             
@@ -329,20 +327,27 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         @modal.method()
         def get_storage_data(self, storage_id: str) -> bytes:
             """
-            Retrieve storage data by storage ID for transfer to client.
+            Retrieve current storage data by storage ID for transfer to client.
             
             Args:
                 storage_id: The storage ID
                 
             Returns:
-                Serialized tensor data (original bytes that were uploaded)
+                Serialized tensor data (current state, not stale cached bytes)
             """
-            storages, tensor_data_cache, lock = self._get_storages()
+            import io
+            
+            storages, lock = self._get_storages()
             
             with lock:
-                if storage_id not in tensor_data_cache:
+                if storage_id not in storages:
                     raise KeyError(f"Storage ID {storage_id} not found")
-                return tensor_data_cache[storage_id]
+                
+                # Serialize current storage state instead of returning stale cached bytes
+                storage = storages[storage_id]
+                buffer = io.BytesIO()
+                torch.save(storage, buffer)
+                return buffer.getvalue()
         
         
         @modal.method()
@@ -356,14 +361,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             Returns:
                 True if removed, False if not found
             """
-            storages, tensor_data_cache, lock = self._get_storages()
+            storages, lock = self._get_storages()
             
             with lock:
                 removed = storage_id in storages
                 if removed:
                     del storages[storage_id]
-                    if storage_id in tensor_data_cache:
-                        del tensor_data_cache[storage_id]
                     log.info(f"🗑️ Removed storage {storage_id}")
                 return removed
         
@@ -398,7 +401,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             try:
                 # Get storage mapping
-                storages, tensor_data_cache, lock = self._get_storages()
+                storages, lock = self._get_storages()
                 
                 # Reconstruct tensors from storage and metadata
                 tensors = []
@@ -546,8 +549,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Generate integer storage ID (compatible with C++ allocator)
                 storage_id = str(random.randint(1, 2**64 - 1))
                 
-                # Store only the storage (no tensor data cache for factory storages)
-                storages, tensor_data_cache, lock = self._get_storages()
+                # Store only the storage
+                storages, lock = self._get_storages()
                 with lock:
                     storages[storage_id] = tensor.untyped_storage()
                 
