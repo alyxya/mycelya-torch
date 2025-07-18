@@ -290,28 +290,6 @@ class RemoteOrchestrator:
         """
         gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.execute_operation_with_ids(op_name, storage_ids, tensor_metadata, list(args), kwargs)
-    def create_factory_tensor_on_remote(
-        self,
-        factory_op: str,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        machine: "RemoteMachine"
-    ) -> str:
-        """
-        Create a tensor using a factory operation on remote machine.
-        
-        Args:
-            factory_op: Factory operation name (e.g., "randn")
-            args: Factory arguments
-            kwargs: Factory keyword arguments  
-            device: Target device
-            
-        Returns:
-            Created tensor ID
-        """
-        gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.factory_storage(factory_op, args, kwargs)
-    
     def remove_tensor_from_remote(self, storage_id: str, machine: "RemoteMachine") -> bool:
         """
         Remove a tensor from remote machine.

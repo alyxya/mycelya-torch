@@ -167,30 +167,6 @@ class ModalClient:
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
     
-    def factory_storage(
-        self,
-        factory_op: str,
-        args: List[Any],
-        kwargs: Dict[str, Any]
-    ) -> str:
-        """
-        Create a storage using a factory operation.
-        
-        Args:
-            factory_op: Factory operation name (e.g., "randn")
-            args: Factory arguments
-            kwargs: Factory keyword arguments
-            
-        Returns:
-            Created storage ID
-        """
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-        
-        return self._executor_instance.factory_storage.remote(
-            factory_op, args, kwargs, self.machine_id
-        )
-    
     def remove_storage(self, storage_id: str) -> bool:
         """
         Remove a storage from the remote machine.
@@ -503,62 +479,6 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 
             except Exception as e:
                 log.error(f"❌ Error executing {op_name}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                raise
-        
-        @modal.method()
-        def factory_storage(
-            self,
-            factory_op: str,
-            args: List[Any],
-            kwargs: Dict[str, Any],
-            machine_id: str
-        ) -> str:
-            """
-            Create a storage using a factory operation (e.g., torch.randn).
-            
-            Args:
-                factory_op: The factory operation name (e.g., "randn", "zeros")
-                args: Factory operation arguments
-                kwargs: Factory operation keyword arguments
-                machine_id: Machine ID for logging
-                
-            Returns:
-                The created storage ID
-            """
-            import torch
-            
-            log.info(f"🏭 Modal {gpu_type} (machine {machine_id}) creating storage: {factory_op}")
-            
-            try:
-                # Get GPU device
-                device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
-                
-                # Update kwargs to use local device
-                if "device" in kwargs:
-                    kwargs["device"] = device
-                
-                # Get the factory function
-                factory_func = getattr(torch, factory_op)
-                
-                # Create tensor
-                tensor = factory_func(*args, **kwargs)
-                
-                # Register storage and return storage ID
-                # Generate integer storage ID (compatible with C++ allocator)
-                storage_id = str(random.randint(1, 2**64 - 1))
-                
-                # Store only the storage
-                storages, lock = self._get_storages()
-                with lock:
-                    storages[storage_id] = tensor.untyped_storage()
-                
-                log.info(f"✅ Created {factory_op} storage {storage_id} with shape {tensor.shape}")
-                return storage_id
-                
-            except Exception as e:
-                log.error(f"❌ Error creating {factory_op} storage: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 raise
