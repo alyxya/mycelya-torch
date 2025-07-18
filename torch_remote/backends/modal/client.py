@@ -86,20 +86,25 @@ class ModalClient(ClientInterface):
         
         return self._server_instance.create_storage.remote(tensor_data, storage_id)
     
-    def get_storage_data(self, storage_id: str) -> bytes:
+    def get_storage_data(self, storage_id: str, shape: List[int] = None, stride: List[int] = None, 
+                        storage_offset: int = 0, dtype: str = None) -> bytes:
         """
-        Get storage data by ID for device transfer.
+        Get storage data by ID for device transfer, optionally as a specific view.
         
         Args:
             storage_id: The storage ID
+            shape: Tensor shape for view (if None, returns full storage)
+            stride: Tensor stride for view  
+            storage_offset: Storage offset for view
+            dtype: Tensor data type
             
         Returns:
-            Serialized tensor data
+            Serialized tensor data (contiguous representation of the view)
         """
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._server_instance.get_storage_data.remote(storage_id)
+        return self._server_instance.get_storage_data.remote(storage_id, shape, stride, storage_offset, dtype)
     
     
     def execute_aten_operation(

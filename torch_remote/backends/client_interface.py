@@ -76,15 +76,20 @@ class ClientInterface(ABC):
         pass
     
     @abstractmethod
-    def get_storage_data(self, storage_id: str) -> bytes:
+    def get_storage_data(self, storage_id: str, shape: List[int] = None, stride: List[int] = None, 
+                        storage_offset: int = 0, dtype: str = None) -> bytes:
         """
-        Retrieve storage data by ID.
+        Retrieve storage data by ID, optionally as a specific view.
         
         Args:
             storage_id: The storage ID to retrieve
+            shape: Tensor shape for view (if None, returns full storage)
+            stride: Tensor stride for view
+            storage_offset: Storage offset for view
+            dtype: Tensor data type
             
         Returns:
-            Serialized tensor data
+            Serialized tensor data (contiguous representation of the view)
         """
         pass
     

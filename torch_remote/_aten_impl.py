@@ -186,33 +186,26 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         storage_id_str = str(storage_id_int)
         log.info(f"Copying storage ID {storage_id_int} from remote to CPU")
         
-        # Use GPU machine to get tensor data by storage ID
-        tensor_data = gpu_machine.get_storage_data(storage_id_str)
-        
-        # Deserialize the storage data directly (not a tensor)
-        import io
-        buffer = io.BytesIO(tensor_data)
-        storage = torch.load(buffer, map_location=CPU_DEVICE_TYPE)
-
-        # Create tensor from storage using the view metadata from from_
-        # Convert to untyped storage if needed (torch.load might create typed storage)
-        if hasattr(storage, 'untyped'):
-            untyped_storage = storage.untyped()
-        else:
-            untyped_storage = storage
-            
-        result = torch.empty(0, dtype=from_.dtype, device=CPU_DEVICE_TYPE).set_(
-            untyped_storage,
-            from_.storage_offset(),
-            from_.size(),
-            from_.stride()
+        # Use GPU machine to get tensor data by storage ID with view information
+        # Pass tensor metadata so remote side can serialize just the view's data
+        tensor_data = gpu_machine.get_storage_data(
+            storage_id_str,
+            shape=list(from_.shape),
+            stride=list(from_.stride()),
+            storage_offset=from_.storage_offset(),
+            dtype=str(from_.dtype)
         )
         
-        # Preserve gradient properties
-        if from_.requires_grad:
-            result.requires_grad_(True)
+        # Deserialize the tensor data as contiguous representation
+        # Since we now serialize with .contiguous(), the deserialized tensor contains exactly
+        # the data that should be in the result tensor - no view reconstruction needed
+        result = executor._deserialize_tensor(tensor_data)
         
-        log.info(f"Successfully copied storage ID {storage_id_int} from remote to CPU with shape {result.shape}")
+        # Verify the result has the expected shape (it should match the remote tensor's shape)
+        if result.size() != from_.size():
+            log.warning(f"Deserialized tensor shape {result.size()} doesn't match remote tensor shape {from_.size()}")
+        
+        log.info(f"Successfully copied contiguous tensor data for storage ID {storage_id_int} to CPU")
         return result
     else:
         raise RuntimeError("Cannot copy from remote device: remote execution not available")

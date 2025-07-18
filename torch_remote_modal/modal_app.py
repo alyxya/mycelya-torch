@@ -164,15 +164,20 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             return storage_id
         
         @modal.method()
-        def get_storage_data(self, storage_id: str) -> bytes:
+        def get_storage_data(self, storage_id: str, shape=None, stride=None, storage_offset=0, dtype=None) -> bytes:
             """
             Retrieve current storage data by storage ID for transfer to client.
+            If view parameters are provided, returns only the view's data as contiguous.
             
             Args:
                 storage_id: The storage ID
+                shape: Tensor shape for view (if None, returns full storage)
+                stride: Tensor stride for view
+                storage_offset: Storage offset for view  
+                dtype: Tensor data type
                 
             Returns:
-                Serialized tensor data (current state, not stale cached bytes)
+                Serialized tensor data (contiguous representation of the view)
             """
             import io
             
@@ -182,10 +187,24 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 if storage_id not in storages:
                     raise KeyError(f"Storage ID {storage_id} not found")
                 
-                # Serialize current storage state instead of returning stale cached bytes
                 storage = storages[storage_id]
+                
+                # If view parameters are provided, create the view and make it contiguous
+                if shape is not None:
+                    # Create tensor from storage with view parameters
+                    tensor = torch.empty(0, device=storage.device).set_(
+                        storage, storage_offset, shape, stride or []
+                    )
+                    # Make contiguous to get only the view's data
+                    tensor = tensor.contiguous()
+                    log.info(f"📦 Serializing view of storage {storage_id}: shape={shape}, stride={stride}, offset={storage_offset}")
+                else:
+                    # Return full storage as before (backward compatibility)
+                    tensor = torch.empty(0, device=storage.device).set_(storage)
+                    log.info(f"📦 Serializing full storage {storage_id}")
+                
                 buffer = io.BytesIO()
-                torch.save(storage, buffer)
+                torch.save(tensor, buffer)
                 return buffer.getvalue()
         
         

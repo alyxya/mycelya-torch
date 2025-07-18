@@ -465,8 +465,15 @@ class RemoteOrchestrator:
         storage_id_int = remote_tensor.untyped_storage().data_ptr()
         storage_id_str = str(storage_id_int)
         
-        # Use GPU machine to get tensor data by ID
-        tensor_data = gpu_machine.get_storage_data(storage_id_str)
+        # Use GPU machine to get tensor data by ID with view information
+        # Pass tensor metadata so remote side can serialize just the view's data
+        tensor_data = gpu_machine.get_storage_data(
+            storage_id_str,
+            shape=list(remote_tensor.shape),
+            stride=list(remote_tensor.stride()),
+            storage_offset=remote_tensor.storage_offset(),
+            dtype=str(remote_tensor.dtype)
+        )
         
         # Deserialize the tensor
         return self._deserialize_tensor(tensor_data)
@@ -482,28 +489,30 @@ class RemoteOrchestrator:
         return result
     
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
-        """Serialize tensor to bytes."""
+        """Serialize tensor to bytes, ensuring view data is contiguous."""
         import io
         buffer = io.BytesIO()
-        # Convert to pure CPU tensor to avoid torch_remote dependencies in serialization
-        cpu_tensor = tensor.cpu().detach()
+        # Convert to pure CPU tensor and make contiguous to serialize only the view's data
+        # This ensures views are serialized as their actual data, not the full underlying storage
+        cpu_tensor = tensor.cpu().detach().contiguous()
         torch.save(cpu_tensor, buffer)
         return buffer.getvalue()
     
     def _deserialize_tensor(self, data: bytes) -> torch.Tensor:
-        """Deserialize tensor from bytes and ensure untyped storage."""
+        """Deserialize tensor from bytes as a contiguous tensor."""
         import io
         buffer = io.BytesIO(data)
         tensor = torch.load(buffer, map_location=CPU_DEVICE_TYPE)
         
-        # Ensure storage is untyped after loading (torch.load may create typed storage)
+        # Since we serialize with .contiguous(), the deserialized tensor should already be contiguous
+        # with storage_offset=0 and optimal stride. No view reconstruction needed.
+        # Just ensure we have untyped storage for consistency with the remote tensor system.
         if hasattr(tensor, 'untyped_storage'):
-            # Force recreation with untyped storage if needed
             untyped_storage = tensor.untyped_storage()
-            # Create a new tensor with the untyped storage to ensure consistency
+            # The tensor should already be contiguous, so we preserve its natural layout
             tensor = torch.empty(0, dtype=tensor.dtype, device=tensor.device).set_(
                 untyped_storage, 
-                tensor.storage_offset(), 
+                0,  # storage_offset should be 0 for contiguous tensors
                 tensor.shape, 
                 tensor.stride()
             )
