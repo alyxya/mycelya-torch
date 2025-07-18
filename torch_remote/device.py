@@ -38,12 +38,13 @@ class BackendProvider(Enum):
     # LAMBDA = "lambda"
 
 
-class RemoteBackend:
+class RemoteMachine:
     """
-    Represents a remote GPU device with specific provider and GPU type.
+    Represents a remote machine with specific provider and GPU type(s).
 
-    Each RemoteBackend instance represents a unique remote GPU instance.
-    Operations between different RemoteBackend instances are blocked with explicit error messages.
+    Each RemoteMachine instance represents a unique remote machine instance
+    that can host one or more GPUs. Operations between different RemoteMachine
+    instances are blocked with explicit error messages.
     """
 
     def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs: Any) -> None:
@@ -123,14 +124,14 @@ class RemoteBackend:
         self._gpu_machine = None
 
     def __str__(self) -> str:
-        return f"RemoteBackend(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.machine_id})"
+        return f"RemoteMachine(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.machine_id})"
 
     def __repr__(self) -> str:
         return self.__str__()
 
     def __eq__(self, other: object) -> bool:
         """Two devices are equal only if they have the same machine_id."""
-        if not isinstance(other, RemoteBackend):
+        if not isinstance(other, RemoteMachine):
             return False
         return self.machine_id == other.machine_id
 
@@ -158,7 +159,7 @@ class RemoteBackend:
     
     def device(self) -> torch.device:
         """
-        Get a PyTorch device object for this RemoteBackend.
+        Get a PyTorch device object for this RemoteMachine.
         
         Returns:
             torch.device: A PyTorch device object with type "remote" and the device's index
@@ -177,21 +178,21 @@ class RemoteBackend:
 
 class DeviceRegistry:
     """
-    Registry to manage active RemoteBackend instances.
+    Registry to manage active RemoteMachine instances.
 
-    Maps device indices directly to RemoteBackend instances for simple lookups.
+    Maps device indices directly to RemoteMachine instances for simple lookups.
     """
 
     def __init__(self) -> None:
-        self._devices: Dict[int, RemoteBackend] = {}  # index -> RemoteBackend
+        self._devices: Dict[int, RemoteMachine] = {}  # index -> RemoteMachine
         self._next_index = 0
 
-    def register_device(self, device: RemoteBackend) -> int:
+    def register_device(self, machine: RemoteMachine) -> int:
         """
         Register a device and return its index.
 
         Args:
-            device: The RemoteBackend to register
+            machine: The RemoteMachine to register
 
         Returns:
             The assigned device index
@@ -210,40 +211,40 @@ class DeviceRegistry:
 
         return index
 
-    def get_device_by_index(self, index: int) -> Optional[RemoteBackend]:
+    def get_device_by_index(self, index: int) -> Optional[RemoteMachine]:
         """Get device by its index."""
         return self._devices.get(index)
 
-    def get_device_by_id(self, machine_id: str) -> Optional[RemoteBackend]:
+    def get_device_by_id(self, machine_id: str) -> Optional[RemoteMachine]:
         """Get device by its ID (for backwards compatibility)."""
         for device in self._devices.values():
             if device.machine_id == machine_id:
                 return device
         return None
 
-    def get_device_index(self, device: RemoteBackend) -> Optional[int]:
-        """Get the index of a device."""
-        for index, existing_device in self._devices.items():
-            if existing_device is device:
+    def get_device_index(self, machine: RemoteMachine) -> Optional[int]:
+        """Get the index of a machine."""
+        for index, existing_machine in self._devices.items():
+            if existing_machine is machine:
                 return index
         return None
 
-    def devices_compatible(self, device1: RemoteBackend, device2: RemoteBackend) -> bool:
-        """Check if two devices are compatible for operations."""
-        # Devices are compatible if they are the same instance
-        return device1 is device2
+    def devices_compatible(self, machine1: RemoteMachine, machine2: RemoteMachine) -> bool:
+        """Check if two machines are compatible for operations."""
+        # Machines are compatible if they are the same instance
+        return machine1 is machine2
 
     def clear(self) -> None:
-        """Clear all registered devices."""
+        """Clear all registered machines."""
         self._devices.clear()
         self._next_index = 0
     
     def shutdown_all_machines(self) -> None:
         """Stop all GPU machines without clearing the registry."""
-        for device in self._devices.values():
-            if device._gpu_machine and device._gpu_machine.is_running():
+        for machine in self._devices.values():
+            if machine._gpu_machine and machine._gpu_machine.is_running():
                 try:
-                    device._gpu_machine.stop()
+                    machine._gpu_machine.stop()
                 except Exception:
                     # Silently ignore errors during shutdown
                     pass
@@ -257,20 +258,20 @@ _device_registry = DeviceRegistry()
 # for proper resource management in standalone usage scenarios.
 
 
-def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:
+def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine:
     """
-    Create a Modal backend device with the specified GPU type.
+    Create a Modal remote machine with the specified GPU type.
 
     Args:
         gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB)
         **kwargs: Additional Modal-specific configuration
 
     Returns:
-        RemoteBackend instance for the specified GPU
+        RemoteMachine instance for the specified GPU
 
     Example:
-        >>> device = create_modal_machine("A100-40GB")
-        >>> tensor = torch.randn(3, 3, device=device)
+        >>> machine = create_modal_machine("A100-40GB")
+        >>> tensor = torch.randn(3, 3, device=machine.device())
     """
     if isinstance(gpu, str):
         try:
@@ -281,19 +282,19 @@ def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend:
     else:
         gpu_type = gpu
 
-    device = RemoteBackend(
+    machine = RemoteMachine(
         provider=BackendProvider.MODAL,
         gpu_type=gpu_type,
         **kwargs
     )
 
-    # Register the device
-    _device_registry.register_device(device)
+    # Register the machine
+    _device_registry.register_device(machine)
     
-    # Register atexit cleanup for this specific device
-    atexit.register(device.stop_gpu_machine)
+    # Register atexit cleanup for this specific machine
+    atexit.register(machine.stop_gpu_machine)
 
-    return device
+    return machine
 
 
 def get_device_registry() -> DeviceRegistry:

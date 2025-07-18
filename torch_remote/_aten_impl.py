@@ -37,13 +37,13 @@ def _get_remote_executor() -> Optional[Any]:
     handles cases where remote execution is not available.
     
     Returns:
-        RemoteExecutor instance if available, None otherwise
+        RemoteOrchestrator instance if available, None otherwise
     """
     global _remote_executor
     if _remote_executor is None:
         try:
-            from ._remote_executor import remote_executor
-            _remote_executor = remote_executor
+            from ._remote_orchestrator import remote_orchestrator
+            _remote_executor = remote_orchestrator
         except ImportError as e:
             log.warning(f"Remote execution not available: {e}")
             _remote_executor = None
@@ -183,7 +183,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         device = registry.get_device_by_index(from_.device.index)
         
         if device is None:
-            raise RuntimeError(f"No RemoteBackend found for remote device index {from_.device.index}")
+            raise RuntimeError(f"No RemoteMachine found for remote device index {from_.device.index}")
         
         # Get the GPU machine for this device
         gpu_machine = device.get_gpu_machine()
@@ -235,7 +235,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         device = registry.get_device_by_index(to_.device.index)
         
         if device is None:
-            raise RuntimeError(f"No RemoteBackend found for remote device index {to_.device.index}")
+            raise RuntimeError(f"No RemoteMachine found for remote device index {to_.device.index}")
         
         # Get the GPU machine for this device
         gpu_machine = device.get_gpu_machine()

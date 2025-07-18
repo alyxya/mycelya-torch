@@ -110,7 +110,7 @@ class RemoteTensorRegistry:
         if nbytes > 0:
             try:
                 # Import here to avoid circular imports
-                from ._remote_executor import _get_remote_executor
+                from ._remote_orchestrator import _get_remote_executor
                 from .device import get_device_registry
                 
                 executor = _get_remote_executor()
@@ -199,7 +199,7 @@ class RemoteTensorRegistry:
         # are immediately available on the GPU machine
         try:
             # Import here to avoid circular imports
-            from ._remote_executor import _get_remote_executor
+            from ._remote_orchestrator import _get_remote_executor
             from .device import get_device_registry
             
             executor = _get_remote_executor()
@@ -223,7 +223,7 @@ class RemoteTensorRegistry:
         """Clean up storage on remote GPU device"""
         try:
             # Import here to avoid circular imports
-            from ._remote_executor import _get_remote_executor
+            from ._remote_orchestrator import _get_remote_executor
             from .device import get_device_registry
             
             executor = _get_remote_executor()

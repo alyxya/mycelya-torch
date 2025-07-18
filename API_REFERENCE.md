@@ -7,7 +7,7 @@
   - [create_modal_machine()](#create_modal_machine)
   - [get_device_registry()](#get_device_registry)
 - [Classes](#classes)
-  - [RemoteBackend](#backenddevice)
+  - [RemoteMachine](#backenddevice)
   - [DeviceRegistry](#deviceregistry)
 - [Enums](#enums)
   - [GPUType](#gputype)
@@ -30,7 +30,7 @@ The torch-remote library provides seamless remote GPU execution for PyTorch tens
 Creates a Modal backend device with the specified GPU type.
 
 ```python
-def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend
+def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine
 ```
 
 **Parameters:**
@@ -40,7 +40,7 @@ def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteBackend
 - `**kwargs`: Additional Modal-specific configuration options
 
 **Returns:**
-- `RemoteBackend`: Configured device instance for the specified GPU type
+- `RemoteMachine`: Configured device instance for the specified GPU type
 
 **Raises:**
 - `ValueError`: If GPU type is invalid or not supported
@@ -82,12 +82,12 @@ print(f"Active devices: {len(registry._devices)}")
 
 ## Classes
 
-### `RemoteBackend`
+### `RemoteMachine`
 
 Represents a remote GPU device with specific provider and GPU type.
 
 ```python
-class RemoteBackend:
+class RemoteMachine:
     def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs)
 ```
 
@@ -135,7 +135,7 @@ Device's index in the device registry.
 ```python
 def device(self) -> torch.device
 ```
-Get a PyTorch device object for this RemoteBackend.
+Get a PyTorch device object for this RemoteMachine.
 
 **Returns:**
 - `torch.device`: A PyTorch device object with type 'remote' and the device's index
@@ -177,7 +177,7 @@ print(device.remote_index)     # 0
 
 ### `DeviceRegistry`
 
-Registry to manage active RemoteBackend instances and ensure tensor compatibility.
+Registry to manage active RemoteMachine instances and ensure tensor compatibility.
 
 ```python
 class DeviceRegistry:
@@ -188,19 +188,19 @@ class DeviceRegistry:
 
 #### `register_device()`
 ```python
-def register_device(self, device: RemoteBackend) -> int
+def register_device(self, device: RemoteMachine) -> int
 ```
 Register a device and return its assigned index.
 
 **Parameters:**
-- `device` (RemoteBackend): Device to register
+- `device` (RemoteMachine): Device to register
 
 **Returns:**
 - `int`: Assigned device index
 
 #### `get_device_by_index()`
 ```python
-def get_device_by_index(self, index: int) -> Optional[RemoteBackend]
+def get_device_by_index(self, index: int) -> Optional[RemoteMachine]
 ```
 Retrieve device by its registry index.
 
@@ -208,11 +208,11 @@ Retrieve device by its registry index.
 - `index` (int): Device index
 
 **Returns:**
-- `Optional[RemoteBackend]`: Device instance or None if not found
+- `Optional[RemoteMachine]`: Device instance or None if not found
 
 #### `get_device_by_id()`
 ```python
-def get_device_by_id(self, device_id: str) -> Optional[RemoteBackend]
+def get_device_by_id(self, device_id: str) -> Optional[RemoteMachine]
 ```
 Retrieve device by its unique ID.
 
@@ -220,29 +220,29 @@ Retrieve device by its unique ID.
 - `device_id` (str): Device identifier
 
 **Returns:**
-- `Optional[RemoteBackend]`: Device instance or None if not found
+- `Optional[RemoteMachine]`: Device instance or None if not found
 
 #### `get_device_index()`
 ```python
-def get_device_index(self, device: RemoteBackend) -> Optional[int]
+def get_device_index(self, device: RemoteMachine) -> Optional[int]
 ```
 Get the registry index of a device.
 
 **Parameters:**
-- `device` (RemoteBackend): Device instance
+- `device` (RemoteMachine): Device instance
 
 **Returns:**
 - `Optional[int]`: Device index or None if not registered
 
 #### `devices_compatible()`
 ```python
-def devices_compatible(self, device1: RemoteBackend, device2: RemoteBackend) -> bool
+def devices_compatible(self, device1: RemoteMachine, device2: RemoteMachine) -> bool
 ```
 Check if two devices are compatible for tensor operations.
 
 **Parameters:**
-- `device1` (RemoteBackend): First device
-- `device2` (RemoteBackend): Second device
+- `device1` (RemoteMachine): First device
+- `device2` (RemoteMachine): Second device
 
 **Returns:**
 - `bool`: True if devices are compatible (same device_id)
@@ -355,14 +355,14 @@ z = torch.ones(10, 10, device=backend_device.device())
 ### Tensor Methods
 
 #### `.to()`
-The tensor `.to()` method is enhanced to support RemoteBackend instances.
+The tensor `.to()` method is enhanced to support RemoteMachine instances.
 
 ```python
 tensor.to(device=None, dtype=None, non_blocking=False, copy=False, memory_format=None) -> Tensor
 ```
 
 **Parameters:**
-- `device`: Can be a `RemoteBackend` instance
+- `device`: Can be a `RemoteMachine` instance
 - Other parameters follow standard PyTorch conventions
 
 **Example:**

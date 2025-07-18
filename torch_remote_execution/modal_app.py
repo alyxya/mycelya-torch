@@ -37,8 +37,8 @@ image = (
 
 # Cache for GPU-specific apps and their functions  
 _gpu_apps: Dict[str, Tuple[modal.App, Any]] = {}
-# Cache for RemoteGPUMachine instances
-_gpu_machines: Dict[str, "RemoteGPUMachine"] = {}
+# Cache for ModalClient instances
+_gpu_machines: Dict[str, "ModalClient"] = {}
 
 # GPU configuration mapping
 GPU_CONFIG = {
@@ -57,13 +57,13 @@ GPU_CONFIG = {
 
 
 
-class RemoteGPUMachine:
+class ModalClient:
     """
-    Stateful wrapper representing a remote GPU machine running on Modal.
+    Client interface for Modal cloud GPU execution.
     
-    This class encapsulates both the Modal app and executor, providing a clean
-    interface for interacting with remote GPU execution while maintaining
-    state and connection management.
+    This class provides a client-side interface to Modal's cloud GPU infrastructure,
+    encapsulating Modal app management, executor instances, and communication
+    protocols while maintaining state and connection management.
     """
     
     def __init__(self, gpu_type: str, machine_id: str):
@@ -266,28 +266,28 @@ class RemoteGPUMachine:
     
     def __repr__(self):
         status = "running" if self.is_running() else "stopped"
-        return f"RemoteGPUMachine(gpu_type=\"{self.gpu_type}\", machine_id=\"{self.machine_id}\", status=\"{status}\")"
+        return f"ModalClient(gpu_type=\"{self.gpu_type}\", machine_id=\"{self.machine_id}\", status=\"{status}\")"
 
 
-def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> RemoteGPUMachine:
+def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> ModalClient:
     """
-    Create a RemoteGPUMachine for a specific GPU type and device.
+    Create a ModalClient for a specific GPU type and machine.
     
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
         
     Returns:
-        RemoteGPUMachine instance representing the remote GPU
+        ModalClient instance for communicating with Modal GPU infrastructure
     """
     # Check cache first
     if machine_id in _gpu_machines:
         return _gpu_machines[machine_id]
     
-    # Create new machine and cache it
-    machine = RemoteGPUMachine(gpu_type, machine_id)
-    _gpu_machines[machine_id] = machine
-    return machine
+    # Create new client and cache it
+    client = ModalClient(gpu_type, machine_id)
+    _gpu_machines[machine_id] = client
+    return client
 
 
 def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
@@ -721,15 +721,15 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
     return app, PytorchOperationExecutor
 
 
-def get_modal_app_for_device(device) -> RemoteGPUMachine:
+def get_modal_app_for_device(device) -> ModalClient:
     """
-    Get the RemoteGPUMachine for a specific device.
+    Get the ModalClient for a specific machine.
     
     Args:
-        device: The RemoteBackend to get the machine for
+        device: The RemoteMachine to get the client for
         
     Returns:
-        RemoteGPUMachine for the device's GPU type
+        ModalClient for the machine's GPU type
     """
     if hasattr(device, "provider") and device.provider.value != "modal":
         raise ValueError(f"Device provider {device.provider.value} is not Modal")

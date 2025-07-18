@@ -14,7 +14,7 @@ import torch
 import time
 
 from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE
-from .device import RemoteBackend, get_device_registry
+from .device import RemoteMachine, get_device_registry
 
 log = logging.getLogger(__name__)
 
@@ -69,27 +69,28 @@ except Exception as e:
     log.warning(f"Remote execution not available: {e}")
 
 
-class RemoteExecutor:
-    """Handles remote execution of aten operations on remote GPUs.
+class RemoteOrchestrator:
+    """Orchestrates remote execution of aten operations across remote machines.
     
-    This is currently a Modal-specific implementation. Multi-provider support
-    would require significant refactoring to abstract provider-specific logic.
+    This class coordinates operation execution between local tensors and remote
+    machines, handling tensor transfers, device communication, and distributed
+    execution flow. Currently supports Modal as the primary provider.
     """
     
     def __init__(self):
         self._device_apps: Dict[str, Any] = {}  # Cache for device-specific GPU machines
         self._last_heartbeat: Dict[str, float] = {}  # Track last successful communication per device
     
-    def _get_device_gpu_machine(self, device: "RemoteBackend"):
-        """Get the active RemoteGPUMachine for a specific device."""
-        # Get the pre-started GPU machine from the device
-        gpu_machine = device.get_gpu_machine()
+    def _get_device_gpu_machine(self, machine: "RemoteMachine"):
+        """Get the active ModalClient for a specific machine."""
+        # Get the pre-started GPU machine from the machine
+        gpu_machine = machine.get_gpu_machine()
         
         if gpu_machine is None:
-            raise RuntimeError(f"No GPU machine available for device {device.machine_id}")
+            raise RuntimeError(f"No GPU machine available for machine {machine.machine_id}")
         
         if not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine for device {device.machine_id} is not running")
+            raise RuntimeError(f"GPU machine for machine {machine.machine_id} is not running")
         
         return gpu_machine
         
@@ -114,10 +115,10 @@ class RemoteExecutor:
             Result of the operation (tensors as remote tensors with new IDs)
         """
         try:
-            # Detect device from tensors
-            device = self._detect_device_from_tensors(args, kwargs)
-            if device is None:
-                raise ValueError("RemoteBackend is required for remote execution")
+            # Detect machine from tensors
+            machine = self._detect_device_from_tensors(args, kwargs)
+            if machine is None:
+                raise ValueError("RemoteMachine is required for remote execution")
             
             # Extract storage IDs and build args for remote execution
             storage_ids = []
@@ -144,20 +145,20 @@ class RemoteExecutor:
             
             # Execute remotely using storage IDs
             result_storage_ids = self.execute_remote_operation_with_ids(
-                op_name, storage_ids, tuple(processed_args), processed_kwargs, device
+                op_name, storage_ids, tuple(processed_args), processed_kwargs, machine
             )
             
             # Create result tensors from returned storage IDs
             if len(result_storage_ids) == 1:
                 # Single tensor result
                 result_storage_id = result_storage_ids[0]
-                result_tensor = self._create_remote_tensor_from_id(result_storage_id, device)
+                result_tensor = self._create_remote_tensor_from_id(result_storage_id, machine)
                 return result_tensor
             else:
                 # Multiple tensor results  
                 result_tensors = []
                 for result_storage_id in result_storage_ids:
-                    result_tensor = self._create_remote_tensor_from_id(result_storage_id, device)
+                    result_tensor = self._create_remote_tensor_from_id(result_storage_id, machine)
                     result_tensors.append(result_tensor)
                 return tuple(result_tensors)
                 
@@ -167,7 +168,7 @@ class RemoteExecutor:
             traceback.print_exc()
             raise
     
-    def _create_remote_tensor_from_id(self, storage_id: str, device: "RemoteBackend") -> torch.Tensor:
+    def _create_remote_tensor_from_id(self, storage_id: str, machine: "RemoteMachine") -> torch.Tensor:
         """
         Create a remote tensor from an existing storage ID.
         
@@ -176,12 +177,12 @@ class RemoteExecutor:
         
         Args:
             storage_id: The remote storage ID
-            device: The device where the tensor exists
+            machine: The machine where the tensor exists
             
         Returns:
             Remote tensor that references the existing data
         """
-        gpu_machine = self._get_device_gpu_machine(device)
+        gpu_machine = self._get_device_gpu_machine(machine)
         
         # Get tensor metadata from remote
         metadata = gpu_machine.get_tensor_metadata(storage_id)
@@ -195,7 +196,7 @@ class RemoteExecutor:
         cpu_tensor = torch.empty(shape, dtype=dtype, device=CPU_DEVICE_TYPE)
         
         # Convert to remote device - this will call the C++ allocator and generate a new ID
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
         
         # Now we need to override the generated storage ID with our existing one
         # The C++ allocator stores storage IDs as data pointers
@@ -213,7 +214,7 @@ class RemoteExecutor:
     def create_tensor_on_remote(
         self,
         tensor_data: bytes, 
-        device: "RemoteBackend",
+        machine: "RemoteMachine",
         storage_id: Optional[str] = None
     ) -> str:
         """
@@ -227,7 +228,7 @@ class RemoteExecutor:
         Returns:
             The tensor ID
         """
-        gpu_machine = self._get_device_gpu_machine(device)
+        gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.create_tensor(tensor_data, storage_id)
     
     def get_tensor_data_from_remote(self, storage_id: str, device_index: int) -> torch.Tensor:
@@ -242,11 +243,11 @@ class RemoteExecutor:
             CPU tensor with the data
         """
         registry = get_device_registry()
-        device = registry.get_device_by_index(device_index)
-        if device is None:
-            raise RuntimeError(f"No device found for index {device_index}")
+        machine = registry.get_device_by_index(device_index)
+        if machine is None:
+            raise RuntimeError(f"No machine found for index {device_index}")
         
-        gpu_machine = self._get_device_gpu_machine(device)
+        gpu_machine = self._get_device_gpu_machine(machine)
         tensor_data = gpu_machine.get_tensor_data(storage_id)
         return self._deserialize_tensor(tensor_data)
     
@@ -256,7 +257,7 @@ class RemoteExecutor:
         storage_ids: List[str],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-        device: "RemoteBackend"
+        machine: "RemoteMachine"
     ) -> List[str]:
         """
         Execute an operation using tensor IDs.
@@ -271,14 +272,14 @@ class RemoteExecutor:
         Returns:
             Result tensor IDs
         """
-        gpu_machine = self._get_device_gpu_machine(device)
+        gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.execute_operation_with_ids(op_name, storage_ids, list(args), kwargs)
     def create_factory_tensor_on_remote(
         self,
         factory_op: str,
         args: List[Any],
         kwargs: Dict[str, Any],
-        device: "RemoteBackend"
+        machine: "RemoteMachine"
     ) -> str:
         """
         Create a tensor using a factory operation on remote machine.
@@ -292,10 +293,10 @@ class RemoteExecutor:
         Returns:
             Created tensor ID
         """
-        gpu_machine = self._get_device_gpu_machine(device)
+        gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.factory_tensor(factory_op, args, kwargs)
     
-    def remove_tensor_from_remote(self, storage_id: str, device: "RemoteBackend") -> bool:
+    def remove_tensor_from_remote(self, storage_id: str, machine: "RemoteMachine") -> bool:
         """
         Remove a tensor from remote machine.
         
@@ -306,10 +307,10 @@ class RemoteExecutor:
         Returns:
             True if removed, False if not found
         """
-        gpu_machine = self._get_device_gpu_machine(device)
+        gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.remove_tensor(storage_id)
     
-    def check_tensor_exists(self, storage_id: str, device: "RemoteBackend") -> bool:
+    def check_tensor_exists(self, storage_id: str, machine: "RemoteMachine") -> bool:
         """
         Check if a tensor exists on the remote machine.
         
@@ -321,14 +322,14 @@ class RemoteExecutor:
             True if tensor exists, False otherwise
         """
         try:
-            gpu_machine = self._get_device_gpu_machine(device)
+            gpu_machine = self._get_device_gpu_machine(machine)
             metadata = gpu_machine.get_tensor_metadata(storage_id)
             self._update_heartbeat(device.machine_id)
             return metadata is not None
         except Exception:
             return False
     
-    def validate_tensor_reference(self, storage_id: str, device: "RemoteBackend") -> bool:
+    def validate_tensor_reference(self, storage_id: str, machine: "RemoteMachine") -> bool:
         """
         Validate that a tensor reference is still valid.
         
@@ -344,7 +345,7 @@ class RemoteExecutor:
         
         return self.check_tensor_exists(storage_id, device)
     
-    def is_device_connected(self, device: "RemoteBackend") -> bool:
+    def is_device_connected(self, machine: "RemoteMachine") -> bool:
         """
         Check if a device is connected and responsive.
         
@@ -355,7 +356,7 @@ class RemoteExecutor:
             True if connected, False otherwise
         """
         try:
-            gpu_machine = self._get_device_gpu_machine(device)
+            gpu_machine = self._get_device_gpu_machine(machine)
             if not gpu_machine.is_running():
                 return False
             
@@ -374,7 +375,7 @@ class RemoteExecutor:
         """Get the timestamp of last successful communication with a device."""
         return self._last_heartbeat.get(machine_id)
     
-    def reconnect_device(self, device: "RemoteBackend") -> bool:
+    def reconnect_device(self, machine: "RemoteMachine") -> bool:
         """
         Attempt to reconnect to a device.
         
@@ -410,7 +411,7 @@ class RemoteExecutor:
         storage_ids: List[str],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-        device: "RemoteBackend"
+        machine: "RemoteMachine"
     ) -> List[str]:
         """
         Safely execute an operation using tensor IDs with error handling.
@@ -452,17 +453,17 @@ class RemoteExecutor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         from .device import get_device_registry
         
-        # Get the device backend
+        # Get the machine backend
         registry = get_device_registry()
-        device = registry.get_device_by_index(remote_tensor.device.index)
+        machine = registry.get_device_by_index(remote_tensor.device.index)
         
-        if device is None:
-            raise RuntimeError(f"No RemoteBackend found for remote device index {remote_tensor.device.index}")
+        if machine is None:
+            raise RuntimeError(f"No RemoteMachine found for remote device index {remote_tensor.device.index}")
         
-        # Get the GPU machine for this device
-        gpu_machine = device.get_gpu_machine()
+        # Get the GPU machine for this machine
+        gpu_machine = machine.get_gpu_machine()
         if gpu_machine is None or not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
+            raise RuntimeError(f"GPU machine not available for machine {machine.machine_id}")
         
         # Get tensor data using tensor ID (convert int to string for GPU machine)
         storage_id_int = remote_tensor.untyped_storage().data_ptr()
@@ -474,14 +475,14 @@ class RemoteExecutor:
         # Deserialize the tensor
         return self._deserialize_tensor(tensor_data)
     
-    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, device: "RemoteBackend") -> torch.Tensor:
+    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, machine: "RemoteMachine") -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""
-        # Create a new remote tensor from the CPU tensor using the RemoteBackend
-        if device is None:
-            raise RuntimeError("RemoteBackend must be specified for remote tensor creation")
+        # Create a new remote tensor from the CPU tensor using the RemoteMachine
+        if machine is None:
+            raise RuntimeError("RemoteMachine must be specified for remote tensor creation")
         
         # Convert to remote device - no need to manually attach _device_id anymore
-        result = cpu_tensor.to(device.device())
+        result = cpu_tensor.to(machine.device())
         return result
     
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
@@ -508,28 +509,28 @@ class RemoteExecutor:
             "element_size": tensor.element_size()
         }
     
-    def _detect_device_from_tensors(self, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Optional[RemoteBackend]:
-        """Detect RemoteBackend from tensors in arguments."""
-        detected_device = None
+    def _detect_device_from_tensors(self, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Optional[RemoteMachine]:
+        """Detect RemoteMachine from tensors in arguments."""
+        detected_machine = None
         
         def check_tensor(tensor):
-            nonlocal detected_device
+            nonlocal detected_machine
             if isinstance(tensor, torch.Tensor) and tensor.device.type == REMOTE_DEVICE_TYPE:
                 # Get device from registry using device index
                 registry = get_device_registry()
-                device = registry.get_device_by_index(tensor.device.index)
+                machine = registry.get_device_by_index(tensor.device.index)
                 
-                if device is None:
-                    raise RuntimeError(f"No RemoteBackend found for remote device index {tensor.device.index}")
+                if machine is None:
+                    raise RuntimeError(f"No RemoteMachine found for remote device index {tensor.device.index}")
                 
-                if detected_device is None:
-                    detected_device = device
-                elif detected_device is not device:
-                    # Different devices found - this is not allowed
+                if detected_machine is None:
+                    detected_machine = machine
+                elif detected_machine is not machine:
+                    # Different machines found - this is not allowed
                     raise RuntimeError(
-                        f"Cannot perform operations between tensors on different remote devices: "
-                        f"\"{detected_device.machine_id}\" (index {detected_device.remote_index}) and "
-                        f"\"{device.machine_id}\" (index {device.remote_index})\")"
+                        f"Cannot perform operations between tensors on different remote machines: "
+                        f"\"{detected_machine.machine_id}\" (index {detected_machine.remote_index}) and "
+                        f"\"{machine.machine_id}\" (index {machine.remote_index})\")"
                     )
         
         # Check args for remote tensors
@@ -540,12 +541,20 @@ class RemoteExecutor:
         for value in kwargs.values():
             check_tensor(value)
         
-        return detected_device
+        return detected_machine
 
 
-# Global executor instance (Modal provider implementation)
-remote_executor = RemoteExecutor()
+# Global orchestrator instance (Modal provider implementation)
+remote_orchestrator = RemoteOrchestrator()
 
-def _get_remote_executor() -> Optional[RemoteExecutor]:
-    """Get the global remote executor instance."""
-    return remote_executor
+def _get_remote_orchestrator() -> Optional[RemoteOrchestrator]:
+    """Get the global remote orchestrator instance."""
+    return remote_orchestrator
+
+# Backward compatibility alias
+def _get_remote_executor() -> Optional[RemoteOrchestrator]:
+    """Get the global remote orchestrator instance (legacy name)."""
+    return remote_orchestrator
+
+# Legacy alias for the global instance
+remote_executor = remote_orchestrator

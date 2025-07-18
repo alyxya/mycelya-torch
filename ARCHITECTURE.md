@@ -23,7 +23,7 @@ Automatically dispatches compute-intensive operations to cloud providers via a p
 torch_remote/                   # Main PyTorch extension package
 ├── __init__.py                 # Package initialization & device registration
 ├── _aten_impl.py              # Operation dispatch & remote execution logic  
-├── _remote_executor.py        # Remote execution system
+├── _remote_orchestrator.py    # Remote execution orchestration
 ├── _meta_parser.py            # Tensor metadata & data structures
 ├── _device_daemon.py          # Device management & process communication
 ├── device.py                  # Backend device abstraction & registry
@@ -77,7 +77,7 @@ torch_remote_execution/        # Private package for remote execution
 - **Library registration**: Registers remote device implementations for specific PyTorch operations
 
 **`torch_remote/_remote_executor.py`** - Remote Execution System
-- **RemoteExecutor class**: Manages remote execution across cloud providers using stateful RemoteGPUMachine instances
+- **RemoteOrchestrator class**: Manages remote execution across cloud providers using stateful ModalClient instances
 - **Tensor serialization/deserialization**: Converts remote tensors to/from bytes for network transport
 - **Provider backend integration**: Interfaces with the `torch_remote_execution` package
 - **Error handling and fallbacks**: Graceful degradation when remote providers are unavailable
@@ -107,17 +107,17 @@ torch_remote_execution/        # Private package for remote execution
 #### Utility Files
 
 **`torch_remote/utils.py`** - Tensor Method Extensions
-- Patches `.to()` method to support `RemoteBackend` objects
+- Patches `.to()` method to support `RemoteMachine` objects
 - Enables `tensor.to(backend_device)` to move tensors to remote device
 - Simple wrapper around the C++ remote conversion function
 
 **`torch_remote/device.py`** - Backend Device Abstraction & Registry
-- **RemoteBackend class**: Represents a remote GPU device with specific provider and GPU type
+- **RemoteMachine class**: Represents a remote GPU device with specific provider and GPU type
   - Unique device ID generation with provider-gpu-uuid format
   - GPU type validation for provider compatibility
   - Device equality and hashing based on unique device ID
   - Provider-specific configuration support
-- **DeviceRegistry class**: Manages active RemoteBackend instances
+- **DeviceRegistry class**: Manages active RemoteMachine instances
   - Device registration with automatic index assignment
   - Device lookup by ID or index
   - Device compatibility validation for operations
@@ -183,7 +183,7 @@ torch_remote_execution/        # Private package for remote execution
 - Marks package as internal to torch_remote
 
 **`torch_remote_execution/modal_app.py`** - Modal Multi-GPU Execution App
-- **RemoteGPUMachine class**: Stateful wrapper representing a remote GPU machine running on Modal
+- **ModalClient class**: Stateful wrapper representing a remote GPU machine running on Modal
   - Encapsulates Modal app and executor with connection management
   - Context manager support for automatic resource cleanup
   - Device-specific initialization and state management
@@ -196,7 +196,7 @@ torch_remote_execution/        # Private package for remote execution
   - T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200
 - **Device-specific GPU routing**: Each machine configured with appropriate GPU type, timeout, and retry settings
 - **Stateful execution model**: 
-  - `create_modal_app_for_gpu()` creates device-specific RemoteGPUMachine instances
+  - `create_modal_app_for_gpu()` creates device-specific ModalClient instances
   - Machine caching prevents redundant app creation for same device
   - Context management ensures proper resource cleanup
 - **Common execution implementation**: Shared execution logic that:
@@ -231,11 +231,11 @@ Here's how a typical operation flows through the system:
    - For simple ops: handles locally
 
 4. **Remote Execution Path** (if enabled):
-   - `RemoteExecutor.execute_remote_operation()` is called
+   - `RemoteOrchestrator.execute_remote_operation()` is called
    - **Device detection and validation**: `_detect_device_from_tensors()` ensures single-device operation
-   - Device-specific RemoteGPUMachine is retrieved or created
+   - Device-specific ModalClient is retrieved or created
    - Tensors are serialized to bytes
-   - RemoteGPUMachine context is started (Modal app)
+   - ModalClient context is started (Modal app)
    - Appropriate GPU-specific function is called based on device configuration
    - `PytorchOperationExecutor.execute_aten_operation()` runs on cloud GPU
    - Results are serialized and returned
@@ -262,8 +262,8 @@ Remote execution is lazy-loaded and gracefully degrades when cloud providers are
 Smart filtering ensures that only operations that benefit from cloud GPU acceleration are sent remotely, while keeping memory operations, views, and small tensor operations local for efficiency.
 
 ### Stateful Remote Execution
-The system uses stateful RemoteGPUMachine instances for improved performance and resource management:
-- **Device-specific machines**: Each RemoteBackend gets its own RemoteGPUMachine instance
+The system uses stateful ModalClient instances for improved performance and resource management:
+- **Device-specific machines**: Each RemoteMachine gets its own ModalClient instance
 - **Connection caching**: Modal app contexts are reused across operations on the same device
 - **Context management**: Automatic startup/shutdown of remote GPU resources
 - **Machine lifecycle**: Start, stop, and running state management for remote resources
@@ -276,14 +276,14 @@ The system implements intelligent separation between input and output tensors fo
 - **Pre-allocated outputs**: `out=` parameter tensors are handled as output tensors to avoid redundant transfers
 
 ### Multi-GPU Support
-The system supports multiple GPU types through device-specific RemoteGPUMachine instances, allowing automatic routing to the most appropriate GPU based on workload requirements and availability.
+The system supports multiple GPU types through device-specific ModalClient instances, allowing automatic routing to the most appropriate GPU based on workload requirements and availability.
 
 ### Tensor ID-Based Memory Architecture
 Remote tensors use a pure tensor ID system with no local data storage. Each tensor stores only a unique 64-bit ID and metadata (shape, dtype) locally, while actual tensor data resides exclusively on remote GPUs. This provides zero local memory overhead and seamless PyTorch integration.
 
 ### Device Validation and Isolation
 The system enforces strict device isolation to prevent operations between tensors on different remote devices:
-- **Single-device constraint**: Operations can only be performed between tensors on the same RemoteBackend instance
+- **Single-device constraint**: Operations can only be performed between tensors on the same RemoteMachine instance
 - **Device ID tracking**: Each tensor maintains a `_device_id` attribute linking it to its specific remote device
 - **Cross-device detection**: `_detect_device_from_tensors()` validates all tensors in an operation belong to the same device
 - **Error prevention**: Mixed-device operations raise clear error messages before execution

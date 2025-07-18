@@ -189,4 +189,4 @@ torch._register_device_module("remote", _create_module())
 
 
 # Import device management
-from .device import create_modal_machine, RemoteBackend, GPUType, get_device_registry
+from .device import create_modal_machine, RemoteMachine, GPUType, get_device_registry

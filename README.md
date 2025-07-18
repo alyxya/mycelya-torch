@@ -46,7 +46,7 @@ print(result)
 
 ### Device API
 
-The `RemoteBackend` provides a `.device()` method to get a PyTorch device object:
+The `RemoteMachine` provides a `.device()` method to get a PyTorch device object:
 
 ```python
 import torch
@@ -63,7 +63,7 @@ print(f"Device: {torch_device}")  # Device: remote:0
 x = torch.randn(3, 3, device=backend_device.device())
 y = torch.zeros(5, 5, device=backend_device.device())
 
-# Use with .to() method (RemoteBackend directly supported)
+# Use with .to() method (RemoteMachine directly supported)
 z = torch.ones(2, 2).to(backend_device)
 ```
 
@@ -144,7 +144,7 @@ The test suite includes comprehensive coverage of:
 
 - **`torch_remote/__init__.py`** - Package initialization and PrivateUse1 device registration
 - **`torch_remote/backends/modal/__init__.py`** - Modal backend device management functions
-- **`torch_remote/utils.py`** - Tensor method patches (`.to()` method enhancement for RemoteBackend)
+- **`torch_remote/utils.py`** - Tensor method patches (`.to()` method enhancement for RemoteMachine)
 
 ### Backend Implementation
 
