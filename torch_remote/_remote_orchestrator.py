@@ -541,8 +541,6 @@ class RemoteOrchestrator:
                 tensor.shape, 
                 tensor.stride()
             )
-            if tensor.requires_grad:
-                tensor.requires_grad_(True)
         
         return tensor
     

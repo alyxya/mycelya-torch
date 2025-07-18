@@ -10,7 +10,7 @@ from torch.utils._pytree import tree_map, tree_map_only
 
 class RemoteTensorMeta:
     def __init__(self, tensor: Optional[torch.Tensor] = None, checked: bool = True, data_ptr: Optional[int] = None, size: Optional[torch.Size] = None, stride: Optional[Tuple[int, ...]] = None, 
-                 storage_offset: Optional[int] = None, dtype: Optional[torch.dtype] = None, nelem_in_bytes: Optional[int] = None, requires_grad: Optional[bool] = None, storage_id: Optional[int] = None) -> None:
+                 storage_offset: Optional[int] = None, dtype: Optional[torch.dtype] = None, nelem_in_bytes: Optional[int] = None, storage_id: Optional[int] = None) -> None:
         """
         Create RemoteTensorMeta from either a tensor or explicit metadata.
         
@@ -23,7 +23,6 @@ class RemoteTensorMeta:
             storage_offset: Explicit storage offset (for view operations)
             dtype: Explicit dtype (for view operations)
             nelem_in_bytes: Explicit element count in bytes (for view operations)
-            requires_grad: Explicit gradient requirement (for view operations)
             storage_id: Storage ID for shared storage tracking (for view operations)
         """
         if tensor is not None:
@@ -38,11 +37,10 @@ class RemoteTensorMeta:
             self.storage_offset = tensor.storage_offset()
             self.dtype = tensor.dtype
             self.nelem_in_bytes = tensor.nelement() * tensor.element_size()
-            self.requires_grad = tensor.requires_grad
             self.storage_id = storage_id  # Optional storage ID for view tracking
         else:
             # Explicit metadata - for view operations
-            if any(param is None for param in [data_ptr, size, stride, storage_offset, dtype, nelem_in_bytes, requires_grad]):
+            if any(param is None for param in [data_ptr, size, stride, storage_offset, dtype, nelem_in_bytes]):
                 raise ValueError("When not providing tensor, all metadata parameters must be specified")
             self.data_ptr = data_ptr  # type: ignore
             self.size = size  # type: ignore
@@ -50,13 +48,12 @@ class RemoteTensorMeta:
             self.storage_offset = storage_offset  # type: ignore
             self.dtype = dtype  # type: ignore
             self.nelem_in_bytes = nelem_in_bytes  # type: ignore
-            self.requires_grad = requires_grad  # type: ignore
             self.storage_id = storage_id
 
     def __repr__(self) -> str:
         return (
             f"RemoteTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
-            f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=}, {self.requires_grad=})"
+            f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=})"
         )
 
 
@@ -154,7 +151,6 @@ def prepare_for_sending(args: Any, kwargs: Any) -> Any:
                     storage_offset=obj.storage_offset(),
                     dtype=obj.dtype,
                     nelem_in_bytes=obj.numel() * obj.element_size(),
-                    requires_grad=obj.requires_grad,
                     storage_id=storage_id
                 )
             else:
@@ -214,6 +210,6 @@ def to_device_no_copy(device: Union[torch.device, str], args: Any, kwargs: Any) 
         Arguments with empty tensors on target device
     """
     def safe_to(t: torch.Tensor) -> torch.Tensor:
-        return torch.empty_like(t, device=device, requires_grad=t.requires_grad)
+        return torch.empty_like(t, device=device)
 
     return tree_map_only(torch.Tensor, safe_to, (args, kwargs))
