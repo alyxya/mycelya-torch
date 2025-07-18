@@ -36,7 +36,7 @@ To run type checking:
 - `torch_remote/device.py` - Device abstraction and backend management
 
 ### Remote Execution
-- `torch_remote_execution/modal_app.py` - Modal cloud GPU integration with multi-GPU support
+- `torch_remote_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
 - `torch_remote/backends/modal/` - Modal provider implementation
 
 ### C++ Extension

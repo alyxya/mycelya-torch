@@ -21,7 +21,7 @@ A PyTorch extension that implements a custom "remote" device type using PyTorch'
 pip install -e .
 ```
 
-This will install both the main `torch_remote` package and the private `torch_remote_execution` package needed for remote execution.
+This will install both the main `torch_remote` package and the private `torch_remote_modal` package needed for Modal execution.
 
 ## Usage
 
@@ -162,7 +162,7 @@ The test suite includes comprehensive coverage of:
 
 ### Private Package Structure
 
-- **`torch_remote_execution/`** - Private package containing cloud provider apps for remote execution
+- **`torch_remote_modal/`** - Private package containing Modal execution app
   - `modal_app.py` - Modal application with multi-GPU support (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
   - `setup.py` - Separate installation configuration
 

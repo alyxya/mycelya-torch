@@ -4,10 +4,10 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="torch_remote_execution",
+    name="torch_remote_modal",
     version="0.1.0",
     author="PyTorch Remote Extension",
-    description="Private package for torch_remote execution supporting multiple cloud providers (do not install directly)",
+    description="Private package for torch_remote Modal execution (do not install directly)",
     packages=find_packages(),
     install_requires=[
         "modal>=0.60.0",

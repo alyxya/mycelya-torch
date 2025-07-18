@@ -66,7 +66,7 @@ if __name__ == "__main__":
         version=version,
         author="PyTorch Remote Extension",
         description="Remote GPU cloud execution extension for PyTorch supporting multiple providers",
-        packages=find_packages(exclude=("test",)) + find_packages(where="torch_remote_execution"),
+        packages=find_packages(exclude=("test",)) + find_packages(where="torch_remote_modal"),
         package_data={
             PACKAGE_NAME: [
                 "*.dll", "*.dylib", "*.so"  # Binary extensions
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         install_requires=[
             "torch>=2.0.0",
             "modal>=0.60.0",
-            # "./torch_remote_execution",  # Now bundled directly
+            # "./torch_remote_modal",  # Now bundled directly
         ],
         extras_require={
             "runpod": ["runpod>=1.0.0"],  # Future provider support

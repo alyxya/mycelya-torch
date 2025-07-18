@@ -38,7 +38,7 @@ torch_remote/                   # Main PyTorch extension package
     ├── RemoteMem.cpp          # Memory management
     └── Remote.h               # C++ header definitions
 
-torch_remote_execution/        # Private package for remote execution
+torch_remote_modal/            # Private package for Modal execution
 ├── __init__.py               # Private package marker
 ├── modal_app.py              # Modal multi-GPU execution app (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
 └── setup.py                  # Private package installation
@@ -79,7 +79,7 @@ torch_remote_execution/        # Private package for remote execution
 **`torch_remote/_remote_orchestrator.py`** - Remote Execution Orchestration
 - **RemoteOrchestrator class**: Manages remote execution across cloud providers using stateful ModalClient instances
 - **Tensor serialization/deserialization**: Converts remote tensors to/from bytes for network transport
-- **Provider backend integration**: Interfaces with the `torch_remote_execution` package
+- **Provider backend integration**: Interfaces with the `torch_remote_modal` package
 - **Error handling and fallbacks**: Graceful degradation when remote providers are unavailable
 - **Device validation**: Enforces single-device operations and prevents mixed-device tensor operations
 - **Device conversion helpers**: Converts between remote tensors and CPU tensors for transport
@@ -175,14 +175,14 @@ torch_remote_execution/        # Private package for remote execution
 - Template functions for cleanup and error reporting
 - Method lookup utilities for calling Python functions from C++
 
-### torch_remote_execution Package (Private Package)
+### torch_remote_modal Package (Private Package)
 
-**`torch_remote_execution/__init__.py`** - Private Package Marker
+**`torch_remote_modal/__init__.py`** - Private Package Marker
 - Simple package initialization with version information
 - Documentation warning against direct use
 - Marks package as internal to torch_remote
 
-**`torch_remote_execution/modal_app.py`** - Modal Multi-GPU Execution App
+**`torch_remote_modal/modal_app.py`** - Modal Multi-GPU Execution App
 - **ModalClient class**: Stateful wrapper representing a remote GPU machine running on Modal
   - Encapsulates Modal app and executor with connection management
   - Context manager support for automatic resource cleanup
@@ -209,7 +209,7 @@ torch_remote_execution/        # Private package for remote execution
 - **Error handling**: Comprehensive error reporting and traceback printing
 - **Dynamic app creation**: Creates unique Modal apps per device to support multiple concurrent GPU machines
 
-**`torch_remote_execution/setup.py`** - Private Package Installation
+**`torch_remote_modal/setup.py`** - Private Package Installation
 - Main setuptools configuration for the remote execution package
 - Dependencies: modal>=0.60.0, torch>=2.0.0
 - Marked as development status to discourage standalone installation
@@ -250,7 +250,7 @@ Here's how a typical operation flows through the system:
 ## Key Design Decisions
 
 ### Private Package Isolation
-The most important architectural decision is separating the provider backend code into `torch_remote_execution`. This prevents import conflicts when cloud provider jobs execute, since providers would otherwise try to import the entire `torch_remote` extension and create circular dependencies. The execution package is isolated with minimal dependencies.
+The most important architectural decision is separating the Modal backend code into `torch_remote_modal`. This prevents import conflicts when Modal jobs execute, since Modal would otherwise try to import the entire `torch_remote` extension and create circular dependencies. The Modal execution package is isolated with minimal dependencies.
 
 ### Pure Tensor ID Coordination
 The system uses a pure tensor ID-based architecture without local device simulation. This eliminates the need for complex threading/multiprocessing decisions and provides cleaner coordination between local metadata tracking and remote execution.
