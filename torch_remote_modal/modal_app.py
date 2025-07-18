@@ -23,11 +23,10 @@ import logging
 from collections import defaultdict
 import torch
 
-# Import constants from torch_remote
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from torch_remote.constants import TENSOR_PLACEHOLDER_PREFIX, CPU_DEVICE_TYPE, CUDA_DEVICE_TYPE
-from torch_remote.backends.modal.client import ModalClient
+# Constants moved from torch_remote to eliminate dependency
+TENSOR_PLACEHOLDER_PREFIX = "__TENSOR_"
+CPU_DEVICE_TYPE = "cpu"
+CUDA_DEVICE_TYPE = "cuda"
 
 log = logging.getLogger(__name__)
 
@@ -39,8 +38,6 @@ image = (
 
 # Cache for GPU-specific apps and their functions  
 _gpu_apps: Dict[str, Tuple[modal.App, Any]] = {}
-# Cache for ModalClient instances
-_gpu_machines: Dict[str, ModalClient] = {}
 
 # GPU configuration mapping
 GPU_CONFIG = {
@@ -59,28 +56,18 @@ GPU_CONFIG = {
 
 
 
-# ModalClient is now imported from torch_remote.backends.modal.client
-
-
-def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> ModalClient:
+def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
     """
-    Create a ModalClient for a specific GPU type and machine.
+    Create a Modal app and server class for a specific GPU type and machine.
     
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
         
     Returns:
-        ModalClient instance for communicating with Modal GPU infrastructure
+        Tuple of (modal_app, server_class) for the specified device
     """
-    # Check cache first
-    if machine_id in _gpu_machines:
-        return _gpu_machines[machine_id]
-    
-    # Create new client and cache it
-    client = ModalClient(gpu_type, machine_id)
-    _gpu_machines[machine_id] = client
-    return client
+    return _create_modal_app_for_gpu(gpu_type, machine_id)
 
 
 def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
@@ -371,20 +358,6 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
     return app, PytorchServer
 
 
-def get_modal_app_for_device(device) -> ModalClient:
-    """
-    Get the ModalClient for a specific machine.
-    
-    Args:
-        device: The RemoteMachine to get the client for
-        
-    Returns:
-        ModalClient for the machine's GPU type
-    """
-    if hasattr(device, "provider") and device.provider.value != "modal":
-        raise ValueError(f"Device provider {device.provider.value} is not Modal")
-    
-    return create_modal_app_for_gpu(device.gpu_type.value, device.machine_id)
 
 
 def clear_app_cache():

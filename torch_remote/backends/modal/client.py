@@ -41,8 +41,8 @@ class ModalClient(ClientInterface):
     def _initialize(self):
         """Initialize the Modal app and server class."""
         # Import here to avoid circular imports
-        from torch_remote_modal.modal_app import _create_modal_app_for_gpu
-        self._app, self._server_class = _create_modal_app_for_gpu(
+        from torch_remote_modal.modal_app import create_modal_app_for_gpu
+        self._app, self._server_class = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id
         )
     
@@ -209,5 +209,5 @@ def get_modal_app_for_device(device) -> ModalClient:
 
 def clear_app_cache():
     """Clear the app cache."""
-    global _gpu_apps
-    _gpu_apps.clear()
+    global _gpu_machines
+    _gpu_machines.clear()
