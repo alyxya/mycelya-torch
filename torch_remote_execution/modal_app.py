@@ -153,7 +153,7 @@ class ModalClient:
         Args:
             op_name: The operation name
             storage_ids: Input tensor storage IDs
-            tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset)
+            tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
             args: Operation arguments
             kwargs: Operation keyword arguments
             
@@ -386,7 +386,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             Args:
                 op_name: The operation name to execute
                 storage_ids: List of input tensor storage IDs
-                tensor_metadata: List of tensor metadata for reconstruction (shape, stride, offset)
+                tensor_metadata: List of tensor metadata for reconstruction (shape, stride, offset, storage_id)
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 machine_id: Machine ID for logging

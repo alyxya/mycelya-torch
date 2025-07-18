@@ -45,7 +45,7 @@ class RemoteTensorRegistry:
     Architecture:
     - storage_id: Identifies remote memory allocation (what was "tensor_id")
     - PyTorch tensors: Handle local identity and metadata naturally
-    - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset)
+    - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
     """
     
     def __init__(self) -> None:
