@@ -2,11 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import logging
-import sys
 from typing import Any, Callable, Dict, Optional, Union
 
 import torch
-from torch.utils._pytree import tree_any
 
 
 log = logging.getLogger(__name__)

@@ -4,7 +4,6 @@
 import atexit
 import logging
 import random
-import weakref
 from typing import Any, Dict, Optional, Set, Callable
 
 import torch
@@ -13,6 +12,11 @@ log = logging.getLogger(__name__)
 
 # Simple tensor ID tracking for remote tensors
 # No local device simulation - remote tensors exist purely as IDs
+
+# Constants for storage ID generation
+MIN_STORAGE_ID = 1
+MAX_STORAGE_ID = 2**64 - 1
+MAX_ID_GENERATION_ATTEMPTS = 1000
 
 
 def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
@@ -52,12 +56,11 @@ class RemoteTensorRegistry:
         """
         # Generate unique 64-bit integer IDs
         # Use non-zero values to avoid confusion with null pointers
-        max_attempts = 1000  # Prevent infinite loops
         attempt = 0
         
-        while attempt < max_attempts:
+        while attempt < MAX_ID_GENERATION_ATTEMPTS:
             # Generate a random 64-bit integer
-            storage_id = random.randint(1, 2**64 - 1)
+            storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
             
             # Check if this ID is already used
             if storage_id not in self.generated_storage_ids:
