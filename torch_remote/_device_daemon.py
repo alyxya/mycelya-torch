@@ -76,7 +76,10 @@ class RemoteTensorRegistry:
     
     # Backward compatibility - rename method but keep old name working
     def generate_tensor_id(self) -> int:
-        """Legacy method name - now generates storage ID."""
+        """Legacy method name - now generates storage ID. 
+        
+        Note: Use generate_storage_id() for new code. storage_id is the preferred terminology.
+        """
         return self.generate_storage_id()
 
     def create_storage_with_id(self, storage_id: int, nbytes: int, device_index: int) -> bool:
@@ -129,7 +132,10 @@ class RemoteTensorRegistry:
     
     # Legacy method for backward compatibility
     def create_tensor_with_id(self, tensor_id: int, nbytes: int, device_index: int) -> bool:
-        """Legacy method - now creates storage."""
+        """Legacy method - now creates storage.
+        
+        Note: Use create_storage_with_id() for new code. storage_id is the preferred terminology.
+        """
         return self.create_storage_with_id(tensor_id, nbytes, device_index)
 
     def free_storage_with_id(self, storage_id: int) -> bool:
@@ -169,10 +175,13 @@ class RemoteTensorRegistry:
     
     # Legacy method for backward compatibility
     def free_tensor_with_id(self, tensor_id: int) -> bool:
-        """Legacy method - now frees storage."""
+        """Legacy method - now frees storage.
+        
+        Note: Use free_storage_with_id() for new code. storage_id is the preferred terminology.
+        """
         return self.free_storage_with_id(tensor_id)
 
-    def register_tensor_with_gpu(self, tensor_id: int, tensor_data: bytes) -> bool:
+    def register_tensor_with_gpu(self, storage_id: int, tensor_data: bytes) -> bool:
         """Register tensor data with GPU machine for immediate access"""
         # This ensures that newly created tensors (including outputs) 
         # are immediately available on the GPU machine
@@ -190,15 +199,15 @@ class RemoteTensorRegistry:
                 if device is not None:
                     gpu_machine = device.get_gpu_machine()
                     if gpu_machine and gpu_machine.is_running():
-                        storage_id_str = str(tensor_id)
+                        storage_id_str = str(storage_id)
                         gpu_machine.create_tensor(tensor_data, storage_id_str)
-                        log.info(f"Registered storage ID {tensor_id} with GPU machine")
+                        log.info(f"Registered storage ID {storage_id} with GPU machine")
                         return True
         except Exception as e:
-            log.warning(f"Failed to register storage {tensor_id} with GPU machine: {e}")
+            log.warning(f"Failed to register storage {storage_id} with GPU machine: {e}")
         return False
 
-    def _cleanup_remote_tensor(self, tensor_id: int, device_idx: int) -> None:
+    def _cleanup_remote_tensor(self, storage_id: int, device_idx: int) -> None:
         """Clean up storage on remote GPU device"""
         try:
             # Import here to avoid circular imports
@@ -207,39 +216,39 @@ class RemoteTensorRegistry:
             
             executor = _get_remote_executor()
             if executor is None:
-                log.warning(f"No remote executor available for storage {tensor_id} cleanup")
+                log.warning(f"No remote executor available for storage {storage_id} cleanup")
                 return
             
             registry = get_device_registry()
             device = registry.get_device_by_index(device_idx)
             
             if device is None:
-                log.warning(f"No device found for index {device_idx} during storage {tensor_id} cleanup")
+                log.warning(f"No device found for index {device_idx} during storage {storage_id} cleanup")
                 return
             
             # Attempt remote cleanup
-            log.info(f"Calling remove_tensor_from_remote for storage {tensor_id}")
-            success = executor.remove_tensor_from_remote(str(tensor_id), device)
+            log.info(f"Calling remove_tensor_from_remote for storage {storage_id}")
+            success = executor.remove_tensor_from_remote(str(storage_id), device)
             if success:
-                log.info(f"✅ Successfully cleaned up remote storage {tensor_id} on device {device_idx}")
+                log.info(f"✅ Successfully cleaned up remote storage {storage_id} on device {device_idx}")
             else:
-                log.warning(f"❌ Remote cleanup returned false for storage {tensor_id} on device {device_idx}")
+                log.warning(f"❌ Remote cleanup returned false for storage {storage_id} on device {device_idx}")
                 
         except Exception as e:
             # Log but don't fail - local cleanup already completed
-            log.warning(f"Failed remote cleanup for storage {tensor_id} on device {device_idx}: {e}")
+            log.warning(f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}")
             # Continue execution since local cleanup is already done
 
     def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
-        """Copy data between tensors identified by their IDs"""
+        """Copy data between tensors identified by their storage IDs"""
         # This is a placeholder - actual copy operations should go through remote execution
         dest_device = self.storage_id_to_device.get(int(dest_id))
         src_device = self.storage_id_to_device.get(int(src_id))
         
         if dest_device is None or src_device is None:
-            raise RuntimeError(f"Copy failed: tensor IDs {dest_id} or {src_id} not found")
+            raise RuntimeError(f"Copy failed: storage IDs {dest_id} or {src_id} not found")
         
-        # For tensor ID system, copy operations should go through remote execution
+        # For storage ID system, copy operations should go through remote execution
         # This is just a placeholder to indicate the operation was requested
         log.info(f"Copy requested: {src_id} -> {dest_id} ({count} bytes)")
         return True
@@ -418,8 +427,8 @@ class Driver:
         return self.registry_obj.copy_data_by_id(dest_id, src_id, count)
 
     @register(registry)
-    def register_tensor_with_gpu(self, tensor_id: int, tensor_data: bytes) -> bool:
-        return self.registry_obj.register_tensor_with_gpu(tensor_id, tensor_data)
+    def register_tensor_with_gpu(self, storage_id: int, tensor_data: bytes) -> bool:
+        return self.registry_obj.register_tensor_with_gpu(storage_id, tensor_data)
     
     @register(registry)
     def create_view_tensor_id(self, base_tensor_id: int, new_shape: Any, new_stride: Any, new_storage_offset: int) -> int:
