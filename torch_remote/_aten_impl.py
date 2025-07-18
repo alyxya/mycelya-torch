@@ -45,7 +45,6 @@ def _get_remote_orchestrator() -> Optional[Any]:
         return None
 
 
-# impl_factory and _IMPL_REGISTRY removed - C++ now uses driver_exec directly
 
 
 def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> torch.Tensor:
@@ -408,7 +407,6 @@ def _local_scalar_dense(ten: torch.Tensor) -> Union[int, float, complex, bool]:
     return host_mem.item()
 
 
-# cpu_tensor_to_persistent_remote function removed - no longer needed with C++ implementations
 # Remote tensors are now handled directly by the C++ allocator with ID-based allocation
 
 
@@ -427,14 +425,11 @@ _remote_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
 )
 
-# Note: empty.memory_format and empty_strided are now implemented in C++
 # via TORCH_LIBRARY_IMPL in RemoteMem.cpp, so we don't register Python implementations
 
-# randn_remote, zeros_remote, ones_remote functions removed
 # These factory functions are now handled by C++ implementations
 # via the registered TORCH_LIBRARY_IMPL dispatch system
 
-# Note: randn, zeros, ones registrations removed - they will use C++ implementations
 # when we add them to TORCH_LIBRARY_IMPL in RemoteMem.cpp
 
 

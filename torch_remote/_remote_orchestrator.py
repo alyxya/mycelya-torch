@@ -8,7 +8,9 @@ Supports multiple remote execution providers.
 This module provides a generic interface for remote execution of PyTorch operations.
 Currently supports Modal as the first provider implementation.
 """
+import io
 import logging
+import traceback
 from typing import Any, Dict, List, Tuple, Optional
 import torch
 import time
@@ -189,7 +191,6 @@ class RemoteOrchestrator:
                 
         except Exception as e:
             log.error(f"❌ Error in efficient remote aten execution of {op_name}: {str(e)}")
-            import traceback
             traceback.print_exc()
             raise
     
@@ -490,7 +491,6 @@ class RemoteOrchestrator:
     
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
         """Serialize tensor to bytes, ensuring view data is contiguous."""
-        import io
         buffer = io.BytesIO()
         # Convert to pure CPU tensor and make contiguous to serialize only the view's data
         # This ensures views are serialized as their actual data, not the full underlying storage
@@ -500,7 +500,6 @@ class RemoteOrchestrator:
     
     def _deserialize_tensor(self, data: bytes) -> torch.Tensor:
         """Deserialize tensor from bytes as a contiguous tensor."""
-        import io
         buffer = io.BytesIO(data)
         tensor = torch.load(buffer, map_location=CPU_DEVICE_TYPE)
         

@@ -1,7 +1,7 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import pprint
+from pprint import pformat
 from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
@@ -88,7 +88,7 @@ def safe_str(args: Any) -> str:
             return obj
 
     new_args = tree_map(convert, args)
-    return pprint.pformat(new_args)
+    return pformat(new_args)
 
 
 def validate_send_queue_args(cmd: str, args: Any) -> None:

@@ -15,17 +15,15 @@ This script works with both pytest and standalone execution:
 import torch
 import pytest
 from typing import Any
+import torch_remote
 
 def test_basic_imports() -> None:
     """Test basic torch and torch_remote imports."""
-    import torch_remote
     assert True
 
 
 def test_device_functions() -> None:
     """Test remote device functions."""
-    import torch
-    import torch_remote
     assert torch.remote.is_available()
     # device_count should be >= 0 (could be 0 if no devices registered)
     assert torch.remote.device_count() >= 0
@@ -33,14 +31,12 @@ def test_device_functions() -> None:
 
 def test_tensor_to_method() -> None:
     """Test that tensors have to() method that works with RemoteMachine."""
-    import torch_remote
     x = torch.randn(2, 2)
     assert hasattr(x, "to") and callable(x.to)
 
 
 def test_backend_tensor_creation(modal_t4_device):
     """Test backend tensor creation via .to() method."""
-    import torch_remote
     x = torch.randn(2, 2)
     y = x.to(modal_t4_device.device())
     assert y is not None and y.shape == x.shape
@@ -48,7 +44,6 @@ def test_backend_tensor_creation(modal_t4_device):
 
 def test_backend_tensor_operations(modal_t4_device):
     """Test operations on backend tensors."""
-    import torch_remote
     x = torch.randn(2, 2)
     y = torch.randn(2, 2)
 
@@ -73,7 +68,6 @@ def test_backend_tensor_operations(modal_t4_device):
 
 def test_dtype_conversion(modal_t4_device):
     """Test remote conversion with dtype parameter."""
-    import torch_remote
     x = torch.randn(2, 2, dtype=torch.float32)
     y = x.to(modal_t4_device.device(), dtype=torch.float64)
     assert y.dtype == torch.float64
@@ -81,7 +75,6 @@ def test_dtype_conversion(modal_t4_device):
 
 def test_copy_parameter(modal_t4_device):
     """Test remote conversion with copy parameter."""
-    import torch_remote
     x = torch.randn(2, 2)
     y = x.to(modal_t4_device.device(), copy=True)
     z = x.to(modal_t4_device.device(), copy=False)
@@ -90,7 +83,6 @@ def test_copy_parameter(modal_t4_device):
 
 def test_error_handling(modal_t4_device):
     """Test that errors are handled gracefully."""
-    import torch_remote
     # These operations might fail, but shouldn't crash
     try:
         torch.randn(3, 3, device="remote")  # Should fail gracefully
@@ -109,7 +101,6 @@ def test_error_handling(modal_t4_device):
 
 def test_backend_tensor_device_properties(modal_t4_device):
     """Test that backend tensors report correct device properties."""
-    import torch_remote
     
     # Create CPU tensor and convert to backend
     x_cpu = torch.randn(3, 3)
@@ -124,7 +115,6 @@ def test_backend_tensor_device_properties(modal_t4_device):
 
 def test_backend_only_operations(modal_t4_device):
     """Test operations that require both tensors to be on the same backend."""
-    import torch_remote
     
     x_cpu = torch.randn(2, 3)
     y_cpu = torch.randn(3, 2)
@@ -151,7 +141,6 @@ def test_backend_only_operations(modal_t4_device):
 
 def test_mixed_device_operations_fail(modal_t4_device):
     """Test that operations between remote and CPU tensors fail appropriately."""
-    import torch_remote
     
     x_cpu = torch.randn(2, 2)
     y_cpu = torch.randn(2, 2)
@@ -189,7 +178,6 @@ def test_mixed_device_operations_fail(modal_t4_device):
 
 def test_cpu_to_backend_conversion(modal_t4_device):
     """Test converting CPU tensors to backend tensors."""
-    import torch_remote
     
     # Test with different tensor types and shapes
     test_cases = [
@@ -214,7 +202,6 @@ def test_cpu_to_backend_conversion(modal_t4_device):
 
 def test_backend_to_cpu_conversion(modal_t4_device):
     """Test converting backend tensors back to CPU tensors."""
-    import torch_remote
     
     # Create backend tensor
     original_cpu = torch.randn(3, 4)
@@ -234,7 +221,6 @@ def test_backend_to_cpu_conversion(modal_t4_device):
 
 def test_multiple_backend_cpu_transfers(modal_t4_device):
     """Test multiple transfers between backend and CPU devices."""
-    import torch_remote
     
     # Start with CPU tensor
     original = torch.randn(2, 3)
@@ -256,7 +242,6 @@ def test_multiple_backend_cpu_transfers(modal_t4_device):
 
 def test_backend_tensor_creation_with_dtypes(modal_t4_device):
     """Test creating backend tensors with different data types."""
-    import torch_remote
     
     dtypes = [torch.float32, torch.float64, torch.int32, torch.int64]
     
@@ -280,7 +265,6 @@ def test_backend_tensor_creation_with_dtypes(modal_t4_device):
 
 def test_backend_device_method(modal_t4_device):
     """Test the .device() method on RemoteMachine for device access."""
-    import torch_remote
     
     # Use the shared backend device
     backend_device = modal_t4_device
@@ -321,7 +305,6 @@ def test_backend_device_method(modal_t4_device):
 
 def test_validate_device_index_basic(shared_devices):
     """Test validate_device_index with valid and invalid indices."""
-    import torch_remote
     
     # Use the shared devices instead of creating new ones
     device1 = shared_devices["t4"]
@@ -339,7 +322,6 @@ def test_validate_device_index_basic(shared_devices):
 
 def test_validate_device_index_invalid(shared_devices):
     """Test validate_device_index with invalid device indices."""
-    import torch_remote
     
     # Use shared devices - should have at least 3 devices
     current_count = torch.remote.device_count()
@@ -358,7 +340,6 @@ def test_validate_device_index_invalid(shared_devices):
 
 def test_validate_device_index_negative(shared_devices):
     """Test validate_device_index with negative device indices."""
-    import torch_remote
     
     # Use shared devices
     assert torch.remote.device_count() >= 1
@@ -375,7 +356,6 @@ def test_validate_device_index_negative(shared_devices):
 
 def test_device_count_dynamic_tracking(clean_registry):
     """Test that device_count properly tracks registered devices dynamically."""
-    import torch_remote
     
     # Registry starts clean (count = 0)
     assert torch.remote.device_count() == 0
@@ -401,7 +381,6 @@ def test_device_count_dynamic_tracking(clean_registry):
 
 def test_validate_device_index_with_multiple_devices(shared_devices):
     """Test validate_device_index with multiple devices from shared fixtures."""
-    import torch_remote
     
     # Use shared devices instead of creating new ones
     all_devices = list(shared_devices.values())
@@ -430,7 +409,6 @@ def test_validate_device_index_with_multiple_devices(shared_devices):
 
 def test_cross_device_transfer_restriction(shared_devices):
     """Test that transferring tensors between different remote devices is prohibited."""
-    import torch_remote
     
     # Use shared devices
     device1 = shared_devices["t4"]
@@ -449,7 +427,6 @@ def test_cross_device_transfer_restriction(shared_devices):
 
 def test_cross_device_copy_restriction(shared_devices):
     """Test that copy operations between different remote devices fail."""
-    import torch_remote
     
     # Use shared devices
     device1 = shared_devices["t4"]
@@ -474,7 +451,6 @@ def test_cross_device_copy_restriction(shared_devices):
     # the _copy_from function directly which is what copy_ eventually calls
     with pytest.raises(RuntimeError, match="Cannot transfer tensor between different remote devices"):
         # Test the underlying _copy_from function directly
-        import torch_remote._aten_impl
         torch_remote._aten_impl._copy_from(x, y)
 
 
@@ -499,7 +475,6 @@ def test_same_device_transfer_still_works(modal_t4_device):
 
 def test_view_operation_basic(modal_t4_device):
     """Test basic view operation on remote tensors."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(4, 6, device=modal_t4_device.device())
@@ -521,7 +496,6 @@ def test_view_operation_basic(modal_t4_device):
 
 def test_view_operation_multiple_dimensions(modal_t4_device):
     """Test view operations with multiple dimension changes."""
-    import torch_remote
     
     # Create a 3D remote tensor
     x = torch.randn(2, 3, 4, device=modal_t4_device.device())
@@ -552,7 +526,6 @@ def test_view_operation_multiple_dimensions(modal_t4_device):
 
 def test_reshape_operation(modal_t4_device):
     """Test reshape operation on remote tensors."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(3, 4, device=modal_t4_device.device())
@@ -574,7 +547,6 @@ def test_reshape_operation(modal_t4_device):
 
 def test_transpose_operation(modal_t4_device):
     """Test transpose operation on remote tensors."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(3, 4, device=modal_t4_device.device())
@@ -596,7 +568,6 @@ def test_transpose_operation(modal_t4_device):
 
 def test_transpose_operation_3d(modal_t4_device):
     """Test transpose operation on 3D remote tensors."""
-    import torch_remote
     
     # Create a 3D remote tensor
     x = torch.randn(2, 3, 4, device=modal_t4_device.device())
@@ -629,7 +600,6 @@ def test_transpose_operation_3d(modal_t4_device):
 
 def test_permute_operation(modal_t4_device):
     """Test permute operation on remote tensors."""
-    import torch_remote
     
     # Create a 3D remote tensor
     x = torch.randn(2, 3, 4, device=modal_t4_device.device())
@@ -651,7 +621,6 @@ def test_permute_operation(modal_t4_device):
 
 def test_permute_operation_4d(modal_t4_device):
     """Test permute operation on 4D remote tensors."""
-    import torch_remote
     
     # Create a 4D remote tensor
     x = torch.randn(2, 3, 4, 5, device=modal_t4_device.device())
@@ -683,7 +652,6 @@ def test_permute_operation_4d(modal_t4_device):
 
 def test_squeeze_operation(modal_t4_device):
     """Test squeeze operation on remote tensors."""
-    import torch_remote
     
     # Create a remote tensor with singleton dimensions
     x = torch.randn(1, 3, 1, 4, device=modal_t4_device.device())
@@ -705,7 +673,6 @@ def test_squeeze_operation(modal_t4_device):
 
 def test_squeeze_operation_specific_dim(modal_t4_device):
     """Test squeeze operation on specific dimensions."""
-    import torch_remote
     
     # Create a remote tensor with singleton dimensions
     x = torch.randn(1, 3, 1, 4, device=modal_t4_device.device())
@@ -733,7 +700,6 @@ def test_squeeze_operation_specific_dim(modal_t4_device):
 
 def test_unsqueeze_operation(modal_t4_device):
     """Test unsqueeze operation on remote tensors."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(3, 4, device=modal_t4_device.device())
@@ -763,7 +729,6 @@ def test_unsqueeze_operation(modal_t4_device):
 
 def test_flatten_operation(modal_t4_device):
     """Test flatten operation on remote tensors."""
-    import torch_remote
     
     # Create a multi-dimensional remote tensor
     x = torch.randn(2, 3, 4, 5, device=modal_t4_device.device())
@@ -793,7 +758,6 @@ def test_flatten_operation(modal_t4_device):
 
 def test_view_operations_preserve_storage_id(modal_t4_device):
     """Test that view operations preserve the underlying storage ID (if implemented correctly)."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(4, 6, device=modal_t4_device.device())
@@ -824,7 +788,6 @@ def test_view_operations_preserve_storage_id(modal_t4_device):
 
 def test_chained_view_operations(modal_t4_device):
     """Test chaining multiple view operations."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(2, 3, 4, device=modal_t4_device.device())
@@ -849,7 +812,6 @@ def test_chained_view_operations(modal_t4_device):
 
 def test_view_operations_after_arithmetic(modal_t4_device):
     """Test view operations on tensors after arithmetic operations."""
-    import torch_remote
     
     # Create remote tensors
     x = torch.randn(3, 4, device=modal_t4_device.device())
@@ -876,7 +838,6 @@ def test_view_operations_after_arithmetic(modal_t4_device):
 
 def test_view_invalid_size_error(modal_t4_device):
     """Test that invalid view sizes raise appropriate errors."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(3, 4, device=modal_t4_device.device())
@@ -888,7 +849,6 @@ def test_view_invalid_size_error(modal_t4_device):
 
 def test_view_with_minus_one_inference(modal_t4_device):
     """Test view operation with -1 dimension inference."""
-    import torch_remote
     
     # Create a remote tensor
     x = torch.randn(2, 3, 4, device=modal_t4_device.device())

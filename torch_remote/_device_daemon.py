@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import atexit
+import io
 import logging
 import random
 from typing import Any, Dict, Optional, Set, Callable
@@ -116,7 +117,6 @@ class RemoteStorageRegistry:
                         gpu_machine = device.get_gpu_machine()
                         if gpu_machine and gpu_machine.is_running():
                             # Create empty tensor data of the right size
-                            import io
                             empty_tensor = torch.empty(nbytes // 4, dtype=torch.float32)  # Assume float32 for now
                             buffer = io.BytesIO()
                             torch.save(empty_tensor, buffer)
