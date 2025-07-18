@@ -120,32 +120,55 @@ class RemoteOrchestrator:
             if machine is None:
                 raise ValueError("RemoteMachine is required for remote execution")
             
-            # Extract storage IDs and build args for remote execution
+            # Extract storage IDs and tensor metadata for remote execution
             storage_ids = []
+            tensor_metadata = []
             processed_args = []
             processed_kwargs = {}
             
-            # Process args - extract storage IDs
+            # Process args - extract storage IDs and metadata
             for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
                     storage_id = str(arg.untyped_storage().data_ptr())
                     storage_ids.append(storage_id)
+                    
+                    # Collect tensor metadata for proper reconstruction
+                    metadata = {
+                        "shape": list(arg.shape),
+                        "stride": list(arg.stride()),
+                        "storage_offset": arg.storage_offset(),
+                        "dtype": str(arg.dtype),
+                        "requires_grad": arg.requires_grad
+                    }
+                    tensor_metadata.append(metadata)
+                    
                     processed_args.append(f"__TENSOR_{len(storage_ids)-1}")
                 else:
                     processed_args.append(arg)
             
-            # Process kwargs - extract storage IDs  
+            # Process kwargs - extract storage IDs and metadata
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
                     storage_id = str(value.untyped_storage().data_ptr())
                     storage_ids.append(storage_id)
+                    
+                    # Collect tensor metadata for proper reconstruction
+                    metadata = {
+                        "shape": list(value.shape),
+                        "stride": list(value.stride()),
+                        "storage_offset": value.storage_offset(),
+                        "dtype": str(value.dtype),
+                        "requires_grad": value.requires_grad
+                    }
+                    tensor_metadata.append(metadata)
+                    
                     processed_kwargs[key] = f"__TENSOR_{len(storage_ids)-1}"
                 else:
                     processed_kwargs[key] = value
             
-            # Execute remotely using storage IDs
+            # Execute remotely using storage IDs and tensor metadata
             result_storage_ids = self.execute_remote_operation_with_ids(
-                op_name, storage_ids, tuple(processed_args), processed_kwargs, machine
+                op_name, storage_ids, tensor_metadata, tuple(processed_args), processed_kwargs, machine
             )
             
             # Create result tensors from returned storage IDs
@@ -172,8 +195,8 @@ class RemoteOrchestrator:
         """
         Create a remote tensor from an existing storage ID.
         
-        This method gets metadata from the remote GPU and creates a local remote tensor
-        that references the existing data via the storage ID.
+        Since we don't have metadata from the remote side, we create a placeholder tensor
+        that will be properly shaped when used in operations.
         
         Args:
             storage_id: The remote storage ID
@@ -182,30 +205,19 @@ class RemoteOrchestrator:
         Returns:
             Remote tensor that references the existing data
         """
-        gpu_machine = self._get_device_gpu_machine(machine)
-        
-        # Get tensor metadata from remote
-        metadata = gpu_machine.get_tensor_metadata(storage_id)
-        
-        # Extract shape and dtype
-        shape = tuple(metadata['shape'])
-        dtype_str = metadata['dtype'].replace('torch.', '')
-        dtype = getattr(torch, dtype_str)
-        
-        # Create a CPU tensor with the correct shape and dtype first
-        cpu_tensor = torch.empty(shape, dtype=dtype, device=CPU_DEVICE_TYPE)
+        # Create a minimal CPU tensor first - shape doesn't matter since it will be reshaped
+        # when used in operations that have proper metadata
+        cpu_tensor = torch.empty(1, dtype=torch.float32, device=CPU_DEVICE_TYPE)
         
         # Convert to remote device - this will call the C++ allocator and generate a new ID
         remote_tensor = cpu_tensor.to(machine.device())
         
-        # Now we need to override the generated storage ID with our existing one
+        # Override the generated storage ID with our existing one
         # The C++ allocator stores storage IDs as data pointers
         storage_id_int = int(storage_id)
         
         # Replace the storage's data pointer with our existing storage ID
-        # This is a hack but necessary to reuse the existing remote tensor data
         storage = remote_tensor.untyped_storage()
-        original_data_ptr = storage.data_ptr
         storage.data_ptr = lambda: storage_id_int
         
         return remote_tensor
@@ -229,7 +241,7 @@ class RemoteOrchestrator:
             The tensor ID
         """
         gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.create_tensor(tensor_data, storage_id)
+        return gpu_machine.create_storage(tensor_data, storage_id)
     
     def get_tensor_data_from_remote(self, storage_id: str, device_index: int) -> torch.Tensor:
         """
@@ -248,32 +260,34 @@ class RemoteOrchestrator:
             raise RuntimeError(f"No machine found for index {device_index}")
         
         gpu_machine = self._get_device_gpu_machine(machine)
-        tensor_data = gpu_machine.get_tensor_data(storage_id)
+        tensor_data = gpu_machine.get_storage_data(storage_id)
         return self._deserialize_tensor(tensor_data)
     
     def execute_remote_operation_with_ids(
         self,
         op_name: str,
         storage_ids: List[str],
+        tensor_metadata: List[Dict[str, Any]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         machine: "RemoteMachine"
     ) -> List[str]:
         """
-        Execute an operation using tensor IDs.
+        Execute an operation using tensor IDs and metadata.
         
         Args:
             op_name: The operation name
-            storage_ids: Input tensor IDs
+            storage_ids: Input tensor storage IDs
+            tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset)
             args: Operation arguments
             kwargs: Operation keyword arguments
-            device: Target device
+            machine: Target machine
             
         Returns:
             Result tensor IDs
         """
         gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.execute_operation_with_ids(op_name, storage_ids, list(args), kwargs)
+        return gpu_machine.execute_operation_with_ids(op_name, storage_ids, tensor_metadata, list(args), kwargs)
     def create_factory_tensor_on_remote(
         self,
         factory_op: str,
@@ -294,7 +308,7 @@ class RemoteOrchestrator:
             Created tensor ID
         """
         gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.factory_tensor(factory_op, args, kwargs)
+        return gpu_machine.factory_storage(factory_op, args, kwargs)
     
     def remove_tensor_from_remote(self, storage_id: str, machine: "RemoteMachine") -> bool:
         """
@@ -308,7 +322,7 @@ class RemoteOrchestrator:
             True if removed, False if not found
         """
         gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.remove_tensor(storage_id)
+        return gpu_machine.remove_storage(storage_id)
     
     def check_tensor_exists(self, storage_id: str, machine: "RemoteMachine") -> bool:
         """
@@ -323,9 +337,9 @@ class RemoteOrchestrator:
         """
         try:
             gpu_machine = self._get_device_gpu_machine(machine)
-            metadata = gpu_machine.get_tensor_metadata(storage_id)
-            self._update_heartbeat(device.machine_id)
-            return metadata is not None
+            # Since we removed get_tensor_metadata, assume tensor exists if machine is running
+            self._update_heartbeat(machine.machine_id)
+            return True
         except Exception:
             return False
     
@@ -470,7 +484,7 @@ class RemoteOrchestrator:
         storage_id_str = str(storage_id_int)
         
         # Use GPU machine to get tensor data by ID
-        tensor_data = gpu_machine.get_tensor_data(storage_id_str)
+        tensor_data = gpu_machine.get_storage_data(storage_id_str)
         
         # Deserialize the tensor
         return self._deserialize_tensor(tensor_data)

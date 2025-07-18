@@ -122,7 +122,7 @@ class RemoteTensorRegistry:
                             tensor_data = buffer.getvalue()
                             
                             storage_id_str = str(storage_id_int)
-                            gpu_machine.create_tensor(tensor_data, storage_id_str)
+                            gpu_machine.create_storage(tensor_data, storage_id_str)
                             log.info(f"Pre-registered storage ID {storage_id_int} with GPU machine")
             except Exception as e:
                 log.warning(f"Failed to pre-register storage {storage_id_int} with GPU machine: {e}")
@@ -191,7 +191,7 @@ class RemoteTensorRegistry:
                     gpu_machine = device.get_gpu_machine()
                     if gpu_machine and gpu_machine.is_running():
                         storage_id_str = str(storage_id)
-                        gpu_machine.create_tensor(tensor_data, storage_id_str)
+                        gpu_machine.create_storage(tensor_data, storage_id_str)
                         log.info(f"Registered storage ID {storage_id} with GPU machine")
                         return True
         except Exception as e:

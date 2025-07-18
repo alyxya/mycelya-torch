@@ -191,7 +191,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         log.info(f"Copying storage ID {storage_id_int} from remote to CPU")
         
         # Use GPU machine to get tensor data by storage ID
-        tensor_data = gpu_machine.get_tensor_data(storage_id_str)
+        tensor_data = gpu_machine.get_storage_data(storage_id_str)
         
         # Deserialize the base tensor data
         base_tensor = executor._deserialize_tensor(tensor_data)
@@ -247,7 +247,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         
         # Use GPU machine to create/update tensor with specific ID
         # This will overwrite any existing empty tensor with the actual data
-        created_id = gpu_machine.create_tensor(tensor_data, storage_id_str)
+        created_id = gpu_machine.create_storage(tensor_data, storage_id_str)
         log.info(f"Successfully created/updated remote tensor with ID {created_id}")
         return to_
     else:

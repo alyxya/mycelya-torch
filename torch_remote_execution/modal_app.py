@@ -107,28 +107,28 @@ class ModalClient:
         """Check if the machine is currently running."""
         return self._app_context is not None
     
-    def create_tensor(self, tensor_data: bytes, storage_id: Optional[str] = None) -> str:
+    def create_storage(self, tensor_data: bytes, storage_id: Optional[str] = None) -> str:
         """
-        Create a tensor on the remote machine.
+        Create a storage on the remote machine.
         
         Args:
             tensor_data: Serialized tensor data
             storage_id: Optional specific ID to use
             
         Returns:
-            The tensor ID
+            The storage ID
         """
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.create_tensor.remote(tensor_data, storage_id)
+        return self._executor_instance.create_storage.remote(tensor_data, storage_id)
     
-    def get_tensor_data(self, storage_id: str) -> bytes:
+    def get_storage_data(self, storage_id: str) -> bytes:
         """
-        Get tensor data by ID for device transfer.
+        Get storage data by ID for device transfer.
         
         Args:
-            storage_id: The tensor ID
+            storage_id: The storage ID
             
         Returns:
             Serialized tensor data
@@ -136,36 +136,24 @@ class ModalClient:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.get_tensor_data.remote(storage_id)
+        return self._executor_instance.get_storage_data.remote(storage_id)
     
-    def get_tensor_metadata(self, storage_id: str) -> Dict[str, Any]:
-        """
-        Get tensor metadata by ID.
-        
-        Args:
-            storage_id: The tensor ID
-            
-        Returns:
-            Tensor metadata
-        """
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-        
-        return self._executor_instance.get_tensor_metadata.remote(storage_id)
     
     def execute_operation_with_ids(
         self,
         op_name: str,
         storage_ids: List[str],
+        tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
     ) -> List[str]:
         """
-        Execute an operation using tensor IDs.
+        Execute an operation using tensor IDs and metadata.
         
         Args:
             op_name: The operation name
-            storage_ids: Input tensor IDs
+            storage_ids: Input tensor storage IDs
+            tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset)
             args: Operation arguments
             kwargs: Operation keyword arguments
             
@@ -176,17 +164,17 @@ class ModalClient:
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
         return self._executor_instance.execute_aten_operation_with_ids.remote(
-            op_name, storage_ids, args, kwargs, self.machine_id
+            op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
     
-    def factory_tensor(
+    def factory_storage(
         self,
         factory_op: str,
         args: List[Any],
         kwargs: Dict[str, Any]
     ) -> str:
         """
-        Create a tensor using a factory operation.
+        Create a storage using a factory operation.
         
         Args:
             factory_op: Factory operation name (e.g., "randn")
@@ -194,21 +182,21 @@ class ModalClient:
             kwargs: Factory keyword arguments
             
         Returns:
-            Created tensor ID
+            Created storage ID
         """
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.factory_tensor.remote(
+        return self._executor_instance.factory_storage.remote(
             factory_op, args, kwargs, self.machine_id
         )
     
-    def remove_tensor(self, storage_id: str) -> bool:
+    def remove_storage(self, storage_id: str) -> bool:
         """
-        Remove a tensor from the remote machine.
+        Remove a storage from the remote machine.
         
         Args:
-            storage_id: The tensor ID
+            storage_id: The storage ID
             
         Returns:
             True if removed, False if not found
@@ -216,43 +204,9 @@ class ModalClient:
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
         
-        return self._executor_instance.remove_tensor.remote(storage_id)
+        return self._executor_instance.remove_storage.remote(storage_id)
     
-    def get_registry_stats(self) -> Dict[str, Any]:
-        """Get tensor registry statistics."""
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-        
-        return self._executor_instance.get_registry_stats.remote()
     
-    def garbage_collect(self, active_storage_ids: Optional[List[str]] = None) -> int:
-        """
-        Perform garbage collection on the remote machine.
-        
-        Args:
-            active_storage_ids: Optional list of tensor IDs to keep alive
-            
-        Returns:
-            Number of tensors removed
-        """
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-        
-        return self._executor_instance.garbage_collect.remote(active_storage_ids)
-    
-    def get_memory_pressure(self) -> Dict[str, Any]:
-        """Get memory pressure information from remote machine."""
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-        
-        return self._executor_instance.get_memory_pressure.remote()
-    
-    def auto_garbage_collect(self) -> int:
-        """Perform automatic garbage collection based on memory pressure."""
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-        
-        return self._executor_instance.auto_garbage_collect.remote()
     
     def __enter__(self):
         """Context manager entry - starts the machine."""
@@ -319,130 +273,37 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
     )
     class PytorchOperationExecutor:
         
-        def _get_tensor_registry(self):
-            """Get or create tensor registry for this executor instance."""
-            if not hasattr(self, "_tensor_registry"):
-                # Define TensorRegistry class locally to avoid import issues
+        def _get_storages(self):
+            """Get or create storage mapping for this executor instance."""
+            if not hasattr(self, "_storages"):
                 import threading
-                from collections import defaultdict
-                import uuid
-                from typing import Dict, List, Optional, Any
+                from typing import Dict, Any
                 
-                class TensorRegistry:
-                    """Server-side registry for managing persistent tensor storage with unique IDs."""
-                    
-                    def __init__(self):
-                        self._tensors: Dict[str, Any] = {}
-                        self._metadata: Dict[str, Dict[str, Any]] = {}
-                        self._ref_counts: Dict[str, int] = defaultdict(int)
-                        self._lock = threading.RLock()
-                        
-                    def register_tensor(self, tensor: Any, storage_id: Optional[str] = None) -> str:
-                        if storage_id is None:
-                            storage_id = str(uuid.uuid4())
-                            
-                        with self._lock:
-                            self._tensors[storage_id] = tensor
-                            self._metadata[storage_id] = {
-                                "shape": list(tensor.shape),
-                                "dtype": str(tensor.dtype),
-                                "device": str(tensor.device),
-                                "numel": tensor.numel(),
-                                "element_size": tensor.element_size(),
-                                "requires_grad": tensor.requires_grad,
-                            }
-                            self._ref_counts[storage_id] += 1
-                            
-                        return storage_id
-                    
-                    def get_tensor(self, storage_id: str) -> Any:
-                        with self._lock:
-                            if storage_id not in self._tensors:
-                                raise KeyError(f"Tensor ID {storage_id} not found in registry")
-                            return self._tensors[storage_id]
-                    
-                    def get_metadata(self, storage_id: str) -> Dict[str, Any]:
-                        with self._lock:
-                            if storage_id not in self._metadata:
-                                raise KeyError(f"Tensor ID {storage_id} not found in registry")
-                            return self._metadata[storage_id].copy()
-                    
-                    def remove_tensor(self, storage_id: str) -> bool:
-                        with self._lock:
-                            if storage_id not in self._tensors:
-                                return False
-                            
-                            del self._tensors[storage_id]
-                            del self._metadata[storage_id]
-                            if storage_id in self._ref_counts:
-                                del self._ref_counts[storage_id]
-                            return True
-                    
-                    def get_stats(self) -> Dict[str, Any]:
-                        with self._lock:
-                            total_tensors = len(self._tensors)
-                            total_memory = 0
-                            for tensor in self._tensors.values():
-                                if hasattr(tensor, "numel") and hasattr(tensor, "element_size"):
-                                    total_memory += tensor.numel() * tensor.element_size()
-                            
-                            return {
-                                "total_tensors": total_tensors,
-                                "total_memory_bytes": total_memory,
-                                "storage_ids": list(self._tensors.keys())
-                            }
-                    
-                    def clear(self):
-                        with self._lock:
-                            self._tensors.clear()
-                            self._metadata.clear()
-                            self._ref_counts.clear()
-                    
-                    def garbage_collect(self) -> int:
-                        """Remove tensors with zero reference counts."""
-                        with self._lock:
-                            to_remove = []
-                            for storage_id, ref_count in self._ref_counts.items():
-                                if ref_count <= 0:
-                                    to_remove.append(storage_id)
-                            
-                            for storage_id in to_remove:
-                                if storage_id in self._tensors:
-                                    del self._tensors[storage_id]
-                                if storage_id in self._metadata:
-                                    del self._metadata[storage_id]
-                                if storage_id in self._ref_counts:
-                                    del self._ref_counts[storage_id]
-                            
-                            return len(to_remove)
-                
-                self._tensor_registry = TensorRegistry()
+                self._storages: Dict[str, Any] = {}  # storage_id -> torch.Storage
+                self._tensor_data: Dict[str, bytes] = {}  # storage_id -> original serialized bytes
+                self._storage_lock = threading.RLock()
             
-            return self._tensor_registry
-        
-        @property
-        def tensor_registry(self):
-            """Get the tensor registry (lazy initialization)."""
-            return self._get_tensor_registry()
+            return self._storages, self._tensor_data, self._storage_lock
         
         @modal.method()
-        def create_tensor(
+        def create_storage(
             self,
             tensor_data: bytes,
             storage_id: Optional[str] = None
         ) -> str:
             """
-            Create a new tensor on the remote machine and return its ID.
+            Create a new storage on the remote machine and return its storage ID.
             
             Args:
                 tensor_data: Serialized tensor data
                 storage_id: Optional specific ID to use
                 
             Returns:
-                The tensor ID
+                The storage ID
             """
             import torch
             import io
+            import uuid
             
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
@@ -452,87 +313,83 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
             tensor = tensor.to(device)
             
-            # Register in tensor registry
-            storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
-            log.info(f"📦 Created tensor {storage_id} with shape {tensor.shape} on {device}")
+            # Store storage and original tensor data
+            if storage_id is None:
+                storage_id = str(uuid.uuid4())
+            
+            storages, tensor_data_cache, lock = self._get_storages()
+            with lock:
+                storages[storage_id] = tensor.untyped_storage()
+                tensor_data_cache[storage_id] = tensor_data  # Store original bytes for get_tensor_data
+            
+            log.info(f"📦 Created storage {storage_id} for tensor with shape {tensor.shape} on {device}")
             
             return storage_id
         
         @modal.method()
-        def get_tensor_data(self, storage_id: str) -> bytes:
+        def get_storage_data(self, storage_id: str) -> bytes:
             """
-            Retrieve tensor data by ID for transfer to client.
+            Retrieve storage data by storage ID for transfer to client.
             
             Args:
-                storage_id: The tensor ID
+                storage_id: The storage ID
                 
             Returns:
-                Serialized tensor data
+                Serialized tensor data (original bytes that were uploaded)
             """
-            import torch
-            import io
+            storages, tensor_data_cache, lock = self._get_storages()
             
-            tensor = self.tensor_registry.get_tensor(storage_id)
-            
-            # Move to CPU for serialization
-            cpu_tensor = tensor.cpu()
-            
-            # Serialize tensor
-            buffer = io.BytesIO()
-            torch.save(cpu_tensor, buffer)
-            
-            return buffer.getvalue()
+            with lock:
+                if storage_id not in tensor_data_cache:
+                    raise KeyError(f"Storage ID {storage_id} not found")
+                return tensor_data_cache[storage_id]
+        
         
         @modal.method()
-        def get_tensor_metadata(self, storage_id: str) -> Dict[str, Any]:
+        def remove_storage(self, storage_id: str) -> bool:
             """
-            Get metadata for a tensor by ID.
+            Remove a storage from the registry.
             
             Args:
-                storage_id: The tensor ID
-                
-            Returns:
-                Tensor metadata
-            """
-            return self.tensor_registry.get_metadata(storage_id)
-        
-        @modal.method()
-        def remove_tensor(self, storage_id: str) -> bool:
-            """
-            Remove a tensor from the registry.
-            
-            Args:
-                storage_id: The tensor ID
+                storage_id: The storage ID
                 
             Returns:
                 True if removed, False if not found
             """
-            removed = self.tensor_registry.remove_tensor(storage_id)
-            if removed:
-                log.info(f"🗑️ Removed tensor {storage_id}")
-            return removed
+            storages, tensor_data_cache, lock = self._get_storages()
+            
+            with lock:
+                removed = storage_id in storages
+                if removed:
+                    del storages[storage_id]
+                    if storage_id in tensor_data_cache:
+                        del tensor_data_cache[storage_id]
+                    log.info(f"🗑️ Removed storage {storage_id}")
+                return removed
         
         @modal.method()
         def execute_aten_operation_with_ids(
             self,
             op_name: str,
             storage_ids: List[str],
+            tensor_metadata: List[Dict[str, Any]],
             args: List[Any],
             kwargs: Dict[str, Any],
             machine_id: str
         ) -> List[str]:
             """
-            Execute an operation using tensor IDs and return result tensor IDs.
+            Execute an operation using storage IDs and tensor metadata.
             
             Args:
                 op_name: The operation name to execute
-                storage_ids: List of input tensor IDs
+                storage_ids: List of input tensor storage IDs
+                tensor_metadata: List of tensor metadata for reconstruction (shape, stride, offset)
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 machine_id: Machine ID for logging
                 
             Returns:
-                List of result tensor IDs
+                List of result tensor storage IDs
             """
             import torch
             
@@ -540,11 +397,36 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             log.debug(f"Using storage IDs: {storage_ids}")
             
             try:
-                # Get tensors from registry
+                # Get storage mapping
+                storages, tensor_data_cache, lock = self._get_storages()
+                
+                # Reconstruct tensors from storage and metadata
                 tensors = []
-                for i, storage_id in enumerate(storage_ids):
-                    tensor = self.tensor_registry.get_tensor(storage_id)
+                for i, (storage_id, metadata) in enumerate(zip(storage_ids, tensor_metadata)):
+                    # Get storage object
+                    with lock:
+                        if storage_id not in storages:
+                            raise KeyError(f"Storage ID {storage_id} not found")
+                        storage = storages[storage_id]
+                    
+                    # Parse dtype string back to torch.dtype
+                    dtype_str = metadata['dtype'].replace('torch.', '')
+                    dtype = getattr(torch, dtype_str)
+                    
+                    # Reconstruct tensor using storage + metadata
+                    tensor = torch.empty(0, dtype=dtype).set_(
+                        storage,
+                        metadata['storage_offset'],
+                        metadata['shape'],
+                        metadata['stride']
+                    )
+                    
+                    # Set requires_grad if needed
+                    if metadata.get('requires_grad', False):
+                        tensor.requires_grad_(True)
+                    
                     tensors.append(tensor)
+                    
                     # Log input tensor details on modal side
                     log.debug(f"📥 MODAL INPUT tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
                     
@@ -594,13 +476,17 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     device = torch.device(CUDA_DEVICE_TYPE if torch.cuda.is_available() else CPU_DEVICE_TYPE)
                     results = [torch.tensor(result, device=device)]
                 
-                # Register result tensors and return their IDs
+                # Register result tensors and return their storage IDs
                 # Generate integer storage IDs like the C++ allocator does
                 result_ids = []
                 for i, tensor in enumerate(results):
                     # Generate integer storage ID (compatible with C++ allocator)
                     storage_id = str(random.randint(1, 2**64 - 1))
-                    storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
+                    
+                    # Store only the storage (no tensor data cache for results)
+                    with lock:
+                        storages[storage_id] = tensor.untyped_storage()
+                    
                     result_ids.append(storage_id)
                     
                     # Log output tensor details on modal side
@@ -619,7 +505,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 raise
         
         @modal.method()
-        def factory_tensor(
+        def factory_storage(
             self,
             factory_op: str,
             args: List[Any],
@@ -627,7 +513,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             machine_id: str
         ) -> str:
             """
-            Create a tensor using a factory operation (e.g., torch.randn).
+            Create a storage using a factory operation (e.g., torch.randn).
             
             Args:
                 factory_op: The factory operation name (e.g., "randn", "zeros")
@@ -636,11 +522,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 machine_id: Machine ID for logging
                 
             Returns:
-                The created tensor ID
+                The created storage ID
             """
             import torch
             
-            log.info(f"🏭 Modal {gpu_type} (machine {machine_id}) creating tensor: {factory_op}")
+            log.info(f"🏭 Modal {gpu_type} (machine {machine_id}) creating storage: {factory_op}")
             
             try:
                 # Get GPU device
@@ -656,66 +542,25 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Create tensor
                 tensor = factory_func(*args, **kwargs)
                 
-                # Register tensor and return ID
+                # Register storage and return storage ID
                 # Generate integer storage ID (compatible with C++ allocator)
                 storage_id = str(random.randint(1, 2**64 - 1))
-                storage_id = self.tensor_registry.register_tensor(tensor, storage_id)
                 
-                log.info(f"✅ Created {factory_op} tensor {storage_id} with shape {tensor.shape}")
+                # Store only the storage (no tensor data cache for factory storages)
+                storages, tensor_data_cache, lock = self._get_storages()
+                with lock:
+                    storages[storage_id] = tensor.untyped_storage()
+                
+                log.info(f"✅ Created {factory_op} storage {storage_id} with shape {tensor.shape}")
                 return storage_id
                 
             except Exception as e:
-                log.error(f"❌ Error creating {factory_op} tensor: {str(e)}")
+                log.error(f"❌ Error creating {factory_op} storage: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 raise
         
-        @modal.method()
-        def get_registry_stats(self) -> Dict[str, Any]:
-            """Get tensor registry statistics."""
-            return self.tensor_registry.get_stats()
         
-        @modal.method()
-        def garbage_collect(self, active_storage_ids: Optional[List[str]] = None) -> int:
-            """
-            Perform garbage collection on the tensor registry.
-            
-            Args:
-                active_storage_ids: Optional list of tensor IDs to keep alive
-                
-            Returns:
-                Number of tensors removed
-            """
-            removed_count = self.tensor_registry.garbage_collect(active_storage_ids)
-            if removed_count > 0:
-                log.info(f"🗑️ Garbage collected {removed_count} tensors")
-            return removed_count
-        
-        @modal.method()
-        def get_memory_pressure(self) -> Dict[str, Any]:
-            """Get memory pressure information."""
-            return self.tensor_registry.get_memory_pressure()
-        
-        @modal.method()
-        def auto_garbage_collect(self) -> int:
-            """
-            Perform automatic garbage collection.
-            
-            Returns:
-                Number of tensors removed
-            """
-            # Get registry stats to check for cleanup opportunities
-            stats = self.tensor_registry.get_stats()
-            
-            removed_count = 0
-            
-            # Perform garbage collection to clean up unreferenced tensors
-            removed_count = self.tensor_registry.garbage_collect()
-            
-            if removed_count > 0:
-                log.info(f"🧹 Auto-GC removed {removed_count} tensors")
-            
-            return removed_count
     
     _gpu_apps[machine_id] = (app, PytorchOperationExecutor)
     return app, PytorchOperationExecutor
