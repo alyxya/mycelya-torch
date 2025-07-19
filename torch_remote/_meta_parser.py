@@ -194,22 +194,3 @@ def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
     return tree_map(convert, (args, kwargs))
 
 
-def to_device_no_copy(device: Union[torch.device, str], args: Any, kwargs: Any) -> Any:
-    """Create empty tensors on target device without copying data.
-
-    Creates tensor placeholders with the same shape and properties
-    as input tensors but on the specified device. Useful for setting
-    up tensor structures before actual data transfer.
-
-    Args:
-        device: Target device for new tensors
-        args: Input arguments containing tensors
-        kwargs: Input keyword arguments containing tensors
-
-    Returns:
-        Arguments with empty tensors on target device
-    """
-    def safe_to(t: torch.Tensor) -> torch.Tensor:
-        return torch.empty_like(t, device=device)
-
-    return tree_map_only(torch.Tensor, safe_to, (args, kwargs))

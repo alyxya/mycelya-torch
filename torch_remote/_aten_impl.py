@@ -12,7 +12,7 @@ from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE, META_DEVICE_TYPE, PR
 log = logging.getLogger(__name__)
 
 from ._device_daemon import driver
-from ._meta_parser import prepare_for_sending, to_device_no_copy
+from ._meta_parser import prepare_for_sending
 
 
 # View operations that should be handled locally with shared storage IDs
