@@ -113,8 +113,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         def create_storage(
             self,
             tensor_data: bytes,
-            storage_id: Optional[str] = None
-        ) -> str:
+            storage_id: Optional[int] = None
+        ) -> int:
             """
             Create a new storage on the remote machine and return its storage ID.
             
@@ -150,7 +150,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             return storage_id
 
         @modal.method()
-        def get_storage_data(self, storage_id: str, shape=None, stride=None, storage_offset=0, dtype=None) -> bytes:
+        def get_storage_data(self, storage_id: int, shape=None, stride=None, storage_offset=0, dtype=None) -> bytes:
             """
             Retrieve current storage data by storage ID for transfer to client.
             If view parameters are provided, returns only the view's data as contiguous.
@@ -194,7 +194,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 return buffer.getvalue()
 
         @modal.method()
-        def remove_storage(self, storage_id: str) -> bool:
+        def remove_storage(self, storage_id: int) -> bool:
             """
             Remove a storage from the registry.
             
@@ -217,7 +217,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         def execute_aten_operation(
             self,
             op_name: str,
-            storage_ids: List[str],
+            storage_ids: List[int],
             tensor_metadata: List[Dict[str, Any]],
             args: List[Any],
             kwargs: Dict[str, Any],

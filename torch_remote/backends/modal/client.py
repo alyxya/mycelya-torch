@@ -70,7 +70,7 @@ class ModalClient(ClientInterface):
         """Check if the machine is currently running."""
         return self._app_context is not None
 
-    def create_storage(self, tensor_data: bytes, storage_id: Optional[str] = None) -> str:
+    def create_storage(self, tensor_data: bytes, storage_id: Optional[int] = None) -> int:
         """
         Create a storage on the remote machine.
 
@@ -86,7 +86,7 @@ class ModalClient(ClientInterface):
 
         return self._server_instance.create_storage.remote(tensor_data, storage_id)
 
-    def get_storage_data(self, storage_id: str, shape: List[int] = None, stride: List[int] = None,
+    def get_storage_data(self, storage_id: int, shape: List[int] = None, stride: List[int] = None,
                         storage_offset: int = 0, dtype: str = None) -> bytes:
         """
         Get storage data by ID for device transfer, optionally as a specific view.
@@ -110,7 +110,7 @@ class ModalClient(ClientInterface):
     def execute_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[str],
+        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
@@ -136,7 +136,7 @@ class ModalClient(ClientInterface):
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
 
-    def remove_storage(self, storage_id: str) -> bool:
+    def remove_storage(self, storage_id: int) -> bool:
         """
         Remove a storage from the remote machine.
 

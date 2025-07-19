@@ -212,7 +212,7 @@ class RemoteOrchestrator:
             traceback.print_exc()
             raise
 
-    def _create_remote_tensor_from_id(self, storage_id: str, machine: "RemoteMachine") -> torch.Tensor:
+    def _create_remote_tensor_from_id(self, storage_id: int, machine: "RemoteMachine") -> torch.Tensor:
         """
         Create a remote tensor from an existing storage ID.
 
@@ -256,8 +256,8 @@ class RemoteOrchestrator:
         self,
         tensor_data: bytes,
         machine: "RemoteMachine",
-        storage_id: Optional[str] = None
-    ) -> str:
+        storage_id: Optional[int] = None
+    ) -> int:
         """
         Create a tensor on the remote machine and return its ID.
 
@@ -272,7 +272,7 @@ class RemoteOrchestrator:
         gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.create_storage(tensor_data, storage_id)
 
-    def get_tensor_data_from_remote(self, storage_id: str, device_index: int) -> torch.Tensor:
+    def get_tensor_data_from_remote(self, storage_id: int, device_index: int) -> torch.Tensor:
         """
         Get tensor data from remote machine by ID.
 
@@ -295,12 +295,12 @@ class RemoteOrchestrator:
     def execute_remote_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[str],
+        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         machine: "RemoteMachine"
-    ) -> List[str]:
+    ) -> List[int]:
         """
         Execute an aten operation using tensor IDs and metadata.
 
@@ -317,7 +317,7 @@ class RemoteOrchestrator:
         """
         gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
-    def remove_tensor_from_remote(self, storage_id: str, machine: "RemoteMachine") -> bool:
+    def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
         Remove a tensor from remote machine.
 
@@ -331,7 +331,7 @@ class RemoteOrchestrator:
         gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.remove_storage(storage_id)
 
-    def check_tensor_exists(self, storage_id: str, machine: "RemoteMachine") -> bool:
+    def check_tensor_exists(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
         Check if a tensor exists on the remote machine.
 
@@ -350,7 +350,7 @@ class RemoteOrchestrator:
         except Exception:
             return False
 
-    def validate_tensor_reference(self, storage_id: str, machine: "RemoteMachine") -> bool:
+    def validate_tensor_reference(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
         Validate that a tensor reference is still valid.
 
@@ -429,12 +429,12 @@ class RemoteOrchestrator:
     def safe_execute_remote_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[str],
+        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         machine: "RemoteMachine"
-    ) -> List[str]:
+    ) -> List[int]:
         """
         Safely execute an aten operation using tensor IDs with error handling.
 

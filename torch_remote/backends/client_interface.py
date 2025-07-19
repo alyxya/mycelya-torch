@@ -62,7 +62,7 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def create_storage(self, tensor_data: bytes, storage_id: Optional[str] = None) -> str:
+    def create_storage(self, tensor_data: bytes, storage_id: Optional[int] = None) -> int:
         """
         Create a storage on the remote machine.
 
@@ -76,7 +76,7 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def get_storage_data(self, storage_id: str, shape: List[int] = None, stride: List[int] = None,
+    def get_storage_data(self, storage_id: int, shape: List[int] = None, stride: List[int] = None,
                         storage_offset: int = 0, dtype: str = None) -> bytes:
         """
         Retrieve storage data by ID, optionally as a specific view.
@@ -97,7 +97,7 @@ class ClientInterface(ABC):
     def execute_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[str],
+        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
@@ -119,7 +119,7 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def remove_storage(self, storage_id: str) -> bool:
+    def remove_storage(self, storage_id: int) -> bool:
         """
         Remove a storage from the remote machine.
 
