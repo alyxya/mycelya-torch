@@ -64,7 +64,7 @@ import torch
 import torch_remote
 
 # Create remote device
-device = torch_remote.create_modal_machine(gpu_type="A100")
+device = torch_remote.create_modal_machine(gpu="A100")
 
 # Operations automatically execute on remote GPU
 x = torch.randn(1000, 1000, device=device)
