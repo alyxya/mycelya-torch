@@ -189,12 +189,18 @@ class RemoteOrchestrator:
                     processed_kwargs[key] = value
 
             # Execute remotely using storage IDs and tensor metadata
+            # The Modal backend should handle both input and output tensors correctly
             result_storage_ids = self.execute_remote_aten_operation(
                 op_name, storage_ids, tensor_metadata, tuple(processed_args), processed_kwargs, machine
             )
 
-            # Create result tensors from returned storage IDs
-            if len(result_storage_ids) == 1:
+            # Handle the result based on whether we got storage IDs back
+            if result_storage_ids is None:
+                # Remote execution completed but didn't return storage IDs
+                # This likely means the operation used pre-allocated outputs (e.g., "out" parameter)
+                # or was an inplace operation, so no new tensors need to be created
+                return None
+            elif len(result_storage_ids) == 1:
                 # Single tensor result
                 result_storage_id = result_storage_ids[0]
                 result_tensor = self._create_remote_tensor_from_id(result_storage_id, machine)
@@ -211,6 +217,7 @@ class RemoteOrchestrator:
             log.error(f"❌ Error in efficient remote aten execution of {op_name}: {str(e)}")
             traceback.print_exc()
             raise
+
 
     def _create_remote_tensor_from_id(self, storage_id: int, machine: "RemoteMachine") -> torch.Tensor:
         """
@@ -317,6 +324,7 @@ class RemoteOrchestrator:
         """
         gpu_machine = self._get_device_gpu_machine(machine)
         return gpu_machine.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
+
     def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
         Remove a tensor from remote machine.

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import logging
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 
@@ -13,6 +13,8 @@ log = logging.getLogger(__name__)
 
 from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending
+
+
 
 
 # View operations that should be handled locally with shared storage IDs
@@ -108,14 +110,20 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         op_name = op.overloadpacket._qualified_op_name
         log.info(f"🔄 Inplace operation: {op_name}")
 
-        # For inplace ops, the result is the first argument (mutated in place)
-        result_tensor = args[0]
+        # Determine the result tensor:
+        # - If there's an "out" parameter, the result is the "out" tensor
+        # - Otherwise, for true inplace ops, the result is the first argument (mutated in place)
+        if "out" in kwargs:
+            result_tensor = kwargs["out"]
+        else:
+            result_tensor = args[0]
 
         # Execute remotely using efficient tensor ID system
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
             log.info(f"🚀 Executing inplace operation {op_name} remotely (efficient)")
-            return orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            return result_tensor
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
 

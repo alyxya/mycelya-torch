@@ -118,6 +118,7 @@ class ClientInterface(ABC):
         """
         pass
 
+
     @abstractmethod
     def remove_storage(self, storage_id: int) -> bool:
         """
