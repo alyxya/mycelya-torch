@@ -973,8 +973,7 @@ def test_simple_mse_loss_gradient(modal_t4_device):
     # Verify loss properties
     assert loss.device == modal_t4_device.device()
     assert loss.requires_grad is True
-    # Note: MSE loss shape might not be scalar due to remote execution issues
-    print(f"Loss shape: {loss.shape}, value: {loss.item() if loss.numel() == 1 else loss}")
+    print(f"Loss shape: {loss.shape}, value: {loss.item()}")
 
     # Backward pass: compute gradients
     loss.backward()
@@ -1266,7 +1265,7 @@ def test_cross_entropy_full_gradient(modal_t4_device):
     # Verify loss properties
     assert loss.device == modal_t4_device.device()
     assert loss.requires_grad is True
-    assert loss.shape == ()  # Should be scalar
+    assert loss.shape == ()
 
     # Backward pass
     loss.backward()

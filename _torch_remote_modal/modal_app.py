@@ -103,8 +103,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 import threading
                 from typing import Dict, Any, Union, Tuple
                 
-                # storage_id -> Union[torch.Storage, (scalar_value, dtype_str)]
-                self._storages: Dict[str, Union[Any, Tuple[Any, str]]] = {}
+                # storage_id -> torch.Storage
+                self._storages: Dict[str, Any] = {}
                 self._storage_lock = threading.RLock()
             
             return self._storages, self._storage_lock
@@ -143,7 +143,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             storages, lock = self._get_storages()
             with lock:
-                # Store tensor storage for all tensors (including scalars)
+                # Store tensor storage for all tensors
                 storages[storage_id] = tensor.untyped_storage()
                 log.info(f"📦 Created storage {storage_id} for tensor with shape {tensor.shape} on {device}")
             

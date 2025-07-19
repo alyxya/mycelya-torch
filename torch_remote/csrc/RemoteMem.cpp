@@ -24,8 +24,8 @@ struct RemoteAllocator final : at::Allocator {
     auto curr_device = c10::Device(c10::DeviceType::PrivateUse1, curr_device_idx);
     void* data = nullptr;
     
-    // Always generate a unique storage ID, even for empty tensors
-    // This ensures scalars and empty tensors get unique IDs
+    // Always generate a unique storage ID for all tensors
+    // This ensures every tensor gets a unique ID
     storage_id_t storage_id = get_method(kGenerateStorageIdMethod)().cast<storage_id_t>();
     
     // Call Python method to create storage with ID and register it

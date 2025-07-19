@@ -382,23 +382,6 @@ def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
     )
 
 
-def _local_scalar_dense(ten: torch.Tensor) -> Union[int, float, complex, bool]:
-    """Extract a scalar value from a remote tensor.
-
-    Downloads the tensor data from the remote device and extracts
-    the scalar value. The tensor must contain exactly one element.
-
-    Args:
-        ten: Remote tensor containing a single scalar value
-
-    Returns:
-        The scalar value as a Python primitive type
-
-    Raises:
-        RuntimeError: If tensor contains more than one element
-    """
-    host_mem = copy_from_device(ten)
-    return host_mem.item()
 
 
 # Remote tensors are now handled directly by the C++ allocator with ID-based allocation
@@ -412,9 +395,6 @@ _remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key=PRIVATEUSE1_DISPATC
 _remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
 _remote_lib_aten.impl(
     "set_.source_Tensor", _set_source_tensor, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
-)
-_remote_lib_aten.impl(
-    "_local_scalar_dense", _local_scalar_dense, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
 )
 
 # via TORCH_LIBRARY_IMPL in RemoteMem.cpp, so we don't register Python implementations
