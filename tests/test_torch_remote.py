@@ -915,12 +915,13 @@ def test_basic_tensor_creation_debug(modal_t4_device):
         y = x_remote + 1.0
         print(f"✓ Addition successful: device={y.device}, requires_grad={y.requires_grad}")
 
-        return True
+        # Test passed successfully
+        assert True
     except Exception as e:
         print(f"✗ Transfer failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Transfer failed: {e}")
 
 
 def test_simple_gradient_computation(modal_t4_device):
@@ -1197,13 +1198,14 @@ def test_long_dtype_debug(modal_t4_device):
         except Exception as e:
             print(f"✗ Mean operation failed: {e}")
 
-        return True
+        # Test passed successfully
+        assert True
 
     except Exception as e:
         print(f"✗ Transfer failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Transfer failed: {e}")
 
 
 def test_cross_entropy_dtype_debug(modal_t4_device):
@@ -1237,12 +1239,13 @@ def test_cross_entropy_dtype_debug(modal_t4_device):
         loss.backward()
         print(f"✓ Backward pass successful: grad shape={logits_cpu.grad.shape}")
 
-        return True
+        # Test passed successfully
+        assert True
     except Exception as e:
         print(f"✗ Cross entropy failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Cross entropy failed: {e}")
 
 
 def test_cross_entropy_full_gradient(modal_t4_device):
@@ -1304,12 +1307,13 @@ def test_direct_tensor_creation_simple(modal_t4_device):
         y.backward()
         print(f"✓ Backward works")
 
-        return True
+        # Test passed successfully
+        assert True
     except Exception as e:
         print(f"✗ Direct creation failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Direct creation failed: {e}")
 
 
 def test_various_tensor_creation_functions(modal_t4_device):
@@ -1343,7 +1347,9 @@ def test_various_tensor_creation_functions(modal_t4_device):
     if failures:
         print(f"Failed functions: {failures}")
 
-    return results
+    # Verify that basic tensor creation functions work
+    failures = [name for name, success in results.items() if not success]
+    assert len(failures) == 0, f"Some tensor creation functions failed: {failures}"
 
 
 def test_mse_loss_shape_debug(modal_t4_device):
@@ -1469,8 +1475,6 @@ def test_direct_tensor_creation(modal_t4_device):
     # At minimum, the workaround should work
     assert workaround_works, "CPU-first workaround should always work"
 
-    return {
-        'direct_with_grad': direct_works,
-        'cpu_first_workaround': workaround_works,
-        'direct_no_grad': direct_no_grad_works
-    }
+    # Verify that at least the workaround works
+    assert workaround_works, "CPU-first workaround should always work"
+    # Test passes if we reach here
