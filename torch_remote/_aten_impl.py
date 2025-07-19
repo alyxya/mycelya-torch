@@ -15,6 +15,134 @@ from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending
 
 
+def _update_tensor_metadata_from_meta_execution(
+    op: torch._ops.OpOverload,
+    result_tensor: torch.Tensor,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any]
+) -> None:
+    """
+    Update result tensor metadata by executing the same operation on meta tensors.
+    
+    This handles cases where operations like resize_ change tensor metadata and we need
+    to update the local tensor to match what happened on the remote device.
+    
+    Args:
+        op: The operation that was executed
+        result_tensor: The tensor whose metadata should be updated
+        args: Original operation arguments
+        kwargs: Original operation keyword arguments
+    """
+    try:
+        # Convert all tensor args to meta tensors with same properties
+        meta_args = []
+        for arg in args:
+            if isinstance(arg, torch.Tensor):
+                meta_tensor = torch.empty(
+                    arg.shape,
+                    dtype=arg.dtype,
+                    device='meta'
+                )
+                # Preserve stride if non-contiguous
+                if arg.stride() != meta_tensor.stride():
+                    meta_tensor = torch.as_strided(
+                        meta_tensor,
+                        arg.shape,
+                        arg.stride(),
+                        arg.storage_offset()
+                    )
+                meta_args.append(meta_tensor)
+            else:
+                meta_args.append(arg)
+        
+        # Convert kwargs to meta tensors
+        meta_kwargs = {}
+        for key, value in kwargs.items():
+            if isinstance(value, torch.Tensor):
+                meta_tensor = torch.empty(
+                    value.shape,
+                    dtype=value.dtype,
+                    device='meta'
+                )
+                if value.stride() != meta_tensor.stride():
+                    meta_tensor = torch.as_strided(
+                        meta_tensor,
+                        value.shape,
+                        value.stride(),
+                        value.storage_offset()
+                    )
+                meta_kwargs[key] = meta_tensor
+            else:
+                meta_kwargs[key] = value
+        
+        # Store original metadata for comparison
+        original_shape = result_tensor.shape
+        original_stride = result_tensor.stride()
+        original_offset = result_tensor.storage_offset()
+        
+        # Execute on meta device to see what the metadata should be
+        try:
+            with torch.device('meta'):
+                meta_result = op(*meta_args, **meta_kwargs)
+        except Exception as meta_exec_error:
+            log.debug(f"Meta execution failed for {op.overloadpacket._qualified_op_name}: {meta_exec_error}")
+            return  # Skip metadata update if meta execution fails
+        
+        # If it's an inplace operation, check the first argument for changes
+        if op._schema.is_mutable and not kwargs.get("out"):
+            if len(meta_args) > 0 and isinstance(meta_args[0], torch.Tensor):
+                target_meta_tensor = meta_args[0]
+            else:
+                return
+        # If it has an "out" parameter, check that tensor
+        elif "out" in kwargs and isinstance(meta_kwargs["out"], torch.Tensor):
+            target_meta_tensor = meta_kwargs["out"]
+        # For regular operations, check the result
+        elif isinstance(meta_result, torch.Tensor):
+            target_meta_tensor = meta_result
+        else:
+            return
+        
+        # Check if metadata changed
+        try:
+            new_shape = target_meta_tensor.shape
+            new_stride = target_meta_tensor.stride()
+            new_offset = target_meta_tensor.storage_offset()
+            
+            # Compare metadata carefully to avoid boolean tensor ambiguity
+            shape_changed = tuple(original_shape) != tuple(new_shape)
+            stride_changed = tuple(original_stride) != tuple(new_stride)
+            offset_changed = original_offset != new_offset
+            
+            metadata_changed = shape_changed or stride_changed or offset_changed
+        except Exception as comparison_error:
+            log.debug(f"Failed to compare tensor metadata for {op.overloadpacket._qualified_op_name}: {comparison_error}")
+            return  # Skip metadata update if comparison fails
+        
+        if metadata_changed:
+            op_name = op.overloadpacket._qualified_op_name
+            
+            # Log warning for non-resize operations
+            if "resize" not in op_name:
+                log.warning(f"⚠️ Operation {op_name} changed tensor metadata - shape: {original_shape} → {new_shape}, stride: {original_stride} → {new_stride}")
+            else:
+                log.debug(f"📏 Resize operation {op_name} changed tensor metadata - shape: {original_shape} → {new_shape}")
+            
+            # Update the result tensor's metadata to match what happened remotely
+            # Use set_ to update the tensor's view of its storage
+            result_tensor.set_(
+                result_tensor.untyped_storage(),
+                new_offset,
+                new_shape,
+                new_stride
+            )
+            
+            log.debug(f"✅ Updated tensor metadata to match remote execution")
+        
+    except Exception as e:
+        log.debug(f"Skipping metadata update for {op.overloadpacket._qualified_op_name}: {e}")
+
+
 
 
 # View operations that should be handled locally with shared storage IDs
@@ -100,6 +228,26 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
 
 def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
     log.info("Calling kernel %s", op)
+    
+    # DEBUG: Log operation details and kwargs
+    op_name = op.overloadpacket._qualified_op_name
+    log.debug(f"Operation: {op_name}, Kwargs: {list(kwargs.keys())}")
+    if "out" in kwargs:
+        log.debug(f"'out' kwarg type: {type(kwargs['out'])}, shape: {kwargs['out'].shape}")
+    else:
+        log.debug("No 'out' kwarg present")
+    
+    # DEBUG: For resize operations, log what's being resized
+    if "resize" in op_name:
+        log.debug(f"RESIZE DEBUG: Original tensor shape: {args[0].shape if len(args) > 0 and isinstance(args[0], torch.Tensor) else 'N/A'}")
+        log.debug(f"RESIZE DEBUG: New size (args[1]): {args[1] if len(args) > 1 else 'N/A'}")
+        log.debug(f"RESIZE DEBUG: All args: {args}")
+        
+        # Print stack trace to see what called this
+        import traceback
+        log.debug(f"RESIZE STACK TRACE:")
+        for line in traceback.format_stack()[-5:]:  # Last 5 frames
+            log.debug(line.strip())
 
     # Handle operations using pytorch-openreg-2 logic for operation classification
     # but with remote execution for actual computation
@@ -123,6 +271,10 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         if orchestrator is not None:
             log.info(f"🚀 Executing inplace operation {op_name} remotely (efficient)")
             orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            
+            # Update tensor metadata to match what happened on remote device
+            _update_tensor_metadata_from_meta_execution(op, result_tensor, args, kwargs)
+            
             return result_tensor
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
@@ -157,7 +309,17 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
             log.info(f"🚀 Executing regular operation {op_name} remotely (efficient)")
-            return orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            result = orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            
+            # Update tensor metadata for operations that return tensors
+            if isinstance(result, torch.Tensor):
+                _update_tensor_metadata_from_meta_execution(op, result, args, kwargs)
+            elif isinstance(result, tuple) and all(isinstance(t, torch.Tensor) for t in result):
+                # Handle multiple tensor outputs
+                for tensor in result:
+                    _update_tensor_metadata_from_meta_execution(op, tensor, args, kwargs)
+            
+            return result
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
