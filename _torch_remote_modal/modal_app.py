@@ -15,7 +15,6 @@ Part of: torch_remote PyTorch extension
 import modal
 from typing import Any, Dict, List, Tuple, Optional
 import os
-import uuid
 import weakref
 import threading
 import random
@@ -139,7 +138,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             # Store storage and original tensor data
             if storage_id is None:
-                storage_id = str(uuid.uuid4())
+                raise ValueError("Storage ID must be provided. Modal app should never generate storage IDs independently - they must come from the centralized allocator system.")
             
             storages, lock = self._get_storages()
             with lock:
