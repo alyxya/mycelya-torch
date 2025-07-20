@@ -112,21 +112,20 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         def create_storage(
             self,
             tensor_data: bytes,
-            storage_id: Optional[int] = None
-        ) -> int:
+            storage_id: int
+        ) -> None:
             """
-            Create a new storage on the remote machine and return its storage ID.
+            Create a new storage on the remote machine.
             
             Args:
                 tensor_data: Serialized tensor data
-                storage_id: Optional specific ID to use
+                storage_id: Specific ID to use for the storage (required)
                 
             Returns:
-                The storage ID
+                None
             """
             import torch
             import io
-            import uuid
             
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
@@ -137,17 +136,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             tensor = tensor.to(device)
             
             # Store storage and original tensor data
-            if storage_id is None:
-                raise ValueError("Storage ID must be provided. Modal app should never generate storage IDs independently - they must come from the centralized allocator system.")
-            
             storages, lock = self._get_storages()
             with lock:
                 # Store tensor storage for all tensors
                 storage_id = int(storage_id)
                 storages[storage_id] = tensor.untyped_storage()
                 log.info(f"📥 RECEIVED Storage ID {storage_id} on Modal (shape: {tensor.shape})")
-            
-            return storage_id
 
         @modal.method()
         def get_storage_data(self, storage_id: int, shape=None, stride=None, storage_offset=0, dtype=None) -> bytes:

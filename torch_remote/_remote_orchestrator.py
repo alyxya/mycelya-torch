@@ -209,21 +209,21 @@ class RemoteOrchestrator:
         self,
         tensor_data: bytes,
         machine: "RemoteMachine",
-        storage_id: Optional[int] = None
-    ) -> int:
+        storage_id: int
+    ) -> None:
         """
-        Create a tensor on the remote machine and return its ID.
+        Create a tensor on the remote machine.
 
         Args:
             tensor_data: Serialized tensor data
-            device: Target device
-            storage_id: Optional specific ID to use
+            machine: Target remote machine
+            storage_id: Specific ID to use for the storage (required)
 
         Returns:
-            The tensor ID
+            None
         """
         client = self._get_device_client(machine)
-        return client.create_storage(tensor_data, storage_id)
+        client.create_storage(tensor_data, storage_id)
 
     def get_tensor_data_from_remote(self, storage_id: int, device_index: int) -> torch.Tensor:
         """

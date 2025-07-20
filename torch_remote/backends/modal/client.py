@@ -70,21 +70,21 @@ class ModalClient(ClientInterface):
         """Check if the machine is currently running."""
         return self._app_context is not None
 
-    def create_storage(self, tensor_data: bytes, storage_id: Optional[int] = None) -> int:
+    def create_storage(self, tensor_data: bytes, storage_id: int) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             tensor_data: Serialized tensor data
-            storage_id: Optional specific ID to use
+            storage_id: Specific ID to use for the storage (required)
 
         Returns:
-            The storage ID
+            None
         """
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
 
-        return self._server_instance.create_storage.remote(tensor_data, storage_id)
+        self._server_instance.create_storage.remote(tensor_data, storage_id)
 
     def get_storage_data(self, storage_id: int, shape: List[int] = None, stride: List[int] = None,
                         storage_offset: int = 0, dtype: str = None) -> bytes:

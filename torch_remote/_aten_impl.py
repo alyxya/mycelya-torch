@@ -333,8 +333,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         tensor_data = orchestrator._serialize_tensor(from_)
         # Use client to create/update tensor with specific ID
         # This will overwrite any existing empty tensor with the actual data
-        created_id = client.create_storage(tensor_data, storage_id)
-        log.info(f"Successfully created/updated remote tensor with ID {created_id}")
+        client.create_storage(tensor_data, storage_id)
+        log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
         return to_
     else:
         raise RuntimeError("Cannot copy to remote device: remote execution not available")
