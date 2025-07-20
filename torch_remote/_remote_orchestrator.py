@@ -101,7 +101,7 @@ class RemoteOrchestrator:
         op_name: str,
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any]
-    ) -> Any:
+    ) -> None:
         """
         Execute an aten operation remotely using the efficient storage ID system.
 
@@ -187,30 +187,15 @@ class RemoteOrchestrator:
                     processed_kwargs[key] = value
 
             # Execute remotely using storage IDs and tensor metadata
-            # The Modal backend should handle both input and output tensors correctly
+            # Execute the operation remotely - all operations work in-place on pre-allocated tensors
             log.info(f"🚀 Sending Storage IDs to {op_name}: {storage_ids}")
-            result_storage_ids = self.execute_remote_aten_operation(
+            self.execute_remote_aten_operation(
                 op_name, storage_ids, tensor_metadata, tuple(processed_args), processed_kwargs, machine
             )
 
-            # Handle the result based on whether we got storage IDs back
-            if result_storage_ids is None:
-                # Remote execution completed but didn't return storage IDs
-                # This likely means the operation used pre-allocated outputs (e.g., "out" parameter)
-                # or was an inplace operation, so no new tensors need to be created
-                return None
-            elif len(result_storage_ids) == 1:
-                # Single tensor result
-                result_storage_id = result_storage_ids[0]
-                result_tensor = self._create_remote_tensor_from_id(result_storage_id, machine)
-                return result_tensor
-            else:
-                # Multiple tensor results
-                result_tensors = []
-                for result_storage_id in result_storage_ids:
-                    result_tensor = self._create_remote_tensor_from_id(result_storage_id, machine)
-                    result_tensors.append(result_tensor)
-                return tuple(result_tensors)
+            # Operation completed successfully - all operations are in-place
+            log.debug(f"✅ Remote operation {op_name} completed successfully")
+            return None
 
         except Exception as e:
             log.error(f"❌ Error in efficient remote aten execution of {op_name}: {str(e)}")
@@ -218,44 +203,6 @@ class RemoteOrchestrator:
             raise
 
 
-    def _create_remote_tensor_from_id(self, storage_id: int, machine: "RemoteMachine") -> torch.Tensor:
-        """
-        Create a remote tensor from an existing storage ID.
-
-        Since we don't have metadata from the remote side, we create a placeholder tensor
-        that will be properly shaped when used in operations.
-
-        Args:
-            storage_id: The remote storage ID
-            machine: The machine where the tensor exists
-
-        Returns:
-            Remote tensor that references the existing data
-        """
-        # DEBUG: Check for storage ID 0 issue
-        storage_id = int(storage_id)
-        log.debug(f"_create_remote_tensor_from_id called with storage_id={storage_id}")
-
-        if storage_id == 0:
-            log.error(f"ERROR: Attempting to create remote tensor with storage ID 0! This will fail.")
-            raise ValueError(f"Storage ID 0 is invalid - this indicates a bug in storage ID generation")
-
-        # Create a minimal CPU tensor first - shape doesn't matter since it will be reshaped
-        # when used in operations that have proper metadata
-        cpu_tensor = torch.empty(1, dtype=torch.float32, device=CPU_DEVICE_TYPE)
-
-        # Convert to remote device - this will call the C++ allocator and generate a new ID
-        remote_tensor = cpu_tensor.to(machine.device())
-
-        # Override the generated storage ID with our existing one
-        # The C++ allocator stores storage IDs as data pointers
-
-        # Replace the storage's data pointer with our existing storage ID
-        storage = remote_tensor.untyped_storage()
-        storage.data_ptr = lambda: storage_id
-
-        log.debug(f"Created remote tensor with overridden storage_id={storage_id}")
-        return remote_tensor
 
 
     def create_tensor_on_remote(
@@ -306,9 +253,10 @@ class RemoteOrchestrator:
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         machine: "RemoteMachine"
-    ) -> List[int]:
+    ) -> None:
         """
         Execute an aten operation using tensor IDs and metadata.
+        Operations execute in-place on pre-allocated tensors.
 
         Args:
             op_name: The aten operation name
@@ -317,12 +265,9 @@ class RemoteOrchestrator:
             args: Operation arguments
             kwargs: Operation keyword arguments
             machine: Target machine
-
-        Returns:
-            Result tensor IDs
         """
         gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
+        gpu_machine.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
 
     def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """

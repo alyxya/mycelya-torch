@@ -186,10 +186,7 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
             log.info(f"🚀 Executing inplace operation {op_name} remotely (efficient)")
             orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
             
-            # Post-operation metadata update removed for simplification
-            
-            # Post-operation resize removed for simplification
-            
+            # For in-place operations, return the tensor that was modified
             return result_tensor
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
@@ -206,11 +203,15 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
             log.info(f"🚀 Executing as_strided operation {op_name} remotely (efficient)")
-            result = orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
             
-            # Post-operation resize removed for simplification
+            # For as_strided, the output tensor should be in the arguments or created by PyTorch
+            # Return the first tensor argument as the result (which was modified in-place)
+            for arg in args:
+                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+                    return arg
             
-            return result
+            raise RuntimeError(f"No output tensor found for as_strided operation {op_name}")
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
@@ -232,13 +233,20 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
             log.info(f"🚀 Executing regular operation {op_name} remotely (efficient)")
-            result = orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
             
-            # Post-operation tensor metadata update removed for simplification
+            # For regular operations, the output tensor should be pre-allocated by PyTorch
+            # Check for 'out' parameter first, then find output tensor in args
+            if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
+                return kwargs["out"]
+                
+            # For operations without explicit 'out' parameter, PyTorch should have 
+            # pre-allocated an output tensor - it's typically the last tensor argument
+            for arg in reversed(args):
+                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+                    return arg
             
-            # Post-operation resize removed for simplification
-            
-            return result
+            raise RuntimeError(f"No output tensor found for operation {op_name}")
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
