@@ -360,8 +360,6 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     # Simplified copy implementation - remote tensors are now regular torch.Tensor
     # with proper device handling via C++ allocator
 
-    # Preserve requires_grad property from source tensor
-    should_preserve_grad = from_.requires_grad
 
     if from_.device.type == to_.device.type:
         if from_.device.type == REMOTE_DEVICE_TYPE:
@@ -396,9 +394,6 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
         # Both non-remote but different devices
         result = to_.copy_(from_)
 
-    # Preserve autograd properties
-    if should_preserve_grad and not result.requires_grad:
-        result.requires_grad_(True)
 
     return result
 
