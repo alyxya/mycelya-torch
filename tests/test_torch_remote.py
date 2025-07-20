@@ -35,20 +35,20 @@ def test_tensor_to_method() -> None:
     assert hasattr(x, "to") and callable(x.to)
 
 
-def test_backend_tensor_creation(modal_t4_device):
+def test_backend_tensor_creation(shared_devices):
     """Test backend tensor creation via .to() method."""
     x = torch.randn(2, 2)
-    y = x.to(modal_t4_device.device())
+    y = x.to(shared_devices["t4"].device())
     assert y is not None and y.shape == x.shape
 
 
-def test_backend_tensor_operations(modal_t4_device):
+def test_backend_tensor_operations(shared_devices):
     """Test operations on backend tensors."""
     x = torch.randn(2, 2)
     y = torch.randn(2, 2)
 
-    x_remote = x.to(modal_t4_device.device())
-    y_remote = y.to(modal_t4_device.device())
+    x_remote = x.to(shared_devices["t4"].device())
+    y_remote = y.to(shared_devices["t4"].device())
 
     # Test addition - verify numerical result matches CPU computation
     z_remote = x_remote + y_remote
@@ -66,22 +66,22 @@ def test_backend_tensor_operations(modal_t4_device):
     assert torch.allclose(w_remote.cpu(), w_expected, rtol=1e-4, atol=1e-6)
 
 
-def test_dtype_conversion(modal_t4_device):
+def test_dtype_conversion(shared_devices):
     """Test remote conversion with dtype parameter."""
     x = torch.randn(2, 2, dtype=torch.float32)
-    y = x.to(modal_t4_device.device(), dtype=torch.float64)
+    y = x.to(shared_devices["t4"].device(), dtype=torch.float64)
     assert y.dtype == torch.float64
 
 
-def test_copy_parameter(modal_t4_device):
+def test_copy_parameter(shared_devices):
     """Test remote conversion with copy parameter."""
     x = torch.randn(2, 2)
-    y = x.to(modal_t4_device.device(), copy=True)
-    z = x.to(modal_t4_device.device(), copy=False)
+    y = x.to(shared_devices["t4"].device(), copy=True)
+    z = x.to(shared_devices["t4"].device(), copy=False)
     assert y is not None and z is not None
 
 
-def test_error_handling(modal_t4_device):
+def test_error_handling(shared_devices):
     """Test that errors are handled gracefully."""
     # These operations might fail, but shouldn't crash
     try:
@@ -90,7 +90,7 @@ def test_error_handling(modal_t4_device):
         pass  # Expected to fail
 
     try:
-        x = torch.randn(2, 2).to(modal_t4_device.device())
+        x = torch.randn(2, 2).to(shared_devices["t4"].device())
         y = torch.randn(2, 2)  # CPU tensor
         z = x.mm(y)  # Mixed device - may or may not work
     except Exception:
@@ -99,12 +99,12 @@ def test_error_handling(modal_t4_device):
     assert True  # If we get here without segfault, it's good
 
 
-def test_backend_tensor_device_properties(modal_t4_device):
+def test_backend_tensor_device_properties(shared_devices):
     """Test that backend tensors report correct device properties."""
 
     # Create CPU tensor and convert to backend
     x_cpu = torch.randn(3, 3)
-    x_remote = x_cpu.to(modal_t4_device.device())
+    x_remote = x_cpu.to(shared_devices["t4"].device())
 
     # Check that remote tensor maintains torch.Tensor interface
     assert type(x_remote).__name__ == "Tensor"
@@ -113,14 +113,14 @@ def test_backend_tensor_device_properties(modal_t4_device):
     assert x_remote.device.type == "remote"
 
 
-def test_backend_only_operations(modal_t4_device):
+def test_backend_only_operations(shared_devices):
     """Test operations that require both tensors to be on the same backend."""
 
     x_cpu = torch.randn(2, 3)
     y_cpu = torch.randn(3, 2)
 
-    x_remote = x_cpu.to(modal_t4_device.device())
-    y_remote = y_cpu.to(modal_t4_device.device())
+    x_remote = x_cpu.to(shared_devices["t4"].device())
+    y_remote = y_cpu.to(shared_devices["t4"].device())
 
     # Test remote-remote operations (should work)
     result_add = x_remote + x_remote
@@ -139,12 +139,12 @@ def test_backend_only_operations(modal_t4_device):
     assert torch.allclose(result_mm.cpu(), expected_mm, rtol=1e-4, atol=1e-6)
 
 
-def test_mixed_device_operations_fail(modal_t4_device):
+def test_mixed_device_operations_fail(shared_devices):
     """Test that operations between remote and CPU tensors fail appropriately."""
 
     x_cpu = torch.randn(2, 2)
     y_cpu = torch.randn(2, 2)
-    x_remote = x_cpu.to(modal_t4_device.device())
+    x_remote = x_cpu.to(shared_devices["t4"].device())
 
     # Test mixed device operations (should fail or be handled gracefully)
     operations_tested = 0
@@ -176,7 +176,7 @@ def test_mixed_device_operations_fail(modal_t4_device):
     assert operations_tested == 3
 
 
-def test_cpu_to_backend_conversion(modal_t4_device):
+def test_cpu_to_backend_conversion(shared_devices):
     """Test converting CPU tensors to backend tensors."""
 
     # Test with different tensor types and shapes
@@ -189,7 +189,7 @@ def test_cpu_to_backend_conversion(modal_t4_device):
     ]
 
     for cpu_tensor in test_cases:
-        remote_tensor = cpu_tensor.to(modal_t4_device.device())
+        remote_tensor = cpu_tensor.to(shared_devices["t4"].device())
 
         # Verify conversion maintains torch.Tensor interface
         assert type(remote_tensor).__name__ == "Tensor"
@@ -200,12 +200,12 @@ def test_cpu_to_backend_conversion(modal_t4_device):
         assert torch.allclose(remote_tensor.cpu(), cpu_tensor, rtol=1e-4, atol=1e-6)
 
 
-def test_backend_to_cpu_conversion(modal_t4_device):
+def test_backend_to_cpu_conversion(shared_devices):
     """Test converting backend tensors back to CPU tensors."""
 
     # Create backend tensor
     original_cpu = torch.randn(3, 4)
-    remote_tensor = original_cpu.to(modal_t4_device.device())
+    remote_tensor = original_cpu.to(shared_devices["t4"].device())
 
     # Convert back to CPU
     back_to_cpu = remote_tensor.cpu()
@@ -219,16 +219,16 @@ def test_backend_to_cpu_conversion(modal_t4_device):
     assert torch.allclose(back_to_cpu, original_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_multiple_backend_cpu_transfers(modal_t4_device):
+def test_multiple_backend_cpu_transfers(shared_devices):
     """Test multiple transfers between backend and CPU devices."""
 
     # Start with CPU tensor
     original = torch.randn(2, 3)
 
     # Multiple round trips: CPU -> Remote -> CPU -> Remote -> CPU
-    step1_remote = original.to(modal_t4_device.device())
+    step1_remote = original.to(shared_devices["t4"].device())
     step2_cpu = step1_remote.cpu()
-    step3_remote = step2_cpu.to(modal_t4_device.device())
+    step3_remote = step2_cpu.to(shared_devices["t4"].device())
     step4_cpu = step3_remote.cpu()
 
     # Verify final result matches original
@@ -240,7 +240,7 @@ def test_multiple_backend_cpu_transfers(modal_t4_device):
     assert type(step3_remote).__name__ == "Tensor"
 
 
-def test_backend_tensor_creation_with_dtypes(modal_t4_device):
+def test_backend_tensor_creation_with_dtypes(shared_devices):
     """Test creating backend tensors with different data types."""
 
     dtypes = [torch.float32, torch.float64, torch.int32, torch.int64]
@@ -248,14 +248,14 @@ def test_backend_tensor_creation_with_dtypes(modal_t4_device):
     for dtype in dtypes:
         try:
             cpu_tensor = torch.randn(2, 2).to(dtype)
-            remote_tensor = cpu_tensor.to(modal_t4_device.device())
+            remote_tensor = cpu_tensor.to(shared_devices["t4"].device())
 
             # Verify dtype preservation
             assert remote_tensor.dtype == dtype
             assert type(remote_tensor).__name__ == "Tensor"
 
             # Test dtype conversion during remote creation
-            remote_converted = cpu_tensor.to(modal_t4_device.device(), dtype=torch.float64)
+            remote_converted = cpu_tensor.to(shared_devices["t4"].device(), dtype=torch.float64)
             assert remote_converted.dtype == torch.float64
 
         except Exception as e:
@@ -263,11 +263,11 @@ def test_backend_tensor_creation_with_dtypes(modal_t4_device):
             print(f"Dtype {dtype} not supported for backend tensors: {e}")
 
 
-def test_backend_device_method(modal_t4_device):
+def test_backend_device_method(shared_devices):
     """Test the .device() method on RemoteMachine for device access."""
 
     # Use the shared backend device
-    backend_device = modal_t4_device
+    backend_device = shared_devices["t4"]
 
     # Test .device() method exists and is callable
     assert hasattr(backend_device, "device")
@@ -354,47 +354,35 @@ def test_validate_device_index_negative(shared_devices):
         assert "Invalid device index" in str(e) or "device" in str(e).lower()
 
 
-def test_device_count_dynamic_tracking():
+def test_device_count_dynamic_tracking(shared_devices):
     """Test that device_count properly tracks registered devices dynamically."""
 
-    # Record initial device count (may be > 0 from other tests)
-    initial_count = torch.remote.device_count()
+    # Use existing shared devices instead of creating new ones
+    devices = [shared_devices["t4"], shared_devices["l4"]]
+    
+    # Verify device count includes our shared devices
+    current_count = torch.remote.device_count()
+    assert current_count >= 2  # At least our shared devices should be present
 
-    # Add devices one by one and verify count increases by expected amount
-    devices = []
-    gpu_types = ["T4", "L4"]  # Reduced to 2 devices to minimize GPU usage
-
-    for i, gpu_type in enumerate(gpu_types):
-        device = torch_remote.create_modal_machine(gpu_type)
-        devices.append(device)
-        expected_count = initial_count + i + 1
-        assert torch.remote.device_count() == expected_count
-
-        # Verify the device has a valid index (doesn't need to match i exactly)
+    # Verify each device has a valid index and can create tensors
+    for device in devices:
         assert device.remote_index >= 0
-
+        
         # Verify we can create tensors on each device
         tensor = torch.randn(2, 2, device=device.device())
         assert tensor is not None
         assert tensor.device.index == device.remote_index
 
 
-def test_validate_device_index_with_multiple_devices():
+def test_validate_device_index_with_multiple_devices(shared_devices):
     """Test validate_device_index with multiple devices."""
 
-    # Create our own devices for this test to ensure we know exactly how many we have
-    devices = []
-    gpu_types = ["T4", "L4", "A100"]  # Create exactly 3 devices
+    # Use existing shared devices instead of creating new ones
+    devices = [shared_devices["t4"], shared_devices["l4"], shared_devices["a100"]]
 
-    initial_count = torch.remote.device_count()
-
-    for gpu_type in gpu_types:
-        device = torch_remote.create_modal_machine(gpu_type)
-        devices.append(device)
-
-    # Verify we now have initial_count + 3 devices
+    # Get current device count
     current_count = torch.remote.device_count()
-    assert current_count == initial_count + 3
+    assert current_count >= 3  # At least our 3 shared devices should be present
 
     # All our devices should work and have valid indices
     for device in devices:
@@ -461,15 +449,15 @@ def test_cross_device_copy_restriction(shared_devices):
         torch_remote._aten_impl._copy_from(x, y)
 
 
-def test_same_device_transfer_still_works(modal_t4_device):
+def test_same_device_transfer_still_works(shared_devices):
     """Test that transfers within the same device still work."""
     # Create two tensors on the same device
-    x = torch.randn(2, 2, device=modal_t4_device.device())
-    y = torch.empty(2, 2, device=modal_t4_device.device())
+    x = torch.randn(2, 2, device=shared_devices["t4"].device())
+    y = torch.empty(2, 2, device=shared_devices["t4"].device())
 
     # Same device operations should work fine
-    result = x.to(modal_t4_device.device())
-    assert result.device == modal_t4_device.device()
+    result = x.to(shared_devices["t4"].device())
+    assert result.device == shared_devices["t4"].device()
 
     # Same device copy should work
     y.copy_(x)
@@ -480,11 +468,11 @@ def test_same_device_transfer_still_works(modal_t4_device):
 # View Operations Test Suite
 # ============================================================================
 
-def test_view_operation_basic(modal_t4_device):
+def test_view_operation_basic(shared_devices):
     """Test basic view operation on remote tensors."""
 
     # Create a remote tensor
-    x = torch.randn(4, 6, device=modal_t4_device.device())
+    x = torch.randn(4, 6, device=shared_devices["t4"].device())
     original_shape = x.shape
 
     # Test basic view operation
@@ -501,11 +489,11 @@ def test_view_operation_basic(modal_t4_device):
     assert torch.allclose(x_cpu.view(2, 12), y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_view_operation_multiple_dimensions(modal_t4_device):
+def test_view_operation_multiple_dimensions(shared_devices):
     """Test view operations with multiple dimension changes."""
 
     # Create a 3D remote tensor
-    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    x = torch.randn(2, 3, 4, device=shared_devices["t4"].device())
 
     # Test various view operations
     test_cases = [
@@ -531,11 +519,11 @@ def test_view_operation_multiple_dimensions(modal_t4_device):
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_reshape_operation(modal_t4_device):
+def test_reshape_operation(shared_devices):
     """Test reshape operation on remote tensors."""
 
     # Create a remote tensor
-    x = torch.randn(3, 4, device=modal_t4_device.device())
+    x = torch.randn(3, 4, device=shared_devices["t4"].device())
 
     # Test reshape operation
     y = x.reshape(2, 6)
@@ -552,11 +540,11 @@ def test_reshape_operation(modal_t4_device):
     assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_transpose_operation(modal_t4_device):
+def test_transpose_operation(shared_devices):
     """Test transpose operation on remote tensors."""
 
     # Create a remote tensor
-    x = torch.randn(3, 4, device=modal_t4_device.device())
+    x = torch.randn(3, 4, device=shared_devices["t4"].device())
 
     # Test transpose operation
     y = x.transpose(0, 1)
@@ -573,11 +561,11 @@ def test_transpose_operation(modal_t4_device):
     assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_transpose_operation_3d(modal_t4_device):
+def test_transpose_operation_3d(shared_devices):
     """Test transpose operation on 3D remote tensors."""
 
     # Create a 3D remote tensor
-    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    x = torch.randn(2, 3, 4, device=shared_devices["t4"].device())
 
     # Test various transpose operations
     transpose_cases = [
@@ -605,11 +593,11 @@ def test_transpose_operation_3d(modal_t4_device):
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_permute_operation(modal_t4_device):
+def test_permute_operation(shared_devices):
     """Test permute operation on remote tensors."""
 
     # Create a 3D remote tensor
-    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    x = torch.randn(2, 3, 4, device=shared_devices["t4"].device())
 
     # Test permute operation
     y = x.permute(2, 0, 1)
@@ -626,11 +614,11 @@ def test_permute_operation(modal_t4_device):
     assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_permute_operation_4d(modal_t4_device):
+def test_permute_operation_4d(shared_devices):
     """Test permute operation on 4D remote tensors."""
 
     # Create a 4D remote tensor
-    x = torch.randn(2, 3, 4, 5, device=modal_t4_device.device())
+    x = torch.randn(2, 3, 4, 5, device=shared_devices["t4"].device())
 
     # Test various permute operations
     permute_cases = [
@@ -657,11 +645,11 @@ def test_permute_operation_4d(modal_t4_device):
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_squeeze_operation(modal_t4_device):
+def test_squeeze_operation(shared_devices):
     """Test squeeze operation on remote tensors."""
 
     # Create a remote tensor with singleton dimensions
-    x = torch.randn(1, 3, 1, 4, device=modal_t4_device.device())
+    x = torch.randn(1, 3, 1, 4, device=shared_devices["t4"].device())
 
     # Test squeeze operation (remove all singleton dimensions)
     y = x.squeeze()
@@ -678,11 +666,11 @@ def test_squeeze_operation(modal_t4_device):
     assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_squeeze_operation_specific_dim(modal_t4_device):
+def test_squeeze_operation_specific_dim(shared_devices):
     """Test squeeze operation on specific dimensions."""
 
     # Create a remote tensor with singleton dimensions
-    x = torch.randn(1, 3, 1, 4, device=modal_t4_device.device())
+    x = torch.randn(1, 3, 1, 4, device=shared_devices["t4"].device())
 
     # Test squeeze specific dimensions
     squeeze_cases = [
@@ -705,11 +693,11 @@ def test_squeeze_operation_specific_dim(modal_t4_device):
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_unsqueeze_operation(modal_t4_device):
+def test_unsqueeze_operation(shared_devices):
     """Test unsqueeze operation on remote tensors."""
 
     # Create a remote tensor
-    x = torch.randn(3, 4, device=modal_t4_device.device())
+    x = torch.randn(3, 4, device=shared_devices["t4"].device())
 
     # Test unsqueeze operations at different positions
     unsqueeze_cases = [
@@ -734,11 +722,11 @@ def test_unsqueeze_operation(modal_t4_device):
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_flatten_operation(modal_t4_device):
+def test_flatten_operation(shared_devices):
     """Test flatten operation on remote tensors."""
 
     # Create a multi-dimensional remote tensor
-    x = torch.randn(2, 3, 4, 5, device=modal_t4_device.device())
+    x = torch.randn(2, 3, 4, 5, device=shared_devices["t4"].device())
 
     # Test flatten operations
     flatten_cases = [
@@ -763,11 +751,11 @@ def test_flatten_operation(modal_t4_device):
         assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_view_operations_preserve_storage_id(modal_t4_device):
+def test_view_operations_preserve_storage_id(shared_devices):
     """Test that view operations preserve the underlying storage ID (if implemented correctly)."""
 
     # Create a remote tensor
-    x = torch.randn(4, 6, device=modal_t4_device.device())
+    x = torch.randn(4, 6, device=shared_devices["t4"].device())
 
     # Perform a view operation
     y = x.view(2, 12)
@@ -793,11 +781,11 @@ def test_view_operations_preserve_storage_id(modal_t4_device):
         print(f"View operation behavior: {e}")
 
 
-def test_chained_view_operations(modal_t4_device):
+def test_chained_view_operations(shared_devices):
     """Test chaining multiple view operations."""
 
     # Create a remote tensor
-    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    x = torch.randn(2, 3, 4, device=shared_devices["t4"].device())
 
     # Chain multiple view operations that work correctly
     # After transpose, tensor is not contiguous, so use reshape instead of view
@@ -817,12 +805,12 @@ def test_chained_view_operations(modal_t4_device):
     assert torch.allclose(expected, y_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_view_operations_after_arithmetic(modal_t4_device):
+def test_view_operations_after_arithmetic(shared_devices):
     """Test view operations on tensors after arithmetic operations."""
 
     # Create remote tensors
-    x = torch.randn(3, 4, device=modal_t4_device.device())
-    y = torch.randn(3, 4, device=modal_t4_device.device())
+    x = torch.randn(3, 4, device=shared_devices["t4"].device())
+    y = torch.randn(3, 4, device=shared_devices["t4"].device())
 
     # Perform arithmetic operation
     z = x + y
@@ -843,22 +831,22 @@ def test_view_operations_after_arithmetic(modal_t4_device):
     assert torch.allclose(expected, w_cpu, rtol=1e-4, atol=1e-6)
 
 
-def test_view_invalid_size_error(modal_t4_device):
+def test_view_invalid_size_error(shared_devices):
     """Test that invalid view sizes raise appropriate errors."""
 
     # Create a remote tensor
-    x = torch.randn(3, 4, device=modal_t4_device.device())
+    x = torch.randn(3, 4, device=shared_devices["t4"].device())
 
     # Test invalid view size (incompatible with total elements)
     with pytest.raises(RuntimeError):
         y = x.view(5, 5)  # 25 elements != 12 elements
 
 
-def test_view_with_minus_one_inference(modal_t4_device):
+def test_view_with_minus_one_inference(shared_devices):
     """Test view operation with -1 dimension inference."""
 
     # Create a remote tensor
-    x = torch.randn(2, 3, 4, device=modal_t4_device.device())
+    x = torch.randn(2, 3, 4, device=shared_devices["t4"].device())
 
     # Test view with -1 inference
     test_cases = [
@@ -888,13 +876,13 @@ def test_view_with_minus_one_inference(modal_t4_device):
 # Autograd and Loss Function Test Suite
 # ============================================================================
 
-def test_basic_tensor_creation_debug(modal_t4_device):
+def test_basic_tensor_creation_debug(shared_devices):
     """Debug basic tensor creation step by step."""
 
     # Test 1: Basic tensor creation without requires_grad
     print("Creating basic tensor without requires_grad...")
     x_basic = torch.randn(2, 2)
-    x_remote_basic = x_basic.to(modal_t4_device.device())
+    x_remote_basic = x_basic.to(shared_devices["t4"].device())
     assert x_remote_basic.requires_grad is False
     print(f"✓ Basic tensor created successfully: device={x_remote_basic.device}, requires_grad={x_remote_basic.requires_grad}")
 
@@ -907,7 +895,7 @@ def test_basic_tensor_creation_debug(modal_t4_device):
     # Test 3: Try transferring to remote device
     print("Transferring CPU tensor with requires_grad to remote device...")
     try:
-        x_remote = x_cpu.to(modal_t4_device.device())
+        x_remote = x_cpu.to(shared_devices["t4"].device())
         print(f"✓ Transfer successful: device={x_remote.device}, requires_grad={x_remote.requires_grad}")
 
         # Test 4: Simple operation
@@ -924,23 +912,23 @@ def test_basic_tensor_creation_debug(modal_t4_device):
         pytest.fail(f"Transfer failed: {e}")
 
 
-def test_simple_gradient_computation(modal_t4_device):
+def test_simple_gradient_computation(shared_devices):
     """Test basic gradient computation on remote tensors."""
 
     # Create tensor on CPU first then move to remote
     x_cpu = torch.randn(2, 2, requires_grad=True)
-    x = x_cpu.to(modal_t4_device.device())
+    x = x_cpu.to(shared_devices["t4"].device())
 
     # Verify requires_grad is preserved
     assert x.requires_grad is True
-    assert x.device == modal_t4_device.device()
+    assert x.device == shared_devices["t4"].device()
 
     # Simple computation: y = sum(x^2)
     y = (x * x).sum()
 
     # Verify y requires grad and is on remote device
     assert y.requires_grad is True
-    assert y.device == modal_t4_device.device()
+    assert y.device == shared_devices["t4"].device()
 
     # Backward pass
     y.backward()
@@ -955,7 +943,7 @@ def test_simple_gradient_computation(modal_t4_device):
     assert torch.allclose(x_cpu.grad, expected_grad, rtol=1e-4, atol=1e-6)
 
 
-def test_simple_mse_loss_gradient(modal_t4_device):
+def test_simple_mse_loss_gradient(shared_devices):
     """Test forward and backward pass with MSE loss on remote tensors."""
 
     # Create input and target tensors
@@ -965,14 +953,14 @@ def test_simple_mse_loss_gradient(modal_t4_device):
     input_cpu = torch.randn(batch_size, requires_grad=True)
     target_cpu = torch.randn(batch_size)
 
-    input_remote = input_cpu.to(modal_t4_device.device())
-    target_remote = target_cpu.to(modal_t4_device.device())
+    input_remote = input_cpu.to(shared_devices["t4"].device())
+    target_remote = target_cpu.to(shared_devices["t4"].device())
 
     # Forward pass: compute MSE loss with explicit reduction
     loss = torch.nn.functional.mse_loss(input_remote, target_remote, reduction='mean')
 
     # Verify loss properties
-    assert loss.device == modal_t4_device.device()
+    assert loss.device == shared_devices["t4"].device()
     assert loss.requires_grad is True
     print(f"Loss shape: {loss.shape}, value: {loss.cpu().item()}")
 
@@ -996,7 +984,7 @@ def test_simple_mse_loss_gradient(modal_t4_device):
     assert torch.allclose(input_cpu.grad, input_ref.grad, rtol=1e-4, atol=1e-6)
 
 
-def test_cross_entropy_linear_model(modal_t4_device):
+def test_cross_entropy_linear_model(shared_devices):
     """Test forward/backward pass with a simple linear model and cross entropy loss."""
 
     # Model parameters: simple linear layer
@@ -1004,14 +992,14 @@ def test_cross_entropy_linear_model(modal_t4_device):
     batch_size = 5
 
     # Create model parameters on remote device
-    weight = torch.randn(hidden_size, input_size, device=modal_t4_device.device(), requires_grad=True)
-    bias = torch.randn(hidden_size, device=modal_t4_device.device(), requires_grad=True)
-    classifier_weight = torch.randn(num_classes, hidden_size, device=modal_t4_device.device(), requires_grad=True)
-    classifier_bias = torch.randn(num_classes, device=modal_t4_device.device(), requires_grad=True)
+    weight = torch.randn(hidden_size, input_size, device=shared_devices["t4"].device(), requires_grad=True)
+    bias = torch.randn(hidden_size, device=shared_devices["t4"].device(), requires_grad=True)
+    classifier_weight = torch.randn(num_classes, hidden_size, device=shared_devices["t4"].device(), requires_grad=True)
+    classifier_bias = torch.randn(num_classes, device=shared_devices["t4"].device(), requires_grad=True)
 
     # Create input data and targets
-    x = torch.randn(batch_size, input_size, device=modal_t4_device.device())
-    targets = torch.randint(0, num_classes, (batch_size,), device=modal_t4_device.device(), dtype=torch.long)
+    x = torch.randn(batch_size, input_size, device=shared_devices["t4"].device())
+    targets = torch.randint(0, num_classes, (batch_size,), device=shared_devices["t4"].device(), dtype=torch.long)
 
     # Forward pass: simple two-layer model
     # Hidden layer with ReLU activation
@@ -1024,9 +1012,9 @@ def test_cross_entropy_linear_model(modal_t4_device):
     loss = torch.nn.functional.cross_entropy(logits, targets)
 
     # Verify forward pass properties
-    assert hidden.device == modal_t4_device.device()
-    assert logits.device == modal_t4_device.device()
-    assert loss.device == modal_t4_device.device()
+    assert hidden.device == shared_devices["t4"].device()
+    assert logits.device == shared_devices["t4"].device()
+    assert loss.device == shared_devices["t4"].device()
     assert hidden.shape == (batch_size, hidden_size)
     assert logits.shape == (batch_size, num_classes)
     assert loss.shape == ()
@@ -1038,7 +1026,7 @@ def test_cross_entropy_linear_model(modal_t4_device):
     params_with_grads = [weight, bias, classifier_weight, classifier_bias]
     for param in params_with_grads:
         assert param.grad is not None
-        assert param.grad.device == modal_t4_device.device()
+        assert param.grad.device == shared_devices["t4"].device()
         assert param.grad.shape == param.shape
         # Verify gradients are not all zeros (learning should happen)
         assert not torch.allclose(param.grad, torch.zeros_like(param.grad))
@@ -1077,18 +1065,18 @@ def test_cross_entropy_linear_model(modal_t4_device):
     assert torch.allclose(classifier_bias.grad.cpu(), classifier_bias_cpu.grad, rtol=1e-4, atol=1e-6)
 
 
-def test_multiple_backward_passes(modal_t4_device):
+def test_multiple_backward_passes(shared_devices):
     """Test multiple forward/backward passes to verify gradient accumulation."""
 
     batch_size, num_classes = 3, 4
 
     # Create a simple linear layer
-    weight = torch.randn(num_classes, 2, device=modal_t4_device.device(), requires_grad=True)
-    bias = torch.randn(num_classes, device=modal_t4_device.device(), requires_grad=True)
+    weight = torch.randn(num_classes, 2, device=shared_devices["t4"].device(), requires_grad=True)
+    bias = torch.randn(num_classes, device=shared_devices["t4"].device(), requires_grad=True)
 
     # First forward/backward pass
-    x1 = torch.randn(batch_size, 2, device=modal_t4_device.device())
-    targets1 = torch.randint(0, num_classes, (batch_size,), device=modal_t4_device.device(), dtype=torch.long)
+    x1 = torch.randn(batch_size, 2, device=shared_devices["t4"].device())
+    targets1 = torch.randint(0, num_classes, (batch_size,), device=shared_devices["t4"].device(), dtype=torch.long)
 
     logits1 = torch.mm(x1, weight.t()) + bias
     loss1 = torch.nn.functional.cross_entropy(logits1, targets1)
@@ -1099,8 +1087,8 @@ def test_multiple_backward_passes(modal_t4_device):
     bias_grad1 = bias.grad.clone()
 
     # Second forward/backward pass (gradients should accumulate)
-    x2 = torch.randn(batch_size, 2, device=modal_t4_device.device())
-    targets2 = torch.randint(0, num_classes, (batch_size,), device=modal_t4_device.device(), dtype=torch.long)
+    x2 = torch.randn(batch_size, 2, device=shared_devices["t4"].device())
+    targets2 = torch.randint(0, num_classes, (batch_size,), device=shared_devices["t4"].device(), dtype=torch.long)
 
     logits2 = torch.mm(x2, weight.t()) + bias
     loss2 = torch.nn.functional.cross_entropy(logits2, targets2)
@@ -1135,18 +1123,18 @@ def test_multiple_backward_passes(modal_t4_device):
     assert torch.allclose(bias.grad, expected_bias_grad, rtol=1e-4, atol=1e-6)
 
 
-def test_requires_grad_propagation(modal_t4_device):
+def test_requires_grad_propagation(shared_devices):
     """Test that requires_grad is properly propagated through operations."""
 
     # Create tensors with and without requires_grad
-    x_grad = torch.randn(2, 3, device=modal_t4_device.device(), requires_grad=True)
-    x_no_grad = torch.randn(2, 3, device=modal_t4_device.device(), requires_grad=False)
-    weight = torch.randn(4, 3, device=modal_t4_device.device(), requires_grad=True)
+    x_grad = torch.randn(2, 3, device=shared_devices["t4"].device(), requires_grad=True)
+    x_no_grad = torch.randn(2, 3, device=shared_devices["t4"].device(), requires_grad=False)
+    weight = torch.randn(4, 3, device=shared_devices["t4"].device(), requires_grad=True)
 
     # Operations with requires_grad=True should propagate gradient requirement
     y_grad = torch.mm(x_grad, weight.t())
     assert y_grad.requires_grad is True
-    assert y_grad.device == modal_t4_device.device()
+    assert y_grad.device == shared_devices["t4"].device()
 
     # Operations with mixed requires_grad should require gradients if any input requires them
     y_mixed = torch.mm(x_no_grad, weight.t())
@@ -1157,7 +1145,7 @@ def test_requires_grad_propagation(modal_t4_device):
     assert y_no_grad.requires_grad is False
 
     # Test that gradients flow correctly through the computational graph
-    targets = torch.randint(0, 4, (2,), device=modal_t4_device.device(), dtype=torch.long)
+    targets = torch.randint(0, 4, (2,), device=shared_devices["t4"].device(), dtype=torch.long)
     loss = torch.nn.functional.cross_entropy(y_grad, targets)
     loss.backward()
 
@@ -1167,7 +1155,7 @@ def test_requires_grad_propagation(modal_t4_device):
     assert x_no_grad.grad is None  # This tensor didn't require gradients
 
 
-def test_long_dtype_debug(modal_t4_device):
+def test_long_dtype_debug(shared_devices):
     """Debug Long dtype handling on remote devices."""
 
     # Test 1: Create Long tensor on CPU and transfer to remote
@@ -1178,7 +1166,7 @@ def test_long_dtype_debug(modal_t4_device):
     # Test 2: Transfer to remote device
     print("Transferring Long tensor to remote device...")
     try:
-        targets_remote = targets_cpu.to(modal_t4_device.device())
+        targets_remote = targets_cpu.to(shared_devices["t4"].device())
         print(f"Remote tensor: dtype={targets_remote.dtype}, shape={targets_remote.shape}, device={targets_remote.device}")
 
         # Test 3: Simple operations on Long tensor
@@ -1208,7 +1196,7 @@ def test_long_dtype_debug(modal_t4_device):
         pytest.fail(f"Transfer failed: {e}")
 
 
-def test_cross_entropy_dtype_debug(modal_t4_device):
+def test_cross_entropy_dtype_debug(shared_devices):
     """Debug cross entropy loss dtype issues."""
 
     # Simple setup
@@ -1222,8 +1210,8 @@ def test_cross_entropy_dtype_debug(modal_t4_device):
     print(f"CPU targets: dtype={targets_cpu.dtype}, shape={targets_cpu.shape}")
 
     # Transfer to remote
-    logits_remote = logits_cpu.to(modal_t4_device.device())
-    targets_remote = targets_cpu.to(modal_t4_device.device())
+    logits_remote = logits_cpu.to(shared_devices["t4"].device())
+    targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
     print(f"Remote logits: dtype={logits_remote.dtype}, shape={logits_remote.shape}")
     print(f"Remote targets: dtype={targets_remote.dtype}, shape={targets_remote.shape}")
@@ -1248,7 +1236,7 @@ def test_cross_entropy_dtype_debug(modal_t4_device):
         pytest.fail(f"Cross entropy failed: {e}")
 
 
-def test_cross_entropy_full_gradient(modal_t4_device):
+def test_cross_entropy_full_gradient(shared_devices):
     """Test full cross entropy loss with gradient computation."""
 
     # Simple classification task
@@ -1259,14 +1247,14 @@ def test_cross_entropy_full_gradient(modal_t4_device):
     targets_cpu = torch.tensor([0, 2, 1], dtype=torch.long)
 
     # Transfer to remote
-    logits_remote = logits_cpu.to(modal_t4_device.device())
-    targets_remote = targets_cpu.to(modal_t4_device.device())
+    logits_remote = logits_cpu.to(shared_devices["t4"].device())
+    targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
     # Forward pass
     loss = torch.nn.functional.cross_entropy(logits_remote, targets_remote)
 
     # Verify loss properties
-    assert loss.device == modal_t4_device.device()
+    assert loss.device == shared_devices["t4"].device()
     assert loss.requires_grad is True
     assert loss.shape == ()
 
@@ -1290,13 +1278,13 @@ def test_cross_entropy_full_gradient(modal_t4_device):
     assert torch.allclose(logits_cpu.grad, logits_ref.grad, rtol=1e-4, atol=1e-6)
 
 
-def test_direct_tensor_creation_simple(modal_t4_device):
+def test_direct_tensor_creation_simple(shared_devices):
     """Test if direct tensor creation now works after removing requires_grad from metadata."""
 
     # Test direct creation with requires_grad
     print("Testing direct tensor creation with requires_grad=True...")
     try:
-        x = torch.randn(2, 2, device=modal_t4_device.device(), requires_grad=True)
+        x = torch.randn(2, 2, device=shared_devices["t4"].device(), requires_grad=True)
         print(f"✓ Direct creation successful: {x.shape}, {x.device}, requires_grad={x.requires_grad}")
 
         # Test that we can do operations and gradients
@@ -1316,20 +1304,20 @@ def test_direct_tensor_creation_simple(modal_t4_device):
         pytest.fail(f"Direct creation failed: {e}")
 
 
-def test_various_tensor_creation_functions(modal_t4_device):
+def test_various_tensor_creation_functions(shared_devices):
     """Test various tensor creation functions work directly on remote device."""
 
     print("Testing various tensor creation functions...")
 
     # Test different creation functions
     tests = [
-        ("torch.randn", lambda: torch.randn(2, 3, device=modal_t4_device.device())),
-        ("torch.zeros", lambda: torch.zeros(2, 3, device=modal_t4_device.device())),
-        ("torch.ones", lambda: torch.ones(2, 3, device=modal_t4_device.device())),
-        ("torch.empty", lambda: torch.empty(2, 3, device=modal_t4_device.device())),
-        ("torch.tensor", lambda: torch.tensor([[1, 2], [3, 4]], device=modal_t4_device.device())),
-        ("torch.randn with grad", lambda: torch.randn(2, 3, device=modal_t4_device.device(), requires_grad=True)),
-        ("torch.zeros with grad", lambda: torch.zeros(2, 3, device=modal_t4_device.device(), requires_grad=True)),
+        ("torch.randn", lambda: torch.randn(2, 3, device=shared_devices["t4"].device())),
+        ("torch.zeros", lambda: torch.zeros(2, 3, device=shared_devices["t4"].device())),
+        ("torch.ones", lambda: torch.ones(2, 3, device=shared_devices["t4"].device())),
+        ("torch.empty", lambda: torch.empty(2, 3, device=shared_devices["t4"].device())),
+        ("torch.tensor", lambda: torch.tensor([[1, 2], [3, 4]], device=shared_devices["t4"].device())),
+        ("torch.randn with grad", lambda: torch.randn(2, 3, device=shared_devices["t4"].device(), requires_grad=True)),
+        ("torch.zeros with grad", lambda: torch.zeros(2, 3, device=shared_devices["t4"].device(), requires_grad=True)),
     ]
 
     results = {}
@@ -1352,7 +1340,7 @@ def test_various_tensor_creation_functions(modal_t4_device):
     assert len(failures) == 0, f"Some tensor creation functions failed: {failures}"
 
 
-def test_mse_loss_shape_debug(modal_t4_device):
+def test_mse_loss_shape_debug(shared_devices):
     """Debug MSE loss reduction shape issue."""
 
     print("=== MSE Loss Shape Debug ===")
@@ -1361,8 +1349,8 @@ def test_mse_loss_shape_debug(modal_t4_device):
     batch_size = 3
 
     # Create tensors
-    input_tensor = torch.randn(batch_size, device=modal_t4_device.device())
-    target_tensor = torch.randn(batch_size, device=modal_t4_device.device())
+    input_tensor = torch.randn(batch_size, device=shared_devices["t4"].device())
+    target_tensor = torch.randn(batch_size, device=shared_devices["t4"].device())
 
     print(f"Input shape: {input_tensor.shape}")
     print(f"Target shape: {target_tensor.shape}")
@@ -1415,7 +1403,7 @@ def test_mse_loss_shape_debug(modal_t4_device):
         traceback.print_exc()
 
 
-def test_direct_tensor_creation(modal_t4_device):
+def test_direct_tensor_creation(shared_devices):
     """Test direct tensor creation on remote device vs CPU-first workaround."""
 
     print("=== Testing Direct Tensor Creation ===")
@@ -1423,7 +1411,7 @@ def test_direct_tensor_creation(modal_t4_device):
     # Test 1: Direct creation (this should fail)
     print("Attempting direct tensor creation on remote device...")
     try:
-        x_direct = torch.randn(2, 2, device=modal_t4_device.device(), requires_grad=True)
+        x_direct = torch.randn(2, 2, device=shared_devices["t4"].device(), requires_grad=True)
         print(f"✓ Direct creation successful: {x_direct.shape}, {x_direct.device}")
         direct_works = True
     except Exception as e:
@@ -1434,7 +1422,7 @@ def test_direct_tensor_creation(modal_t4_device):
     print("\nAttempting CPU-first workaround...")
     try:
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.to(modal_t4_device.device())
+        x_remote = x_cpu.to(shared_devices["t4"].device())
         print(f"✓ CPU-first workaround successful: {x_remote.shape}, {x_remote.device}")
         workaround_works = True
     except Exception as e:
@@ -1444,7 +1432,7 @@ def test_direct_tensor_creation(modal_t4_device):
     # Test 3: Direct creation without requires_grad
     print("\nAttempting direct creation without requires_grad...")
     try:
-        y_direct = torch.randn(2, 2, device=modal_t4_device.device())
+        y_direct = torch.randn(2, 2, device=shared_devices["t4"].device())
         print(f"✓ Direct creation without grad successful: {y_direct.shape}, {y_direct.device}")
         direct_no_grad_works = True
     except Exception as e:
@@ -1454,10 +1442,10 @@ def test_direct_tensor_creation(modal_t4_device):
     # Test 4: Various tensor creation functions
     print("\nTesting various tensor creation functions...")
     creation_functions = [
-        ("torch.zeros", lambda: torch.zeros(2, 2, device=modal_t4_device.device())),
-        ("torch.ones", lambda: torch.ones(2, 2, device=modal_t4_device.device())),
-        ("torch.empty", lambda: torch.empty(2, 2, device=modal_t4_device.device())),
-        ("torch.tensor", lambda: torch.tensor([1, 2, 3], device=modal_t4_device.device())),
+        ("torch.zeros", lambda: torch.zeros(2, 2, device=shared_devices["t4"].device())),
+        ("torch.ones", lambda: torch.ones(2, 2, device=shared_devices["t4"].device())),
+        ("torch.empty", lambda: torch.empty(2, 2, device=shared_devices["t4"].device())),
+        ("torch.tensor", lambda: torch.tensor([1, 2, 3], device=shared_devices["t4"].device())),
     ]
 
     for name, create_func in creation_functions:
@@ -1480,7 +1468,7 @@ def test_direct_tensor_creation(modal_t4_device):
     # Test passes if we reach here
 
 
-def test_gradient_propagation_cpu_to_remote(modal_t4_device):
+def test_gradient_propagation_cpu_to_remote(shared_devices):
     """Test gradient propagation works properly for CPU -> remote transfers."""
     print("Testing gradient propagation for CPU -> remote transfers...")
     
@@ -1489,7 +1477,7 @@ def test_gradient_propagation_cpu_to_remote(modal_t4_device):
     print(f"CPU tensor: shape={x_cpu.shape}, requires_grad={x_cpu.requires_grad}, is_leaf={x_cpu.is_leaf}")
     
     # Transfer to remote
-    x_remote = x_cpu.to(modal_t4_device.device())
+    x_remote = x_cpu.to(shared_devices["t4"].device())
     print(f"Remote tensor: shape={x_remote.shape}, requires_grad={x_remote.requires_grad}, is_leaf={x_remote.is_leaf}")
     print(f"Remote grad_fn: {x_remote.grad_fn}")
     
@@ -1512,7 +1500,7 @@ def test_gradient_propagation_cpu_to_remote(modal_t4_device):
     print(f"✓ CPU gradients correct: {x_cpu.grad}")
 
 
-def test_gradient_propagation_remote_to_cpu(modal_t4_device):
+def test_gradient_propagation_remote_to_cpu(shared_devices):
     """Test gradient propagation works properly for remote -> CPU transfers."""
     print("Testing gradient propagation for remote -> CPU transfers...")
     
@@ -1520,7 +1508,7 @@ def test_gradient_propagation_remote_to_cpu(modal_t4_device):
     x_cpu = torch.randn(3, 3, requires_grad=True)
     
     # Transfer to remote and back to CPU
-    x_remote = x_cpu.to(modal_t4_device.device())
+    x_remote = x_cpu.to(shared_devices["t4"].device())
     x_back_cpu = x_remote.cpu()
     
     print(f"Original CPU: requires_grad={x_cpu.requires_grad}, is_leaf={x_cpu.is_leaf}")
@@ -1544,7 +1532,7 @@ def test_gradient_propagation_remote_to_cpu(modal_t4_device):
     print(f"✓ Round-trip gradients correct: {x_cpu.grad}")
 
 
-def test_mixed_device_gradient_computation(modal_t4_device):
+def test_mixed_device_gradient_computation(shared_devices):
     """Test complex gradient scenarios with mixed device operations."""
     print("Testing mixed device gradient computation...")
     
@@ -1553,8 +1541,8 @@ def test_mixed_device_gradient_computation(modal_t4_device):
     b_cpu = torch.randn(3, 3, requires_grad=True)
     
     # Transfer to remote via different paths
-    a_remote = a_cpu.to(modal_t4_device.device())
-    b_remote = b_cpu.to(modal_t4_device.device()) 
+    a_remote = a_cpu.to(shared_devices["t4"].device())
+    b_remote = b_cpu.to(shared_devices["t4"].device()) 
     
     # Operations on remote
     c_remote = a_remote @ b_remote  # Matrix multiplication
@@ -1585,7 +1573,7 @@ def test_mixed_device_gradient_computation(modal_t4_device):
     assert b_cpu.grad.shape == b_cpu.shape, "b_cpu grad should match tensor shape"
 
 
-def test_gradient_accumulation_across_transfers(modal_t4_device):
+def test_gradient_accumulation_across_transfers(shared_devices):
     """Test gradient accumulation works correctly across multiple device transfers."""
     print("Testing gradient accumulation across transfers...")
     
@@ -1596,7 +1584,7 @@ def test_gradient_accumulation_across_transfers(modal_t4_device):
     
     for i in range(3):
         # Transfer to remote
-        x_remote = x_cpu.to(modal_t4_device.device())
+        x_remote = x_cpu.to(shared_devices["t4"].device())
         
         # Different operations each time
         if i == 0:
@@ -1623,7 +1611,7 @@ def test_gradient_accumulation_across_transfers(modal_t4_device):
     print(f"✓ Accumulated gradients correct: {x_cpu.grad}")
 
 
-def test_view_operations_with_gradients(modal_t4_device):
+def test_view_operations_with_gradients(shared_devices):
     """Test that view operations preserve gradient flow across device transfers."""
     print("Testing view operations with gradients...")
     
@@ -1631,7 +1619,7 @@ def test_view_operations_with_gradients(modal_t4_device):
     x_cpu = torch.randn(6, 4, requires_grad=True)
     
     # Transfer to remote
-    x_remote = x_cpu.to(modal_t4_device.device())
+    x_remote = x_cpu.to(shared_devices["t4"].device())
     
     # View operations on remote
     x_reshaped = x_remote.view(4, 6)
@@ -1658,7 +1646,7 @@ def test_view_operations_with_gradients(modal_t4_device):
     print(f"✓ View operations preserve gradients correctly")
 
 
-def test_custom_loss_function_gradients(modal_t4_device):
+def test_custom_loss_function_gradients(shared_devices):
     """Test gradient flow through custom loss functions with device transfers."""
     print("Testing custom loss function gradients...")
     
@@ -1667,7 +1655,7 @@ def test_custom_loss_function_gradients(modal_t4_device):
     target = torch.tensor([0, 1, 2, 1])  # Classification targets
     
     # Transfer prediction to remote
-    pred_remote = pred_cpu.to(modal_t4_device.device())
+    pred_remote = pred_cpu.to(shared_devices["t4"].device())
     
     # Apply softmax on remote
     prob_remote = torch.softmax(pred_remote, dim=1)

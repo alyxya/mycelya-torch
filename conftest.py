@@ -17,17 +17,6 @@ import logging
 log = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="session")
-def modal_t4_device():
-    """
-    Session-scoped fixture providing a shared Modal T4 device.
-
-    The device is created once per test session and reused across all tests.
-    This reduces GPU resource usage by sharing device instances across tests.
-    """
-    machine = torch_remote.create_modal_machine("T4")
-    yield machine
-    # Cleanup if needed (device cleanup is typically handled by torch_remote)
 
 
 @pytest.fixture(scope="session")
@@ -102,7 +91,7 @@ def sample_tensors():
 
 
 @pytest.fixture
-def device_tensors(modal_t4_device, sample_tensors):
+def device_tensors(shared_devices, sample_tensors):
     """
     Function-scoped fixture providing tensors already on the remote device.
 
@@ -110,9 +99,10 @@ def device_tensors(modal_t4_device, sample_tensors):
     Note: Function-scoped, so tensors are recreated for each test function.
     """
     remote_tensors = {}
+    t4_device = shared_devices["t4"]
     for name, cpu_tensor in sample_tensors.items():
         try:
-            remote_tensors[name] = cpu_tensor.to(modal_t4_device.device())
+            remote_tensors[name] = cpu_tensor.to(t4_device.device())
         except Exception as e:
             # Some tensor types might not be supported, skip them
             log.warning(f"Could not create remote tensor for {name}: {e}")
