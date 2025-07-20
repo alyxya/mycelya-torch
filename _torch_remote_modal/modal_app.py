@@ -300,15 +300,6 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             log.info(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
             log.debug(f"Using storage IDs: {storage_ids}")
             
-            # Special logging for abs operation to understand empty tensor handling
-            if "abs" in op_name:
-                print(f"\n🟡 DEBUGGING abs on Modal side:")
-                print(f"  storage_ids count: {len(storage_ids)}")
-                print(f"  metadata count: {len(tensor_metadata)}")
-                for i, metadata in enumerate(tensor_metadata):
-                    print(f"    metadata[{i}]: shape={metadata['shape']}, is_empty={metadata.get('is_empty', False)}")
-                print(f"🟡 END Modal abs debug\n")
-            
             try:
                 # Get storage mapping
                 storages, lock = self._get_storages()
@@ -383,29 +374,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 
                 log.debug(f"Executing operation with {len(processed_args)} args and {len(tensors)} tensors")
                 
-                # Special tensor shape logging for abs
-                if "abs" in op_name:
-                    print(f"\n📦 MODAL TENSOR SHAPES BEFORE {op_name}:")
-                    for i, tensor in enumerate(tensors):
-                        print(f"  tensor[{i}]: shape={tensor.shape}, numel={tensor.numel()}, device={tensor.device}")
-                    print(f"  processed_args: {[type(arg) for arg in processed_args]}")
-                    print(f"  processed_kwargs: {list(processed_kwargs.keys())}")
-                    if 'out' in processed_kwargs:
-                        out_tensor = processed_kwargs['out']
-                        print(f"    'out' tensor: shape={out_tensor.shape}, numel={out_tensor.numel()}, device={out_tensor.device}")
-                
                 # Execute the operation - results are written directly to pre-allocated tensors
                 result = op(*processed_args, **processed_kwargs)
-                
-                # Special tensor shape logging for abs after operation
-                if "abs" in op_name:
-                    print(f"\n📦 MODAL TENSOR SHAPES AFTER {op_name}:")
-                    for i, tensor in enumerate(tensors):
-                        print(f"  tensor[{i}]: shape={tensor.shape}, numel={tensor.numel()}, device={tensor.device}")
-                    if 'out' in processed_kwargs:
-                        out_tensor = processed_kwargs['out']
-                        print(f"    'out' tensor: shape={out_tensor.shape}, numel={out_tensor.numel()}, device={out_tensor.device}")
-                    print(f"📦 END Modal tensor debug\n")
                 
                 log.info(f"✅ Completed: {op_name} - operation executed on pre-allocated tensors")
                 
