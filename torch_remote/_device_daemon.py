@@ -47,13 +47,12 @@ class RemoteStorageRegistry:
     - storage_id: Identifies remote memory allocation on GPU machines
     - PyTorch tensors: Handle local identity and metadata naturally
     - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
-    - Reference counting: Manages storage lifetime across multiple tensor views
+    - Storage cleanup: Handles remote storage cleanup when tensors are freed
     """
 
     def __init__(self) -> None:
-        # Storage ID tracking - maps storage to device and reference count
+        # Storage ID tracking - maps storage to device
         self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
-        self.storage_id_ref_count: Dict[int, int] = {}  # storage_id -> reference count
 
         # Set for tracking all generated storage IDs to avoid duplicates
         self.generated_storage_ids: Set[int] = set()
@@ -95,7 +94,6 @@ class RemoteStorageRegistry:
 
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
-        self.storage_id_ref_count[storage_id] = 1
 
         # Register the storage with the GPU machine immediately for all allocations
         try:
@@ -138,35 +136,27 @@ class RemoteStorageRegistry:
 
 
     def free_storage_with_id(self, storage_id: int) -> bool:
-        """Free storage by storage ID with reference counting and remote cleanup"""
+        """Free storage by storage ID and perform remote cleanup"""
         storage_id = int(storage_id)
         if storage_id == 0:  # Empty storage
             return True
 
-        # Decrement reference count
-        if storage_id in self.storage_id_ref_count:
-            self.storage_id_ref_count[storage_id] -= 1
+        # Get device index before cleanup
+        device_idx = self.storage_id_to_device.get(storage_id)
+        
+        if storage_id in self.storage_id_to_device:
+            # Clean up storage tracking
+            self.storage_id_to_device.pop(storage_id, None)
+            self.generated_storage_ids.discard(storage_id)
 
-            # Only cleanup remote storage if this is the last reference
-            if self.storage_id_ref_count[storage_id] <= 0:
-                # Get device index before cleanup
-                device_idx = self.storage_id_to_device.get(storage_id)
-
-                # Clean up storage tracking
-                del self.storage_id_ref_count[storage_id]
-                self.storage_id_to_device.pop(storage_id, None)
-                self.generated_storage_ids.discard(storage_id)
-
-                # Call remote cleanup
-                if device_idx is not None:
-                    log.info(f"Last reference to storage {storage_id} freed, initiating remote cleanup")
-                    self._cleanup_remote_storage(storage_id, device_idx)
-                else:
-                    log.info(f"No device index found for storage {storage_id}, skipping remote cleanup")
-
-                log.info(f"Freed storage ID {storage_id}")
+            # Call remote cleanup
+            if device_idx is not None:
+                log.info(f"Storage {storage_id} freed, initiating remote cleanup")
+                self._cleanup_remote_storage(storage_id, device_idx)
             else:
-                log.info(f"Storage {storage_id} still has {self.storage_id_ref_count[storage_id]} references, skipping cleanup")
+                log.info(f"No device index found for storage {storage_id}, skipping remote cleanup")
+
+            log.info(f"Freed storage ID {storage_id}")
         else:
             log.warning(f"Attempted to free unknown storage {storage_id}")
 
@@ -260,7 +250,6 @@ class Driver:
     def _cleanup(self) -> None:
         """Clean up storage ID mappings on exit"""
         self.registry_obj.storage_id_to_device.clear()
-        self.registry_obj.storage_id_ref_count.clear()
         self.registry_obj.generated_storage_ids.clear()
 
     def exec(self, cmd: str, *args: Any) -> Any:
