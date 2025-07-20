@@ -974,7 +974,7 @@ def test_simple_mse_loss_gradient(modal_t4_device):
     # Verify loss properties
     assert loss.device == modal_t4_device.device()
     assert loss.requires_grad is True
-    print(f"Loss shape: {loss.shape}, value: {loss.item()}")
+    print(f"Loss shape: {loss.shape}, value: {loss.cpu().item()}")
 
     # Backward pass: compute gradients
     loss.backward()
