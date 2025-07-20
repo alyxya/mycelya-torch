@@ -12,15 +12,6 @@ CPU and a remote Modal device, and compares the results.
 import torch
 import torch.nn.functional as F
 import torch_remote
-import logging
-
-# Enable debug logging for our specific modules
-handler = logging.StreamHandler()
-handler.setLevel(logging.DEBUG)
-logging.getLogger('torch_remote._aten_impl').setLevel(logging.DEBUG)
-logging.getLogger('torch_remote._aten_impl').addHandler(handler)
-logging.getLogger('torch_remote._remote_orchestrator').setLevel(logging.DEBUG)
-logging.getLogger('torch_remote._remote_orchestrator').addHandler(handler)
 
 
 def main():
@@ -43,7 +34,8 @@ def main():
     # Compute MSE loss on CPU
     print("Computing MSE loss on CPU...")
     mse_loss_cpu = F.mse_loss(predictions_cpu, targets_cpu)
-    print(f"CPU MSE Loss: {mse_loss_cpu.item():.6f}")
+    mse_loss_value = mse_loss_cpu.item()  # Save original CPU value for comparison
+    print(f"CPU MSE Loss: {mse_loss_value:.6f}")
     
     # Backward pass on CPU
     mse_loss_cpu.backward()

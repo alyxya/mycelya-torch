@@ -123,7 +123,10 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
   }
 };
 
-// Hooks will be registered explicitly from remote_extension.cpp
+static bool register_hook_flag [[maybe_unused]] = []() {
+  at::RegisterPrivateUse1HooksInterface(new RemoteHooksInterface());
+  return true;
+}();
 
 // Device guard registration
 struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
@@ -259,15 +262,6 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
 C10_REGISTER_GUARD_IMPL(PrivateUse1, RemoteGuardImpl);
 
 } // namespace
-
-// Function to explicitly register hooks - called from Python extension init
-void register_remote_hooks() {
-  static bool hooks_registered = false;
-  if (!hooks_registered) {
-    at::RegisterPrivateUse1HooksInterface(new RemoteHooksInterface());
-    hooks_registered = true;
-  }
-}
 
 // Setter for the python driver_exec function
 void set_driver_exec(PyObject* driver_exec_fn) {

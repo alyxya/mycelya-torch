@@ -114,27 +114,23 @@ def _check_and_fix_output_tensor_metadata(
             # Shapes match, no resize needed
             return False
         
-        print(f"🔧 METADATA MISMATCH for {op_name}:")
-        print(f"  Actual output shape: {actual_shape} (numel={actual_numel})")
-        print(f"  Expected output shape: {expected_shape} (numel={expected_numel})")
+        log.debug(f"Metadata mismatch for {op_name}: actual {actual_shape} vs expected {expected_shape}")
         
         # Decide resize strategy based on current tensor size
         if actual_numel == 0:
             # Option 1: Empty tensor - resize BEFORE operation
-            print(f"  Strategy: PRE-RESIZE (empty tensor)")
             output_tensor.resize_(expected_shape)
-            print(f"  ✅ Resized output tensor to {output_tensor.shape}")
+            log.debug(f"Pre-resized output tensor to {output_tensor.shape}")
             return True
         else:
             # Option 2: Non-empty tensor - will resize AFTER operation
-            print(f"  Strategy: POST-RESIZE (non-empty tensor) - will resize after operation")
             # Store expected metadata for post-operation resize
             output_tensor._expected_post_op_shape = expected_shape
             output_tensor._expected_post_op_numel = expected_numel
             return False  # Don't pre-resize, but mark for post-resize
             
     except Exception as e:
-        print(f"⚠️ Error during metadata check for {op_name}: {e}")
+        log.debug(f"Error during metadata check for {op_name}: {e}")
         return False
 
 
@@ -186,19 +182,16 @@ def _check_and_apply_post_operation_resize(
         
         # Check if resize is still needed
         if tuple(actual_shape) != tuple(expected_shape):
-            print(f"🔧 POST-OP METADATA MISMATCH for {op_name}:")
-            print(f"  Actual result shape: {actual_shape} (numel={actual_numel})")
-            print(f"  Expected result shape: {expected_shape} (numel={expected_numel})")
+            log.debug(f"Post-op metadata mismatch for {op_name}: actual {actual_shape} vs expected {expected_shape}")
             
             # Apply post-operation resize 
-            print(f"  🔄 Applying post-operation resize...")
             try:
                 # Now that we have a registered resize_ implementation, this should
                 # use our _resize_remote function and bypass the kernel fallback
                 output_tensor.resize_(expected_shape)
-                print(f"  ✅ Post-operation resize completed: {output_tensor.shape}")
+                log.debug(f"Post-operation resize completed: {output_tensor.shape}")
             except Exception as resize_error:
-                print(f"  ❌ Post-operation resize failed: {resize_error}")
+                log.debug(f"Post-operation resize failed: {resize_error}")
                 # Continue without resize rather than failing the entire operation
     
     return result
@@ -440,26 +433,10 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
     op_name = op.overloadpacket._qualified_op_name
     # Normal logging
     log.info(f"Operation: {op_name}, Args: {len(args)}, Kwargs: {list(kwargs.keys())}")
-    if 'metadata_fixed' in locals() and metadata_fixed:
-        print(f"  📐 Output tensor metadata was corrected for {op_name}")
     
     # Check and fix output tensor metadata if needed
     metadata_fixed = _check_and_fix_output_tensor_metadata(op, args, kwargs)
     
-    # DEBUG: For resize operations, log what's being resized
-    if "resize" in op_name:
-        try:
-            log.debug(f"RESIZE DEBUG: Original tensor shape: {args[0].shape if len(args) > 0 and isinstance(args[0], torch.Tensor) else 'N/A'}")
-            log.debug(f"RESIZE DEBUG: New size (args[1]): {args[1] if len(args) > 1 else 'N/A'}")
-            log.debug(f"RESIZE DEBUG: Args count: {len(args)}")
-            
-            # Print stack trace to see what called this
-            import traceback
-            log.debug(f"RESIZE STACK TRACE:")
-            for line in traceback.format_stack()[-5:]:  # Last 5 frames
-                log.debug(line.strip())
-        except Exception as debug_error:
-            log.debug(f"Error in resize debug logging: {debug_error}")
 
     # Handle operations using pytorch-openreg-2 logic for operation classification
     # but with remote execution for actual computation

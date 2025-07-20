@@ -16,7 +16,6 @@ using storage_id_t = uint64_t;  // Changed from string to integer for efficient 
 
 void set_driver_exec(PyObject* driver_exec_fn);
 py::function get_method(const char* name);
-void register_remote_hooks();
 
 static constexpr char kCreateStorageMethod[] = "create_storage_with_id";
 static constexpr char kFreeStorageMethod[] = "free_storage_with_id";
