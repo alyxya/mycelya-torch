@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 
-from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE, META_DEVICE_TYPE, PRIVATEUSE1_DISPATCH_KEY
+from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE, META_DEVICE_TYPE, PRIVATEUSE1_DISPATCH_KEY, AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY
 
 
 log = logging.getLogger(__name__)
@@ -557,7 +557,7 @@ _remote_lib_aten.impl(
 _remote_lib_aten.impl("item", _remote_item_impl, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
 
 # Also register for AutogradPrivateUse1 to handle tensors with requires_grad=True
-_remote_lib_aten.impl("item", _remote_item_impl, dispatch_key="AutogradPrivateUse1")
+_remote_lib_aten.impl("item", _remote_item_impl, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY)
 # Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
 # so we don't register a Python version to avoid conflicts
 # resize_ is now implemented in C++ (RemoteMem.cpp) following OpenReg pattern
