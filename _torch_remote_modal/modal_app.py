@@ -178,8 +178,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 
                 # If view parameters are provided, create the view and make it contiguous
                 if shape is not None:
-                    # Create tensor from storage with view parameters
-                    tensor = torch.empty(0, device=storage.device).set_(
+                    # Parse dtype string back to torch.dtype
+                    dtype_str = dtype.replace("torch.", "") if dtype else "float32"
+                    torch_dtype = getattr(torch, dtype_str)
+                    
+                    # Create tensor from storage with view parameters (with correct dtype!)
+                    tensor = torch.empty(0, dtype=torch_dtype, device=storage.device).set_(
                         storage, storage_offset, shape, stride or []
                     )
                     # Make contiguous to get only the view's data
