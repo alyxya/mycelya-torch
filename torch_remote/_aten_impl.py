@@ -403,6 +403,66 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     return result
 
 
+def _remote_item_impl(self: torch.Tensor):
+    """Custom implementation of item() for remote tensors.
+    
+    This function efficiently retrieves only the scalar value from the remote device
+    by getting raw bytes and directly converting to the appropriate Python type,
+    avoiding the overhead of creating a full CPU tensor.
+    
+    Args:
+        self: The remote tensor (must be a scalar)
+        
+    Returns:
+        Python scalar value
+    """
+    if self.device.type != REMOTE_DEVICE_TYPE:
+        # Fallback to default implementation for non-remote tensors
+        return torch.ops.aten.item.default(self)
+    
+    # Check that tensor is scalar (replicate PyTorch's exact behavior)
+    if self.numel() != 1:
+        raise RuntimeError(f"a Tensor with {self.numel()} elements cannot be converted to Scalar")
+    
+    # Get scalar value from remote device (optimized for single element)
+    log.info("🔢 Item operation: retrieving scalar value from remote device")
+    
+    # Get storage ID and remote machine
+    storage_id = self.untyped_storage().data_ptr()
+    
+    # Get the remote machine using device registry (same pattern as copy_from_device)
+    from .device import get_device_registry
+    registry = get_device_registry()
+    machine = registry.get_device_by_index(self.device.index)
+    
+    if machine is None:
+        raise RuntimeError(f"No RemoteMachine found for remote device index {self.device.index}")
+    
+    # Get the GPU machine for this device
+    gpu_machine = machine.get_gpu_machine()
+    if gpu_machine is None or not gpu_machine.is_running():
+        raise RuntimeError(f"GPU machine not available for device {machine.machine_id}")
+    
+    # Get serialized tensor data for this scalar
+    tensor_data = gpu_machine.get_storage_data(
+        storage_id,
+        shape=list(self.shape),
+        stride=list(self.stride()),
+        storage_offset=self.storage_offset(),
+        dtype=str(self.dtype)
+    )
+    
+    # Deserialize to CPU tensor and extract scalar value
+    orchestrator = _get_remote_orchestrator()
+    if orchestrator is None:
+        raise RuntimeError("Cannot retrieve scalar value: remote execution not available")
+    
+    cpu_tensor = orchestrator._deserialize_tensor(tensor_data)
+    
+    # Call item() on the CPU tensor to get the Python scalar
+    return cpu_tensor.item()
+
+
 def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout: Optional[torch.layout] = None, device: Optional[Union[torch.device, str, int]] = None, pin_memory: Optional[bool] = None, non_blocking: bool = False, memory_format: Optional[torch.memory_format] = None) -> torch.Tensor:
     """Implementation of tensor.to() for remote tensors with cross-device transfer restriction."""
 
@@ -499,6 +559,10 @@ _remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key=PRIVATEUSE1_DISPATCH_KE
 _remote_lib_aten.impl(
     "set_.source_Tensor", _set_source_tensor, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
 )
+_remote_lib_aten.impl("item", _remote_item_impl, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
+
+# Also register for AutogradPrivateUse1 to handle tensors with requires_grad=True
+_remote_lib_aten.impl("item", _remote_item_impl, dispatch_key="AutogradPrivateUse1")
 # Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
 # so we don't register a Python version to avoid conflicts
 # resize_ is now implemented in C++ (RemoteMem.cpp) following OpenReg pattern
