@@ -63,12 +63,12 @@ To run type checking:
 import torch
 import torch_remote
 
-# Create remote device
-device = torch_remote.create_modal_machine(gpu="A100")
+# Create remote machine
+machine = torch_remote.create_modal_machine(gpu="A100")
 
 # Operations automatically execute on remote GPU
-x = torch.randn(1000, 1000, device=device)
-y = torch.randn(1000, 1000, device=device)
+x = torch.randn(1000, 1000, device=machine.device())
+y = torch.randn(1000, 1000, device=machine.device())
 result = x @ y  # Matrix multiplication on remote A100
 ```
 
