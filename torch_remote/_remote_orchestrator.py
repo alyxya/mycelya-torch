@@ -80,21 +80,21 @@ class RemoteOrchestrator:
     """
 
     def __init__(self):
-        self._device_apps: Dict[str, Any] = {}  # Cache for device-specific GPU machines
+        self._device_apps: Dict[str, Any] = {}  # Cache for device-specific clients
         self._last_heartbeat: Dict[str, float] = {}  # Track last successful communication per device
 
-    def _get_device_gpu_machine(self, machine: "RemoteMachine"):
+    def _get_device_client(self, machine: "RemoteMachine"):
         """Get the active ModalClient for a specific machine."""
-        # Get the pre-started GPU machine from the machine
-        gpu_machine = machine.get_gpu_machine()
+        # Get the pre-started client from the machine
+        client = machine.get_client()
 
-        if gpu_machine is None:
-            raise RuntimeError(f"No GPU machine available for machine {machine.machine_id}")
+        if client is None:
+            raise RuntimeError(f"No client available for machine {machine.machine_id}")
 
-        if not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine for machine {machine.machine_id} is not running")
+        if not client.is_running():
+            raise RuntimeError(f"Client for machine {machine.machine_id} is not running")
 
-        return gpu_machine
+        return client
 
     def execute_remote_aten_operation_efficient(
         self,
@@ -222,8 +222,8 @@ class RemoteOrchestrator:
         Returns:
             The tensor ID
         """
-        gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.create_storage(tensor_data, storage_id)
+        client = self._get_device_client(machine)
+        return client.create_storage(tensor_data, storage_id)
 
     def get_tensor_data_from_remote(self, storage_id: int, device_index: int) -> torch.Tensor:
         """
@@ -241,8 +241,8 @@ class RemoteOrchestrator:
         if machine is None:
             raise RuntimeError(f"No machine found for index {device_index}")
 
-        gpu_machine = self._get_device_gpu_machine(machine)
-        tensor_data = gpu_machine.get_storage_data(storage_id)
+        client = self._get_device_client(machine)
+        tensor_data = client.get_storage_data(storage_id)
         return self._deserialize_tensor(tensor_data)
 
     def execute_remote_aten_operation(
@@ -266,8 +266,8 @@ class RemoteOrchestrator:
             kwargs: Operation keyword arguments
             machine: Target machine
         """
-        gpu_machine = self._get_device_gpu_machine(machine)
-        gpu_machine.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
+        client = self._get_device_client(machine)
+        client.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
 
     def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
@@ -280,8 +280,8 @@ class RemoteOrchestrator:
         Returns:
             True if removed, False if not found
         """
-        gpu_machine = self._get_device_gpu_machine(machine)
-        return gpu_machine.remove_storage(storage_id)
+        client = self._get_device_client(machine)
+        return client.remove_storage(storage_id)
 
     def check_tensor_exists(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
@@ -295,7 +295,7 @@ class RemoteOrchestrator:
             True if tensor exists, False otherwise
         """
         try:
-            gpu_machine = self._get_device_gpu_machine(machine)
+            client = self._get_device_client(machine)
             # Since we removed get_tensor_metadata, assume tensor exists if machine is running
             self._update_heartbeat(machine.machine_id)
             return True
@@ -329,12 +329,12 @@ class RemoteOrchestrator:
             True if connected, False otherwise
         """
         try:
-            gpu_machine = self._get_device_gpu_machine(machine)
-            if not gpu_machine.is_running():
+            client = self._get_device_client(machine)
+            if not client.is_running():
                 return False
 
             # Try to get registry stats as a ping
-            stats = gpu_machine.get_registry_stats()
+            stats = client.get_registry_stats()
             self._update_heartbeat(device.machine_id)
             return True
         except Exception:
@@ -359,11 +359,11 @@ class RemoteOrchestrator:
             True if reconnection successful, False otherwise
         """
         try:
-            gpu_machine = device.get_gpu_machine()
-            if gpu_machine:
-                # Stop and restart the machine
-                gpu_machine.stop()
-                gpu_machine.start()
+            client = device.get_client()
+            if client:
+                # Stop and restart the client
+                client.stop()
+                client.start()
 
                 # Test connection
                 if self.is_device_connected(device):
@@ -435,17 +435,17 @@ class RemoteOrchestrator:
         if machine is None:
             raise RuntimeError(f"No RemoteMachine found for remote device index {remote_tensor.device.index}")
 
-        # Get the GPU machine for this machine
-        gpu_machine = machine.get_gpu_machine()
-        if gpu_machine is None or not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine not available for machine {machine.machine_id}")
+        # Get the client for this machine
+        client = machine.get_client()
+        if client is None or not client.is_running():
+            raise RuntimeError(f"Client not available for machine {machine.machine_id}")
 
         # Get tensor data using storage ID
         storage_id = remote_tensor.untyped_storage().data_ptr()
 
-        # Use GPU machine to get tensor data by ID with view information
+        # Use client to get tensor data by ID with view information
         # Pass tensor metadata so remote side can serialize just the view's data
-        tensor_data = gpu_machine.get_storage_data(
+        tensor_data = client.get_storage_data(
             storage_id,
             shape=list(remote_tensor.shape),
             stride=list(remote_tensor.stride()),

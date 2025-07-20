@@ -61,13 +61,13 @@ class RemoteMachine:
         self.machine_id = self._generate_machine_id()
         self.config = kwargs
         self._initialized = False
-        self._gpu_machine = None
+        self._client = None
 
         # Validate GPU type is supported by provider
         self._validate_gpu_support()
 
-        # Create and start the GPU machine
-        self._create_and_start_gpu_machine()
+        # Create and start the client
+        self._create_and_start_client()
 
     def _generate_machine_id(self) -> str:
         """Generate a human-readable machine ID with provider and GPU info."""
@@ -90,38 +90,38 @@ class RemoteMachine:
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
 
-    def _create_and_start_gpu_machine(self) -> None:
-        """Create and start the GPU machine for this device."""
+    def _create_and_start_client(self) -> None:
+        """Create and start the client for this device."""
         try:
             if self.provider == BackendProvider.MODAL:
                 # Import here to avoid circular imports
                 from .backends.modal.client import create_modal_app_for_gpu
-                self._gpu_machine = create_modal_app_for_gpu(self.gpu_type.value, self.machine_id)
-                self._gpu_machine.start()
-                log.info(f"Started GPU machine: {self._gpu_machine}")
+                self._client = create_modal_app_for_gpu(self.gpu_type.value, self.machine_id)
+                self._client.start()
+                log.info(f"Started client: {self._client}")
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
         except ImportError as e:
             log.warning(f"Remote execution not available: {e}")
             # Continue without remote execution capability
         except Exception as e:
-            log.error(f"Failed to start GPU machine: {e}")
+            log.error(f"Failed to start client: {e}")
             # Continue without remote execution capability
 
-    def get_gpu_machine(self) -> Optional[Any]:
-        """Get the active GPU machine for this device."""
-        return self._gpu_machine
+    def get_client(self) -> Optional[Any]:
+        """Get the active client for this device."""
+        return self._client
 
-    def stop_gpu_machine(self) -> None:
-        """Stop the GPU machine for this device."""
-        if self._gpu_machine and self._gpu_machine.is_running():
+    def stop_client(self) -> None:
+        """Stop the client for this device."""
+        if self._client and self._client.is_running():
             try:
-                self._gpu_machine.stop()
-                log.info(f"Stopped GPU machine: {self.machine_id}")
+                self._client.stop()
+                log.info(f"Stopped client: {self.machine_id}")
             except Exception as e:
                 # Don't log full stack traces during shutdown
-                log.warning(f"Error stopping GPU machine {self.machine_id}: {type(e).__name__}")
-        self._gpu_machine = None
+                log.warning(f"Error stopping client {self.machine_id}: {type(e).__name__}")
+        self._client = None
 
     def __str__(self) -> str:
         return f"RemoteMachine(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.machine_id})"
@@ -234,11 +234,11 @@ class DeviceRegistry:
         self._next_index = 0
 
     def shutdown_all_machines(self) -> None:
-        """Stop all GPU machines without clearing the registry."""
+        """Stop all clients without clearing the registry."""
         for machine in self._devices.values():
-            if machine._gpu_machine and machine._gpu_machine.is_running():
+            if machine._client and machine._client.is_running():
                 try:
-                    machine._gpu_machine.stop()
+                    machine._client.stop()
                 except Exception:
                     # Silently ignore errors during shutdown
                     pass
@@ -286,7 +286,7 @@ def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine:
     _device_registry.register_device(machine)
 
     # Register atexit cleanup for this specific machine
-    atexit.register(machine.stop_gpu_machine)
+    atexit.register(machine.stop_client)
 
     return machine
 

@@ -36,7 +36,7 @@ class ClientInterface(ABC):
         """
         Start the cloud provider's compute resources.
 
-        This method should initialize and start the remote GPU machine,
+        This method should initialize and start the remote client,
         making it ready to accept operations.
         """
         pass
@@ -46,7 +46,7 @@ class ClientInterface(ABC):
         """
         Stop the cloud provider's compute resources.
 
-        This method should cleanly shutdown the remote GPU machine
+        This method should cleanly shutdown the remote client
         and release any associated resources.
         """
         pass

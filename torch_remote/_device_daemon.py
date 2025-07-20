@@ -44,7 +44,7 @@ class RemoteStorageRegistry:
     Simplified registry to track remote storage IDs only.
 
     Architecture:
-    - storage_id: Identifies remote memory allocation on GPU machines
+    - storage_id: Identifies remote memory allocation on clients
     - PyTorch tensors: Handle local identity and metadata naturally
     - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
     - Storage cleanup: Handles remote storage cleanup when tensors are freed
@@ -95,7 +95,7 @@ class RemoteStorageRegistry:
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
 
-        # Register the storage with the GPU machine immediately for all allocations
+        # Register the storage with the client immediately for all allocations
         try:
                 # Import here to avoid circular imports
                 from ._remote_orchestrator import remote_orchestrator
@@ -107,8 +107,8 @@ class RemoteStorageRegistry:
                     device = registry.get_device_by_index(device_index)
 
                     if device is not None:
-                        gpu_machine = device.get_gpu_machine()
-                        if gpu_machine and gpu_machine.is_running():
+                        client = device.get_client()
+                        if client and client.is_running():
                             # Create tensor data of the right size (handle 0-byte case)
                             if nbytes == 0:
                                 # For 0-byte allocations, create a minimal empty tensor
@@ -121,10 +121,10 @@ class RemoteStorageRegistry:
                             torch.save(empty_tensor, buffer)
                             tensor_data = buffer.getvalue()
 
-                            gpu_machine.create_storage(tensor_data, storage_id)
-                            log.info(f"Registered storage {storage_id} with GPU machine ({nbytes} bytes)")
+                            client.create_storage(tensor_data, storage_id)
+                            log.info(f"Registered storage {storage_id} with client ({nbytes} bytes)")
         except Exception as e:
-            log.warning(f"Failed to register storage {storage_id} with GPU machine: {e}")
+            log.warning(f"Failed to register storage {storage_id} with client: {e}")
 
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return True
@@ -430,17 +430,17 @@ class Driver:
                 log.warning(f"No device found for index {device_idx} during storage {storage_id} resize")
                 return False
             
-            # Get GPU machine and call resize_storage
-            gpu_machine = device.get_gpu_machine()
-            if gpu_machine and gpu_machine.is_running():
-                success = gpu_machine.resize_storage(storage_id, new_shape, dtype)
+            # Get client and call resize_storage
+            client = device.get_client()
+            if client and client.is_running():
+                success = client.resize_storage(storage_id, new_shape, dtype)
                 if success:
                     log.info(f"✅ Successfully resized remote storage {storage_id} to shape {new_shape}")
                 else:
                     log.warning(f"❌ Remote resize returned false for storage {storage_id}")
                 return success
             else:
-                log.warning(f"GPU machine not available for storage {storage_id} resize")
+                log.warning(f"Client not available for storage {storage_id} resize")
                 return False
                 
         except Exception as e:

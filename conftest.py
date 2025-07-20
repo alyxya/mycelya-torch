@@ -68,9 +68,9 @@ def clean_registry():
     # Re-register any session devices that were previously registered
     # This preserves session fixture devices while giving a clean slate for the test
     for device in existing_devices:
-        # Only re-register if this looks like a session device (has a running GPU machine)
+        # Only re-register if this looks like a session device (has a running client)
         try:
-            if hasattr(device, "get_gpu_machine") and device.get_gpu_machine() and device.get_gpu_machine().is_running():
+            if hasattr(device, "get_client") and device.get_client() and device.get_client().is_running():
                 registry.register_device(device)
         except Exception:
             # If there's any issue checking device state, skip re-registration

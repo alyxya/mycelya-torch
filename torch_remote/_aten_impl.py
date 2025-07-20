@@ -81,7 +81,7 @@ VIEW_OPERATIONS = {
 def _get_remote_orchestrator() -> Optional[Any]:
     """Get the global remote orchestrator instance.
 
-    The remote orchestrator handles communication with remote GPU machines
+    The remote orchestrator handles communication with remote clients
     and coordinates tensor operations across devices. This function
     imports the orchestrator and gracefully handles cases where remote
     execution is not available.
@@ -268,18 +268,18 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         if device is None:
             raise RuntimeError(f"No RemoteMachine found for remote device index {from_.device.index}")
 
-        # Get the GPU machine for this device
-        gpu_machine = device.get_gpu_machine()
-        if gpu_machine is None or not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
+        # Get the client for this device
+        client = device.get_client()
+        if client is None or not client.is_running():
+            raise RuntimeError(f"Client not available for device {device.machine_id}")
 
         # Get storage data using storage ID
         storage_id = from_.untyped_storage().data_ptr()
         log.info(f"Copying storage ID {storage_id} from remote to CPU")
 
-        # Use GPU machine to get tensor data by storage ID with view information
+        # Use client to get tensor data by storage ID with view information
         # Pass tensor metadata so remote side can serialize just the view's data
-        tensor_data = gpu_machine.get_storage_data(
+        tensor_data = client.get_storage_data(
             storage_id,
             shape=list(from_.shape),
             stride=list(from_.stride()),
@@ -320,10 +320,10 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         if device is None:
             raise RuntimeError(f"No RemoteMachine found for remote device index {to_.device.index}")
 
-        # Get the GPU machine for this device
-        gpu_machine = device.get_gpu_machine()
-        if gpu_machine is None or not gpu_machine.is_running():
-            raise RuntimeError(f"GPU machine not available for device {device.machine_id}")
+        # Get the client for this device
+        client = device.get_client()
+        if client is None or not client.is_running():
+            raise RuntimeError(f"Client not available for device {device.machine_id}")
 
         # Send tensor data using storage ID
         storage_id = to_.untyped_storage().data_ptr()
@@ -331,9 +331,9 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
 
         # Serialize the CPU tensor
         tensor_data = orchestrator._serialize_tensor(from_)
-        # Use GPU machine to create/update tensor with specific ID
+        # Use client to create/update tensor with specific ID
         # This will overwrite any existing empty tensor with the actual data
-        created_id = gpu_machine.create_storage(tensor_data, storage_id)
+        created_id = client.create_storage(tensor_data, storage_id)
         log.info(f"Successfully created/updated remote tensor with ID {created_id}")
         return to_
     else:
@@ -438,13 +438,13 @@ def _remote_item_impl(self: torch.Tensor):
     if machine is None:
         raise RuntimeError(f"No RemoteMachine found for remote device index {self.device.index}")
     
-    # Get the GPU machine for this device
-    gpu_machine = machine.get_gpu_machine()
-    if gpu_machine is None or not gpu_machine.is_running():
-        raise RuntimeError(f"GPU machine not available for device {machine.machine_id}")
+    # Get the client for this device
+    client = machine.get_client()
+    if client is None or not client.is_running():
+        raise RuntimeError(f"Client not available for device {machine.machine_id}")
     
     # Get serialized tensor data for this scalar
-    tensor_data = gpu_machine.get_storage_data(
+    tensor_data = client.get_storage_data(
         storage_id,
         shape=list(self.shape),
         stride=list(self.stride()),

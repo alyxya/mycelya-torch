@@ -16,7 +16,7 @@ from ..client_interface import ClientInterface
 log = logging.getLogger(__name__)
 
 # Cache for ModalClient instances
-_gpu_machines: Dict[str, "ModalClient"] = {}
+_clients: Dict[str, "ModalClient"] = {}
 
 
 class ModalClient(ClientInterface):
@@ -197,12 +197,12 @@ def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> ModalClient:
         ModalClient instance for communicating with Modal GPU infrastructure
     """
     # Check cache first
-    if machine_id in _gpu_machines:
-        return _gpu_machines[machine_id]
+    if machine_id in _clients:
+        return _clients[machine_id]
 
     # Create new client and cache it
     client = ModalClient(gpu_type, machine_id)
-    _gpu_machines[machine_id] = client
+    _clients[machine_id] = client
     return client
 
 
@@ -227,5 +227,5 @@ def get_modal_app_for_device(device) -> ModalClient:
 
 def clear_app_cache():
     """Clear the app cache."""
-    global _gpu_machines
-    _gpu_machines.clear()
+    global _clients
+    _clients.clear()
