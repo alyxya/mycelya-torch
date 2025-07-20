@@ -193,19 +193,19 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 return buffer.getvalue()
 
         @modal.method()
-        def resize_storage(self, storage_id: int, new_shape: List[int], dtype: str) -> bool:
+        def resize_storage(self, storage_id: int, new_bytes: int) -> bool:
             """
-            Resize a storage to accommodate a new tensor shape.
+            Resize a storage to accommodate new byte size.
             
             This handles the case where resize_ needs more storage space than currently allocated.
+            Only resizes if new_bytes > current storage size.
             
             Args:
                 storage_id: The storage ID to resize
-                new_shape: The new shape for the tensor
-                dtype: The tensor data type
+                new_bytes: The new size in bytes
                 
             Returns:
-                True if resize succeeded, False if storage not found
+                True if resize succeeded, False if storage not found or new_bytes <= current size
             """
             import torch
             
@@ -218,33 +218,38 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     return False
                 
                 old_storage = storages[storage_id]
+                current_bytes = old_storage.nbytes()
                 
-                # Parse dtype string back to torch.dtype
-                dtype_str = dtype.replace("torch.", "")
-                torch_dtype = getattr(torch, dtype_str)
+                # Check if resize is actually needed (should be bigger)
+                if new_bytes <= current_bytes:
+                    log.debug(f"Storage {storage_id} resize skipped: new_bytes ({new_bytes}) <= current_bytes ({current_bytes})")
+                    return True  # No-op, but success
                 
-                # Calculate new storage size needed
-                new_numel = 1
-                for dim in new_shape:
-                    new_numel *= dim
-                
-                # Create new storage with adequate size
-                # We'll preserve existing data if the new tensor is larger
                 device = old_storage.device
                 
-                # Create a new tensor with the new shape
-                new_tensor = torch.empty(new_shape, dtype=torch_dtype, device=device)
+                # Allocate new storage with the bigger size
+                new_storage = torch.UntypedStorage(new_bytes, device=device)
                 
-                # If we can, copy over the old data
-                old_tensor = torch.empty(0, dtype=torch_dtype, device=device).set_(old_storage)
-                if old_tensor.numel() > 0 and new_tensor.numel() > 0:
-                    # Copy as much data as possible from old to new
-                    copy_numel = min(old_tensor.numel(), new_tensor.numel())
-                    new_tensor.view(-1)[:copy_numel] = old_tensor.view(-1)[:copy_numel]
+                # Copy old storage bytes into the beginning of new storage
+                if current_bytes > 0:
+                    # Create byte views of both storages for copying
+                    old_bytes = old_storage.data_ptr()
+                    new_bytes_ptr = new_storage.data_ptr()
+                    
+                    # Use torch.from_buffer to create tensors from raw bytes for copying
+                    old_byte_tensor = torch.frombuffer(
+                        old_storage, dtype=torch.uint8, count=current_bytes
+                    )
+                    new_byte_tensor = torch.frombuffer(
+                        new_storage, dtype=torch.uint8, count=new_bytes
+                    )
+                    
+                    # Copy old data to beginning of new storage
+                    new_byte_tensor[:current_bytes] = old_byte_tensor
                 
                 # Replace the storage
-                storages[storage_id] = new_tensor.untyped_storage()
-                log.info(f"🔄 Resized storage {storage_id} to shape {new_shape}")
+                storages[storage_id] = new_storage
+                log.info(f"🔄 Resized storage {storage_id} from {current_bytes} to {new_bytes} bytes")
                 return True
 
         @modal.method()

@@ -99,13 +99,8 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
       try {
         py::gil_scoped_acquire acquire;
         
-        // Call Python function to resize remote storage
-        // For simplicity, assume float32 (4 bytes per element) - this could be enhanced
-        size_t new_elements = new_bytes / 4;  // Assume float32
-        py::list new_shape = py::cast(std::vector<int64_t>{static_cast<int64_t>(new_elements)});
-        
-        // Call resize_storage on the appropriate backend
-        auto resize_result = get_method("resize_storage_by_id")(storage_id, new_shape, "float32");
+        // Call Python function to resize remote storage with byte count directly
+        auto resize_result = get_method("resize_storage_by_id")(storage_id, static_cast<int64_t>(new_bytes));
         bool success = resize_result.cast<bool>();
         
         if (success) {
