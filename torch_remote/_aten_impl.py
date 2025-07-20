@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import logging
+import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -10,6 +11,197 @@ from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE, META_DEVICE_TYPE, PR
 
 
 log = logging.getLogger(__name__)
+
+# Thread-local storage to track if we're in meta execution
+_thread_local = threading.local()
+
+def is_in_meta_execution() -> bool:
+    """Check if we're currently executing operations for meta tensor inference."""
+    return getattr(_thread_local, 'in_meta_execution', False)
+
+def set_meta_execution(value: bool) -> None:
+    """Set the meta execution flag."""
+    _thread_local.in_meta_execution = value
+
+
+def _check_and_fix_output_tensor_metadata(
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any]
+) -> bool:
+    """
+    Check if output tensor metadata matches expected metadata from meta execution.
+    If not, resize the output tensor appropriately.
+    
+    Returns:
+        True if a resize was performed, False otherwise
+    """
+    # Only handle operations with 'out' parameter
+    if "out" not in kwargs:
+        return False
+        
+    output_tensor = kwargs["out"]
+    if not isinstance(output_tensor, torch.Tensor) or output_tensor.device.type != REMOTE_DEVICE_TYPE:
+        return False
+    
+    op_name = op.overloadpacket._qualified_op_name
+    
+    try:
+        # Run meta execution to determine expected output metadata
+        meta_args = []
+        for arg in args:
+            if isinstance(arg, torch.Tensor):
+                meta_tensor = torch.empty(
+                    arg.shape,
+                    dtype=arg.dtype,
+                    device='meta'
+                )
+                if arg.stride() != meta_tensor.stride():
+                    meta_tensor = torch.as_strided(
+                        meta_tensor,
+                        arg.shape,
+                        arg.stride(),
+                        arg.storage_offset()
+                    )
+                meta_args.append(meta_tensor)
+            else:
+                meta_args.append(arg)
+        
+        # Create meta kwargs without the 'out' parameter
+        meta_kwargs = {}
+        for key, value in kwargs.items():
+            if key == "out":
+                continue  # Skip 'out' parameter for meta execution
+            elif isinstance(value, torch.Tensor):
+                meta_tensor = torch.empty(
+                    value.shape,
+                    dtype=value.dtype,
+                    device='meta'
+                )
+                if value.stride() != meta_tensor.stride():
+                    meta_tensor = torch.as_strided(
+                        meta_tensor,
+                        value.shape,
+                        value.stride(),
+                        value.storage_offset()
+                    )
+                meta_kwargs[key] = meta_tensor
+            else:
+                meta_kwargs[key] = value
+        
+        # Execute on meta device to get expected output metadata
+        # We need to call the non-out variant to get the expected shape
+        set_meta_execution(True)
+        try:
+            with torch.device('meta'):
+                # For .out variants, call the base operation without 'out' parameter
+                if op._overloadname == "out":
+                    # Get the base operation (without .out)
+                    base_op = op.overloadpacket.default
+                    expected_result = base_op(*meta_args, **meta_kwargs)
+                else:
+                    expected_result = op(*meta_args, **meta_kwargs)
+        finally:
+            set_meta_execution(False)
+        
+        # Compare actual vs expected metadata
+        actual_shape = output_tensor.shape
+        expected_shape = expected_result.shape
+        actual_numel = output_tensor.numel()
+        expected_numel = expected_result.numel()
+        
+        if tuple(actual_shape) == tuple(expected_shape):
+            # Shapes match, no resize needed
+            return False
+        
+        print(f"🔧 METADATA MISMATCH for {op_name}:")
+        print(f"  Actual output shape: {actual_shape} (numel={actual_numel})")
+        print(f"  Expected output shape: {expected_shape} (numel={expected_numel})")
+        
+        # Decide resize strategy based on current tensor size
+        if actual_numel == 0:
+            # Option 1: Empty tensor - resize BEFORE operation
+            print(f"  Strategy: PRE-RESIZE (empty tensor)")
+            output_tensor.resize_(expected_shape)
+            print(f"  ✅ Resized output tensor to {output_tensor.shape}")
+            return True
+        else:
+            # Option 2: Non-empty tensor - will resize AFTER operation
+            print(f"  Strategy: POST-RESIZE (non-empty tensor) - will resize after operation")
+            # Store expected metadata for post-operation resize
+            output_tensor._expected_post_op_shape = expected_shape
+            output_tensor._expected_post_op_numel = expected_numel
+            return False  # Don't pre-resize, but mark for post-resize
+            
+    except Exception as e:
+        print(f"⚠️ Error during metadata check for {op_name}: {e}")
+        return False
+
+
+def _check_and_apply_post_operation_resize(
+    op: torch._ops.OpOverload,
+    result: Any,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any]
+) -> Any:
+    """
+    Check if any output tensors need post-operation resizing and apply if needed.
+    
+    This handles cases where non-empty tensors had size mismatches and were marked
+    for post-operation resize during the pre-operation metadata check.
+    
+    Args:
+        op: The operation that was executed
+        result: The result of the operation
+        args: Original operation arguments
+        kwargs: Original operation keyword arguments
+        
+    Returns:
+        The result, potentially with resized tensors
+    """
+    op_name = op.overloadpacket._qualified_op_name
+    
+    # Check if any output tensor was marked for post-operation resize
+    output_tensor = None
+    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
+        output_tensor = kwargs["out"]
+    elif isinstance(result, torch.Tensor):
+        output_tensor = result
+    
+    if output_tensor is None:
+        return result
+        
+    # Check if this tensor was marked for post-operation resize
+    if (hasattr(output_tensor, '_expected_post_op_shape') and 
+        hasattr(output_tensor, '_expected_post_op_numel')):
+        
+        expected_shape = output_tensor._expected_post_op_shape
+        expected_numel = output_tensor._expected_post_op_numel
+        actual_shape = output_tensor.shape
+        actual_numel = output_tensor.numel()
+        
+        # Clean up the temporary attributes
+        delattr(output_tensor, '_expected_post_op_shape')
+        delattr(output_tensor, '_expected_post_op_numel')
+        
+        # Check if resize is still needed
+        if tuple(actual_shape) != tuple(expected_shape):
+            print(f"🔧 POST-OP METADATA MISMATCH for {op_name}:")
+            print(f"  Actual result shape: {actual_shape} (numel={actual_numel})")
+            print(f"  Expected result shape: {expected_shape} (numel={expected_numel})")
+            
+            # Apply post-operation resize 
+            print(f"  🔄 Applying post-operation resize...")
+            try:
+                # Now that we have a registered resize_ implementation, this should
+                # use our _resize_remote function and bypass the kernel fallback
+                output_tensor.resize_(expected_shape)
+                print(f"  ✅ Post-operation resize completed: {output_tensor.shape}")
+            except Exception as resize_error:
+                print(f"  ❌ Post-operation resize failed: {resize_error}")
+                # Continue without resize rather than failing the entire operation
+    
+    return result
 
 from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending
@@ -82,11 +274,18 @@ def _update_tensor_metadata_from_meta_execution(
         
         # Execute on meta device to see what the metadata should be
         try:
+            # Mark that we're in meta execution to prevent remote device allocation
+            _thread_local.in_meta_execution = True
+            
             with torch.device('meta'):
                 meta_result = op(*meta_args, **meta_kwargs)
+                
         except Exception as meta_exec_error:
             log.debug(f"Meta execution failed for {op.overloadpacket._qualified_op_name}: {meta_exec_error}")
             return  # Skip metadata update if meta execution fails
+        finally:
+            # Clear the meta execution flag
+            _thread_local.in_meta_execution = False
         
         # If it's an inplace operation, check the first argument for changes
         if op._schema.is_mutable and not kwargs.get("out"):
@@ -228,26 +427,39 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
 
 def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
     log.info("Calling kernel %s", op)
+    # Kernel fallback for remote operations
     
-    # DEBUG: Log operation details and kwargs
+    # Skip remote execution if we're in meta execution mode
+    # Meta execution should only create meta tensors, never remote tensors
+    if is_in_meta_execution():
+        log.debug(f"Skipping remote execution for {op.overloadpacket._qualified_op_name} - in meta execution mode")
+        # Fall back to CPU execution for meta operations
+        return op.redispatch(torch._C.DispatchKey.CPU, *args, **kwargs)
+    
+    # Get operation name
     op_name = op.overloadpacket._qualified_op_name
-    log.debug(f"Operation: {op_name}, Kwargs: {list(kwargs.keys())}")
-    if "out" in kwargs:
-        log.debug(f"'out' kwarg type: {type(kwargs['out'])}, shape: {kwargs['out'].shape}")
-    else:
-        log.debug("No 'out' kwarg present")
+    # Normal logging
+    log.info(f"Operation: {op_name}, Args: {len(args)}, Kwargs: {list(kwargs.keys())}")
+    if 'metadata_fixed' in locals() and metadata_fixed:
+        print(f"  📐 Output tensor metadata was corrected for {op_name}")
+    
+    # Check and fix output tensor metadata if needed
+    metadata_fixed = _check_and_fix_output_tensor_metadata(op, args, kwargs)
     
     # DEBUG: For resize operations, log what's being resized
     if "resize" in op_name:
-        log.debug(f"RESIZE DEBUG: Original tensor shape: {args[0].shape if len(args) > 0 and isinstance(args[0], torch.Tensor) else 'N/A'}")
-        log.debug(f"RESIZE DEBUG: New size (args[1]): {args[1] if len(args) > 1 else 'N/A'}")
-        log.debug(f"RESIZE DEBUG: All args: {args}")
-        
-        # Print stack trace to see what called this
-        import traceback
-        log.debug(f"RESIZE STACK TRACE:")
-        for line in traceback.format_stack()[-5:]:  # Last 5 frames
-            log.debug(line.strip())
+        try:
+            log.debug(f"RESIZE DEBUG: Original tensor shape: {args[0].shape if len(args) > 0 and isinstance(args[0], torch.Tensor) else 'N/A'}")
+            log.debug(f"RESIZE DEBUG: New size (args[1]): {args[1] if len(args) > 1 else 'N/A'}")
+            log.debug(f"RESIZE DEBUG: Args count: {len(args)}")
+            
+            # Print stack trace to see what called this
+            import traceback
+            log.debug(f"RESIZE STACK TRACE:")
+            for line in traceback.format_stack()[-5:]:  # Last 5 frames
+                log.debug(line.strip())
+        except Exception as debug_error:
+            log.debug(f"Error in resize debug logging: {debug_error}")
 
     # Handle operations using pytorch-openreg-2 logic for operation classification
     # but with remote execution for actual computation
@@ -275,6 +487,9 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
             # Update tensor metadata to match what happened on remote device
             _update_tensor_metadata_from_meta_execution(op, result_tensor, args, kwargs)
             
+            # Check and apply post-operation resize if needed
+            result_tensor = _check_and_apply_post_operation_resize(op, result_tensor, args, kwargs)
+            
             return result_tensor
         else:
             raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
@@ -291,14 +506,24 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
             log.info(f"🚀 Executing as_strided operation {op_name} remotely (efficient)")
-            return orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            result = orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            
+            # Check and apply post-operation resize if needed
+            result = _check_and_apply_post_operation_resize(op, result, args, kwargs)
+            
+            return result
         else:
             raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
 
     # Second check for view operations (alias_info) - excluding as_strided
     elif any(r.alias_info is not None for r in op._schema.returns):
         # View ops - handle consistently using the view handler
-        return _handle_view_operation(op, *args, **kwargs)
+        result = _handle_view_operation(op, *args, **kwargs)
+        
+        # Check and apply post-operation resize if needed
+        result = _check_and_apply_post_operation_resize(op, result, args, kwargs)
+        
+        return result
 
     # Everything else is a regular operation - execute remotely
     else:
@@ -318,6 +543,9 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
                 # Handle multiple tensor outputs
                 for tensor in result:
                     _update_tensor_metadata_from_meta_execution(op, tensor, args, kwargs)
+            
+            # Check and apply post-operation resize if needed
+            result = _check_and_apply_post_operation_resize(op, result, args, kwargs)
             
             return result
         else:
@@ -530,6 +758,10 @@ def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout
     return result
 
 
+# resize_ implementation has been moved to C++ (RemoteMem.cpp) following OpenReg pattern
+# The C++ implementation calls PyTorch's default resize_ with resizePrivateUse1Bytes hook
+
+
 def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
     """Set one tensor to point to another tensor's storage.
 
@@ -552,6 +784,10 @@ def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
     )
 
 
+# Note: set_.source_Storage_storage_offset is implemented in C++ (RemoteMem.cpp)
+# The C++ implementation calls at::cpu::set_ which is exactly what we need
+
+
 
 
 # Remote tensors are now handled directly by the C++ allocator with ID-based allocation
@@ -566,6 +802,9 @@ _remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key=PRIVATEUSE1_DISPATCH_KE
 _remote_lib_aten.impl(
     "set_.source_Tensor", _set_source_tensor, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
 )
+# Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
+# so we don't register a Python version to avoid conflicts
+# resize_ is now implemented in C++ (RemoteMem.cpp) following OpenReg pattern
 
 # via TORCH_LIBRARY_IMPL in RemoteMem.cpp, so we don't register Python implementations
 

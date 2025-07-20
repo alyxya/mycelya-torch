@@ -5,7 +5,7 @@ import atexit
 import io
 import logging
 import random
-from typing import Any, Dict, Optional, Set, Callable
+from typing import Any, Dict, Optional, Set, Callable, List
 
 import torch
 
@@ -79,7 +79,7 @@ class RemoteStorageRegistry:
             # Check if this ID is already used
             if storage_id not in self.generated_storage_ids:
                 self.generated_storage_ids.add(storage_id)
-                log.debug(f"Generated unique storage ID: {storage_id}")
+                log.info(f"🆔 GENERATED Storage ID: {storage_id}")
                 return storage_id
 
             attempt += 1
@@ -93,18 +93,12 @@ class RemoteStorageRegistry:
         """Create remote storage with the given ID and return success status"""
         storage_id_int = int(storage_id)
 
-        # Always track the storage ID, even for empty tensors
+        # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id_int] = device_index
         self.storage_id_ref_count[storage_id_int] = 1
 
-        # For empty tensors (0 bytes), only track locally - do NOT register with remote GPU
-        if nbytes == 0:
-            log.info(f"Registered empty storage ID {storage_id_int} on device {device_index} (local tracking only)")
-            return True
-
-        # Register the storage with the GPU machine immediately
-        if nbytes > 0:
-            try:
+        # Register the storage with the GPU machine immediately for all allocations
+        try:
                 # Import here to avoid circular imports
                 from ._remote_orchestrator import remote_orchestrator
                 from .device import get_device_registry
@@ -117,17 +111,22 @@ class RemoteStorageRegistry:
                     if device is not None:
                         gpu_machine = device.get_gpu_machine()
                         if gpu_machine and gpu_machine.is_running():
-                            # Create empty tensor data of the right size
-                            empty_tensor = torch.empty(nbytes // 4, dtype=torch.float32)  # Assume float32 for now
+                            # Create tensor data of the right size (handle 0-byte case)
+                            if nbytes == 0:
+                                # For 0-byte allocations, create a minimal empty tensor
+                                empty_tensor = torch.empty(0, dtype=torch.float32)
+                            else:
+                                # For non-zero allocations, create appropriately sized tensor
+                                empty_tensor = torch.empty(nbytes // 4, dtype=torch.float32)  # Assume float32 for now
+                            
                             buffer = io.BytesIO()
                             torch.save(empty_tensor, buffer)
                             tensor_data = buffer.getvalue()
 
-                            storage_id_str = str(storage_id_int)
-                            gpu_machine.create_storage(tensor_data, storage_id_str)
-                            log.info(f"Pre-registered storage ID {storage_id_int} with GPU machine")
-            except Exception as e:
-                log.warning(f"Failed to pre-register storage {storage_id_int} with GPU machine: {e}")
+                            gpu_machine.create_storage(tensor_data, storage_id_int)
+                            log.info(f"Registered storage {storage_id_int} with GPU machine ({nbytes} bytes)")
+        except Exception as e:
+            log.warning(f"Failed to register storage {storage_id_int} with GPU machine: {e}")
 
         log.info(f"Registered storage ID {storage_id_int} on device {device_index}")
         return True
@@ -196,7 +195,7 @@ class RemoteStorageRegistry:
 
             # Attempt remote cleanup
             log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
-            success = orchestrator.remove_tensor_from_remote(str(storage_id), device)
+            success = orchestrator.remove_tensor_from_remote(storage_id, device)
             if success:
                 log.info(f"✅ Successfully cleaned up remote storage {storage_id} on device {device_idx}")
             else:
@@ -361,6 +360,10 @@ class Driver:
         elif cmd == "recordDataPtrOnStream":
             # No-op for data pointer recording
             return None
+        elif cmd == "resize_storage_by_id":
+            # Resize remote storage by storage ID
+            storage_id, new_shape, dtype = args
+            return self._resize_storage_by_id(storage_id, new_shape, dtype)
         else:
             raise RuntimeError(f"Unknown command: {cmd}")
 
@@ -410,6 +413,50 @@ class Driver:
     @register(registry)
     def free_storage_with_id(self, storage_id: int) -> bool:
         return self.registry_obj.free_storage_with_id(storage_id)
+
+    def _resize_storage_by_id(self, storage_id: int, new_shape: List[int], dtype: str) -> bool:
+        """Resize remote storage by storage ID"""
+        try:
+            storage_id_int = int(storage_id)
+            
+            # Get device index for this storage
+            device_idx = self.registry_obj.get_storage_device(storage_id_int)
+            if device_idx is None:
+                log.warning(f"No device found for storage {storage_id_int}")
+                return False
+            
+            # Import here to avoid circular imports
+            from ._remote_orchestrator import remote_orchestrator
+            from .device import get_device_registry
+            
+            orchestrator = remote_orchestrator
+            if orchestrator is None:
+                log.warning(f"No remote orchestrator available for storage {storage_id_int} resize")
+                return False
+            
+            registry = get_device_registry()
+            device = registry.get_device_by_index(device_idx)
+            
+            if device is None:
+                log.warning(f"No device found for index {device_idx} during storage {storage_id_int} resize")
+                return False
+            
+            # Get GPU machine and call resize_storage
+            gpu_machine = device.get_gpu_machine()
+            if gpu_machine and gpu_machine.is_running():
+                success = gpu_machine.resize_storage(storage_id_int, new_shape, dtype)
+                if success:
+                    log.info(f"✅ Successfully resized remote storage {storage_id_int} to shape {new_shape}")
+                else:
+                    log.warning(f"❌ Remote resize returned false for storage {storage_id_int}")
+                return success
+            else:
+                log.warning(f"GPU machine not available for storage {storage_id_int} resize")
+                return False
+                
+        except Exception as e:
+            log.warning(f"Failed to resize remote storage {storage_id}: {e}")
+            return False
 
 
 

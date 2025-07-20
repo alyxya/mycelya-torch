@@ -168,6 +168,48 @@ at::Tensor& set_remote(
     return at::cpu::set_(result, storage, storage_offset, size, stride);
 }
 
+// C++ implementation of resize_ that explicitly calls storage resize hooks
+const at::Tensor& resize_remote_(
+    const at::Tensor& self,
+    at::IntArrayRef size,
+    c10::optional<at::MemoryFormat> memory_format) {
+    
+    // Calculate required storage size for new shape
+    int64_t new_numel = 1;
+    for (auto s : size) {
+        new_numel *= s;
+    }
+    
+    size_t element_size = self.dtype().itemsize();
+    size_t required_bytes = new_numel * element_size;
+    size_t current_bytes = self.storage().nbytes();
+    
+    // Get storage reference for potential resize
+    auto storage = self.storage();
+    
+    // Only resize storage if we need MORE space (growth)
+    // For shrinking, keep existing storage and just change tensor view
+    if (required_bytes > current_bytes) {
+        // Directly call the resize hook through PrivateUse1HooksInterface
+        at::detail::getPrivateUse1Hooks().resizePrivateUse1Bytes(storage, required_bytes);
+    }
+    
+    // Calculate new strides for contiguous layout (assuming contiguous memory format)
+    std::vector<int64_t> new_stride(size.size());
+    if (size.size() > 0) {
+        new_stride[size.size() - 1] = 1;
+        for (int64_t i = size.size() - 2; i >= 0; i--) {
+            new_stride[i] = new_stride[i + 1] * size[i + 1];
+        }
+    }
+    
+    // Update tensor metadata using set_ operation
+    // This updates shape, stride, and storage_offset without allocating new storage
+    const_cast<at::Tensor&>(self).set_(storage, 0, size, new_stride);
+    
+    return self;
+}
+
 // Register the C++ implementations directly with PyTorch's dispatch system
 // This follows the OpenReg pattern where empty operations are implemented in C++
 TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
@@ -180,6 +222,9 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // All other operations (transpose, squeeze, unsqueeze, view) go through Python fallback
   m.impl("as_strided", as_strided_remote);
   m.impl("set_.source_Storage_storage_offset", set_remote);
+  
+  // Register resize_ following OpenReg pattern - uses default implementation with custom hook
+  m.impl("resize_", resize_remote_);
 }
 
 } // namespace remote

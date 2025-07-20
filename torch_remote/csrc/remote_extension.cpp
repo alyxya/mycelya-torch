@@ -46,6 +46,9 @@ static struct PyModuleDef remote_C_module =
 PyMODINIT_FUNC PyInit__C(void) {
   PyObject* mod = PyModule_Create(&remote_C_module);
 
+  // Register hooks FIRST, before anything else
+  remote::register_remote_hooks();
+
   py::object remote_mod = py::module_::import("torch_remote");
   // Only borrowed from the python side!
   remote::set_driver_exec(remote_mod.attr("driver_exec").ptr());

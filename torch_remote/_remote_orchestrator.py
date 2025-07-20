@@ -140,8 +140,7 @@ class RemoteOrchestrator:
                         processed_args.append(None)
                         continue
 
-                    storage_id = str(storage_id_int)
-                    storage_ids.append(storage_id)
+                    storage_ids.append(storage_id_int)
 
                     # Collect tensor metadata for proper reconstruction
                     metadata = {
@@ -150,7 +149,7 @@ class RemoteOrchestrator:
                         "storage_offset": arg.storage_offset(),
                         "dtype": str(arg.dtype),
                         # Note: requires_grad is NOT sent to remote - autograd happens locally
-                        "storage_id": storage_id
+                        "storage_id": storage_id_int
                     }
                     tensor_metadata.append(metadata)
 
@@ -170,8 +169,7 @@ class RemoteOrchestrator:
                         processed_kwargs[key] = None
                         continue
 
-                    storage_id = str(storage_id_int)
-                    storage_ids.append(storage_id)
+                    storage_ids.append(storage_id_int)
 
                     # Collect tensor metadata for proper reconstruction
                     metadata = {
@@ -180,7 +178,7 @@ class RemoteOrchestrator:
                         "storage_offset": value.storage_offset(),
                         "dtype": str(value.dtype),
                         # Note: requires_grad is NOT sent to remote - autograd happens locally
-                        "storage_id": storage_id
+                        "storage_id": storage_id_int
                     }
                     tensor_metadata.append(metadata)
 
@@ -190,6 +188,7 @@ class RemoteOrchestrator:
 
             # Execute remotely using storage IDs and tensor metadata
             # The Modal backend should handle both input and output tensors correctly
+            log.info(f"🚀 Sending Storage IDs to {op_name}: {storage_ids}")
             result_storage_ids = self.execute_remote_aten_operation(
                 op_name, storage_ids, tensor_metadata, tuple(processed_args), processed_kwargs, machine
             )
@@ -496,14 +495,13 @@ class RemoteOrchestrator:
         if gpu_machine is None or not gpu_machine.is_running():
             raise RuntimeError(f"GPU machine not available for machine {machine.machine_id}")
 
-        # Get tensor data using tensor ID (convert int to string for GPU machine)
+        # Get tensor data using tensor ID (keep as integer for GPU machine)
         storage_id_int = remote_tensor.untyped_storage().data_ptr()
-        storage_id_str = str(storage_id_int)
 
         # Use GPU machine to get tensor data by ID with view information
         # Pass tensor metadata so remote side can serialize just the view's data
         tensor_data = gpu_machine.get_storage_data(
-            storage_id_str,
+            storage_id_int,
             shape=list(remote_tensor.shape),
             stride=list(remote_tensor.stride()),
             storage_offset=remote_tensor.storage_offset(),

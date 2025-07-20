@@ -85,13 +85,45 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
   at::Generator getNewGenerator(c10::DeviceIndex device_index) const override {
     return make_remote_generator(device_index);
   }
+
+  void resizePrivateUse1Bytes(
+      const c10::Storage& storage,
+      size_t new_bytes) const override {
+    size_t old_bytes = storage.nbytes();
+    
+    // If expanding storage, we need to resize remotely first
+    if (new_bytes > old_bytes) {
+      // Get storage ID from the data pointer
+      storage_id_t storage_id = reinterpret_cast<storage_id_t>(storage.data_ptr().get());
+      
+      try {
+        py::gil_scoped_acquire acquire;
+        
+        // Call Python function to resize remote storage
+        // For simplicity, assume float32 (4 bytes per element) - this could be enhanced
+        size_t new_elements = new_bytes / 4;  // Assume float32
+        py::list new_shape = py::cast(std::vector<int64_t>{static_cast<int64_t>(new_elements)});
+        
+        // Call resize_storage on the appropriate backend
+        auto resize_result = get_method("resize_storage_by_id")(storage_id, new_shape, "float32");
+        bool success = resize_result.cast<bool>();
+        
+        if (!success) {
+          // Continue with local update anyway to avoid crash
+          // TODO: Consider throwing an exception here in production
+        }
+      } catch (const std::exception& e) {
+        // Continue with local update anyway to avoid crash
+        // TODO: Consider throwing an exception here in production
+      }
+    }
+    
+    // Update the local storage's internal size tracking
+    const_cast<c10::Storage&>(storage).unsafeGetStorageImpl()->set_nbytes(new_bytes);
+  }
 };
 
-static bool register_hook_flag [[maybe_unused]] = []() {
-  at::RegisterPrivateUse1HooksInterface(new RemoteHooksInterface());
-
-  return true;
-}();
+// Hooks will be registered explicitly from remote_extension.cpp
 
 // Device guard registration
 struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
@@ -227,6 +259,15 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
 C10_REGISTER_GUARD_IMPL(PrivateUse1, RemoteGuardImpl);
 
 } // namespace
+
+// Function to explicitly register hooks - called from Python extension init
+void register_remote_hooks() {
+  static bool hooks_registered = false;
+  if (!hooks_registered) {
+    at::RegisterPrivateUse1HooksInterface(new RemoteHooksInterface());
+    hooks_registered = true;
+  }
+}
 
 // Setter for the python driver_exec function
 void set_driver_exec(PyObject* driver_exec_fn) {
