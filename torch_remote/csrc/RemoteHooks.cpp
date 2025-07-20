@@ -108,18 +108,16 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
         auto resize_result = get_method("resize_storage_by_id")(storage_id, new_shape, "float32");
         bool success = resize_result.cast<bool>();
         
-        if (!success) {
-          // Continue with local update anyway to avoid crash
-          // TODO: Consider throwing an exception here in production
+        if (success) {
+          // Update the local storage's internal size tracking only on success
+          const_cast<c10::Storage&>(storage).unsafeGetStorageImpl()->set_nbytes(new_bytes);
+        } else {
+          TORCH_CHECK(false, "Failed to resize remote storage for storage ID: ", storage_id);
         }
       } catch (const std::exception& e) {
-        // Continue with local update anyway to avoid crash
-        // TODO: Consider throwing an exception here in production
+        TORCH_CHECK(false, "Exception during remote storage resize: ", e.what());
       }
     }
-    
-    // Update the local storage's internal size tracking
-    const_cast<c10::Storage&>(storage).unsafeGetStorageImpl()->set_nbytes(new_bytes);
   }
 };
 
