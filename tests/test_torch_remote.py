@@ -1478,3 +1478,220 @@ def test_direct_tensor_creation(modal_t4_device):
     # Verify that at least the workaround works
     assert workaround_works, "CPU-first workaround should always work"
     # Test passes if we reach here
+
+
+def test_gradient_propagation_cpu_to_remote(modal_t4_device):
+    """Test gradient propagation works properly for CPU -> remote transfers."""
+    print("Testing gradient propagation for CPU -> remote transfers...")
+    
+    # Test 1: Basic gradient flow CPU -> remote -> backward
+    x_cpu = torch.randn(3, 3, requires_grad=True)
+    print(f"CPU tensor: shape={x_cpu.shape}, requires_grad={x_cpu.requires_grad}, is_leaf={x_cpu.is_leaf}")
+    
+    # Transfer to remote
+    x_remote = x_cpu.to(modal_t4_device.device())
+    print(f"Remote tensor: shape={x_remote.shape}, requires_grad={x_remote.requires_grad}, is_leaf={x_remote.is_leaf}")
+    print(f"Remote grad_fn: {x_remote.grad_fn}")
+    
+    # Ensure autograd graph is preserved
+    assert x_remote.requires_grad == True, "Remote tensor should preserve requires_grad"
+    assert x_remote.is_leaf == False, "Remote tensor should not be leaf (created by .to())"
+    assert x_remote.grad_fn is not None, "Remote tensor should have grad_fn"
+    
+    # Perform operation on remote
+    y = (x_remote * 2).sum()
+    print(f"Result: {y}, grad_fn: {y.grad_fn}")
+    
+    # Backward pass
+    y.backward()
+    
+    # Check gradient on original CPU tensor
+    assert x_cpu.grad is not None, "CPU tensor should have gradients"
+    expected_grad = torch.full_like(x_cpu, 2.0)  # d/dx(2x) = 2
+    assert torch.allclose(x_cpu.grad, expected_grad), f"Expected grad {expected_grad}, got {x_cpu.grad}"
+    print(f"✓ CPU gradients correct: {x_cpu.grad}")
+
+
+def test_gradient_propagation_remote_to_cpu(modal_t4_device):
+    """Test gradient propagation works properly for remote -> CPU transfers."""
+    print("Testing gradient propagation for remote -> CPU transfers...")
+    
+    # Start with CPU tensor to establish autograd graph
+    x_cpu = torch.randn(3, 3, requires_grad=True)
+    
+    # Transfer to remote and back to CPU
+    x_remote = x_cpu.to(modal_t4_device.device())
+    x_back_cpu = x_remote.cpu()
+    
+    print(f"Original CPU: requires_grad={x_cpu.requires_grad}, is_leaf={x_cpu.is_leaf}")
+    print(f"Remote: requires_grad={x_remote.requires_grad}, is_leaf={x_remote.is_leaf}")
+    print(f"Back to CPU: requires_grad={x_back_cpu.requires_grad}, is_leaf={x_back_cpu.is_leaf}")
+    print(f"Back to CPU grad_fn: {x_back_cpu.grad_fn}")
+    
+    # Ensure autograd graph is preserved through round trip
+    assert x_back_cpu.requires_grad == True, "CPU tensor should preserve requires_grad"
+    assert x_back_cpu.is_leaf == False, "Transferred tensor should not be leaf"
+    assert x_back_cpu.grad_fn is not None, "Transferred tensor should have grad_fn"
+    
+    # Perform operation and backward
+    y = (x_back_cpu * 3).sum()
+    y.backward()
+    
+    # Check gradient on original CPU tensor
+    assert x_cpu.grad is not None, "Original CPU tensor should have gradients"
+    expected_grad = torch.full_like(x_cpu, 3.0)  # d/dx(3x) = 3
+    assert torch.allclose(x_cpu.grad, expected_grad), f"Expected grad {expected_grad}, got {x_cpu.grad}"
+    print(f"✓ Round-trip gradients correct: {x_cpu.grad}")
+
+
+def test_mixed_device_gradient_computation(modal_t4_device):
+    """Test complex gradient scenarios with mixed device operations."""
+    print("Testing mixed device gradient computation...")
+    
+    # Create multiple tensors with different paths
+    a_cpu = torch.randn(3, 3, requires_grad=True)
+    b_cpu = torch.randn(3, 3, requires_grad=True)
+    
+    # Transfer to remote via different paths
+    a_remote = a_cpu.to(modal_t4_device.device())
+    b_remote = b_cpu.to(modal_t4_device.device()) 
+    
+    # Operations on remote
+    c_remote = a_remote @ b_remote  # Matrix multiplication
+    d_remote = c_remote + 1.0
+    
+    # Transfer result back to CPU
+    d_cpu = d_remote.cpu()
+    
+    # Final operation on CPU
+    loss = d_cpu.sum()
+    
+    print(f"Loss: {loss}, grad_fn: {loss.grad_fn}")
+    
+    # Backward pass through the entire mixed-device graph
+    loss.backward()
+    
+    # Check gradients on both original tensors
+    assert a_cpu.grad is not None, "a_cpu should have gradients"
+    assert b_cpu.grad is not None, "b_cpu should have gradients"
+    
+    print(f"✓ a_cpu grad shape: {a_cpu.grad.shape}")
+    print(f"✓ b_cpu grad shape: {b_cpu.grad.shape}")
+    
+    # Verify gradients are reasonable (non-zero, correct shape)
+    assert not torch.allclose(a_cpu.grad, torch.zeros_like(a_cpu)), "a_cpu grad should be non-zero"
+    assert not torch.allclose(b_cpu.grad, torch.zeros_like(b_cpu)), "b_cpu grad should be non-zero"
+    assert a_cpu.grad.shape == a_cpu.shape, "a_cpu grad should match tensor shape"
+    assert b_cpu.grad.shape == b_cpu.shape, "b_cpu grad should match tensor shape"
+
+
+def test_gradient_accumulation_across_transfers(modal_t4_device):
+    """Test gradient accumulation works correctly across multiple device transfers."""
+    print("Testing gradient accumulation across transfers...")
+    
+    x_cpu = torch.randn(2, 2, requires_grad=True)
+    
+    # Multiple forward passes with transfers
+    total_loss = 0
+    
+    for i in range(3):
+        # Transfer to remote
+        x_remote = x_cpu.to(modal_t4_device.device())
+        
+        # Different operations each time
+        if i == 0:
+            y = x_remote.sum()
+        elif i == 1:
+            y = (x_remote ** 2).sum()
+        else:
+            y = (x_remote * 3).sum()
+        
+        # Transfer result back
+        y_cpu = y.cpu()
+        total_loss = total_loss + y_cpu
+    
+    print(f"Total loss: {total_loss}")
+    
+    # Single backward pass should accumulate all gradients
+    total_loss.backward()
+    
+    assert x_cpu.grad is not None, "Should have accumulated gradients"
+    
+    # Expected gradient: 1 + 2*x + 3 for each element
+    expected_grad = 1 + 2*x_cpu.data + 3
+    assert torch.allclose(x_cpu.grad, expected_grad, atol=1e-6), f"Expected {expected_grad}, got {x_cpu.grad}"
+    print(f"✓ Accumulated gradients correct: {x_cpu.grad}")
+
+
+def test_view_operations_with_gradients(modal_t4_device):
+    """Test that view operations preserve gradient flow across device transfers."""
+    print("Testing view operations with gradients...")
+    
+    # Start with a larger tensor
+    x_cpu = torch.randn(6, 4, requires_grad=True)
+    
+    # Transfer to remote
+    x_remote = x_cpu.to(modal_t4_device.device())
+    
+    # View operations on remote
+    x_reshaped = x_remote.view(4, 6)
+    x_transposed = x_reshaped.t()
+    
+    # Transfer back and continue operations
+    x_back_cpu = x_transposed.cpu()
+    y = x_back_cpu.sum()
+    
+    print(f"Original shape: {x_cpu.shape}")
+    print(f"Final shape: {x_back_cpu.shape}")
+    print(f"Loss: {y}")
+    
+    # Backward through view operations
+    y.backward()
+    
+    # Check gradient shape matches original
+    assert x_cpu.grad is not None, "Should have gradients"
+    assert x_cpu.grad.shape == x_cpu.shape, f"Grad shape {x_cpu.grad.shape} should match tensor shape {x_cpu.shape}"
+    
+    # All gradients should be 1 (sum derivative)
+    expected_grad = torch.ones_like(x_cpu)
+    assert torch.allclose(x_cpu.grad, expected_grad), "All gradients should be 1"
+    print(f"✓ View operations preserve gradients correctly")
+
+
+def test_custom_loss_function_gradients(modal_t4_device):
+    """Test gradient flow through custom loss functions with device transfers."""
+    print("Testing custom loss function gradients...")
+    
+    # Create prediction and target tensors
+    pred_cpu = torch.randn(4, 3, requires_grad=True)
+    target = torch.tensor([0, 1, 2, 1])  # Classification targets
+    
+    # Transfer prediction to remote
+    pred_remote = pred_cpu.to(modal_t4_device.device())
+    
+    # Apply softmax on remote
+    prob_remote = torch.softmax(pred_remote, dim=1)
+    
+    # Transfer back for loss computation
+    prob_cpu = prob_remote.cpu()
+    
+    # Cross-entropy loss (manual implementation)
+    log_prob = torch.log(prob_cpu + 1e-8)  # Add small epsilon for numerical stability
+    loss = -log_prob[range(len(target)), target].mean()
+    
+    print(f"Loss: {loss}")
+    
+    # Backward pass
+    loss.backward()
+    
+    # Check gradients
+    assert pred_cpu.grad is not None, "Should have gradients"
+    assert pred_cpu.grad.shape == pred_cpu.shape, "Gradient shape should match prediction shape"
+    
+    # Verify gradients are reasonable (not all zeros, not NaN)
+    assert not torch.allclose(pred_cpu.grad, torch.zeros_like(pred_cpu)), "Gradients should be non-zero"
+    assert not torch.isnan(pred_cpu.grad).any(), "Gradients should not contain NaN"
+    assert not torch.isinf(pred_cpu.grad).any(), "Gradients should not contain Inf"
+    
+    print(f"✓ Custom loss gradients computed correctly")
+    print(f"Gradient range: [{pred_cpu.grad.min():.6f}, {pred_cpu.grad.max():.6f}]")

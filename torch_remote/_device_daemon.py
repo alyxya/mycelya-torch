@@ -324,13 +324,13 @@ class Driver:
             # Return default stream (0) for device
             device_idx = args[0] if args else self.registry_obj.get_device()
             import torch
-            return torch.Stream(torch.device("remote", device_idx), 0)
+            return torch.Stream(device=torch.device("remote", device_idx), priority=0)
         elif cmd == "getStreamFromGlobalPool":
             # Return a stream from global pool (just use default stream for now)
             device_idx = args[0] if args else self.registry_obj.get_device()
             is_high_priority = args[1] if len(args) > 1 else False
             import torch
-            return torch.Stream(torch.device("remote", device_idx), 0)
+            return torch.Stream(device=torch.device("remote", device_idx), priority=0)
         elif cmd == "record":
             # No-op for event recording on remote
             return None
@@ -347,7 +347,7 @@ class Driver:
             # Return 0 for elapsed time between events
             return 0.0
         elif cmd == "recordDataPtrOnStream":
-            # No-op for data pointer recording
+            # No-op for data pointer recording (args: data_ptr_int64, stream)
             return None
         elif cmd == "resize_storage_by_id":
             # Resize remote storage by storage ID

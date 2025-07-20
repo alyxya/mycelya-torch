@@ -244,7 +244,8 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
       const c10::DataPtr& data_ptr,
       const c10::Stream& stream) const override {
     py::gil_scoped_acquire acquire;
-    get_method("recordDataPtrOnStream")(data_ptr, stream);
+    // Convert DataPtr to int64_t to avoid pybind11 registration issues
+    get_method("recordDataPtrOnStream")((int64_t)data_ptr.get(), stream);
   }
 
   double elapsedTime(
