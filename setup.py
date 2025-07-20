@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from setuptools import find_packages, setup
-from torch.utils.cpp_extension import CppExtension, BuildExtension
+from setuptools.command.build_ext import build_ext
 
 
 PACKAGE_NAME = "torch_remote"
@@ -17,6 +17,26 @@ version = "0.1.0"
 
 ROOT_DIR = Path(__file__).absolute().parent
 CSRC_DIR = ROOT_DIR / "torch_remote/csrc"
+
+
+def get_build_ext_class():
+    """Get PyTorch's BuildExtension class, importing only when needed."""
+    try:
+        from torch.utils.cpp_extension import BuildExtension
+        return BuildExtension.with_options(no_python_abi_suffix=True)
+    except ImportError:
+        # Fallback to standard build_ext if PyTorch not available
+        return build_ext
+
+
+def get_extension_class():
+    """Get appropriate Extension class."""
+    try:
+        from torch.utils.cpp_extension import CppExtension
+        return CppExtension
+    except ImportError:
+        from setuptools import Extension
+        return Extension
 
 
 class clean(distutils.command.clean.clean):
@@ -51,12 +71,13 @@ if __name__ == "__main__":
 
     sources = list(CSRC_DIR.glob("*.cpp"))
 
-    # Note that we always compile with debug info
+    # Use appropriate Extension class based on PyTorch availability
+    ExtensionClass = get_extension_class()
     ext_modules = [
-        CppExtension(
+        ExtensionClass(
             name="torch_remote._C",
             sources=sorted(str(s) for s in sources),
-            include_dirs=[CSRC_DIR],
+            include_dirs=[str(CSRC_DIR)],
             extra_compile_args=CXX_FLAGS,
         )
     ]
@@ -75,6 +96,7 @@ if __name__ == "__main__":
         install_requires=[
             "torch>=2.0.0",
             "modal>=0.60.0",
+            "numpy",
         ],
         extras_require={
             "runpod": ["runpod>=1.0.0"],  # Future provider support
@@ -83,7 +105,7 @@ if __name__ == "__main__":
         ext_modules=ext_modules,
         python_requires=">=3.8",
         cmdclass={
-            "build_ext": BuildExtension.with_options(no_python_abi_suffix=True),
+            "build_ext": get_build_ext_class(),
             "clean": clean,
         },
     )
