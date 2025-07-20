@@ -62,13 +62,27 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def create_storage(self, tensor_data: bytes, storage_id: int) -> None:
+    def create_storage(self, nbytes: int, storage_id: int) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
-            tensor_data: Serialized tensor data to store
+            nbytes: Number of bytes to allocate for the storage
             storage_id: Specific ID to use for the storage (required)
+
+        Returns:
+            None
+        """
+        pass
+
+    @abstractmethod
+    def update_storage(self, tensor_data: bytes, storage_id: int) -> None:
+        """
+        Update an existing storage with tensor data.
+
+        Args:
+            tensor_data: Serialized tensor data to store
+            storage_id: Storage ID to update
 
         Returns:
             None

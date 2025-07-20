@@ -109,19 +109,8 @@ class RemoteStorageRegistry:
                     if device is not None:
                         client = device.get_client()
                         if client and client.is_running():
-                            # Create tensor data of the right size (handle 0-byte case)
-                            if nbytes == 0:
-                                # For 0-byte allocations, create a minimal empty tensor
-                                empty_tensor = torch.empty(0, dtype=torch.float32)
-                            else:
-                                # For non-zero allocations, create appropriately sized tensor
-                                empty_tensor = torch.empty(nbytes // 4, dtype=torch.float32)  # Assume float32 for now
-                            
-                            buffer = io.BytesIO()
-                            torch.save(empty_tensor, buffer)
-                            tensor_data = buffer.getvalue()
-
-                            client.create_storage(tensor_data, storage_id)
+                            # Create storage with exact byte size - no garbage data needed
+                            client.create_storage(nbytes, storage_id)
                             log.info(f"Registered storage {storage_id} with client ({nbytes} bytes)")
         except Exception as e:
             log.warning(f"Failed to register storage {storage_id} with client: {e}")

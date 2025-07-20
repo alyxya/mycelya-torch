@@ -111,15 +111,45 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         @modal.method()
         def create_storage(
             self,
-            tensor_data: bytes,
+            nbytes: int,
             storage_id: int
         ) -> None:
             """
             Create a new storage on the remote machine.
             
             Args:
-                tensor_data: Serialized tensor data
+                nbytes: Number of bytes to allocate for the storage
                 storage_id: Specific ID to use for the storage (required)
+                
+            Returns:
+                None
+            """
+            import torch
+            
+            # Create tensor directly on GPU with exact byte size
+            device = torch.device(CUDA_DEVICE_TYPE)
+            tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
+            
+            # Store storage and original tensor data
+            storages, lock = self._get_storages()
+            with lock:
+                # Store tensor storage for all tensors
+                storage_id = int(storage_id)
+                storages[storage_id] = tensor.untyped_storage()
+                log.info(f"📥 CREATED Storage ID {storage_id} on Modal ({nbytes} bytes)")
+
+        @modal.method()
+        def update_storage(
+            self,
+            tensor_data: bytes,
+            storage_id: int
+        ) -> None:
+            """
+            Update an existing storage with tensor data.
+            
+            Args:
+                tensor_data: Serialized tensor data
+                storage_id: Storage ID to update
                 
             Returns:
                 None
@@ -135,13 +165,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             device = torch.device(CUDA_DEVICE_TYPE)
             tensor = tensor.to(device)
             
-            # Store storage and original tensor data
+            # Update existing storage
             storages, lock = self._get_storages()
             with lock:
-                # Store tensor storage for all tensors
                 storage_id = int(storage_id)
                 storages[storage_id] = tensor.untyped_storage()
-                log.info(f"📥 RECEIVED Storage ID {storage_id} on Modal (shape: {tensor.shape})")
+                log.info(f"📥 UPDATED Storage ID {storage_id} on Modal (shape: {tensor.shape})")
 
         @modal.method()
         def get_storage_data(self, storage_id: int, shape=None, stride=None, storage_offset=0, dtype=None) -> bytes:

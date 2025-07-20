@@ -223,7 +223,7 @@ class RemoteOrchestrator:
             None
         """
         client = self._get_device_client(machine)
-        client.create_storage(tensor_data, storage_id)
+        client.update_storage(tensor_data, storage_id)
 
     def get_tensor_data_from_remote(self, storage_id: int, device_index: int) -> torch.Tensor:
         """
