@@ -575,16 +575,4 @@ _remote_lib_aten.impl("item", _remote_item_impl, dispatch_key="AutogradPrivateUs
 # when we add them to TORCH_LIBRARY_IMPL in RemoteMem.cpp
 
 
-def cleanup_library_registrations() -> None:
-    """Clean up library registrations to prevent hanging."""
-    global _remote_lib, _remote_lib_aten
-    try:
-        # PyTorch doesn't provide a clean way to unregister, but we can try
-        # Calling this during cleanup might help
-        if hasattr(_remote_lib, "_destroy"):
-            _remote_lib._destroy()
-        if hasattr(_remote_lib_aten, "_destroy"):
-            _remote_lib_aten._destroy()
-    except Exception:
-        pass
 
