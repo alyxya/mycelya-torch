@@ -9,46 +9,76 @@ from torch.utils._pytree import tree_map, tree_map_only
 
 
 class RemoteTensorMeta:
-    def __init__(self, tensor: Optional[torch.Tensor] = None, checked: bool = True, data_ptr: Optional[int] = None, size: Optional[torch.Size] = None, stride: Optional[Tuple[int, ...]] = None,
-                 storage_offset: Optional[int] = None, dtype: Optional[torch.dtype] = None, nelem_in_bytes: Optional[int] = None, storage_id: Optional[int] = None) -> None:
-        """
-        Create RemoteTensorMeta from either a tensor or explicit metadata.
-
+    def __init__(self, data_ptr: int, size: torch.Size, stride: Tuple[int, ...], 
+                 storage_offset: int, dtype: torch.dtype, nelem_in_bytes: int, 
+                 storage_id: Optional[int] = None) -> None:
+        """Create RemoteTensorMeta with explicit metadata.
+        
         Args:
-            tensor: Extract metadata from this tensor (original behavior)
-            checked: Whether to check tensor is on remote device
-            data_ptr: Explicit tensor ID (for view operations)
-            size: Explicit size (for view operations)
-            stride: Explicit stride (for view operations)
-            storage_offset: Explicit storage offset (for view operations)
-            dtype: Explicit dtype (for view operations)
-            nelem_in_bytes: Explicit element count in bytes (for view operations)
-            storage_id: Storage ID for shared storage tracking (for view operations)
+            data_ptr: Tensor ID/storage ID
+            size: Tensor shape
+            stride: Tensor stride
+            storage_offset: Storage offset
+            dtype: Data type
+            nelem_in_bytes: Number of elements in bytes
+            storage_id: Optional storage ID for view tracking
         """
-        if tensor is not None:
-            # Original behavior - extract from tensor
-            if checked and not tensor.device.type == "remote":
-                raise RuntimeError(
-                    "Creating RemoteTensorMeta is only for Tensors on remote device"
-                )
-            self.data_ptr = tensor.untyped_storage().data_ptr()
-            self.size = tensor.size()
-            self.stride = tensor.stride()
-            self.storage_offset = tensor.storage_offset()
-            self.dtype = tensor.dtype
-            self.nelem_in_bytes = tensor.nelement() * tensor.element_size()
-            self.storage_id = storage_id  # Optional storage ID for view tracking
-        else:
-            # Explicit metadata - for view operations
-            if any(param is None for param in [data_ptr, size, stride, storage_offset, dtype, nelem_in_bytes]):
-                raise ValueError("When not providing tensor, all metadata parameters must be specified")
-            self.data_ptr = data_ptr  # type: ignore
-            self.size = size  # type: ignore
-            self.stride = stride  # type: ignore
-            self.storage_offset = storage_offset  # type: ignore
-            self.dtype = dtype  # type: ignore
-            self.nelem_in_bytes = nelem_in_bytes  # type: ignore
-            self.storage_id = storage_id
+        self.data_ptr = data_ptr
+        self.size = size
+        self.stride = stride
+        self.storage_offset = storage_offset
+        self.dtype = dtype
+        self.nelem_in_bytes = nelem_in_bytes
+        self.storage_id = storage_id
+
+    @classmethod
+    def from_tensor(cls, tensor: torch.Tensor, checked: bool = True) -> 'RemoteTensorMeta':
+        """Create RemoteTensorMeta from existing tensor.
+        
+        Args:
+            tensor: Source tensor to extract metadata from
+            checked: Whether to validate tensor is on remote device
+            
+        Returns:
+            RemoteTensorMeta instance with tensor's metadata
+            
+        Raises:
+            RuntimeError: If checked=True and tensor is not on remote device
+        """
+        if checked and tensor.device.type != "remote":
+            raise RuntimeError(
+                "Creating RemoteTensorMeta is only for Tensors on remote device"
+            )
+        
+        return cls(
+            data_ptr=tensor.untyped_storage().data_ptr(),
+            size=tensor.size(),
+            stride=tensor.stride(),
+            storage_offset=tensor.storage_offset(),
+            dtype=tensor.dtype,
+            nelem_in_bytes=tensor.nelement() * tensor.element_size()
+        )
+
+    @classmethod
+    def from_remote_tensor(cls, tensor: torch.Tensor) -> 'RemoteTensorMeta':
+        """Create RemoteTensorMeta for remote tensor serialization.
+        
+        Args:
+            tensor: Remote tensor to create metadata from
+            
+        Returns:
+            RemoteTensorMeta instance with storage_id set for view tracking
+        """
+        storage_id = tensor.untyped_storage().data_ptr()
+        return cls(
+            data_ptr=storage_id,
+            size=tensor.size(),
+            stride=tensor.stride(),
+            storage_offset=tensor.storage_offset(),
+            dtype=tensor.dtype,
+            nelem_in_bytes=tensor.numel() * tensor.element_size(),
+            storage_id=storage_id
+        )
 
     def __repr__(self) -> str:
         return (
@@ -80,7 +110,7 @@ def safe_str(args: Any) -> str:
     """
     def convert(obj: Any) -> Any:
         if isinstance(obj, torch.Tensor):
-            return str(RemoteTensorMeta(obj, checked=False))
+            return str(RemoteTensorMeta.from_tensor(obj, checked=False))
         else:
             return obj
 
@@ -143,19 +173,10 @@ def prepare_for_sending(args: Any, kwargs: Any) -> Any:
         if isinstance(obj, torch.Tensor):
             if obj.device.type == "remote":
                 # For remote tensors, send storage_id + metadata instead of full tensor data
-                storage_id = obj.untyped_storage().data_ptr()
-                return RemoteTensorMeta(
-                    data_ptr=storage_id,
-                    size=obj.size(),
-                    stride=obj.stride(),
-                    storage_offset=obj.storage_offset(),
-                    dtype=obj.dtype,
-                    nelem_in_bytes=obj.numel() * obj.element_size(),
-                    storage_id=storage_id
-                )
+                return RemoteTensorMeta.from_remote_tensor(obj)
             else:
                 # For non-remote tensors, use original behavior
-                return RemoteTensorMeta(obj)
+                return RemoteTensorMeta.from_tensor(obj)
         else:
             return obj
 
