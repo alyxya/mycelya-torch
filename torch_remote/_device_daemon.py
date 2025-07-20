@@ -91,11 +91,11 @@ class RemoteStorageRegistry:
 
     def create_storage_with_id(self, storage_id: int, nbytes: int, device_index: int) -> bool:
         """Create remote storage with the given ID and return success status"""
-        storage_id_int = int(storage_id)
+        storage_id = int(storage_id)
 
         # Always track the storage ID for all tensors
-        self.storage_id_to_device[storage_id_int] = device_index
-        self.storage_id_ref_count[storage_id_int] = 1
+        self.storage_id_to_device[storage_id] = device_index
+        self.storage_id_ref_count[storage_id] = 1
 
         # Register the storage with the GPU machine immediately for all allocations
         try:
@@ -123,52 +123,52 @@ class RemoteStorageRegistry:
                             torch.save(empty_tensor, buffer)
                             tensor_data = buffer.getvalue()
 
-                            gpu_machine.create_storage(tensor_data, storage_id_int)
-                            log.info(f"Registered storage {storage_id_int} with GPU machine ({nbytes} bytes)")
+                            gpu_machine.create_storage(tensor_data, storage_id)
+                            log.info(f"Registered storage {storage_id} with GPU machine ({nbytes} bytes)")
         except Exception as e:
-            log.warning(f"Failed to register storage {storage_id_int} with GPU machine: {e}")
+            log.warning(f"Failed to register storage {storage_id} with GPU machine: {e}")
 
-        log.info(f"Registered storage ID {storage_id_int} on device {device_index}")
+        log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return True
 
     def get_storage_device(self, storage_id: int) -> Optional[int]:
         """Get device index for a storage ID"""
-        storage_id_int = int(storage_id)
-        return self.storage_id_to_device.get(storage_id_int)
+        storage_id = int(storage_id)
+        return self.storage_id_to_device.get(storage_id)
 
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID with reference counting and remote cleanup"""
-        storage_id_int = int(storage_id)
-        if storage_id_int == 0:  # Empty storage
+        storage_id = int(storage_id)
+        if storage_id == 0:  # Empty storage
             return True
 
         # Decrement reference count
-        if storage_id_int in self.storage_id_ref_count:
-            self.storage_id_ref_count[storage_id_int] -= 1
+        if storage_id in self.storage_id_ref_count:
+            self.storage_id_ref_count[storage_id] -= 1
 
             # Only cleanup remote storage if this is the last reference
-            if self.storage_id_ref_count[storage_id_int] <= 0:
+            if self.storage_id_ref_count[storage_id] <= 0:
                 # Get device index before cleanup
-                device_idx = self.storage_id_to_device.get(storage_id_int)
+                device_idx = self.storage_id_to_device.get(storage_id)
 
                 # Clean up storage tracking
-                del self.storage_id_ref_count[storage_id_int]
-                self.storage_id_to_device.pop(storage_id_int, None)
-                self.generated_storage_ids.discard(storage_id_int)
+                del self.storage_id_ref_count[storage_id]
+                self.storage_id_to_device.pop(storage_id, None)
+                self.generated_storage_ids.discard(storage_id)
 
                 # Call remote cleanup
                 if device_idx is not None:
-                    log.info(f"Last reference to storage {storage_id_int} freed, initiating remote cleanup")
-                    self._cleanup_remote_storage(storage_id_int, device_idx)
+                    log.info(f"Last reference to storage {storage_id} freed, initiating remote cleanup")
+                    self._cleanup_remote_storage(storage_id, device_idx)
                 else:
-                    log.info(f"No device index found for storage {storage_id_int}, skipping remote cleanup")
+                    log.info(f"No device index found for storage {storage_id}, skipping remote cleanup")
 
-                log.info(f"Freed storage ID {storage_id_int}")
+                log.info(f"Freed storage ID {storage_id}")
             else:
-                log.info(f"Storage {storage_id_int} still has {self.storage_id_ref_count[storage_id_int]} references, skipping cleanup")
+                log.info(f"Storage {storage_id} still has {self.storage_id_ref_count[storage_id]} references, skipping cleanup")
         else:
-            log.warning(f"Attempted to free unknown storage {storage_id_int}")
+            log.warning(f"Attempted to free unknown storage {storage_id}")
 
         return True
 
@@ -417,12 +417,12 @@ class Driver:
     def _resize_storage_by_id(self, storage_id: int, new_shape: List[int], dtype: str) -> bool:
         """Resize remote storage by storage ID"""
         try:
-            storage_id_int = int(storage_id)
+            storage_id = int(storage_id)
             
             # Get device index for this storage
-            device_idx = self.registry_obj.get_storage_device(storage_id_int)
+            device_idx = self.registry_obj.get_storage_device(storage_id)
             if device_idx is None:
-                log.warning(f"No device found for storage {storage_id_int}")
+                log.warning(f"No device found for storage {storage_id}")
                 return False
             
             # Import here to avoid circular imports
@@ -431,27 +431,27 @@ class Driver:
             
             orchestrator = remote_orchestrator
             if orchestrator is None:
-                log.warning(f"No remote orchestrator available for storage {storage_id_int} resize")
+                log.warning(f"No remote orchestrator available for storage {storage_id} resize")
                 return False
             
             registry = get_device_registry()
             device = registry.get_device_by_index(device_idx)
             
             if device is None:
-                log.warning(f"No device found for index {device_idx} during storage {storage_id_int} resize")
+                log.warning(f"No device found for index {device_idx} during storage {storage_id} resize")
                 return False
             
             # Get GPU machine and call resize_storage
             gpu_machine = device.get_gpu_machine()
             if gpu_machine and gpu_machine.is_running():
-                success = gpu_machine.resize_storage(storage_id_int, new_shape, dtype)
+                success = gpu_machine.resize_storage(storage_id, new_shape, dtype)
                 if success:
-                    log.info(f"✅ Successfully resized remote storage {storage_id_int} to shape {new_shape}")
+                    log.info(f"✅ Successfully resized remote storage {storage_id} to shape {new_shape}")
                 else:
-                    log.warning(f"❌ Remote resize returned false for storage {storage_id_int}")
+                    log.warning(f"❌ Remote resize returned false for storage {storage_id}")
                 return success
             else:
-                log.warning(f"GPU machine not available for storage {storage_id_int} resize")
+                log.warning(f"GPU machine not available for storage {storage_id} resize")
                 return False
                 
         except Exception as e:

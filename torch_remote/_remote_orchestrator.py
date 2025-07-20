@@ -131,16 +131,16 @@ class RemoteOrchestrator:
             # Process args - extract storage IDs and metadata
             for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
-                    storage_id_int = arg.untyped_storage().data_ptr()
+                    storage_id = arg.untyped_storage().data_ptr()
 
                     # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
-                    if storage_id_int == 0:
+                    if storage_id == 0:
                         log.warning(f"Skipping empty tensor with data_ptr=0 in remote operation {op_name}. This may cause unexpected behavior.")
                         # For now, replace with a placeholder - in the future we should handle this properly
                         processed_args.append(None)
                         continue
 
-                    storage_ids.append(storage_id_int)
+                    storage_ids.append(storage_id)
 
                     # Collect tensor metadata for proper reconstruction
                     metadata = {
@@ -149,7 +149,7 @@ class RemoteOrchestrator:
                         "storage_offset": arg.storage_offset(),
                         "dtype": str(arg.dtype),
                         # Note: requires_grad is NOT sent to remote - autograd happens locally
-                        "storage_id": storage_id_int
+                        "storage_id": storage_id
                     }
                     tensor_metadata.append(metadata)
 
@@ -160,16 +160,16 @@ class RemoteOrchestrator:
             # Process kwargs - extract storage IDs and metadata
             for key, value in kwargs.items():
                 if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
-                    storage_id_int = value.untyped_storage().data_ptr()
+                    storage_id = value.untyped_storage().data_ptr()
 
                     # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
-                    if storage_id_int == 0:
+                    if storage_id == 0:
                         log.warning(f"Skipping empty tensor with data_ptr=0 in remote operation {op_name} kwarg '{key}'. This may cause unexpected behavior.")
                         # For now, replace with a placeholder - in the future we should handle this properly
                         processed_kwargs[key] = None
                         continue
 
-                    storage_ids.append(storage_id_int)
+                    storage_ids.append(storage_id)
 
                     # Collect tensor metadata for proper reconstruction
                     metadata = {
@@ -178,7 +178,7 @@ class RemoteOrchestrator:
                         "storage_offset": value.storage_offset(),
                         "dtype": str(value.dtype),
                         # Note: requires_grad is NOT sent to remote - autograd happens locally
-                        "storage_id": storage_id_int
+                        "storage_id": storage_id
                     }
                     tensor_metadata.append(metadata)
 
@@ -233,10 +233,10 @@ class RemoteOrchestrator:
             Remote tensor that references the existing data
         """
         # DEBUG: Check for storage ID 0 issue
-        storage_id_int = int(storage_id)
-        log.debug(f"_create_remote_tensor_from_id called with storage_id={storage_id} (int={storage_id_int})")
+        storage_id = int(storage_id)
+        log.debug(f"_create_remote_tensor_from_id called with storage_id={storage_id}")
 
-        if storage_id_int == 0:
+        if storage_id == 0:
             log.error(f"ERROR: Attempting to create remote tensor with storage ID 0! This will fail.")
             raise ValueError(f"Storage ID 0 is invalid - this indicates a bug in storage ID generation")
 
@@ -252,9 +252,9 @@ class RemoteOrchestrator:
 
         # Replace the storage's data pointer with our existing storage ID
         storage = remote_tensor.untyped_storage()
-        storage.data_ptr = lambda: storage_id_int
+        storage.data_ptr = lambda: storage_id
 
-        log.debug(f"Created remote tensor with overridden storage_id={storage_id_int}")
+        log.debug(f"Created remote tensor with overridden storage_id={storage_id}")
         return remote_tensor
 
 
@@ -495,13 +495,13 @@ class RemoteOrchestrator:
         if gpu_machine is None or not gpu_machine.is_running():
             raise RuntimeError(f"GPU machine not available for machine {machine.machine_id}")
 
-        # Get tensor data using tensor ID (keep as integer for GPU machine)
-        storage_id_int = remote_tensor.untyped_storage().data_ptr()
+        # Get tensor data using storage ID
+        storage_id = remote_tensor.untyped_storage().data_ptr()
 
         # Use GPU machine to get tensor data by ID with view information
         # Pass tensor metadata so remote side can serialize just the view's data
         tensor_data = gpu_machine.get_storage_data(
-            storage_id_int,
+            storage_id,
             shape=list(remote_tensor.shape),
             stride=list(remote_tensor.stride()),
             storage_offset=remote_tensor.storage_offset(),

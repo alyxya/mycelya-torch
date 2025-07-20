@@ -143,9 +143,9 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             storages, lock = self._get_storages()
             with lock:
                 # Store tensor storage for all tensors
-                storage_id_int = int(storage_id)
-                storages[storage_id_int] = tensor.untyped_storage()
-                log.info(f"📥 RECEIVED Storage ID {storage_id_int} on Modal (shape: {tensor.shape})")
+                storage_id = int(storage_id)
+                storages[storage_id] = tensor.untyped_storage()
+                log.info(f"📥 RECEIVED Storage ID {storage_id} on Modal (shape: {tensor.shape})")
             
             return storage_id
 
@@ -170,11 +170,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             storages, lock = self._get_storages()
             
             with lock:
-                storage_id_int = int(storage_id)
-                if storage_id_int not in storages:
-                    raise KeyError(f"Storage ID {storage_id_int} not found")
+                storage_id = int(storage_id)
+                if storage_id not in storages:
+                    raise KeyError(f"Storage ID {storage_id} not found")
                 
-                storage = storages[storage_id_int]
+                storage = storages[storage_id]
                 
                 # If view parameters are provided, create the view and make it contiguous
                 if shape is not None:
@@ -184,11 +184,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     )
                     # Make contiguous to get only the view's data
                     tensor = tensor.contiguous()
-                    log.info(f"📦 Serializing view of storage {storage_id_int}: shape={shape}, stride={stride}, offset={storage_offset}")
+                    log.info(f"📦 Serializing view of storage {storage_id}: shape={shape}, stride={stride}, offset={storage_offset}")
                 else:
                     # Return full storage as before (backward compatibility)
                     tensor = torch.empty(0, device=storage.device).set_(storage)
-                    log.info(f"📦 Serializing full storage {storage_id_int}")
+                    log.info(f"📦 Serializing full storage {storage_id}")
                 
                 buffer = io.BytesIO()
                 torch.save(tensor, buffer)
@@ -214,12 +214,12 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             storages, lock = self._get_storages()
             
             with lock:
-                storage_id_int = int(storage_id)
-                if storage_id_int not in storages:
-                    log.warning(f"Storage ID {storage_id_int} not found for resize")
+                storage_id = int(storage_id)
+                if storage_id not in storages:
+                    log.warning(f"Storage ID {storage_id} not found for resize")
                     return False
                 
-                old_storage = storages[storage_id_int]
+                old_storage = storages[storage_id]
                 
                 # Parse dtype string back to torch.dtype
                 dtype_str = dtype.replace("torch.", "")
@@ -245,8 +245,8 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     new_tensor.view(-1)[:copy_numel] = old_tensor.view(-1)[:copy_numel]
                 
                 # Replace the storage
-                storages[storage_id_int] = new_tensor.untyped_storage()
-                log.info(f"🔄 Resized storage {storage_id_int} to shape {new_shape}")
+                storages[storage_id] = new_tensor.untyped_storage()
+                log.info(f"🔄 Resized storage {storage_id} to shape {new_shape}")
                 return True
 
         @modal.method()
@@ -263,11 +263,11 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             storages, lock = self._get_storages()
             
             with lock:
-                storage_id_int = int(storage_id)
-                removed = storage_id_int in storages
+                storage_id = int(storage_id)
+                removed = storage_id in storages
                 if removed:
-                    del storages[storage_id_int]
-                    log.info(f"🗑️ Removed storage {storage_id_int}")
+                    del storages[storage_id]
+                    log.info(f"🗑️ Removed storage {storage_id}")
                 return removed
 
         @modal.method()
@@ -321,15 +321,15 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     
                     # Get storage object
                     with lock:
-                        storage_id_int = int(storage_id)
-                        if storage_id_int not in storages:
+                        storage_id = int(storage_id)
+                        if storage_id not in storages:
                             available_ids = list(storages.keys())
-                            log.error(f"❌ MISSING Storage ID {storage_id_int}")
+                            log.error(f"❌ MISSING Storage ID {storage_id}")
                             log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
-                            log.error(f"🔍 Looking for: {storage_id_int} (type: {type(storage_id_int)})")
+                            log.error(f"🔍 Looking for: {storage_id} (type: {type(storage_id)})")
                             log.error(f"🔍 Available types: {[type(sid) for sid in available_ids]}")
-                            raise KeyError(f"Storage ID {storage_id_int} not found")
-                        storage = storages[storage_id_int]
+                            raise KeyError(f"Storage ID {storage_id} not found")
+                        storage = storages[storage_id]
                     
                     # Parse dtype string back to torch.dtype
                     dtype_str = metadata["dtype"].replace("torch.", "")
@@ -344,7 +344,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     )
                     
                     # Log tensor details on modal side
-                    log.debug(f"📥 MODAL tensor[{i}]: ID={storage_id_int}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
+                    log.debug(f"📥 MODAL tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
                     
                     # Log tensor data summary for debugging
                     if tensor.numel() > 0:
