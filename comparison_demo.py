@@ -14,7 +14,7 @@ def demonstrate_memory_efficiency():
     print("🎯 MEMORY EFFICIENCY DEMONSTRATION")
     print("=" * 60)
 
-    device = torch_remote.create_modal_machine("T4")
+    machine = torch_remote.create_modal_machine("T4")
 
     print("📊 Comparing memory usage patterns:\n")
 
@@ -33,7 +33,7 @@ def demonstrate_memory_efficiency():
         print(f"🔍 Testing size {size} (expected data: {expected_mb:.1f} MB)")
 
         # Create remote tensor
-        remote_tensor = torch.randn(size, device=device.device())
+        remote_tensor = torch.randn(size, device=machine.device())
 
         # Show key properties
         print(f"   Tensor type: {type(remote_tensor).__name__}")
@@ -63,20 +63,20 @@ def demonstrate_operations():
     print("🧮 OPERATIONS DEMONSTRATION")
     print("=" * 60)
 
-    device = torch_remote.create_modal_machine("T4")
+    machine = torch_remote.create_modal_machine("T4")
 
     print("Testing various operations with remote tensor backend:\n")
 
     # Create tensors
-    x = torch.randn(100, 100, device=device.device())
-    y = torch.randn(100, 100, device=device.device())
+    x = torch.randn(100, 100, device=machine.device())
+    y = torch.randn(100, 100, device=machine.device())
 
     print(f"Created tensors: x.device={x.data.device}, y.device={y.data.device}")
 
     operations = [
         ("Addition", lambda: x + y),
         ("Matrix multiplication", lambda: x.mm(y)),
-        ("Broadcasting", lambda: x + torch.randn(1, 100, device=device.device())),
+        ("Broadcasting", lambda: x + torch.randn(1, 100, device=machine.device())),
         ("Transpose", lambda: x.t()),
         ("Slicing", lambda: x[10:20, 10:20]),
         ("Element-wise functions", lambda: torch.relu(x)),
@@ -101,11 +101,11 @@ def demonstrate_comparison_with_original():
     print("📈 COMPARISON WITH PREVIOUS APPROACH")
     print("=" * 60)
 
-    device = torch_remote.create_modal_machine("T4")
+    machine = torch_remote.create_modal_machine("T4")
 
     # Current approach (remote tensors)
     print("Current implementation (remote tensors):")
-    current_tensor = torch.randn(1000, 1000, device=device.device())
+    current_tensor = torch.randn(1000, 1000, device=machine.device())
     print(f"   Underlying device: {current_tensor.data.device}")
     print(f"   Local memory for metadata: ~0 MB (efficient remote tensor)")
     print(f"   ✅ Zero local memory overhead")

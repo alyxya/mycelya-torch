@@ -25,8 +25,8 @@ def modal_t4_device():
     The device is created once per test session and reused across all tests.
     This reduces GPU resource usage by sharing device instances across tests.
     """
-    device = torch_remote.create_modal_machine("T4")
-    yield device
+    machine = torch_remote.create_modal_machine("T4")
+    yield machine
     # Cleanup if needed (device cleanup is typically handled by torch_remote)
 
 

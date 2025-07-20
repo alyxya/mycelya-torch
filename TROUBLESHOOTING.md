@@ -153,7 +153,7 @@ ValueError: Invalid GPU type 'RTX4090'. Valid types: ['T4', 'L4', 'A10G', 'A100-
        print(gpu_type.value)
    
    # Create device with valid GPU type
-   device = torch_remote.create_modal_machine("A100-40GB")
+   machine = torch_remote.create_modal_machine("A100-40GB")
    ```
 
 2. **Case-sensitive GPU types**: Ensure exact spelling and case.
@@ -171,7 +171,7 @@ TimeoutError: Device initialization timed out after 300 seconds
 
 2. **Try smaller GPU type** (T4/L4 start faster than A100/H100):
    ```python
-   device = torch_remote.create_modal_machine("T4")  # Faster startup
+   machine = torch_remote.create_modal_machine("T4")  # Faster startup
    ```
 
 3. **Increase timeout** by modifying GPU config if needed.
@@ -208,8 +208,8 @@ TimeoutError: Remote operation timed out after 450 seconds
 4. **Use simpler operations** to test connectivity:
    ```python
    import torch
-   device = torch_remote.create_modal_machine("T4")
-   x = torch.randn(10, 10, device=device)
+   machine = torch_remote.create_modal_machine("T4")
+   x = torch.randn(10, 10, device=machine.device())
    y = x + 1  # Simple operation
    ```
 
@@ -259,19 +259,19 @@ This is **by design** - each remote device represents a separate GPU instance.
 
 1. **Use same device for all tensors**:
    ```python
-   device = torch_remote.create_modal_machine("A100-40GB")
-   x = torch.randn(10, 10, device=device)
-   y = torch.randn(10, 10, device=device)
+   machine = torch_remote.create_modal_machine("A100-40GB")
+   x = torch.randn(10, 10, device=machine.device())
+   y = torch.randn(10, 10, device=machine.device())
    z = x + y  # ✅ Works - same device
    ```
 
 2. **Transfer tensors if needed**:
    ```python
-   device1 = torch_remote.create_modal_machine("T4")
-   device2 = torch_remote.create_modal_machine("L4")
+   machine1 = torch_remote.create_modal_machine("T4")
+   machine2 = torch_remote.create_modal_machine("L4")
    
-   x = torch.randn(10, 10, device=device1)
-   y = torch.randn(10, 10, device=device2)
+   x = torch.randn(10, 10, device=machine1.device())
+   y = torch.randn(10, 10, device=machine2.device())
    
    # Transfer to same device
    y_on_device1 = y.to(device1)
@@ -296,8 +296,8 @@ x = torch.randn(10, 10, device="remote")
 x = torch.randn(10, 10, device="remote:0")
 
 # ✅ Correct
-device = torch_remote.create_modal_machine("A100-40GB")
-x = torch.randn(10, 10, device=device)
+machine = torch_remote.create_modal_machine("A100-40GB")
+x = torch.randn(10, 10, device=machine.device())
 ```
 
 #### **Problem**: Device ID not preserved
@@ -308,7 +308,7 @@ RuntimeError: Device ID must be explicitly specified for remote tensor creation
 **Solution**:
 1. **Check tensor has device ID**:
    ```python
-   tensor = torch.randn(10, 10, device=device)
+   tensor = torch.randn(10, 10, device=machine.device())
    print(f"Device ID: {getattr(tensor, '_device_id', 'NOT SET')}")
    ```
 
@@ -359,14 +359,14 @@ RuntimeError: CUDA out of memory. Tried to allocate X GiB
 1. **Use smaller tensors**:
    ```python
    # Reduce tensor size
-   x = torch.randn(1000, 1000, device=device)  # Instead of (10000, 10000)
+   x = torch.randn(1000, 1000, device=machine.device())  # Instead of (10000, 10000)
    ```
 
 2. **Choose appropriate GPU type**:
    ```python
    # For large models, use high-memory GPUs
-   device = torch_remote.create_modal_machine("A100-80GB")  # 80GB memory
-   device = torch_remote.create_modal_machine("H100")       # 80GB memory
+   machine = torch_remote.create_modal_machine("A100-80GB")  # 80GB memory
+   machine = torch_remote.create_modal_machine("H100")       # 80GB memory
    ```
 
 3. **Process in batches**:
@@ -409,10 +409,10 @@ RuntimeError: CUDA out of memory. Tried to allocate X GiB
 1. **Use larger tensors** - small operations have high overhead:
    ```python
    # Small tensors may run locally (faster)
-   x = torch.randn(10, 10, device=device)
+   x = torch.randn(10, 10, device=machine.device())
    
    # Large tensors will run remotely
-   x = torch.randn(1000, 1000, device=device)
+   x = torch.randn(1000, 1000, device=machine.device())
    ```
 
 2. **Batch operations**:
@@ -428,11 +428,11 @@ RuntimeError: CUDA out of memory. Tried to allocate X GiB
 3. **Choose appropriate GPU**:
    ```python
    # For compute-heavy workloads
-   device = torch_remote.create_modal_machine("H100")  # Fastest
-   device = torch_remote.create_modal_machine("A100-40GB")  # Good performance
+   machine = torch_remote.create_modal_machine("H100")  # Fastest
+   machine = torch_remote.create_modal_machine("A100-40GB")  # Good performance
    
    # For testing/light workloads
-   device = torch_remote.create_modal_machine("T4")  # Cheaper, adequate
+   machine = torch_remote.create_modal_machine("T4")  # Cheaper, adequate
    ```
 
 ### Container Startup Delays
@@ -444,16 +444,16 @@ This is **normal behavior** - Modal containers have cold start time.
 **Solutions**:
 1. **Use smaller GPU types** for faster startup:
    ```python
-   device = torch_remote.create_modal_machine("T4")  # ~30-60 seconds
-   device = torch_remote.create_modal_machine("L4")  # ~30-60 seconds
+   machine = torch_remote.create_modal_machine("T4")  # ~30-60 seconds
+   machine = torch_remote.create_modal_machine("L4")  # ~30-60 seconds
    # vs
-   device = torch_remote.create_modal_machine("H100")  # ~2-5 minutes
+   machine = torch_remote.create_modal_machine("H100")  # ~2-5 minutes
    ```
 
 2. **Keep containers warm** by doing periodic operations:
    ```python
    # Do a small operation every few minutes to keep container alive
-   keepalive = torch.randn(2, 2, device=device)
+   keepalive = torch.randn(2, 2, device=machine.device())
    result = keepalive + 1
    ```
 
@@ -486,7 +486,7 @@ def choose_gpu(model_size_gb, workload_type):
 
 # Example usage
 gpu_type = choose_gpu(model_size_gb=15, workload_type="training")
-device = torch_remote.create_modal_machine(gpu_type)
+machine = torch_remote.create_modal_machine(gpu_type)
 ```
 
 ---
@@ -534,7 +534,7 @@ for device_id, device in registry._devices.items():
 
 **2. Verify tensor device information**:
 ```python
-tensor = torch.randn(10, 10, device=device)
+tensor = torch.randn(10, 10, device=machine.device())
 print(f"Device: {tensor.device}")
 print(f"Device type: {tensor.device.type}")
 print(f"Device index: {tensor.device.index}")
@@ -548,8 +548,8 @@ def test_device(device):
     print(f"Testing device: {device}")
     try:
         # Create tensors
-        x = torch.randn(10, 10, device=device)
-        y = torch.randn(10, 10, device=device)
+        x = torch.randn(10, 10, device=machine.device())
+        y = torch.randn(10, 10, device=machine.device())
         
         # Test basic operation
         z = x + y
@@ -638,15 +638,15 @@ def validate_torch_remote_setup():
     
     # 4. Check device creation
     try:
-        device = torch_remote.create_modal_machine("T4")
-        print(f"✅ Device creation: {device}")
+        machine = torch_remote.create_modal_machine("T4")
+        print(f"✅ Device creation: {machine}")
     except Exception as e:
         print(f"❌ Device creation failed: {e}")
         return False
     
     # 5. Check tensor creation
     try:
-        tensor = torch.randn(5, 5, device=device)
+        tensor = torch.randn(5, 5, device=machine.device())
         print(f"✅ Tensor creation: {tensor.shape} on {tensor.device}")
     except Exception as e:
         print(f"❌ Tensor creation failed: {e}")
@@ -657,8 +657,8 @@ def validate_torch_remote_setup():
         import logging
         logging.basicConfig(level=logging.INFO)
         
-        x = torch.randn(10, 10, device=device)
-        y = torch.randn(10, 10, device=device)
+        x = torch.randn(10, 10, device=machine.device())
+        y = torch.randn(10, 10, device=machine.device())
         z = x + y  # Should see remote execution logs
         print(f"✅ Basic operation: {z.shape}")
     except Exception as e:
@@ -716,8 +716,8 @@ If you're still experiencing issues after trying these solutions:
    import torch
    import torch_remote
    
-   device = torch_remote.create_modal_machine("T4")
-   x = torch.randn(10, 10, device=device)
+   machine = torch_remote.create_modal_machine("T4")
+   x = torch.randn(10, 10, device=machine.device())
    y = x + 1  # Your failing operation here
    ```
 
