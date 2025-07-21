@@ -322,7 +322,7 @@ def _create_modal_app_for_gpu(
                 return removed
 
         @modal.method()
-        def execute_aten_operation_with_io_separation(
+        def execute_aten_operation(
             self,
             op_name: str,
             tensor_metadata: List[Dict[str, Any]],
@@ -489,125 +489,6 @@ def _create_modal_app_for_gpu(
                 traceback.print_exc()
                 raise
 
-        @modal.method()
-        def execute_aten_operation(
-            self,
-            op_name: str,
-            tensor_metadata: List[Dict[str, Any]],
-            args: List[Any],
-            kwargs: Dict[str, Any],
-            machine_id: str
-        ) -> None:
-            """
-            Execute an operation using storage IDs and tensor metadata.
-            All tensors (input and output) are pre-allocated and passed as arguments.
-            
-            Args:
-                op_name: The operation name to execute
-                tensor_metadata: List of tensor metadata for reconstruction (shape, stride, offset, storage_id)
-                args: Operation arguments (with tensor placeholders)
-                kwargs: Operation keyword arguments (with tensor placeholders)
-                machine_id: Machine ID for logging
-                
-            Returns:
-                None (operation is executed on pre-allocated tensors)
-            """
-            import torch
-            
-            # Extract storage IDs from metadata
-            storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
-            
-            log.info(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
-            log.debug(f"Using storage IDs: {storage_ids}")
-            
-            try:
-                # Get storage mapping
-                storages, lock = self._get_storages()
-                
-                # Reconstruct all tensors from storage and metadata
-                tensors = []
-                for i, metadata in enumerate(tensor_metadata):
-                    storage_id = metadata["storage_id"]
-                    # DEBUG: Log what storage ID is being requested
-                    log.debug(f"Modal app looking for storage_id={storage_id} (type={type(storage_id)})")
-                    
-                    # Get storage object
-                    with lock:
-                        storage_id = int(storage_id)
-                        if storage_id not in storages:
-                            available_ids = list(storages.keys())
-                            log.error(f"❌ MISSING Storage ID {storage_id}")
-                            log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
-                            log.error(f"🔍 Looking for: {storage_id} (type: {type(storage_id)})")
-                            log.error(f"🔍 Available types: {[type(sid) for sid in available_ids]}")
-                            raise KeyError(f"Storage ID {storage_id} not found")
-                        storage = storages[storage_id]
-                    
-                    # Parse dtype string back to torch.dtype
-                    dtype_str = metadata["dtype"].replace("torch.", "")
-                    dtype = getattr(torch, dtype_str)
-                    
-                    # Reconstruct tensor using storage + metadata (on CUDA device)
-                    tensor = torch.empty(0, dtype=dtype, device="cuda").set_(
-                        storage,
-                        metadata["storage_offset"],
-                        metadata["shape"],
-                        metadata["stride"]
-                    )
-                    
-                    # Log tensor details on modal side
-                    log.debug(f"📥 MODAL tensor[{i}]: ID={storage_id}, shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}, size={tensor.numel()}")
-                    
-                    # Log tensor data summary for debugging
-                    if tensor.numel() > 0:
-                        # Only compute mean for floating point tensors
-                        if tensor.dtype.is_floating_point:
-                            log.debug(f"   Data range: [{tensor.min().item():.6f}, {tensor.max().item():.6f}], mean={tensor.mean().item():.6f}")
-                        else:
-                            log.debug(f"   Data range: [{tensor.min().item()}, {tensor.max().item()}], dtype={tensor.dtype}")
-                    
-                    tensors.append(tensor)
-                
-                # Replace tensor placeholders in args with actual tensors
-                processed_args = []
-                for arg in args:
-                    if isinstance(arg, str) and arg.startswith("__TENSOR_"):
-                        idx = int(arg.split("_")[-1])
-                        processed_args.append(tensors[idx])
-                    else:
-                        processed_args.append(arg)
-                
-                # Process kwargs similarly
-                processed_kwargs = {}
-                for key, value in kwargs.items():
-                    if isinstance(value, str) and value.startswith("__TENSOR_"):
-                        idx = int(value.split("_")[-1])
-                        processed_kwargs[key] = tensors[idx]
-                    else:
-                        processed_kwargs[key] = value
-                
-                # Get the operation
-                op_name_fixed = op_name.replace("::", ".")
-                op_parts = op_name_fixed.split(".")
-                op = torch.ops
-                for part in op_parts:
-                    op = getattr(op, part)
-                
-                log.debug(f"Executing operation with {len(processed_args)} args and {len(tensors)} tensors")
-                
-                # Execute the operation - results are written directly to pre-allocated tensors
-                result = op(*processed_args, **processed_kwargs)
-                
-                log.info(f"✅ Completed: {op_name} - operation executed on pre-allocated tensors")
-                
-                # Operation completed successfully - any output tensors have been modified in-place
-                return
-                
-            except Exception as e:
-                log.error(f"❌ Error executing {op_name}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                raise
 
     _gpu_apps[machine_id] = (app, PytorchServer)
     return app, PytorchServer

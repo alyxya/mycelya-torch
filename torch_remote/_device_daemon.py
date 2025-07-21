@@ -105,21 +105,21 @@ class RemoteStorageRegistry:
             from ._remote_orchestrator import remote_orchestrator
             from .device import get_device_registry
 
-                orchestrator = remote_orchestrator
-                if orchestrator is not None:
-                    registry = get_device_registry()
-                    device = registry.get_device_by_index(device_index)
+            orchestrator = remote_orchestrator
+            if orchestrator is not None:
+                registry = get_device_registry()
+                device = registry.get_device_by_index(device_index)
 
-                    if device is not None:
-                        client = device.get_client()
-                        if client and client.is_running():
-                            # Create storage with exact byte size
-                            # No garbage data needed
-                            client.create_storage(nbytes, storage_id)
-                            log.info(
-                                f"Registered storage {storage_id} with client "
-                                f"({nbytes} bytes)"
-                            )
+                if device is not None:
+                    client = device.get_client()
+                    if client and client.is_running():
+                        # Create storage with exact byte size
+                        # No garbage data needed
+                        client.create_storage(nbytes, storage_id)
+                        log.info(
+                            f"Registered storage {storage_id} with client "
+                            f"({nbytes} bytes)"
+                        )
         except Exception as e:
             log.warning(
                 f"Failed to register storage {storage_id} with client: {e}"

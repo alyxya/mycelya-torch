@@ -538,45 +538,6 @@ class RemoteOrchestrator:
             log.error(f"Error during reconnection to device {device.machine_id}: {e}")
             return False
 
-    @with_error_handling
-    def safe_execute_remote_aten_operation(
-        self,
-        op_name: str,
-        tensor_metadata: List[Dict[str, Any]],
-        args: Tuple[Any, ...],
-        kwargs: Dict[str, Any],
-        machine: "RemoteMachine"
-    ) -> List[int]:
-        """
-        Safely execute an aten operation using tensor IDs with error handling.
-
-        Args:
-            op_name: The aten operation name
-            tensor_metadata: Metadata for reconstructing tensors (includes storage_id)
-            args: Operation arguments
-            kwargs: Operation keyword arguments
-            machine: Target machine
-
-        Returns:
-            Result tensor IDs
-
-        Raises:
-            StaleReferenceError: If tensor references are invalid
-            ConnectionError: If device is not connected
-            RemoteExecutionError: If execution fails
-        """
-        # Validate device connection
-        if not self.is_device_connected(machine):
-            raise ConnectionError(f"Device {machine.machine_id} is not connected")
-
-        # Validate tensor references
-        storage_ids = extract_storage_ids(tensor_metadata)
-        for storage_id in storage_ids:
-            if not self.check_tensor_exists(storage_id, machine):
-                raise StaleReferenceError(f"Tensor {storage_id} not found on device {machine.machine_id}")
-
-        # Execute operation
-        return self.execute_remote_aten_operation(op_name, tensor_metadata, args, kwargs, machine)
 
     def cleanup(self):
         """Clean up the remote orchestrator."""

@@ -154,36 +154,6 @@ class ModalClient(ClientInterface):
         kwargs: Dict[str, Any]
     ) -> None:
         """
-        Execute an aten operation using tensor IDs and metadata.
-        All tensors (input and output) are pre-allocated and passed as arguments.
-
-        Args:
-            op_name: The aten operation name
-            tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
-            args: Operation arguments
-            kwargs: Operation keyword arguments
-
-        Returns:
-            None (operation is executed on pre-allocated tensors)
-        """
-        if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-
-        from ..client_interface import extract_storage_ids
-        storage_ids = extract_storage_ids(tensor_metadata)
-        log.info(f"📡 Modal Client sending Storage IDs: {storage_ids} (types: {[type(sid) for sid in storage_ids]})")
-        return self._server_instance.execute_aten_operation.remote(
-            op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
-        )
-
-    def execute_aten_operation_with_io_separation(
-        self,
-        op_name: str,
-        tensor_metadata: List[Dict[str, Any]],
-        args: List[Any],
-        kwargs: Dict[str, Any]
-    ) -> None:
-        """
         Execute an aten operation with explicit input/output tensor separation.
 
         This method handles operations where input and output tensors are explicitly
@@ -203,10 +173,23 @@ class ModalClient(ClientInterface):
 
         from ..client_interface import extract_storage_ids
         storage_ids = extract_storage_ids(tensor_metadata)
-        log.info(f"📡 Modal Client (IO separation) sending Storage IDs: {storage_ids}")
-        return self._server_instance.execute_aten_operation_with_io_separation.remote(
-            op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
+        log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")
+        return self._server_instance.execute_aten_operation.remote(
+            op_name, tensor_metadata, args, kwargs, self.machine_id
         )
+
+    def execute_aten_operation_with_io_separation(
+        self,
+        op_name: str,
+        tensor_metadata: List[Dict[str, Any]],
+        args: List[Any],
+        kwargs: Dict[str, Any]
+    ) -> None:
+        """
+        Legacy method name for backward compatibility.
+        Delegates to execute_aten_operation which now uses IO separation.
+        """
+        return self.execute_aten_operation(op_name, tensor_metadata, args, kwargs)
 
     def remove_storage(self, storage_id: int) -> bool:
         """
