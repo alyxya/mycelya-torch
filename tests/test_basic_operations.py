@@ -290,6 +290,141 @@ class TestTensorComparisons:
             pytest.skip("Tensor comparison operations not implemented")
 
 
+class TestTensorConcatenation:
+    """Tests for tensor concatenation (aten::cat) operations."""
+    
+    def test_cat_dim0_basic(self, shared_devices):
+        """Test basic concatenation along dimension 0."""
+        x = torch.randn(2, 3)
+        y = torch.randn(3, 3)
+        
+        x_remote = x.to(shared_devices["t4"].device())
+        y_remote = y.to(shared_devices["t4"].device())
+        
+        # Concatenate along dim 0
+        result_remote = torch.cat([x_remote, y_remote], dim=0)
+        result_expected = torch.cat([x, y], dim=0)
+        
+        # Verify shape and values
+        assert result_remote.shape == (5, 3)
+        NumericalTestUtils.assert_remote_cpu_match(result_remote, result_expected)
+    
+    def test_cat_dim1_basic(self, shared_devices):
+        """Test basic concatenation along dimension 1."""
+        x = torch.randn(2, 2)
+        y = torch.randn(2, 3)
+        
+        x_remote = x.to(shared_devices["t4"].device())
+        y_remote = y.to(shared_devices["t4"].device())
+        
+        # Concatenate along dim 1
+        result_remote = torch.cat([x_remote, y_remote], dim=1)
+        result_expected = torch.cat([x, y], dim=1)
+        
+        # Verify shape and values
+        assert result_remote.shape == (2, 5)
+        NumericalTestUtils.assert_remote_cpu_match(result_remote, result_expected)
+    
+    def test_cat_multiple_tensors(self, shared_devices):
+        """Test concatenation with multiple tensors."""
+        x = torch.randn(2, 2)
+        y = torch.randn(2, 2)
+        z = torch.randn(2, 2)
+        
+        x_remote = x.to(shared_devices["t4"].device())
+        y_remote = y.to(shared_devices["t4"].device())
+        z_remote = z.to(shared_devices["t4"].device())
+        
+        # Concatenate 3 tensors along dim 0
+        result_remote = torch.cat([x_remote, y_remote, z_remote], dim=0)
+        result_expected = torch.cat([x, y, z], dim=0)
+        
+        # Verify shape and values
+        assert result_remote.shape == (6, 2)
+        NumericalTestUtils.assert_remote_cpu_match(result_remote, result_expected)
+    
+    def test_cat_with_gradients(self, shared_devices):
+        """Test concatenation with gradient flow."""
+        x = torch.randn(2, 2, requires_grad=True)
+        y = torch.randn(3, 2, requires_grad=True)
+        
+        x_remote = x.to(shared_devices["t4"].device())
+        y_remote = y.to(shared_devices["t4"].device())
+        
+        # Concatenate and compute loss
+        cat_remote = torch.cat([x_remote, y_remote], dim=0)
+        loss_remote = cat_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients exist and are correct
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        NumericalTestUtils.verify_gradient_flow(y_remote)
+        
+        # Gradients should be all ones (derivative of sum is 1)
+        expected_x_grad = torch.ones_like(x)
+        expected_y_grad = torch.ones_like(y)
+        
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_x_grad,
+            msg="x gradient should be ones"
+        )
+        NumericalTestUtils.assert_tensors_close(
+            y_remote.grad.cpu(), expected_y_grad,
+            msg="y gradient should be ones"
+        )
+    
+    def test_cat_different_dtypes(self, shared_devices):
+        """Test concatenation behavior with different dtypes."""
+        # Create tensors with same dtype
+        x = torch.randn(2, 2, dtype=torch.float32)
+        y = torch.randn(3, 2, dtype=torch.float32)
+        
+        x_remote = x.to(shared_devices["t4"].device())
+        y_remote = y.to(shared_devices["t4"].device())
+        
+        result_remote = torch.cat([x_remote, y_remote], dim=0)
+        result_expected = torch.cat([x, y], dim=0)
+        
+        # Verify dtype is preserved
+        assert result_remote.dtype == torch.float32
+        NumericalTestUtils.assert_remote_cpu_match(result_remote, result_expected)
+    
+    def test_cat_single_tensor(self, shared_devices):
+        """Test concatenation with a single tensor."""
+        x = torch.randn(2, 3)
+        x_remote = x.to(shared_devices["t4"].device())
+        
+        # Cat with single tensor should return the same tensor
+        result_remote = torch.cat([x_remote], dim=0)
+        result_expected = torch.cat([x], dim=0)
+        
+        assert result_remote.shape == (2, 3)
+        NumericalTestUtils.assert_remote_cpu_match(result_remote, result_expected)
+    
+    @pytest.mark.parametrize("dim", [0, 1])
+    def test_cat_parametrized_dimensions(self, shared_devices, dim):
+        """Test concatenation along different dimensions."""
+        if dim == 0:
+            x = torch.randn(2, 3)
+            y = torch.randn(4, 3)
+            expected_shape = (6, 3)
+        else:  # dim == 1
+            x = torch.randn(2, 3)
+            y = torch.randn(2, 4)
+            expected_shape = (2, 7)
+        
+        x_remote = x.to(shared_devices["t4"].device())
+        y_remote = y.to(shared_devices["t4"].device())
+        
+        result_remote = torch.cat([x_remote, y_remote], dim=dim)
+        result_expected = torch.cat([x, y], dim=dim)
+        
+        assert result_remote.shape == expected_shape
+        NumericalTestUtils.assert_remote_cpu_match(result_remote, result_expected)
+
+
 @pytest.mark.parametrize("operation,expected_shape", [
     (lambda x, y: x + y, (2, 2)),
     (lambda x, y: x - y, (2, 2)),
