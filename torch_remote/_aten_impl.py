@@ -957,13 +957,20 @@ _remote_lib_aten.impl(
 )
 _remote_lib_aten.impl("item", _remote_item_impl, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
 
-# AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY registrations removed:
-# These were causing autograd issues because:
+# AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY registrations removed for copy operations:
+# _copy_from and _to_copy were causing autograd issues because:
 # 1. _copy_from breaks autograd chain via copy_from_device() -> _deserialize_tensor() -> .detach()
 # 2. In-place operations on leaf variables with requires_grad=True are not allowed
 # 3. No proper grad_fn creation for autograd graph connectivity
-# 4. This remote tensor system doesn't need device-specific autograd behavior
+# 4. This remote tensor system doesn't need device-specific autograd behavior for data movement
 # 5. PyTorch's default autograd handles remote tensors correctly when only PRIVATEUSE1_DISPATCH_KEY is registered
+
+# However, item() is safe to register to AutogradPrivateUse1 because:
+# - It's a terminal operation that extracts scalar values
+# - It doesn't involve data movement or tensor creation
+# - It has well-defined behavior for tensors with requires_grad=True
+_remote_lib_aten_autograd = torch.library.Library("aten", "IMPL")
+_remote_lib_aten_autograd.impl("item", _remote_item_impl, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY)
 
 # Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
 # so we don't register a Python version to avoid conflicts
