@@ -132,6 +132,33 @@ class ClientInterface(ABC):
         """
         pass
 
+    @abstractmethod
+    def execute_aten_operation_with_io_separation(
+        self,
+        op_name: str,
+        storage_ids: List[int],
+        tensor_metadata: List[Dict[str, Any]],
+        args: List[Any],
+        kwargs: Dict[str, Any]
+    ) -> None:
+        """
+        Execute an aten operation with explicit input/output tensor separation.
+        
+        This method handles operations where input and output tensors are explicitly
+        separated, enabling better handling of complex output patterns and storage updates.
+
+        Args:
+            op_name: The aten operation name to execute
+            storage_ids: List of all tensor storage IDs (inputs + outputs)
+            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags
+            args: Operation arguments (may contain tensor placeholders)
+            kwargs: Operation keyword arguments (may contain tensor placeholders)
+
+        Returns:
+            None (operation results are written to output tensors)
+        """
+        pass
+
 
     @abstractmethod
     def resize_storage(self, storage_id: int, new_bytes: int) -> bool:

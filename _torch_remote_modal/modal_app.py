@@ -303,6 +303,172 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 return removed
 
         @modal.method()
+        def execute_aten_operation_with_io_separation(
+            self,
+            op_name: str,
+            storage_ids: List[int],
+            tensor_metadata: List[Dict[str, Any]],
+            args: List[Any],
+            kwargs: Dict[str, Any],
+            machine_id: str
+        ) -> None:
+            """
+            Execute an operation with explicit input/output tensor separation.
+            
+            This method handles operations where input and output tensors are explicitly
+            separated based on the is_input/is_output flags in tensor metadata.
+            
+            Args:
+                op_name: The operation name to execute
+                storage_ids: List of all tensor storage IDs (inputs + outputs)
+                tensor_metadata: List of tensor metadata with is_input/is_output flags
+                args: Operation arguments (with tensor placeholders)
+                kwargs: Operation keyword arguments (with tensor placeholders)
+                machine_id: Machine ID for logging
+                
+            Returns:
+                None (operation results are written to output tensors)
+            """
+            import torch
+            
+            log.info(f"🚀 Modal {gpu_type} (machine {machine_id}) executing with IO separation: {op_name}")
+            log.debug(f"Using storage IDs: {storage_ids}")
+            
+            try:
+                # Get storage mapping
+                storages, lock = self._get_storages()
+                
+                # Reconstruct only input tensors from storage and metadata
+                # Output tensors don't need reconstruction - we'll update their storage mapping after the operation
+                tensors = []
+                input_tensors = []
+                output_storage_ids = []
+                output_metadata_list = []
+                
+                for i, (storage_id, metadata) in enumerate(zip(storage_ids, tensor_metadata)):
+                    log.debug(f"Modal app processing storage_id={storage_id} (type={type(storage_id)})")
+                    
+                    # Classify tensor as input or output
+                    is_input = metadata.get("is_input", True)  # Default to input for backward compatibility
+                    is_output = metadata.get("is_output", False)
+                    
+                    # Always reconstruct tensor from storage + metadata (needed for operation execution)
+                    with lock:
+                        storage_id = int(storage_id)
+                        if storage_id not in storages:
+                            available_ids = list(storages.keys())
+                            log.error(f"❌ MISSING Storage ID {storage_id}")
+                            log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
+                            raise KeyError(f"Storage ID {storage_id} not found")
+                        storage = storages[storage_id]
+                    
+                    # Parse dtype string back to torch.dtype
+                    dtype_str = metadata["dtype"].replace("torch.", "")
+                    dtype = getattr(torch, dtype_str)
+                    
+                    # Reconstruct tensor using storage + metadata (on CUDA device)
+                    tensor = torch.empty(0, dtype=dtype, device=CUDA_DEVICE_TYPE).set_(
+                        storage,
+                        metadata["storage_offset"],
+                        metadata["shape"],
+                        metadata["stride"]
+                    )
+                    
+                    log.debug(f"📥 MODAL tensor[{i}] ({'input' if is_input else ''}{'output' if is_output else ''}): ID={storage_id}, shape={tensor.shape}")
+                    tensors.append(tensor)
+                    
+                    # Keep track of which tensors are inputs vs outputs for post-operation processing
+                    if is_input:
+                        input_tensors.append(tensor)
+                    if is_output:
+                        output_storage_ids.append(storage_id)
+                        output_metadata_list.append(metadata)
+                
+                # Replace tensor placeholders in args with actual reconstructed tensors
+                processed_args = []
+                for arg in args:
+                    if isinstance(arg, str) and arg.startswith(TENSOR_PLACEHOLDER_PREFIX):
+                        idx = int(arg.split("_")[-1])
+                        if idx < len(tensors):
+                            processed_args.append(tensors[idx])
+                        else:
+                            raise IndexError(f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)")
+                    else:
+                        processed_args.append(arg)
+                
+                # Process kwargs similarly
+                processed_kwargs = {}
+                for key, value in kwargs.items():
+                    if isinstance(value, str) and value.startswith(TENSOR_PLACEHOLDER_PREFIX):
+                        idx = int(value.split("_")[-1])
+                        if idx < len(tensors):
+                            processed_kwargs[key] = tensors[idx]
+                        else:
+                            raise IndexError(f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)")
+                    else:
+                        processed_kwargs[key] = value
+                
+                # Get the operation
+                op_name_fixed = op_name.replace("::", ".")
+                op_parts = op_name_fixed.split(".")
+                op = torch.ops
+                for part in op_parts:
+                    op = getattr(op, part)
+                
+                log.debug(f"Executing operation with {len(processed_args)} args, "
+                         f"{len(input_tensors)} inputs, {len(output_storage_ids)} outputs")
+                
+                # Execute the operation on input tensors - this will create result tensors
+                result = op(*processed_args, **processed_kwargs)
+                
+                # Handle storage mapping updates for output tensors
+                if output_storage_ids:
+                    log.debug(f"Processing {len(output_storage_ids)} output tensors for storage updates")
+                    
+                    # Convert result to list if it's a single tensor
+                    if isinstance(result, torch.Tensor):
+                        result_tensors = [result]
+                    elif isinstance(result, tuple):
+                        result_tensors = list(result)
+                    else:
+                        log.warning(f"Unexpected result type: {type(result)}")
+                        result_tensors = []
+                    
+                    # Update storage mapping for each output tensor
+                    with lock:
+                        for i, (storage_id, metadata) in enumerate(zip(output_storage_ids, output_metadata_list)):
+                            if i < len(result_tensors):
+                                result_tensor = result_tensors[i]
+                                storage_id = int(storage_id)
+                                
+                                # Check if the storage has changed
+                                if storage_id in storages:
+                                    current_storage = storages[storage_id]
+                                    result_storage = result_tensor.untyped_storage()
+                                    
+                                    if current_storage is not result_storage:
+                                        # Storage changed - update the mapping
+                                        log.debug(f"📦 Updating storage mapping for ID {storage_id}")
+                                        storages[storage_id] = result_storage
+                                    else:
+                                        log.debug(f"📦 Storage ID {storage_id} unchanged")
+                                else:
+                                    # New storage ID - add to mapping
+                                    log.debug(f"📦 Adding new storage mapping for ID {storage_id}")
+                                    storages[storage_id] = result_tensor.untyped_storage()
+                            else:
+                                log.warning(f"No result tensor for output storage ID {storage_id}")
+                
+                log.info(f"✅ Completed: {op_name} with IO separation")
+                return
+                
+            except Exception as e:
+                log.error(f"❌ Error executing {op_name} with IO separation: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                raise
+
+        @modal.method()
         def execute_aten_operation(
             self,
             op_name: str,

@@ -96,6 +96,131 @@ class RemoteOrchestrator:
 
         return client
 
+    def execute_remote_aten_operation_with_outputs(
+        self,
+        op_name: str,
+        input_tensors: List[torch.Tensor],
+        output_tensors: List[torch.Tensor],
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any]
+    ) -> None:
+        """
+        Execute an aten operation remotely with explicit input and output tensors.
+        
+        This method uses the new approach where input and output tensors are passed
+        explicitly, enabling proper handling of operations with complex output patterns.
+
+        Args:
+            op_name: The aten operation name
+            input_tensors: List of input tensors (read-only)
+            output_tensors: List of output tensors (write targets)
+            args: Operation arguments (may contain tensor placeholders)
+            kwargs: Operation keyword arguments (may contain tensor placeholders)
+
+        Returns:
+            None (results are written to output_tensors)
+        """
+        try:
+            log.info(f"🚀 ORCHESTRATOR: Starting remote execution of {op_name}")
+            log.info(f"   - Input tensors: {len(input_tensors)}")
+            log.info(f"   - Output tensors: {len(output_tensors)}")
+            
+            # Detect machine from input tensors
+            machine = None
+            for tensor in input_tensors + output_tensors:
+                if tensor.device.type == REMOTE_DEVICE_TYPE:
+                    registry = get_device_registry()
+                    tensor_machine = registry.get_device_by_index(tensor.device.index)
+                    if machine is None:
+                        machine = tensor_machine
+                    elif machine is not tensor_machine:
+                        raise RuntimeError(
+                            f"Cannot perform operations between tensors on different remote machines: "
+                            f"\"{machine.machine_id}\" and \"{tensor_machine.machine_id}\""
+                        )
+
+            if machine is None:
+                raise ValueError("RemoteMachine is required for remote execution")
+
+            # Prepare tensor lists and metadata
+            all_tensors = input_tensors + output_tensors
+            storage_ids = []
+            tensor_metadata = []
+            
+            for tensor in all_tensors:
+                if tensor.device.type == REMOTE_DEVICE_TYPE:
+                    storage_id = tensor.untyped_storage().data_ptr()
+                    
+                    if storage_id == 0:
+                        log.warning(f"Skipping empty tensor with data_ptr=0 in remote operation {op_name}")
+                        continue
+
+                    storage_ids.append(storage_id)
+                    # Use object identity checks instead of membership to avoid triggering aten::eq
+                    is_input = any(tensor is input_tensor for input_tensor in input_tensors)
+                    is_output = any(tensor is output_tensor for output_tensor in output_tensors)
+                    
+                    metadata = {
+                        "shape": list(tensor.shape),
+                        "stride": list(tensor.stride()),
+                        "storage_offset": tensor.storage_offset(),
+                        "dtype": str(tensor.dtype),
+                        "storage_id": storage_id,
+                        "is_input": is_input,
+                        "is_output": is_output
+                    }
+                    tensor_metadata.append(metadata)
+
+            # Replace remote tensors in args/kwargs with placeholders to avoid serialization issues
+            processed_args = []
+            tensor_index = 0
+            for arg in args:
+                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+                    # Find this tensor in our metadata list
+                    arg_storage_id = arg.untyped_storage().data_ptr()
+                    for i, metadata in enumerate(tensor_metadata):
+                        if metadata["storage_id"] == arg_storage_id:
+                            processed_args.append(f"__TENSOR_{i}")
+                            break
+                    else:
+                        # Tensor not found in metadata - this shouldn't happen
+                        log.warning(f"Remote tensor not found in metadata for {op_name}")
+                        processed_args.append(arg)
+                else:
+                    processed_args.append(arg)
+            
+            processed_kwargs = {}
+            for key, value in kwargs.items():
+                if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+                    # Find this tensor in our metadata list
+                    value_storage_id = value.untyped_storage().data_ptr()
+                    for i, metadata in enumerate(tensor_metadata):
+                        if metadata["storage_id"] == value_storage_id:
+                            processed_kwargs[key] = f"__TENSOR_{i}"
+                            break
+                    else:
+                        # Tensor not found in metadata - this shouldn't happen
+                        log.warning(f"Remote tensor not found in metadata for {op_name}")
+                        processed_kwargs[key] = value
+                else:
+                    processed_kwargs[key] = value
+
+            # Execute remotely using new interface
+            log.info(f"🚀 ORCHESTRATOR: Calling modal execution for {op_name}")
+            log.info(f"   - Storage IDs: {storage_ids}")
+            
+            self.execute_remote_aten_operation_with_io_separation(
+                op_name, storage_ids, tensor_metadata, processed_args, processed_kwargs, machine
+            )
+
+            log.info(f"✅ ORCHESTRATOR: Remote operation {op_name} completed successfully")
+            return None
+
+        except Exception as e:
+            log.error(f"❌ Error in remote aten execution with outputs for {op_name}: {str(e)}")
+            traceback.print_exc()
+            raise
+
     def execute_remote_aten_operation_efficient(
         self,
         op_name: str,
@@ -244,6 +369,29 @@ class RemoteOrchestrator:
         client = self._get_device_client(machine)
         tensor_data = client.get_storage_data(storage_id)
         return self._deserialize_tensor(tensor_data)
+
+    def execute_remote_aten_operation_with_io_separation(
+        self,
+        op_name: str,
+        storage_ids: List[int],
+        tensor_metadata: List[Dict[str, Any]],
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
+        machine: "RemoteMachine"
+    ) -> None:
+        """
+        Execute an aten operation using tensor IDs with explicit input/output separation.
+        
+        Args:
+            op_name: The aten operation name
+            storage_ids: All tensor storage IDs (inputs + outputs)
+            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags
+            args: Operation arguments
+            kwargs: Operation keyword arguments
+            machine: Target machine
+        """
+        client = self._get_device_client(machine)
+        client.execute_aten_operation_with_io_separation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
 
     def execute_remote_aten_operation(
         self,

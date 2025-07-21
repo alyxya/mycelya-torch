@@ -168,6 +168,38 @@ class ModalClient(ClientInterface):
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
 
+    def execute_aten_operation_with_io_separation(
+        self,
+        op_name: str,
+        storage_ids: List[int],
+        tensor_metadata: List[Dict[str, Any]],
+        args: List[Any],
+        kwargs: Dict[str, Any]
+    ) -> None:
+        """
+        Execute an aten operation with explicit input/output tensor separation.
+        
+        This method handles operations where input and output tensors are explicitly
+        separated, enabling better handling of complex output patterns and storage updates.
+
+        Args:
+            op_name: The aten operation name
+            storage_ids: List of all tensor storage IDs (inputs + outputs)
+            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags
+            args: Operation arguments
+            kwargs: Operation keyword arguments
+
+        Returns:
+            None (operation results are written to output tensors)
+        """
+        if not self.is_running():
+            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
+
+        log.info(f"📡 Modal Client (IO separation) sending Storage IDs: {storage_ids}")
+        return self._server_instance.execute_aten_operation_with_io_separation.remote(
+            op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
+        )
+
     def remove_storage(self, storage_id: int) -> bool:
         """
         Remove a storage from the remote machine.
