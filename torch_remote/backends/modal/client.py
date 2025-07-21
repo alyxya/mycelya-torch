@@ -8,8 +8,8 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List, Optional
 import logging
+from typing import Any, Dict, List, Optional
 
 from ..client_interface import ClientInterface
 
@@ -102,8 +102,14 @@ class ModalClient(ClientInterface):
 
         self._server_instance.update_storage.remote(tensor_data, storage_id)
 
-    def get_storage_data(self, storage_id: int, shape: List[int] = None, stride: List[int] = None,
-                        storage_offset: int = 0, dtype: str = None) -> bytes:
+    def get_storage_data(
+        self,
+        storage_id: int,
+        shape: List[int] = None,
+        stride: List[int] = None,
+        storage_offset: int = 0,
+        dtype: str = None,
+    ) -> bytes:
         """
         Get storage data by ID for device transfer, optionally as a specific view.
 
@@ -120,16 +126,18 @@ class ModalClient(ClientInterface):
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
 
-        return self._server_instance.get_storage_data.remote(storage_id, shape, stride, storage_offset, dtype)
+        return self._server_instance.get_storage_data.remote(
+            storage_id, shape, stride, storage_offset, dtype
+        )
 
     def resize_storage(self, storage_id: int, new_bytes: int) -> bool:
         """
         Resize a storage on the remote machine.
-        
+
         Args:
             storage_id: The storage ID to resize
             new_bytes: The new size in bytes
-            
+
         Returns:
             True if resize succeeded, False if storage not found or new_bytes <= current size
         """
@@ -163,7 +171,10 @@ class ModalClient(ClientInterface):
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
 
-        log.info(f"📡 Modal Client sending Storage IDs: {storage_ids} (types: {[type(sid) for sid in storage_ids]})")
+        log.info(
+            f"📡 Modal Client sending Storage IDs: {storage_ids} "
+            f"(types: {[type(sid) for sid in storage_ids]})"
+        )
         return self._server_instance.execute_aten_operation.remote(
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
@@ -178,7 +189,7 @@ class ModalClient(ClientInterface):
     ) -> None:
         """
         Execute an aten operation with explicit input/output tensor separation.
-        
+
         This method handles operations where input and output tensors are explicitly
         separated, enabling better handling of complex output patterns and storage updates.
 
@@ -195,7 +206,9 @@ class ModalClient(ClientInterface):
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
 
-        log.info(f"📡 Modal Client (IO separation) sending Storage IDs: {storage_ids}")
+        log.info(
+            f"📡 Modal Client (IO separation) sending Storage IDs: {storage_ids}"
+        )
         return self._server_instance.execute_aten_operation_with_io_separation.remote(
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
@@ -215,8 +228,6 @@ class ModalClient(ClientInterface):
 
         return self._server_instance.remove_storage.remote(storage_id)
 
-
-
     def __enter__(self):
         """Context manager entry - starts the machine."""
         self.start()
@@ -226,10 +237,12 @@ class ModalClient(ClientInterface):
         """Context manager exit - stops the machine."""
         self.stop()
 
-
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
-        return f"ModalClient(gpu_type=\"{self.gpu_type}\", machine_id=\"{self.machine_id}\", status=\"{status}\")"
+        return (
+            f'ModalClient(gpu_type="{self.gpu_type}", '
+            f'machine_id="{self.machine_id}", status="{status}")'
+        )
 
 
 def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> ModalClient:

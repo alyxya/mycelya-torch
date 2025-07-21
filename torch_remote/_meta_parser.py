@@ -9,11 +9,18 @@ from torch.utils._pytree import tree_map, tree_map_only
 
 
 class RemoteTensorMeta:
-    def __init__(self, data_ptr: int, size: torch.Size, stride: Tuple[int, ...], 
-                 storage_offset: int, dtype: torch.dtype, nelem_in_bytes: int, 
-                 storage_id: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        data_ptr: int,
+        size: torch.Size,
+        stride: Tuple[int, ...],
+        storage_offset: int,
+        dtype: torch.dtype,
+        nelem_in_bytes: int,
+        storage_id: Optional[int] = None,
+    ) -> None:
         """Create RemoteTensorMeta with explicit metadata.
-        
+
         Args:
             data_ptr: Tensor ID/storage ID
             size: Tensor shape
@@ -32,16 +39,18 @@ class RemoteTensorMeta:
         self.storage_id = storage_id
 
     @classmethod
-    def from_tensor(cls, tensor: torch.Tensor, checked: bool = True) -> 'RemoteTensorMeta':
+    def from_tensor(
+        cls, tensor: torch.Tensor, checked: bool = True
+    ) -> 'RemoteTensorMeta':
         """Create RemoteTensorMeta from existing tensor.
-        
+
         Args:
             tensor: Source tensor to extract metadata from
             checked: Whether to validate tensor is on remote device
-            
+
         Returns:
             RemoteTensorMeta instance with tensor's metadata
-            
+
         Raises:
             RuntimeError: If checked=True and tensor is not on remote device
         """
@@ -60,12 +69,14 @@ class RemoteTensorMeta:
         )
 
     @classmethod
-    def from_remote_tensor(cls, tensor: torch.Tensor) -> 'RemoteTensorMeta':
+    def from_remote_tensor(
+        cls, tensor: torch.Tensor
+    ) -> 'RemoteTensorMeta':
         """Create RemoteTensorMeta for remote tensor serialization.
-        
+
         Args:
             tensor: Remote tensor to create metadata from
-            
+
         Returns:
             RemoteTensorMeta instance with storage_id set for view tracking
         """
@@ -87,8 +98,9 @@ class RemoteTensorMeta:
         )
 
 
-# RemoteTensorData class removed - C++ implementations now return regular torch.Tensor objects
-# with proper device handling via the enhanced RemoteAllocator and ID-based allocation system
+# RemoteTensorData class removed - C++ implementations now return regular
+# torch.Tensor objects with proper device handling via the enhanced
+# RemoteAllocator and ID-based allocation system
 
 
 VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}

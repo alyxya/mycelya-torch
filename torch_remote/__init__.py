@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import types
-from typing import Any, Union, Optional
+from typing import Any, Optional, Union
 
 import torch
 
@@ -85,7 +85,9 @@ def _create_module() -> types.ModuleType:
         """
         return torch.accelerator.current_device_index()
 
-    def get_rng_state(device: Union[str, int, torch.device] = "remote") -> torch.Tensor:
+    def get_rng_state(
+        device: Union[str, int, torch.device] = "remote"
+    ) -> torch.Tensor:
         """Get the random number generator state for a remote device.
 
         Args:
@@ -104,7 +106,10 @@ def _create_module() -> types.ModuleType:
         default_generator = torch_remote._C._get_default_generator(idx)
         return default_generator.get_state()
 
-    def set_rng_state(new_state: torch.Tensor, device: Union[str, int, torch.device] = "remote") -> None:
+    def set_rng_state(
+        new_state: torch.Tensor,
+        device: Union[str, int, torch.device] = "remote"
+    ) -> None:
         """Set the random number generator state for a remote device.
 
         Args:
@@ -179,7 +184,6 @@ def _create_module() -> types.ModuleType:
     module.manual_seed = manual_seed  # type: ignore[assignment]
     module.manual_seed_all = manual_seed_all  # type: ignore[assignment]
 
-
     return module
 
 
@@ -189,7 +193,12 @@ torch._register_device_module("remote", _create_module())
 
 
 # Import device management
-from .device import create_modal_machine, RemoteMachine, GPUType, get_device_registry
+from .device import (
+    GPUType,
+    RemoteMachine,
+    create_modal_machine,
+    get_device_registry,
+)
 
 # Import ATen implementations to ensure PyTorch registrations are executed
 import torch_remote._aten_impl  # noqa: F401

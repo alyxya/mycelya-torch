@@ -10,12 +10,12 @@ Currently supports Modal as the first provider implementation.
 """
 import io
 import logging
-import traceback
-from typing import Any, Dict, List, Tuple, Optional
-import torch
 import time
+import traceback
+from typing import Any, Dict, List, Optional, Tuple
 
-# Direct string literals (no longer using separate constants)
+import torch
+
 from .device import RemoteMachine, get_device_registry
 
 log = logging.getLogger(__name__)
@@ -102,11 +102,11 @@ class RemoteOrchestrator:
         input_tensors: List[torch.Tensor],
         output_tensors: List[torch.Tensor],
         args: Tuple[Any, ...],
-        kwargs: Dict[str, Any]
+        kwargs: Dict[str, Any],
     ) -> None:
         """
         Execute an aten operation remotely with explicit input and output tensors.
-        
+
         This method uses the new approach where input and output tensors are passed
         explicitly, enabling proper handling of operations with complex output patterns.
 
@@ -135,8 +135,9 @@ class RemoteOrchestrator:
                         machine = tensor_machine
                     elif machine is not tensor_machine:
                         raise RuntimeError(
-                            f"Cannot perform operations between tensors on different remote machines: "
-                            f"\"{machine.machine_id}\" and \"{tensor_machine.machine_id}\""
+                            f"Cannot perform operations between tensors on different "
+                            f'remote machines: "{machine.machine_id}" and '
+                            f'"{tensor_machine.machine_id}"'
                         )
 
             if machine is None:
@@ -156,9 +157,14 @@ class RemoteOrchestrator:
                         continue
 
                     storage_ids.append(storage_id)
-                    # Use object identity checks instead of membership to avoid triggering aten::eq
-                    is_input = any(tensor is input_tensor for input_tensor in input_tensors)
-                    is_output = any(tensor is output_tensor for output_tensor in output_tensors)
+                    # Use object identity checks instead of membership
+                    # to avoid triggering aten::eq
+                    is_input = any(
+                        tensor is input_tensor for input_tensor in input_tensors
+                    )
+                    is_output = any(
+                        tensor is output_tensor for output_tensor in output_tensors
+                    )
                     
                     metadata = {
                         "shape": list(tensor.shape),
@@ -171,7 +177,8 @@ class RemoteOrchestrator:
                     }
                     tensor_metadata.append(metadata)
 
-            # Replace remote tensors in args/kwargs with placeholders to avoid serialization issues
+            # Replace remote tensors in args/kwargs with placeholders
+            # to avoid serialization issues
             processed_args = []
             tensor_index = 0
             for arg in args:
@@ -184,7 +191,9 @@ class RemoteOrchestrator:
                             break
                     else:
                         # Tensor not found in metadata - this shouldn't happen
-                        log.warning(f"Remote tensor not found in metadata for {op_name}")
+                        log.warning(
+                            f"Remote tensor not found in metadata for {op_name}"
+                        )
                         processed_args.append(arg)
                 else:
                     processed_args.append(arg)
@@ -208,16 +217,23 @@ class RemoteOrchestrator:
             # Execute remotely using new interface
             log.info(f"🚀 ORCHESTRATOR: Calling modal execution for {op_name}")
             log.info(f"   - Storage IDs: {storage_ids}")
-            
+
             self.execute_remote_aten_operation_with_io_separation(
-                op_name, storage_ids, tensor_metadata, processed_args, processed_kwargs, machine
+                op_name,
+                storage_ids,
+                tensor_metadata,
+                processed_args,
+                processed_kwargs,
+                machine,
             )
 
             log.info(f"✅ ORCHESTRATOR: Remote operation {op_name} completed successfully")
             return None
 
         except Exception as e:
-            log.error(f"❌ Error in remote aten execution with outputs for {op_name}: {str(e)}")
+            log.error(
+                f"❌ Error in remote aten execution with outputs for {op_name}: {str(e)}"
+            )
             traceback.print_exc()
             raise
 
@@ -225,7 +241,7 @@ class RemoteOrchestrator:
         self,
         op_name: str,
         args: Tuple[Any, ...],
-        kwargs: Dict[str, Any]
+        kwargs: Dict[str, Any],
     ) -> None:
         """
         Execute an aten operation remotely using the efficient storage ID system.
@@ -258,10 +274,15 @@ class RemoteOrchestrator:
                 if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     storage_id = arg.untyped_storage().data_ptr()
 
-                    # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
+                    # Check for empty tensors (data_ptr == 0)
+                    # These should not be sent to remote
                     if storage_id == 0:
-                        log.warning(f"Skipping empty tensor with data_ptr=0 in remote operation {op_name}. This may cause unexpected behavior.")
-                        # For now, replace with a placeholder - in the future we should handle this properly
+                        log.warning(
+                            f"Skipping empty tensor with data_ptr=0 in remote "
+                            f"operation {op_name}. This may cause unexpected behavior."
+                        )
+                        # For now, replace with a placeholder
+                        # In the future we should handle this properly
                         processed_args.append(None)
                         continue
 

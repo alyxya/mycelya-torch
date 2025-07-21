@@ -12,17 +12,16 @@ This module handles all Modal-specific functionality including:
 
 Part of: torch_remote PyTorch extension
 """
-import modal
-from typing import Any, Dict, List, Tuple, Optional
-import os
-import weakref
-import threading
-import random
 import logging
+import os
+import random
+import threading
+import weakref
 from collections import defaultdict
-import torch
+from typing import Any, Dict, List, Optional, Tuple
 
-# Direct string literals (no longer using separate constants)
+import modal
+import torch
 
 log = logging.getLogger(__name__)
 
@@ -50,28 +49,32 @@ GPU_CONFIG = {
 }
 
 
-def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
+def create_modal_app_for_gpu(
+    gpu_type: str, machine_id: str
+) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and server class for a specific GPU type and machine.
-    
+
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
-        
+
     Returns:
         Tuple of (modal_app, server_class) for the specified device
     """
     return _create_modal_app_for_gpu(gpu_type, machine_id)
 
 
-def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
+def _create_modal_app_for_gpu(
+    gpu_type: str, machine_id: str
+) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and class for a specific GPU type and device.
-    
+
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
-        
+
     Returns:
         Tuple of (modal_app, server_class) for the specified device
     """
@@ -79,7 +82,10 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         return _gpu_apps[machine_id]
     
     if gpu_type not in GPU_CONFIG:
-        raise ValueError(f"GPU type \"{gpu_type}\" is not supported. Available types: {list(GPU_CONFIG.keys())}")
+        raise ValueError(
+            f'GPU type "{gpu_type}" is not supported. '
+            f'Available types: {list(GPU_CONFIG.keys())}'
+        )
     
     config = GPU_CONFIG[gpu_type]
     app = modal.App(f"torch-remote-{machine_id}")
@@ -170,11 +176,18 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 log.info(f"📥 UPDATED Storage ID {storage_id} on Modal (shape: {tensor.shape})")
 
         @modal.method()
-        def get_storage_data(self, storage_id: int, shape=None, stride=None, storage_offset=0, dtype=None) -> bytes:
+        def get_storage_data(
+            self,
+            storage_id: int,
+            shape=None,
+            stride=None,
+            storage_offset=0,
+            dtype=None,
+        ) -> bytes:
             """
             Retrieve current storage data by storage ID for transfer to client.
             If view parameters are provided, returns only the view's data as contiguous.
-            
+
             Args:
                 storage_id: The storage ID
                 shape: Tensor shape for view (if None, returns full storage)
@@ -203,12 +216,15 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     torch_dtype = getattr(torch, dtype_str)
                     
                     # Create tensor from storage with view parameters (with correct dtype!)
-                    tensor = torch.empty(0, dtype=torch_dtype, device=storage.device).set_(
-                        storage, storage_offset, shape, stride or []
-                    )
+                    tensor = torch.empty(
+                        0, dtype=torch_dtype, device=storage.device
+                    ).set_(storage, storage_offset, shape, stride or [])
                     # Make contiguous to get only the view's data
                     tensor = tensor.contiguous()
-                    log.info(f"📦 Serializing view of storage {storage_id}: shape={shape}, stride={stride}, offset={storage_offset}")
+                    log.info(
+                        f"📦 Serializing view of storage {storage_id}: "
+                        f"shape={shape}, stride={stride}, offset={storage_offset}"
+                    )
                 else:
                     # Return full storage as before (backward compatibility)
                     tensor = torch.empty(0, device=storage.device).set_(storage)
@@ -248,7 +264,10 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 
                 # Check if resize is actually needed (should be bigger)
                 if new_bytes <= current_bytes:
-                    log.debug(f"Storage {storage_id} resize skipped: new_bytes ({new_bytes}) <= current_bytes ({current_bytes})")
+                    log.debug(
+                        f"Storage {storage_id} resize skipped: "
+                        f"new_bytes ({new_bytes}) <= current_bytes ({current_bytes})"
+                    )
                     return True  # No-op, but success
                 
                 device = old_storage.device
@@ -275,7 +294,10 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 
                 # Replace the storage
                 storages[storage_id] = new_storage
-                log.info(f"🔄 Resized storage {storage_id} from {current_bytes} to {new_bytes} bytes")
+                log.info(
+                    f"🔄 Resized storage {storage_id} from {current_bytes} "
+                    f"to {new_bytes} bytes"
+                )
                 return True
 
         @modal.method()

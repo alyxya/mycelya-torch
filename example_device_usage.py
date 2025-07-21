@@ -13,7 +13,7 @@ import torch_remote
 
 def main():
     print("🚀 PyTorch Remote Device Backend Example")
-    print("="*50)
+    print("=" * 50)
 
     # Remote execution is now always enabled for remote tensors
 
@@ -52,8 +52,16 @@ def main():
     registry = torch_remote.get_device_registry()
     t4_device_from_registry = registry.get_device_by_index(x_t4.device.index)
     l4_device_from_registry = registry.get_device_by_index(x_l4.device.index)
-    print(f"   T4 device index: {x_t4.device.index}, ID: {t4_device_from_registry.device_id if t4_device_from_registry else 'NOT FOUND'}")
-    print(f"   L4 device index: {x_l4.device.index}, ID: {l4_device_from_registry.device_id if l4_device_from_registry else 'NOT FOUND'}")
+    t4_device_id = (
+        t4_device_from_registry.device_id if t4_device_from_registry
+        else 'NOT FOUND'
+    )
+    l4_device_id = (
+        l4_device_from_registry.device_id if l4_device_from_registry
+        else 'NOT FOUND'
+    )
+    print(f"   T4 device index: {x_t4.device.index}, ID: {t4_device_id}")
+    print(f"   L4 device index: {x_l4.device.index}, ID: {l4_device_id}")
 
     # Operations within the same device work
     print("\n3. Operations within the same device:")

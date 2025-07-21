@@ -5,7 +5,7 @@ import atexit
 import io
 import logging
 import random
-from typing import Any, Dict, Optional, Set, Callable, List
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import torch
 
@@ -20,7 +20,9 @@ MAX_STORAGE_ID = 2**64 - 1
 MAX_ID_GENERATION_ATTEMPTS = 1000
 
 
-def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
+def register(
+    registry: Dict[str, Callable]
+) -> Callable[[Callable], Callable]:
     """Decorator to register functions in a registry dictionary.
 
     This decorator adds the decorated function to the provided registry
@@ -88,7 +90,9 @@ class RemoteStorageRegistry:
         raise RuntimeError(f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts")
 
 
-    def create_storage_with_id(self, storage_id: int, nbytes: int, device_index: int) -> bool:
+    def create_storage_with_id(
+        self, storage_id: int, nbytes: int, device_index: int
+    ) -> bool:
         """Create remote storage with the given ID and return success status"""
         storage_id = int(storage_id)
 
@@ -97,9 +101,9 @@ class RemoteStorageRegistry:
 
         # Register the storage with the client immediately for all allocations
         try:
-                # Import here to avoid circular imports
-                from ._remote_orchestrator import remote_orchestrator
-                from .device import get_device_registry
+            # Import here to avoid circular imports
+            from ._remote_orchestrator import remote_orchestrator
+            from .device import get_device_registry
 
                 orchestrator = remote_orchestrator
                 if orchestrator is not None:
@@ -109,11 +113,17 @@ class RemoteStorageRegistry:
                     if device is not None:
                         client = device.get_client()
                         if client and client.is_running():
-                            # Create storage with exact byte size - no garbage data needed
+                            # Create storage with exact byte size
+                            # No garbage data needed
                             client.create_storage(nbytes, storage_id)
-                            log.info(f"Registered storage {storage_id} with client ({nbytes} bytes)")
+                            log.info(
+                                f"Registered storage {storage_id} with client "
+                                f"({nbytes} bytes)"
+                            )
         except Exception as e:
-            log.warning(f"Failed to register storage {storage_id} with client: {e}")
+            log.warning(
+                f"Failed to register storage {storage_id} with client: {e}"
+            )
 
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return True
@@ -140,10 +150,15 @@ class RemoteStorageRegistry:
 
             # Call remote cleanup
             if device_idx is not None:
-                log.info(f"Storage {storage_id} freed, initiating remote cleanup")
+                log.info(
+                f"Storage {storage_id} freed, initiating remote cleanup"
+            )
                 self._cleanup_remote_storage(storage_id, device_idx)
             else:
-                log.info(f"No device index found for storage {storage_id}, skipping remote cleanup")
+                log.info(
+                f"No device index found for storage {storage_id}, "
+                "skipping remote cleanup"
+            )
 
             log.info(f"Freed storage ID {storage_id}")
         else:
@@ -162,41 +177,61 @@ class RemoteStorageRegistry:
             from .device import get_device_registry
             orchestrator = remote_orchestrator
             if orchestrator is None:
-                log.warning(f"No remote orchestrator available for storage {storage_id} cleanup")
+                log.warning(
+                f"No remote orchestrator available for storage {storage_id} cleanup"
+            )
                 return
 
             registry = get_device_registry()
             device = registry.get_device_by_index(device_idx)
 
             if device is None:
-                log.warning(f"No device found for index {device_idx} during storage {storage_id} cleanup")
+                log.warning(
+                f"No device found for index {device_idx} during storage "
+                f"{storage_id} cleanup"
+            )
                 return
 
             # Attempt remote cleanup
-            log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
+            log.info(
+                f"Calling remove_storage_from_remote for storage {storage_id}"
+            )
             success = orchestrator.remove_tensor_from_remote(storage_id, device)
             if success:
-                log.info(f"✅ Successfully cleaned up remote storage {storage_id} on device {device_idx}")
+                log.info(
+                    f"✅ Successfully cleaned up remote storage {storage_id} "
+                    f"on device {device_idx}"
+                )
             else:
-                log.warning(f"❌ Remote cleanup returned false for storage {storage_id} on device {device_idx}")
+                log.warning(
+                    f"❌ Remote cleanup returned false for storage {storage_id} "
+                    f"on device {device_idx}"
+                )
 
         except Exception as e:
             # Log but don't fail - local cleanup already completed
             log.warning(f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}")
             # Continue execution since local cleanup is already done
 
-    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
+    def copy_data_by_id(
+        self, dest_id: int, src_id: int, count: int
+    ) -> bool:
         """Copy data between storages identified by their storage IDs"""
         # This is a placeholder - actual copy operations should go through remote execution
         dest_device = self.storage_id_to_device.get(int(dest_id))
         src_device = self.storage_id_to_device.get(int(src_id))
 
         if dest_device is None or src_device is None:
-            raise RuntimeError(f"Copy failed: storage IDs {dest_id} or {src_id} not found")
+            raise RuntimeError(
+                f"Copy failed: storage IDs {dest_id} or {src_id} not found"
+            )
 
-        # For storage ID system, copy operations should go through remote aten execution
-        # This is just a placeholder to indicate the operation was requested
-        log.info(f"Storage copy requested: {src_id} -> {dest_id} ({count} bytes)")
+        # For storage ID system, copy operations should go through remote
+        # aten execution. This is just a placeholder to indicate the operation
+        # was requested
+        log.info(
+            f"Storage copy requested: {src_id} -> {dest_id} ({count} bytes)"
+        )
         return True
 
 

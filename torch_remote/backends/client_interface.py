@@ -90,8 +90,14 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def get_storage_data(self, storage_id: int, shape: List[int] = None, stride: List[int] = None,
-                        storage_offset: int = 0, dtype: str = None) -> bytes:
+    def get_storage_data(
+        self,
+        storage_id: int,
+        shape: List[int] = None,
+        stride: List[int] = None,
+        storage_offset: int = 0,
+        dtype: str = None,
+    ) -> bytes:
         """
         Retrieve storage data by ID, optionally as a specific view.
 

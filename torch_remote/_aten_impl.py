@@ -1,14 +1,12 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import contextlib
 import logging
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
-
-# Direct string literals (no longer using separate constants)
-
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +20,7 @@ def _check_and_fix_empty_output_tensors(args: Tuple[Any, ...], kwargs: Dict[str,
     """
     if "out" not in kwargs:
         return
-        
+
     output_tensor = kwargs["out"]
     if not isinstance(output_tensor, torch.Tensor) or output_tensor.device.type != "remote":
         return
@@ -38,21 +36,29 @@ def _check_and_fix_empty_output_tensors(args: Tuple[Any, ...], kwargs: Dict[str,
     # Check args first (positional arguments)
     for arg in args:
         if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            # Use storage ID to check if it's the same tensor (avoid shape comparison issues)
-            if arg.untyped_storage().data_ptr() != output_tensor.untyped_storage().data_ptr():
+            # Use storage ID to check if it's the same tensor
+            storage_ptr = arg.untyped_storage().data_ptr()
+            output_ptr = output_tensor.untyped_storage().data_ptr()
+            if storage_ptr != output_ptr:
                 if arg.numel() > 0:  # Use non-empty tensor as reference
                     output_tensor.resize_(arg.shape)
-                    log.debug(f"Resized empty output tensor to match input shape: {arg.shape}")
+                    log.debug(
+                        f"Resized empty output tensor to match input shape: {arg.shape}"
+                    )
                     return
     
     # Check kwargs if no suitable arg found
     for value in kwargs.values():
         if isinstance(value, torch.Tensor) and value.device.type == "remote":
             # Use storage ID to check if it's the same tensor
-            if value.untyped_storage().data_ptr() != output_tensor.untyped_storage().data_ptr():
+            value_ptr = value.untyped_storage().data_ptr()
+            output_ptr = output_tensor.untyped_storage().data_ptr()
+            if value_ptr != output_ptr:
                 if value.numel() > 0:  # Use non-empty tensor as reference
                     output_tensor.resize_(value.shape)
-                    log.debug(f"Resized empty output tensor to match input shape: {value.shape}")
+                    log.debug(
+                        f"Resized empty output tensor to match input shape: {value.shape}"
+                    )
                     return
 
 
@@ -60,8 +66,6 @@ def _check_and_fix_empty_output_tensors(args: Tuple[Any, ...], kwargs: Dict[str,
 
 from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending
-import contextlib
-import threading
 
 
 # Thread-local storage for tracking whether we should disable remote fallback
@@ -84,7 +88,9 @@ def _disable_remote_fallback():
         _local.disable_remote_fallback = old_value
 
 
-def _fallback_to_old_approach(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Any:
+def _fallback_to_old_approach(
+    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+) -> Any:
     """
     Fallback to the old implementation approach when meta execution fails.
     This handles cases where meta tensor execution isn't supported for certain operations.
@@ -106,47 +112,57 @@ def _fallback_to_old_approach(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
         # Execute remotely
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
-            orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            orchestrator.execute_remote_aten_operation_efficient(
+                op_name, args, kwargs
+            )
             return result_tensor
         else:
-            raise RuntimeError(f"Cannot execute inplace operation {op_name}: remote execution not available")
+            raise RuntimeError(
+                f"Cannot execute inplace operation {op_name}: "
+                "remote execution not available"
+            )
 
     # Handle as_strided separately
     elif op is torch.ops.aten.as_strided.default:
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
-            orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            orchestrator.execute_remote_aten_operation_efficient(
+                op_name, args, kwargs
+            )
             # Return the first tensor argument as the result
             for arg in args:
                 if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     return arg
-            raise RuntimeError(f"No output tensor found for as_strided operation {op_name}")
+            raise RuntimeError(
+                f"No output tensor found for as_strided operation {op_name}"
+            )
         else:
-            raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
+            raise RuntimeError(
+                f"Cannot execute operation {op_name}: remote execution not available"
+            )
 
     # Everything else is a regular operation
     else:
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
-            orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
-            
+            orchestrator.execute_remote_aten_operation_efficient(
+                op_name, args, kwargs
+            )
+
             # Check for 'out' parameter first
             if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
                 return kwargs["out"]
-                
+
             # Find output tensor in args (typically the last tensor argument)
             for arg in reversed(args):
                 if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     return arg
-            
+
             raise RuntimeError(f"No output tensor found for operation {op_name}")
         else:
-            raise RuntimeError(f"Cannot execute operation {op_name}: remote execution not available")
-
-
-# _update_tensor_metadata_from_meta_execution function removed for simplification
-
-
+            raise RuntimeError(
+                f"Cannot execute operation {op_name}: remote execution not available"
+            )
 
 
 # View operations that should be handled locally with shared storage IDs
@@ -179,7 +195,9 @@ def _get_remote_orchestrator() -> Optional[Any]:
         return None
 
 
-def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> torch.Tensor:
+def _handle_view_operation(
+    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
+) -> torch.Tensor:
     """
     Handle view operations locally with shared storage IDs.
 
@@ -197,7 +215,12 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
     tensor_args = []
     for i, arg in enumerate(args):
         if isinstance(arg, torch.Tensor):
-            tensor_args.append(f"arg[{i}]: {arg.device.type}:{arg.device.index if hasattr(arg.device, 'index') else 'N/A'}, shape={arg.shape}")
+            device_index = (
+                arg.device.index if hasattr(arg.device, 'index') else 'N/A'
+            )
+            tensor_args.append(
+                f"arg[{i}]: {arg.device.type}:{device_index}, shape={arg.shape}"
+            )
     if tensor_args:
         log.info(f"   - tensor args: {'; '.join(tensor_args)}")
 
@@ -215,17 +238,28 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
             if arg.device != base_device:
                 from torch_remote.device import get_device_registry
                 device_registry = get_device_registry()
-                base_device_info = device_registry.get_device_by_index(base_device.index)
-                arg_device_info = device_registry.get_device_by_index(arg.device.index)
-                
-                base_name = base_device_info.machine_id if base_device_info else f"remote:{base_device.index}"
-                arg_name = arg_device_info.machine_id if arg_device_info else f"remote:{arg.device.index}"
-                
+                base_device_info = device_registry.get_device_by_index(
+                    base_device.index
+                )
+                arg_device_info = device_registry.get_device_by_index(
+                    arg.device.index
+                )
+
+                base_name = (
+                    base_device_info.machine_id if base_device_info
+                    else f"remote:{base_device.index}"
+                )
+                arg_name = (
+                    arg_device_info.machine_id if arg_device_info
+                    else f"remote:{arg.device.index}"
+                )
+
                 raise RuntimeError(
-                    f"Cannot perform view operation \"{op_name}\" between tensors on different remote devices. "
-                    f"Base tensor on \"{base_name}\" (index {base_device.index}), "
-                    f"argument {i} on \"{arg_name}\" (index {arg.device.index}). "
-                    f"Transfer tensors to the same device first."
+                    f'Cannot perform view operation "{op_name}" between tensors '
+                    f'on different remote devices. Base tensor on "{base_name}" '
+                    f'(index {base_device.index}), argument {i} on "{arg_name}" '
+                    f'(index {arg.device.index}). '
+                    "Transfer tensors to the same device first."
                 )
     
     for key, value in kwargs.items():

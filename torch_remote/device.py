@@ -6,11 +6,12 @@ Backend device management for torch_remote.
 
 This module provides device abstraction for different GPU cloud providers and GPU types.
 """
-import uuid
 import atexit
 import logging
-from typing import Dict, Any, Optional, Union
+import uuid
 from enum import Enum
+from typing import Any, Dict, Optional, Union
+
 import torch
 
 log = logging.getLogger(__name__)
@@ -175,7 +176,6 @@ class RemoteMachine:
         return torch.device("remote", remote_index)
 
 
-
 class DeviceRegistry:
     """
     Registry to manage active RemoteMachine instances.
@@ -214,7 +214,6 @@ class DeviceRegistry:
     def get_device_by_index(self, index: int) -> Optional[RemoteMachine]:
         """Get device by its index."""
         return self._devices.get(index)
-
 
     def get_device_index(self, machine: RemoteMachine) -> Optional[int]:
         """Get the index of a machine."""

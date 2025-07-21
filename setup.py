@@ -86,11 +86,18 @@ if __name__ == "__main__":
         name=PACKAGE_NAME,
         version=version,
         author="PyTorch Remote Extension",
-        description="Remote GPU cloud execution extension for PyTorch supporting multiple providers",
-        packages=find_packages(exclude=("test",)) + ["_torch_remote_modal"],
+        description=(
+            "Remote GPU cloud execution extension for PyTorch "
+            "supporting multiple providers"
+        ),
+        packages=(
+            find_packages(exclude=("test",)) + ["_torch_remote_modal"]
+        ),
         package_data={
             PACKAGE_NAME: [
-                "*.dll", "*.dylib", "*.so"  # Binary extensions
+                "*.dll",
+                "*.dylib", 
+                "*.so"  # Binary extensions
             ]
         },
         install_requires=[
