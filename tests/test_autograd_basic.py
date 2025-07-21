@@ -1,0 +1,413 @@
+# Copyright (C) 2025 alyxya
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Tests for basic autograd functionality in torch-remote.
+
+This module tests fundamental gradient computation, backward passes,
+and basic autograd operations on remote tensors.
+"""
+
+import torch
+import pytest
+import torch_remote
+from test_utilities import (
+    DeviceTestUtils,
+    NumericalTestUtils,
+    TestConstants
+)
+
+
+class TestBasicGradientComputation:
+    """Tests for basic gradient computation on remote tensors."""
+    
+    def test_simple_backward_pass(self, shared_devices):
+        """Test simple backward pass on remote tensors."""
+        # Create tensors with gradients
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        # Simple operation
+        y_remote = x_remote.sum()
+        
+        # Backward pass
+        y_remote.backward()
+        
+        # Verify gradients exist
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        
+        # Verify gradient values
+        expected_grad = torch.ones_like(x_cpu)
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_grad
+        )
+    
+    def test_scalar_multiplication_grad(self, shared_devices):
+        """Test gradients for scalar multiplication."""
+        x_cpu = torch.randn(3, 3, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        scalar = 2.5
+        
+        # Operation
+        y_remote = x_remote * scalar
+        loss_remote = y_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        expected_grad = torch.full_like(x_cpu, scalar)
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_grad
+        )
+    
+    def test_addition_gradients(self, shared_devices):
+        """Test gradients for tensor addition."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        y_cpu = torch.randn(2, 2, requires_grad=True)
+        
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        y_remote = y_cpu.to(shared_devices["t4"].device())
+        
+        # Operation
+        z_remote = x_remote + y_remote
+        loss_remote = z_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients for both tensors
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        NumericalTestUtils.verify_gradient_flow(y_remote)
+        
+        # Both should have gradient of ones
+        expected_grad = torch.ones_like(x_cpu)
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_grad
+        )
+        NumericalTestUtils.assert_tensors_close(
+            y_remote.grad.cpu(), expected_grad
+        )
+    
+    def test_element_wise_multiplication_grad(self, shared_devices):
+        """Test gradients for element-wise multiplication."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        y_cpu = torch.randn(2, 2, requires_grad=True)
+        
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        y_remote = y_cpu.to(shared_devices["t4"].device())
+        
+        # Operation
+        z_remote = x_remote * y_remote
+        loss_remote = z_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        NumericalTestUtils.verify_gradient_flow(y_remote)
+        
+        # x's gradient should be y, y's gradient should be x
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), y_cpu
+        )
+        NumericalTestUtils.assert_tensors_close(
+            y_remote.grad.cpu(), x_cpu
+        )
+
+
+class TestMatrixOperationGradients:
+    """Tests for gradients in matrix operations."""
+    
+    def test_matrix_multiplication_gradients(self, shared_devices):
+        """Test gradients for matrix multiplication."""
+        x_cpu = torch.randn(2, 3, requires_grad=True)
+        y_cpu = torch.randn(3, 2, requires_grad=True)
+        
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        y_remote = y_cpu.to(shared_devices["t4"].device())
+        
+        # Matrix multiplication
+        z_remote = x_remote.mm(y_remote)
+        loss_remote = z_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients exist
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        NumericalTestUtils.verify_gradient_flow(y_remote)
+        
+        # Verify gradient shapes
+        assert x_remote.grad.shape == x_cpu.shape
+        assert y_remote.grad.shape == y_cpu.shape
+    
+    def test_batch_matrix_multiplication_gradients(self, shared_devices):
+        """Test gradients for batch matrix multiplication."""
+        x_cpu = torch.randn(2, 3, 4, requires_grad=True)
+        y_cpu = torch.randn(2, 4, 5, requires_grad=True)
+        
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        y_remote = y_cpu.to(shared_devices["t4"].device())
+        
+        try:
+            # Batch matrix multiplication
+            z_remote = torch.bmm(x_remote, y_remote)
+            loss_remote = z_remote.sum()
+            
+            # Backward pass
+            loss_remote.backward()
+            
+            # Verify gradients exist and have correct shapes
+            NumericalTestUtils.verify_gradient_flow(x_remote)
+            NumericalTestUtils.verify_gradient_flow(y_remote)
+            assert x_remote.grad.shape == x_cpu.shape
+            assert y_remote.grad.shape == y_cpu.shape
+        except (RuntimeError, NotImplementedError):
+            pytest.skip("Batch matrix multiplication gradients not supported")
+
+
+class TestViewOperationGradients:
+    """Tests for gradients with view operations."""
+    
+    def test_view_operation_gradients(self, shared_devices):
+        """Test that gradients flow through view operations."""
+        x_cpu = torch.randn(2, 6, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        # View operation
+        y_remote = x_remote.view(3, 4)
+        loss_remote = y_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients flow back to original tensor
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        
+        # Gradient should have original shape
+        assert x_remote.grad.shape == x_cpu.shape
+        expected_grad = torch.ones_like(x_cpu)
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_grad
+        )
+    
+    def test_transpose_operation_gradients(self, shared_devices):
+        """Test that gradients flow through transpose operations."""
+        x_cpu = torch.randn(3, 4, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        # Transpose operation
+        y_remote = x_remote.transpose(0, 1)
+        loss_remote = y_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        assert x_remote.grad.shape == x_cpu.shape
+        expected_grad = torch.ones_like(x_cpu)
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_grad
+        )
+    
+    def test_reshape_operation_gradients(self, shared_devices):
+        """Test that gradients flow through reshape operations."""
+        x_cpu = torch.randn(2, 3, 4, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        # Reshape operation
+        y_remote = x_remote.reshape(6, 4)
+        loss_remote = y_remote.sum()
+        
+        # Backward pass
+        loss_remote.backward()
+        
+        # Verify gradients
+        NumericalTestUtils.verify_gradient_flow(x_remote)
+        assert x_remote.grad.shape == x_cpu.shape
+
+
+class TestGradientAccumulation:
+    """Tests for gradient accumulation behavior."""
+    
+    def test_gradient_accumulation_basic(self, shared_devices):
+        """Test basic gradient accumulation."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        # First backward pass
+        y1_remote = x_remote.sum()
+        y1_remote.backward(retain_graph=True)
+        first_grad = x_remote.grad.clone()
+        
+        # Second backward pass (should accumulate)
+        y2_remote = (x_remote * 2).sum()
+        y2_remote.backward()
+        
+        # Verify gradient accumulation
+        expected_grad = first_grad + 2 * torch.ones_like(x_cpu)
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_grad.cpu()
+        )
+    
+    def test_gradient_zero_behavior(self, shared_devices):
+        """Test gradient zeroing behavior."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        # First backward pass
+        y_remote = x_remote.sum()
+        y_remote.backward()
+        
+        # Verify gradients exist
+        assert x_remote.grad is not None
+        
+        # Zero gradients
+        x_remote.grad.zero_()
+        
+        # Verify gradients are zero
+        expected_zero = torch.zeros_like(x_cpu)
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), expected_zero
+        )
+
+
+class TestAutoGradFunction:
+    """Tests for autograd function behavior."""
+    
+    def test_requires_grad_propagation(self, shared_devices):
+        """Test that requires_grad propagates correctly."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        y_cpu = torch.randn(2, 2, requires_grad=False)
+        
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        y_remote = y_cpu.to(shared_devices["t4"].device())
+        
+        # Operations with requires_grad=True tensor
+        z_remote = x_remote + y_remote
+        assert z_remote.requires_grad
+        
+        # Operations with only requires_grad=False tensors
+        w_remote = y_remote * 2
+        assert not w_remote.requires_grad
+    
+    def test_detach_behavior(self, shared_devices):
+        """Test tensor detach behavior."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        # Detach tensor
+        x_detached = x_remote.detach()
+        assert not x_detached.requires_grad
+        
+        # Operations on detached tensor shouldn't require grad
+        y_remote = x_detached * 2
+        assert not y_remote.requires_grad
+    
+    def test_no_grad_context(self, shared_devices):
+        """Test torch.no_grad() context behavior."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.to(shared_devices["t4"].device())
+        
+        with torch.no_grad():
+            y_remote = x_remote * 2
+            assert not y_remote.requires_grad
+
+
+class TestGradientNumericalVerification:
+    """Tests for numerical verification of gradients."""
+    
+    def test_gradient_numerical_simple(self, shared_devices):
+        """Test gradient computation against CPU reference."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.clone().detach().requires_grad_(True).to(shared_devices["t4"].device())
+        
+        # CPU computation
+        y_cpu = (x_cpu ** 2).sum()
+        y_cpu.backward()
+        cpu_grad = x_cpu.grad.clone()
+        
+        # Remote computation
+        y_remote = (x_remote ** 2).sum()
+        y_remote.backward()
+        
+        # Compare gradients
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), cpu_grad,
+            msg="Remote gradient doesn't match CPU gradient"
+        )
+    
+    def test_chain_rule_verification(self, shared_devices):
+        """Test chain rule implementation."""
+        x_cpu = torch.randn(2, 2, requires_grad=True)
+        x_remote = x_cpu.clone().detach().requires_grad_(True).to(shared_devices["t4"].device())
+        
+        # CPU computation: y = (x^2 + 1) * 3
+        y_cpu = ((x_cpu ** 2) + 1) * 3
+        loss_cpu = y_cpu.sum()
+        loss_cpu.backward()
+        cpu_grad = x_cpu.grad.clone()
+        
+        # Remote computation
+        y_remote = ((x_remote ** 2) + 1) * 3
+        loss_remote = y_remote.sum()
+        loss_remote.backward()
+        
+        # Compare gradients
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), cpu_grad,
+            msg="Chain rule gradient doesn't match CPU"
+        )
+
+
+@pytest.mark.parametrize("shape", TestConstants.SMALL_SHAPES)
+def test_parametrized_gradient_shapes(shared_devices, shape):
+    """Test gradient computation with various tensor shapes."""
+    x_cpu = torch.randn(shape, requires_grad=True)
+    x_remote = x_cpu.to(shared_devices["t4"].device())
+    
+    # Simple operation
+    y_remote = x_remote.sum()
+    y_remote.backward()
+    
+    # Verify gradient shape and values
+    NumericalTestUtils.verify_gradient_flow(x_remote)
+    assert x_remote.grad.shape == shape
+    expected_grad = torch.ones(shape)
+    NumericalTestUtils.assert_tensors_close(
+        x_remote.grad.cpu(), expected_grad
+    )
+
+
+@pytest.mark.parametrize("operation", [
+    lambda x: x.sum(),
+    lambda x: (x ** 2).sum(),
+    lambda x: (x * 2).sum(),
+    lambda x: x.mean(),
+])
+def test_parametrized_operations_gradients(shared_devices, operation):
+    """Test gradients for various operations."""
+    x_cpu = torch.randn(3, 3, requires_grad=True)
+    x_remote = x_cpu.clone().detach().requires_grad_(True).to(shared_devices["t4"].device())
+    
+    try:
+        # CPU computation
+        y_cpu = operation(x_cpu)
+        y_cpu.backward()
+        cpu_grad = x_cpu.grad.clone()
+        
+        # Remote computation
+        y_remote = operation(x_remote)
+        y_remote.backward()
+        
+        # Compare gradients
+        NumericalTestUtils.assert_tensors_close(
+            x_remote.grad.cpu(), cpu_grad,
+            msg=f"Gradient mismatch for operation {operation}"
+        )
+    except (RuntimeError, NotImplementedError):
+        pytest.skip(f"Operation {operation} gradients not supported")

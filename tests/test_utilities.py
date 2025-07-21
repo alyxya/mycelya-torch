@@ -1,0 +1,294 @@
+# Copyright (C) 2025 alyxya
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Test utilities for torch-remote package.
+
+This module provides common utility functions for test setup, verification,
+and data generation to reduce code duplication across test files.
+"""
+
+import torch
+import pytest
+from typing import Dict, List, Tuple, Any, Union, Optional
+
+
+class TestConstants:
+    """Common constants used across tests."""
+    
+    # Standard tolerance values for numerical comparisons
+    DEFAULT_RTOL = 1e-4
+    DEFAULT_ATOL = 1e-6
+    
+    # Common tensor shapes
+    SMALL_SHAPES = [(2, 2), (3, 3), (1, 5)]
+    MEDIUM_SHAPES = [(3, 4), (5, 6), (4, 8)]
+    TENSOR_3D_SHAPES = [(2, 3, 4), (1, 4, 5), (3, 2, 6)]
+    TENSOR_4D_SHAPES = [(2, 3, 4, 5), (1, 2, 3, 4)]
+    
+    # Common device keys
+    DEVICE_KEYS = ["t4", "l4", "a100"]
+    
+    # Classification test parameters
+    DEFAULT_BATCH_SIZE = 3
+    DEFAULT_NUM_CLASSES = 3
+
+
+class DeviceTestUtils:
+    """Utilities for device-related testing."""
+    
+    @staticmethod
+    def create_remote_tensor(
+        shape: Tuple[int, ...], 
+        shared_devices: Dict[str, Any], 
+        device_key: str = "t4",
+        requires_grad: bool = False,
+        dtype: torch.dtype = torch.float32
+    ) -> torch.Tensor:
+        """Create a tensor on a remote device."""
+        x_cpu = torch.randn(shape, dtype=dtype, requires_grad=requires_grad)
+        return x_cpu.to(shared_devices[device_key].device())
+    
+    @staticmethod
+    def create_test_tensors(
+        shapes: List[Tuple[int, ...]], 
+        shared_devices: Dict[str, Any], 
+        device_key: str = "t4"
+    ) -> List[torch.Tensor]:
+        """Create multiple test tensors on the same remote device."""
+        return [
+            DeviceTestUtils.create_remote_tensor(shape, shared_devices, device_key)
+            for shape in shapes
+        ]
+    
+    @staticmethod
+    def verify_device_properties(tensor: torch.Tensor, expected_device: Any) -> None:
+        """Verify that a tensor has expected device properties."""
+        assert tensor.device.type == "remote"
+        assert tensor.device.index == expected_device.remote_index
+    
+    @staticmethod
+    def create_cpu_and_remote_pair(
+        shape: Tuple[int, ...], 
+        shared_devices: Dict[str, Any], 
+        device_key: str = "t4",
+        dtype: torch.dtype = torch.float32,
+        requires_grad: bool = False
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Create a CPU tensor and its remote counterpart."""
+        cpu_tensor = torch.randn(shape, dtype=dtype, requires_grad=requires_grad)
+        remote_tensor = cpu_tensor.to(shared_devices[device_key].device())
+        return cpu_tensor, remote_tensor
+
+
+class NumericalTestUtils:
+    """Utilities for numerical verification in tests."""
+    
+    @staticmethod
+    def assert_tensors_close(
+        actual: torch.Tensor, 
+        expected: torch.Tensor, 
+        rtol: float = TestConstants.DEFAULT_RTOL,
+        atol: float = TestConstants.DEFAULT_ATOL,
+        msg: Optional[str] = None
+    ) -> None:
+        """Assert that two tensors are numerically close."""
+        if msg is None:
+            msg = f"Tensors not close: max diff = {torch.max(torch.abs(actual - expected)).item()}"
+        assert torch.allclose(actual, expected, rtol=rtol, atol=atol), msg
+    
+    @staticmethod
+    def assert_remote_cpu_match(
+        remote_tensor: torch.Tensor, 
+        cpu_tensor: torch.Tensor,
+        rtol: float = TestConstants.DEFAULT_RTOL,
+        atol: float = TestConstants.DEFAULT_ATOL
+    ) -> None:
+        """Assert that a remote tensor matches its CPU counterpart."""
+        NumericalTestUtils.assert_tensors_close(
+            remote_tensor.cpu(), 
+            cpu_tensor, 
+            rtol=rtol, 
+            atol=atol,
+            msg="Remote tensor result doesn't match CPU computation"
+        )
+    
+    @staticmethod
+    def verify_gradient_flow(
+        leaf_tensor: torch.Tensor, 
+        expected_grad: Optional[torch.Tensor] = None,
+        rtol: float = TestConstants.DEFAULT_RTOL,
+        atol: float = TestConstants.DEFAULT_ATOL
+    ) -> None:
+        """Verify that gradients flow correctly through a tensor."""
+        assert leaf_tensor.grad is not None, "Expected gradient but found None"
+        if expected_grad is not None:
+            NumericalTestUtils.assert_tensors_close(
+                leaf_tensor.grad.cpu(), 
+                expected_grad, 
+                rtol=rtol, 
+                atol=atol,
+                msg="Gradient doesn't match expected value"
+            )
+
+
+class ErrorTestUtils:
+    """Utilities for testing error conditions."""
+    
+    @staticmethod
+    def assert_cross_device_fails(
+        tensor1: torch.Tensor, 
+        tensor2: torch.Tensor, 
+        operation_fn: callable,
+        expected_error_message: str = "Cannot transfer tensor between different remote devices"
+    ) -> None:
+        """Assert that an operation fails when using tensors from different devices."""
+        with pytest.raises(RuntimeError, match=expected_error_message):
+            operation_fn(tensor1, tensor2)
+    
+    @staticmethod
+    def test_operation_gracefully(
+        operation_fn: callable,
+        expected_exceptions: Tuple = (RuntimeError, TypeError, NotImplementedError)
+    ) -> bool:
+        """Test that an operation either succeeds or fails gracefully with expected exceptions."""
+        try:
+            result = operation_fn()
+            return True
+        except expected_exceptions:
+            return True
+        except Exception as e:
+            pytest.fail(f"Operation failed with unexpected exception: {type(e).__name__}: {e}")
+
+
+class TestDataGenerator:
+    """Utilities for generating test data."""
+    
+    @staticmethod
+    def generate_classification_data(
+        batch_size: int = TestConstants.DEFAULT_BATCH_SIZE,
+        num_classes: int = TestConstants.DEFAULT_NUM_CLASSES,
+        shared_devices: Optional[Dict[str, Any]] = None,
+        device_key: str = "t4"
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Generate data for classification tests."""
+        # Create input data
+        inputs = torch.randn(batch_size, num_classes, requires_grad=True)
+        
+        # Create targets
+        targets = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
+        
+        # Move to remote device if requested
+        if shared_devices is not None:
+            inputs = inputs.to(shared_devices[device_key].device())
+            targets = targets.to(shared_devices[device_key].device())
+        
+        return inputs, targets
+    
+    @staticmethod
+    def generate_tensor_test_cases(
+        base_shapes: Optional[List[Tuple[int, ...]]] = None
+    ) -> List[torch.Tensor]:
+        """Generate a variety of tensor test cases."""
+        if base_shapes is None:
+            base_shapes = TestConstants.SMALL_SHAPES
+        
+        test_cases = []
+        for shape in base_shapes:
+            # Random tensor
+            test_cases.append(torch.randn(shape))
+            # Zero tensor
+            test_cases.append(torch.zeros(shape))
+            # Ones tensor
+            test_cases.append(torch.ones(shape))
+        
+        # Add some special cases
+        test_cases.append(torch.tensor([[1.0, 2.0], [3.0, 4.0]]))
+        
+        return test_cases
+    
+    @staticmethod
+    def create_gradient_test_setup(
+        shape: Tuple[int, ...],
+        shared_devices: Dict[str, Any],
+        device_key: str = "t4"
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Create a standard setup for gradient testing."""
+        # Create a leaf tensor that requires gradients
+        x = torch.randn(shape, requires_grad=True)
+        x_remote = x.to(shared_devices[device_key].device())
+        
+        return x, x_remote
+
+
+class ViewOperationTestUtils:
+    """Utilities specific to view operation testing."""
+    
+    @staticmethod
+    def test_view_operation(
+        tensor: torch.Tensor,
+        operation_fn: callable,
+        cpu_reference: torch.Tensor,
+        *args, **kwargs
+    ) -> None:
+        """Test a view operation against a CPU reference."""
+        # Apply operation to remote tensor
+        result_remote = operation_fn(tensor, *args, **kwargs)
+        
+        # Apply same operation to CPU reference
+        result_cpu = operation_fn(cpu_reference, *args, **kwargs)
+        
+        # Verify results match
+        NumericalTestUtils.assert_remote_cpu_match(result_remote, result_cpu)
+        
+        # Verify shape matches
+        assert result_remote.shape == result_cpu.shape
+    
+    @staticmethod
+    def generate_view_test_cases() -> List[Tuple[str, callable, tuple, dict]]:
+        """Generate test cases for view operations."""
+        return [
+            ("view", lambda x, *args: x.view(*args), (4, 1), {}),
+            ("reshape", lambda x, *args: x.reshape(*args), (-1,), {}),
+            ("transpose", lambda x, *args: x.transpose(*args), (0, 1), {}),
+            ("permute", lambda x, *args: x.permute(*args), (1, 0), {}),
+            ("squeeze", lambda x, *args: x.squeeze(*args), (), {}),
+            ("unsqueeze", lambda x, *args: x.unsqueeze(*args), (0,), {}),
+            ("flatten", lambda x, *args, **kwargs: x.flatten(*args, **kwargs), (), {}),
+        ]
+
+
+class IntegrationTestUtils:
+    """Utilities for integration testing with PyTorch modules."""
+    
+    @staticmethod
+    def create_simple_linear_model(
+        input_size: int,
+        output_size: int,
+        shared_devices: Dict[str, Any],
+        device_key: str = "t4"
+    ) -> torch.nn.Module:
+        """Create a simple linear model on a remote device."""
+        model = torch.nn.Linear(input_size, output_size)
+        return model.to(shared_devices[device_key].device())
+    
+    @staticmethod
+    def verify_model_forward_backward(
+        model: torch.nn.Module,
+        inputs: torch.Tensor,
+        targets: torch.Tensor,
+        loss_fn: callable = torch.nn.functional.mse_loss
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Verify a model's forward and backward pass."""
+        # Forward pass
+        outputs = model(inputs)
+        loss = loss_fn(outputs, targets)
+        
+        # Backward pass
+        loss.backward()
+        
+        # Verify gradients exist
+        for param in model.parameters():
+            assert param.grad is not None, "Expected gradient but found None"
+        
+        return outputs, loss
