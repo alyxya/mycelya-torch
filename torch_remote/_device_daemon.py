@@ -340,8 +340,8 @@ class Driver:
             return None
         elif cmd == "resize_storage_by_id":
             # Resize remote storage by storage ID
-            storage_id, new_shape, dtype = args
-            return self._resize_storage_by_id(storage_id, new_shape, dtype)
+            storage_id, new_bytes = args
+            return self._resize_storage_by_id(storage_id, new_bytes)
         else:
             raise RuntimeError(f"Unknown command: {cmd}")
 
