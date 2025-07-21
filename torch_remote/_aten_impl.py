@@ -957,17 +957,13 @@ _remote_lib_aten.impl(
 )
 _remote_lib_aten.impl("item", _remote_item_impl, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
 
-# Register for AutogradPrivateUse1 to handle tensors with requires_grad=True
-_remote_lib_autograd = torch.library.Library("_", "IMPL")
-_remote_lib_autograd.fallback(_remote_kernel_fallback, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY)
-
-_remote_lib_aten_autograd = torch.library.Library("aten", "IMPL")
-_remote_lib_aten_autograd.impl("_copy_from", _copy_from, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY)
-_remote_lib_aten_autograd.impl("_to_copy", _to_copy, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY)
-_remote_lib_aten_autograd.impl(
-    "set_.source_Tensor", _set_source_tensor, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY
-)
-_remote_lib_aten_autograd.impl("item", _remote_item_impl, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY)
+# AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY registrations removed:
+# These were causing autograd issues because:
+# 1. _copy_from breaks autograd chain via copy_from_device() -> _deserialize_tensor() -> .detach()
+# 2. In-place operations on leaf variables with requires_grad=True are not allowed
+# 3. No proper grad_fn creation for autograd graph connectivity
+# 4. This remote tensor system doesn't need device-specific autograd behavior
+# 5. PyTorch's default autograd handles remote tensors correctly when only PRIVATEUSE1_DISPATCH_KEY is registered
 
 # Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
 # so we don't register a Python version to avoid conflicts
