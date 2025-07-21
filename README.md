@@ -120,7 +120,7 @@ y = x.to(device, dtype=torch.float64, copy=True)  # Convert dtype and copy
 Run the test suite:
 
 ```bash
-pytest test/test_torch_remote.py -v
+pytest tests/test_torch_remote.py -v
 ```
 
 Test remote execution manually:

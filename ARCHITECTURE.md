@@ -27,11 +27,12 @@ torch_remote/                   # Main PyTorch extension package
 ├── _meta_parser.py            # Tensor metadata & data structures
 ├── _device_daemon.py          # Device management & process communication
 ├── device.py                  # Backend device abstraction & registry
-├── utils.py                   # Tensor method extensions
 ├── backends/                  # Multi-provider backend system
 │   ├── __init__.py            # Backend registry & management
+│   ├── client_interface.py    # Abstract client interface for providers
 │   └── modal/                 # Modal provider implementation
-│       └── __init__.py        # Modal backend integration
+│       ├── __init__.py        # Modal backend integration
+│       └── client.py          # Modal client implementation
 └── csrc/                      # C++ extension
     ├── remote_extension.cpp   # Python extension entry point
     ├── RemoteHooks.cpp        # PrivateUse1 backend implementation
@@ -104,12 +105,7 @@ torch_remote_modal/            # Private package for Modal execution
 - **Cleanup handling**: Signal handlers and atexit hooks for proper resource cleanup
 - **Pure ID-based architecture**: No local tensor data storage, only metadata coordination
 
-#### Utility Files
-
-**`torch_remote/utils.py`** - Tensor Method Extensions
-- Patches `.to()` method to support `RemoteMachine` objects
-- Enables `tensor.to(backend_device)` to move tensors to remote device
-- Simple wrapper around the C++ remote conversion function
+#### Device Management
 
 **`torch_remote/device.py`** - Backend Device Abstraction & Registry
 - **RemoteMachine class**: Represents a remote GPU device with specific provider and GPU type
@@ -136,11 +132,23 @@ torch_remote_modal/            # Private package for Modal execution
 - **Configuration management**: Handles provider-specific configuration and credentials
 - **Fallback logic**: Manages fallback between providers when one is unavailable
 
+**`torch_remote/backends/client_interface.py`** - Abstract Client Interface
+- **AbstractClient class**: Defines the standard interface all provider clients must implement
+- **Method signatures**: Standardizes client operations across different cloud providers
+- **Error handling**: Common error handling patterns for remote operations
+- **Documentation**: Interface documentation for implementing new providers
+
 **`torch_remote/backends/modal/__init__.py`** - Modal Backend Integration
 - **Modal backend implementation**: Implements the standard provider interface for Modal
 - **Authentication handling**: Manages Modal API tokens and authentication
 - **Resource configuration**: Handles Modal-specific GPU and container configurations
 - **Error translation**: Converts Modal-specific errors to standard backend errors
+
+**`torch_remote/backends/modal/client.py`** - Modal Client Implementation
+- **ModalClient class**: Concrete implementation of AbstractClient for Modal
+- **GPU app management**: Creates and manages Modal apps for different GPU types
+- **Remote execution**: Handles actual remote operation execution on Modal infrastructure
+- **Connection management**: Manages Modal app lifecycle and connection state
 
 
 #### C++ Extension

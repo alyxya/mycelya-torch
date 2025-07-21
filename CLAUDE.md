@@ -18,12 +18,14 @@ pytest tests/ -v
 
 To run linting:
 ```bash
-# Add your lint command here (e.g., flake8, black, etc.)
+# No linting tools currently configured
+# Consider adding: flake8, black, or ruff
 ```
 
 To run type checking:
 ```bash
-# Add your typecheck command here (e.g., mypy)
+# No type checking tools currently configured
+# Consider adding: mypy
 ```
 
 ## Key Components

@@ -7,7 +7,7 @@
   - [create_modal_machine()](#create_modal_machine)
   - [get_device_registry()](#get_device_registry)
 - [Classes](#classes)
-  - [RemoteMachine](#backenddevice)
+  - [RemoteMachine](#remotemachine)
   - [DeviceRegistry](#deviceregistry)
 - [Enums](#enums)
   - [GPUType](#gputype)
@@ -143,7 +143,7 @@ Get a PyTorch device object for this RemoteMachine.
 **Example:**
 ```python
 backend_machine = torch_remote.create_modal_machine("A100-40GB")
-torch_device = backend_device.device()
+torch_device = backend_machine.device()
 tensor = torch.randn(3, 3, device=torch_device)
 ```
 
@@ -169,10 +169,10 @@ from torch_remote import GPUType, BackendProvider
 # Create device
 machine = torch_remote.create_modal_machine("A100-40GB")
 
-print(device.device_id)        # "modal-a10040gb-abc12345"
-print(device.device_name)      # "Modal A100-40GB"
-print(device.modal_gpu_spec)   # "A100-40GB"
-print(device.remote_index)     # 0
+print(machine.device_id)        # "modal-a10040gb-abc12345"
+print(machine.device_name)      # "Modal A100-40GB"
+print(machine.modal_gpu_spec)   # "A100-40GB"
+print(machine.remote_index)     # 0
 ```
 
 ### `DeviceRegistry`
@@ -250,9 +250,9 @@ registry = torch_remote.get_device_registry()
 machine = torch_remote.create_modal_machine("T4")
 
 # Device is automatically registered
-index = registry.get_device_index(device)
+index = registry.get_device_index(machine)
 retrieved = registry.get_device_by_index(index)
-assert retrieved == device
+assert retrieved == machine
 ```
 
 ## Enums
@@ -336,9 +336,9 @@ import torch_remote
 backend_machine = torch_remote.create_modal_machine("A100-40GB")
 
 # Create tensors on remote device using .device() method
-x = torch.randn(100, 100, device=backend_device.device())
-y = torch.zeros(50, 50, device=backend_device.device())
-z = torch.ones(10, 10, device=backend_device.device())
+x = torch.randn(100, 100, device=backend_machine.device())
+y = torch.zeros(50, 50, device=backend_machine.device())
+z = torch.ones(10, 10, device=backend_machine.device())
 ```
 
 ### Tensor Methods
@@ -364,7 +364,7 @@ x = torch.randn(5, 5)
 
 # Move to remote device
 machine = torch_remote.create_modal_machine("T4")
-x_remote = x.to(device)
+x_remote = x.to(machine)
 
 # Move back to CPU
 x_cpu = x_remote.cpu()
@@ -478,8 +478,8 @@ import torch_remote
 machine = torch_remote.create_modal_machine("A100-40GB")
 
 # Create tensors
-x = torch.randn(1000, 1000, device=device.device())
-y = torch.randn(1000, 1000, device=device.device())
+x = torch.randn(1000, 1000, device=machine.device())
+y = torch.randn(1000, 1000, device=machine.device())
 
 # Operations execute remotely
 z = x @ y  # Matrix multiplication on remote GPU
@@ -499,8 +499,8 @@ t4_machine = torch_remote.create_modal_machine("T4")
 a100_machine = torch_remote.create_modal_machine("A100-40GB")
 
 # Create tensors on different devices
-x_t4 = torch.randn(100, 100, device=t4_device.device())
-x_a100 = torch.randn(200, 200, device=a100_device.device())
+x_t4 = torch.randn(100, 100, device=t4_machine.device())
+x_a100 = torch.randn(200, 200, device=a100_machine.device())
 
 # Operations within same device work
 y_t4 = x_t4 + x_t4     # Works - same device
@@ -540,10 +540,10 @@ import torch
 import torch_remote
 
 machine = torch_remote.create_modal_machine("H100")
-x = torch.randn(5, 5, device=device.device())
+x = torch.randn(5, 5, device=machine.device())
 
 # Use remote device context
-with torch.remote.device(device.remote_index):
+with torch.remote.device(machine.remote_index):
     # Random operations use this device
     y = torch.randn(5, 5)  # Created on remote device
     z = x + y              # Both on same remote device
