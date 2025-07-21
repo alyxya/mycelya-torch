@@ -22,10 +22,7 @@ import logging
 from collections import defaultdict
 import torch
 
-# Constants moved from torch_remote to eliminate dependency
-TENSOR_PLACEHOLDER_PREFIX = "__TENSOR_"
-CPU_DEVICE_TYPE = "cpu"
-CUDA_DEVICE_TYPE = "cuda"
+# Direct string literals (no longer using separate constants)
 
 log = logging.getLogger(__name__)
 
@@ -127,7 +124,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             import torch
             
             # Create tensor directly on GPU with exact byte size
-            device = torch.device(CUDA_DEVICE_TYPE)
+            device = torch.device("cuda")
             tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
             
             # Store storage and original tensor data
@@ -159,10 +156,10 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
             
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
-            tensor = torch.load(buffer, map_location=CPU_DEVICE_TYPE, weights_only=True)
+            tensor = torch.load(buffer, map_location="cpu", weights_only=True)
             
             # Move to GPU (Modal environment always has CUDA)
-            device = torch.device(CUDA_DEVICE_TYPE)
+            device = torch.device("cuda")
             tensor = tensor.to(device)
             
             # Update existing storage
@@ -367,7 +364,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     dtype = getattr(torch, dtype_str)
                     
                     # Reconstruct tensor using storage + metadata (on CUDA device)
-                    tensor = torch.empty(0, dtype=dtype, device=CUDA_DEVICE_TYPE).set_(
+                    tensor = torch.empty(0, dtype=dtype, device="cuda").set_(
                         storage,
                         metadata["storage_offset"],
                         metadata["shape"],
@@ -387,7 +384,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Replace tensor placeholders in args with actual reconstructed tensors
                 processed_args = []
                 for arg in args:
-                    if isinstance(arg, str) and arg.startswith(TENSOR_PLACEHOLDER_PREFIX):
+                    if isinstance(arg, str) and arg.startswith("__TENSOR_"):
                         idx = int(arg.split("_")[-1])
                         if idx < len(tensors):
                             processed_args.append(tensors[idx])
@@ -399,7 +396,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Process kwargs similarly
                 processed_kwargs = {}
                 for key, value in kwargs.items():
-                    if isinstance(value, str) and value.startswith(TENSOR_PLACEHOLDER_PREFIX):
+                    if isinstance(value, str) and value.startswith("__TENSOR_"):
                         idx = int(value.split("_")[-1])
                         if idx < len(tensors):
                             processed_kwargs[key] = tensors[idx]
@@ -525,7 +522,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                     dtype = getattr(torch, dtype_str)
                     
                     # Reconstruct tensor using storage + metadata (on CUDA device)
-                    tensor = torch.empty(0, dtype=dtype, device=CUDA_DEVICE_TYPE).set_(
+                    tensor = torch.empty(0, dtype=dtype, device="cuda").set_(
                         storage,
                         metadata["storage_offset"],
                         metadata["shape"],
@@ -548,7 +545,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Replace tensor placeholders in args with actual tensors
                 processed_args = []
                 for arg in args:
-                    if isinstance(arg, str) and arg.startswith(TENSOR_PLACEHOLDER_PREFIX):
+                    if isinstance(arg, str) and arg.startswith("__TENSOR_"):
                         idx = int(arg.split("_")[-1])
                         processed_args.append(tensors[idx])
                     else:
@@ -557,7 +554,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
                 # Process kwargs similarly
                 processed_kwargs = {}
                 for key, value in kwargs.items():
-                    if isinstance(value, str) and value.startswith(TENSOR_PLACEHOLDER_PREFIX):
+                    if isinstance(value, str) and value.startswith("__TENSOR_"):
                         idx = int(value.split("_")[-1])
                         processed_kwargs[key] = tensors[idx]
                     else:

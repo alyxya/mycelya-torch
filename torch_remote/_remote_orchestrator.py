@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Tuple, Optional
 import torch
 import time
 
-from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE
+# Direct string literals (no longer using separate constants)
 from .device import RemoteMachine, get_device_registry
 
 log = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ class RemoteOrchestrator:
             # Detect machine from input tensors
             machine = None
             for tensor in input_tensors + output_tensors:
-                if tensor.device.type == REMOTE_DEVICE_TYPE:
+                if tensor.device.type == "remote":
                     registry = get_device_registry()
                     tensor_machine = registry.get_device_by_index(tensor.device.index)
                     if machine is None:
@@ -148,7 +148,7 @@ class RemoteOrchestrator:
             tensor_metadata = []
             
             for tensor in all_tensors:
-                if tensor.device.type == REMOTE_DEVICE_TYPE:
+                if tensor.device.type == "remote":
                     storage_id = tensor.untyped_storage().data_ptr()
                     
                     if storage_id == 0:
@@ -175,7 +175,7 @@ class RemoteOrchestrator:
             processed_args = []
             tensor_index = 0
             for arg in args:
-                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     # Find this tensor in our metadata list
                     arg_storage_id = arg.untyped_storage().data_ptr()
                     for i, metadata in enumerate(tensor_metadata):
@@ -191,7 +191,7 @@ class RemoteOrchestrator:
             
             processed_kwargs = {}
             for key, value in kwargs.items():
-                if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+                if isinstance(value, torch.Tensor) and value.device.type == "remote":
                     # Find this tensor in our metadata list
                     value_storage_id = value.untyped_storage().data_ptr()
                     for i, metadata in enumerate(tensor_metadata):
@@ -255,7 +255,7 @@ class RemoteOrchestrator:
 
             # Process args - extract storage IDs and metadata
             for arg in args:
-                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     storage_id = arg.untyped_storage().data_ptr()
 
                     # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
@@ -284,7 +284,7 @@ class RemoteOrchestrator:
 
             # Process kwargs - extract storage IDs and metadata
             for key, value in kwargs.items():
-                if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+                if isinstance(value, torch.Tensor) and value.device.type == "remote":
                     storage_id = value.untyped_storage().data_ptr()
 
                     # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
@@ -626,7 +626,7 @@ class RemoteOrchestrator:
     def _deserialize_tensor(self, data: bytes) -> torch.Tensor:
         """Deserialize tensor from bytes as a contiguous tensor."""
         buffer = io.BytesIO(data)
-        tensor = torch.load(buffer, map_location=CPU_DEVICE_TYPE)
+        tensor = torch.load(buffer, map_location="cpu")
 
         # Since we serialize with .contiguous(), the deserialized tensor should already be contiguous
         # with storage_offset=0 and optimal stride. No view reconstruction needed.
@@ -657,7 +657,7 @@ class RemoteOrchestrator:
 
         def check_tensor(tensor):
             nonlocal detected_machine
-            if isinstance(tensor, torch.Tensor) and tensor.device.type == REMOTE_DEVICE_TYPE:
+            if isinstance(tensor, torch.Tensor) and tensor.device.type == "remote":
                 # Get device from registry using device index
                 registry = get_device_registry()
                 machine = registry.get_device_by_index(tensor.device.index)

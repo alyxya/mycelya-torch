@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 
-from .constants import REMOTE_DEVICE_TYPE, CPU_DEVICE_TYPE, META_DEVICE_TYPE, PRIVATEUSE1_DISPATCH_KEY, AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY
+# Direct string literals (no longer using separate constants)
 
 
 log = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ def _check_and_fix_empty_output_tensors(args: Tuple[Any, ...], kwargs: Dict[str,
         return
         
     output_tensor = kwargs["out"]
-    if not isinstance(output_tensor, torch.Tensor) or output_tensor.device.type != REMOTE_DEVICE_TYPE:
+    if not isinstance(output_tensor, torch.Tensor) or output_tensor.device.type != "remote":
         return
     
     # Only fix empty tensors
@@ -37,7 +37,7 @@ def _check_and_fix_empty_output_tensors(args: Tuple[Any, ...], kwargs: Dict[str,
     
     # Check args first (positional arguments)
     for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
             # Use storage ID to check if it's the same tensor (avoid shape comparison issues)
             if arg.untyped_storage().data_ptr() != output_tensor.untyped_storage().data_ptr():
                 if arg.numel() > 0:  # Use non-empty tensor as reference
@@ -47,7 +47,7 @@ def _check_and_fix_empty_output_tensors(args: Tuple[Any, ...], kwargs: Dict[str,
     
     # Check kwargs if no suitable arg found
     for value in kwargs.values():
-        if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(value, torch.Tensor) and value.device.type == "remote":
             # Use storage ID to check if it's the same tensor
             if value.untyped_storage().data_ptr() != output_tensor.untyped_storage().data_ptr():
                 if value.numel() > 0:  # Use non-empty tensor as reference
@@ -118,7 +118,7 @@ def _fallback_to_old_approach(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
             orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
             # Return the first tensor argument as the result
             for arg in args:
-                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     return arg
             raise RuntimeError(f"No output tensor found for as_strided operation {op_name}")
         else:
@@ -136,7 +136,7 @@ def _fallback_to_old_approach(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
                 
             # Find output tensor in args (typically the last tensor argument)
             for arg in reversed(args):
-                if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                     return arg
             
             raise RuntimeError(f"No output tensor found for operation {op_name}")
@@ -204,14 +204,14 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
     # Get the base tensor (first argument for most view operations)
     base_tensor = args[0]
 
-    if base_tensor.device.type != REMOTE_DEVICE_TYPE:
+    if base_tensor.device.type != "remote":
         # Not a remote tensor - execute normally
         return op(*args, **kwargs)
     
     # Validate that any other remote tensors in args/kwargs are on the same device
     base_device = base_tensor.device
     for i, arg in enumerate(args[1:], 1):  # Skip first arg (base tensor)
-        if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
             if arg.device != base_device:
                 from torch_remote.device import get_device_registry
                 device_registry = get_device_registry()
@@ -229,7 +229,7 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
                 )
     
     for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(value, torch.Tensor) and value.device.type == "remote":
             if value.device != base_device:
                 from torch_remote.device import get_device_registry
                 device_registry = get_device_registry()
@@ -259,9 +259,9 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
     # Convert ALL tensor arguments to meta tensors to avoid device mixing
     meta_args = []
     for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
             # Convert remote tensor to meta tensor
-            meta_arg = torch.empty(arg.size(), dtype=arg.dtype, device=META_DEVICE_TYPE)
+            meta_arg = torch.empty(arg.size(), dtype=arg.dtype, device="meta")
             if arg.stride() != meta_arg.stride():
                 meta_arg = torch.as_strided(meta_arg, arg.shape, arg.stride(), arg.storage_offset())
             meta_args.append(meta_arg)
@@ -270,9 +270,9 @@ def _handle_view_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any)
     
     meta_kwargs = {}
     for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(value, torch.Tensor) and value.device.type == "remote":
             # Convert remote tensor to meta tensor
-            meta_value = torch.empty(value.size(), dtype=value.dtype, device=META_DEVICE_TYPE)
+            meta_value = torch.empty(value.size(), dtype=value.dtype, device="meta")
             if value.stride() != meta_value.stride():
                 meta_value = torch.as_strided(meta_value, value.shape, value.stride(), value.storage_offset())
             meta_kwargs[key] = meta_value
@@ -426,7 +426,7 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         nonlocal remote_device
         
         # Check device consistency for remote tensors
-        if tensor.device.type == REMOTE_DEVICE_TYPE:
+        if tensor.device.type == "remote":
             if remote_device is None:
                 remote_device = tensor.device
                 log.debug(f"Using remote device: {remote_device}")
@@ -452,7 +452,7 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         meta_tensor = torch.empty(
             tensor.shape,
             dtype=tensor.dtype,
-            device=META_DEVICE_TYPE,
+            device="meta",
             requires_grad=tensor.requires_grad
         )
         if tensor.stride() != meta_tensor.stride():
@@ -463,14 +463,14 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     
     # Convert args with device validation
     for i, arg in enumerate(args):
-        if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
             meta_args.append(validate_and_convert_to_meta_tensor(arg, i))
         else:
             meta_args.append(arg)
     
     # Convert kwargs with device validation
     for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(value, torch.Tensor) and value.device.type == "remote":
             meta_kwargs[key] = validate_and_convert_to_meta_tensor(value, len(args) + len(meta_kwargs))
         else:
             meta_kwargs[key] = value
@@ -523,15 +523,15 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     
     # First add all input tensors
     for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
             all_tensors.append(arg)
     for value in kwargs.values():
-        if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+        if isinstance(value, torch.Tensor) and value.device.type == "remote":
             all_tensors.append(value)
     
     # Special handling for "out" parameter - ensure it's treated as an output tensor
     out_tensor = None
-    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor) and kwargs["out"].device.type == REMOTE_DEVICE_TYPE:
+    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor) and kwargs["out"].device.type == "remote":
         out_tensor = kwargs["out"]
         log.debug(f"Found 'out' parameter tensor with shape {out_tensor.shape}")
     
@@ -599,10 +599,10 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         # Separate input and output tensors
         input_tensors = []
         for arg in args:
-            if isinstance(arg, torch.Tensor) and arg.device.type == REMOTE_DEVICE_TYPE:
+            if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
                 input_tensors.append(arg)
         for value in kwargs.values():
-            if isinstance(value, torch.Tensor) and value.device.type == REMOTE_DEVICE_TYPE:
+            if isinstance(value, torch.Tensor) and value.device.type == "remote":
                 input_tensors.append(value)
         
         log.debug(f"🔧 About to call orchestrator with {len(input_tensors)} input tensors, {len(output_tensors)} output tensors")
@@ -654,7 +654,7 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     """Copy data from remote tensor to CPU tensor using remote execution"""
-    if from_.device.type != REMOTE_DEVICE_TYPE:
+    if from_.device.type != "remote":
         raise ValueError("copy_from_device requires a remote tensor")
 
     # Use remote execution to get the tensor data
@@ -704,9 +704,9 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     """Copy data from CPU tensor to remote tensor using remote execution"""
-    if to_.device.type != REMOTE_DEVICE_TYPE:
+    if to_.device.type != "remote":
         raise ValueError("copy_from_host_to_device requires a remote target tensor")
-    if from_.device.type != CPU_DEVICE_TYPE:
+    if from_.device.type != "cpu":
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
     # Use remote execution to send the tensor data
@@ -763,7 +763,7 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
 
 
     if from_.device.type == to_.device.type:
-        if from_.device.type == REMOTE_DEVICE_TYPE:
+        if from_.device.type == "remote":
             if from_.device.index == to_.device.index:
                 # Same remote device - use direct copy
                 op = torch.ops.aten.copy_.default
@@ -784,11 +784,11 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
         else:
             # Both tensors on same non-remote device
             result = to_.copy_(from_)
-    elif from_.device.type == REMOTE_DEVICE_TYPE:
+    elif from_.device.type == "remote":
         # Remote to non-remote
         host_mem = copy_from_device(from_)
         result = to_.copy_(host_mem)
-    elif to_.device.type == REMOTE_DEVICE_TYPE:
+    elif to_.device.type == "remote":
         # Non-remote to remote
         result = copy_from_host_to_device(from_, to_)
     else:
@@ -812,7 +812,7 @@ def _remote_item_impl(self: torch.Tensor):
     Returns:
         Python scalar value
     """
-    if self.device.type != REMOTE_DEVICE_TYPE:
+    if self.device.type != "remote":
         # Fallback to default implementation for non-remote tensors
         return torch.ops.aten.item.default(self)
     
@@ -867,7 +867,7 @@ def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout
         target_device = torch.device(device) if not isinstance(device, torch.device) else device
 
         # Different device transfer - check if both are remote
-        if input.device.type == REMOTE_DEVICE_TYPE and target_device.type == REMOTE_DEVICE_TYPE and input.device != target_device:
+        if input.device.type == "remote" and target_device.type == "remote" and input.device != target_device:
             # Cross-device remote transfer - NOT ALLOWED
             from torch_remote.device import get_device_registry
             device_registry = get_device_registry()
@@ -891,7 +891,7 @@ def _to_copy(input: torch.Tensor, *, dtype: Optional[torch.dtype] = None, layout
     output_memory_format = memory_format if memory_format is not None else torch.contiguous_format
 
     # Create output tensor
-    if output_device.type == REMOTE_DEVICE_TYPE:
+    if output_device.type == "remote":
         # Create empty remote tensor - use contiguous format for remote tensors
         result = torch.empty(input.size(), dtype=output_dtype, layout=output_layout,
                              device=output_device, memory_format=torch.contiguous_format)
@@ -947,30 +947,30 @@ def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
 
 
 _remote_lib = torch.library.Library("_", "IMPL")
-_remote_lib.fallback(_remote_kernel_fallback, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
+_remote_lib.fallback(_remote_kernel_fallback, dispatch_key="PrivateUse1")
 
 _remote_lib_aten = torch.library.Library("aten", "IMPL")
-_remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
-_remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
+_remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
+_remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key="PrivateUse1")
 _remote_lib_aten.impl(
-    "set_.source_Tensor", _set_source_tensor, dispatch_key=PRIVATEUSE1_DISPATCH_KEY
+    "set_.source_Tensor", _set_source_tensor, dispatch_key="PrivateUse1"
 )
-_remote_lib_aten.impl("item", _remote_item_impl, dispatch_key=PRIVATEUSE1_DISPATCH_KEY)
+_remote_lib_aten.impl("item", _remote_item_impl, dispatch_key="PrivateUse1")
 
-# AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY registrations removed for copy operations:
+# AUTOGRAD_"PrivateUse1" registrations removed for copy operations:
 # _copy_from and _to_copy were causing autograd issues because:
 # 1. _copy_from breaks autograd chain via copy_from_device() -> _deserialize_tensor() -> .detach()
 # 2. In-place operations on leaf variables with requires_grad=True are not allowed
 # 3. No proper grad_fn creation for autograd graph connectivity
 # 4. This remote tensor system doesn't need device-specific autograd behavior for data movement
-# 5. PyTorch's default autograd handles remote tensors correctly when only PRIVATEUSE1_DISPATCH_KEY is registered
+# 5. PyTorch's default autograd handles remote tensors correctly when only "PrivateUse1" is registered
 
 # However, item() is safe to register to AutogradPrivateUse1 because:
 # - It's a terminal operation that extracts scalar values
 # - It doesn't involve data movement or tensor creation
 # - It has well-defined behavior for tensors with requires_grad=True
 _remote_lib_aten_autograd = torch.library.Library("aten", "IMPL")
-_remote_lib_aten_autograd.impl("item", _remote_item_impl, dispatch_key=AUTOGRAD_PRIVATEUSE1_DISPATCH_KEY)
+_remote_lib_aten_autograd.impl("item", _remote_item_impl, dispatch_key="AutogradPrivateUse1")
 
 # Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
 # so we don't register a Python version to avoid conflicts
