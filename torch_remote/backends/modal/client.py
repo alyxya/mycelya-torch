@@ -149,7 +149,6 @@ class ModalClient(ClientInterface):
     def execute_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
@@ -160,7 +159,6 @@ class ModalClient(ClientInterface):
 
         Args:
             op_name: The aten operation name
-            storage_ids: All tensor storage IDs (both input and output tensors)
             tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
             args: Operation arguments
             kwargs: Operation keyword arguments
@@ -171,10 +169,9 @@ class ModalClient(ClientInterface):
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
 
-        log.info(
-            f"📡 Modal Client sending Storage IDs: {storage_ids} "
-            f"(types: {[type(sid) for sid in storage_ids]})"
-        )
+        from ..client_interface import extract_storage_ids
+        storage_ids = extract_storage_ids(tensor_metadata)
+        log.info(f"📡 Modal Client sending Storage IDs: {storage_ids} (types: {[type(sid) for sid in storage_ids]})")
         return self._server_instance.execute_aten_operation.remote(
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )
@@ -182,7 +179,6 @@ class ModalClient(ClientInterface):
     def execute_aten_operation_with_io_separation(
         self,
         op_name: str,
-        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
@@ -195,8 +191,7 @@ class ModalClient(ClientInterface):
 
         Args:
             op_name: The aten operation name
-            storage_ids: List of all tensor storage IDs (inputs + outputs)
-            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags
+            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags and storage_id
             args: Operation arguments
             kwargs: Operation keyword arguments
 
@@ -206,9 +201,9 @@ class ModalClient(ClientInterface):
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
 
-        log.info(
-            f"📡 Modal Client (IO separation) sending Storage IDs: {storage_ids}"
-        )
+        from ..client_interface import extract_storage_ids
+        storage_ids = extract_storage_ids(tensor_metadata)
+        log.info(f"📡 Modal Client (IO separation) sending Storage IDs: {storage_ids}")
         return self._server_instance.execute_aten_operation_with_io_separation.remote(
             op_name, storage_ids, tensor_metadata, args, kwargs, self.machine_id
         )

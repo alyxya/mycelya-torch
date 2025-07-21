@@ -12,6 +12,19 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 
+def extract_storage_ids(tensor_metadata: List[Dict[str, Any]]) -> List[int]:
+    """
+    Extract storage IDs from tensor metadata.
+    
+    Args:
+        tensor_metadata: List of metadata dictionaries, each containing a "storage_id" field
+        
+    Returns:
+        List of storage IDs in the same order as the metadata
+    """
+    return [metadata["storage_id"] for metadata in tensor_metadata]
+
+
 class ClientInterface(ABC):
     """
     Abstract base class defining the interface for cloud provider clients.
@@ -117,7 +130,6 @@ class ClientInterface(ABC):
     def execute_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
@@ -128,8 +140,7 @@ class ClientInterface(ABC):
 
         Args:
             op_name: The aten operation name to execute
-            storage_ids: List of all tensor storage IDs (both input and output tensors)
-            tensor_metadata: Metadata for reconstructing all tensors (shape, stride, offset, etc.)
+            tensor_metadata: Metadata for reconstructing all tensors (shape, stride, offset, storage_id)
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
 
@@ -142,7 +153,6 @@ class ClientInterface(ABC):
     def execute_aten_operation_with_io_separation(
         self,
         op_name: str,
-        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any]
@@ -155,8 +165,7 @@ class ClientInterface(ABC):
 
         Args:
             op_name: The aten operation name to execute
-            storage_ids: List of all tensor storage IDs (inputs + outputs)
-            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags
+            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags and storage_id
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
 

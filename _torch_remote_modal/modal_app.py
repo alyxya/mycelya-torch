@@ -325,7 +325,6 @@ def _create_modal_app_for_gpu(
         def execute_aten_operation_with_io_separation(
             self,
             op_name: str,
-            storage_ids: List[int],
             tensor_metadata: List[Dict[str, Any]],
             args: List[Any],
             kwargs: Dict[str, Any],
@@ -339,8 +338,7 @@ def _create_modal_app_for_gpu(
             
             Args:
                 op_name: The operation name to execute
-                storage_ids: List of all tensor storage IDs (inputs + outputs)
-                tensor_metadata: List of tensor metadata with is_input/is_output flags
+                tensor_metadata: List of tensor metadata with is_input/is_output flags and storage_id
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 machine_id: Machine ID for logging
@@ -349,6 +347,9 @@ def _create_modal_app_for_gpu(
                 None (operation results are written to output tensors)
             """
             import torch
+            
+            # Extract storage IDs from metadata
+            storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
             
             log.info(f"🚀 Modal {gpu_type} (machine {machine_id}) executing with IO separation: {op_name}")
             log.debug(f"Using storage IDs: {storage_ids}")
@@ -364,7 +365,8 @@ def _create_modal_app_for_gpu(
                 output_storage_ids = []
                 output_metadata_list = []
                 
-                for i, (storage_id, metadata) in enumerate(zip(storage_ids, tensor_metadata)):
+                for i, metadata in enumerate(tensor_metadata):
+                    storage_id = metadata["storage_id"]
                     log.debug(f"Modal app processing storage_id={storage_id} (type={type(storage_id)})")
                     
                     # Classify tensor as input or output
@@ -491,7 +493,6 @@ def _create_modal_app_for_gpu(
         def execute_aten_operation(
             self,
             op_name: str,
-            storage_ids: List[int],
             tensor_metadata: List[Dict[str, Any]],
             args: List[Any],
             kwargs: Dict[str, Any],
@@ -503,7 +504,6 @@ def _create_modal_app_for_gpu(
             
             Args:
                 op_name: The operation name to execute
-                storage_ids: List of all tensor storage IDs (both input and output tensors)
                 tensor_metadata: List of tensor metadata for reconstruction (shape, stride, offset, storage_id)
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
@@ -514,6 +514,9 @@ def _create_modal_app_for_gpu(
             """
             import torch
             
+            # Extract storage IDs from metadata
+            storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
+            
             log.info(f"🚀 Modal {gpu_type} (machine {machine_id}) executing: {op_name}")
             log.debug(f"Using storage IDs: {storage_ids}")
             
@@ -523,7 +526,8 @@ def _create_modal_app_for_gpu(
                 
                 # Reconstruct all tensors from storage and metadata
                 tensors = []
-                for i, (storage_id, metadata) in enumerate(zip(storage_ids, tensor_metadata)):
+                for i, metadata in enumerate(tensor_metadata):
+                    storage_id = metadata["storage_id"]
                     # DEBUG: Log what storage ID is being requested
                     log.debug(f"Modal app looking for storage_id={storage_id} (type={type(storage_id)})")
                     

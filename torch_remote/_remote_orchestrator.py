@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 
 from .device import RemoteMachine, get_device_registry
+from .backends.client_interface import extract_storage_ids
 
 log = logging.getLogger(__name__)
 
@@ -219,12 +220,7 @@ class RemoteOrchestrator:
             log.info(f"   - Storage IDs: {storage_ids}")
 
             self.execute_remote_aten_operation_with_io_separation(
-                op_name,
-                storage_ids,
-                tensor_metadata,
-                processed_args,
-                processed_kwargs,
-                machine,
+                op_name, tensor_metadata, processed_args, processed_kwargs, machine
             )
 
             log.info(f"✅ ORCHESTRATOR: Remote operation {op_name} completed successfully")
@@ -336,7 +332,7 @@ class RemoteOrchestrator:
             # Execute the operation remotely - all operations work in-place on pre-allocated tensors
             log.info(f"🚀 Sending Storage IDs to {op_name}: {storage_ids}")
             self.execute_remote_aten_operation(
-                op_name, storage_ids, tensor_metadata, tuple(processed_args), processed_kwargs, machine
+                op_name, tensor_metadata, tuple(processed_args), processed_kwargs, machine
             )
 
             # Operation completed successfully - all operations are in-place
@@ -394,7 +390,6 @@ class RemoteOrchestrator:
     def execute_remote_aten_operation_with_io_separation(
         self,
         op_name: str,
-        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
@@ -405,19 +400,17 @@ class RemoteOrchestrator:
         
         Args:
             op_name: The aten operation name
-            storage_ids: All tensor storage IDs (inputs + outputs)
-            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags
+            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags and storage_id
             args: Operation arguments
             kwargs: Operation keyword arguments
             machine: Target machine
         """
         client = self._get_device_client(machine)
-        client.execute_aten_operation_with_io_separation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
+        client.execute_aten_operation_with_io_separation(op_name, tensor_metadata, list(args), kwargs)
 
     def execute_remote_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
@@ -429,14 +422,13 @@ class RemoteOrchestrator:
 
         Args:
             op_name: The aten operation name
-            storage_ids: Input tensor storage IDs
             tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
             args: Operation arguments
             kwargs: Operation keyword arguments
             machine: Target machine
         """
         client = self._get_device_client(machine)
-        client.execute_aten_operation(op_name, storage_ids, tensor_metadata, list(args), kwargs)
+        client.execute_aten_operation(op_name, tensor_metadata, list(args), kwargs)
 
     def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
@@ -550,7 +542,6 @@ class RemoteOrchestrator:
     def safe_execute_remote_aten_operation(
         self,
         op_name: str,
-        storage_ids: List[int],
         tensor_metadata: List[Dict[str, Any]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
@@ -561,8 +552,7 @@ class RemoteOrchestrator:
 
         Args:
             op_name: The aten operation name
-            storage_ids: Input tensor IDs
-            tensor_metadata: Metadata for reconstructing tensors
+            tensor_metadata: Metadata for reconstructing tensors (includes storage_id)
             args: Operation arguments
             kwargs: Operation keyword arguments
             machine: Target machine
@@ -580,12 +570,13 @@ class RemoteOrchestrator:
             raise ConnectionError(f"Device {machine.machine_id} is not connected")
 
         # Validate tensor references
+        storage_ids = extract_storage_ids(tensor_metadata)
         for storage_id in storage_ids:
             if not self.check_tensor_exists(storage_id, machine):
                 raise StaleReferenceError(f"Tensor {storage_id} not found on device {machine.machine_id}")
 
         # Execute operation
-        return self.execute_remote_aten_operation(op_name, storage_ids, tensor_metadata, args, kwargs, machine)
+        return self.execute_remote_aten_operation(op_name, tensor_metadata, args, kwargs, machine)
 
     def cleanup(self):
         """Clean up the remote orchestrator."""
