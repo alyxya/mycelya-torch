@@ -48,9 +48,9 @@ To run type checking:
 - `torch_remote/_device_daemon.py` - Local tensor ID registry and device daemon interface  
 - `torch_remote/device.py` - RemoteMachine abstraction and device management
 
-### Service Architecture
-- `torch_remote/services/tensor_transfer.py` - Tensor serialization/transfer logic
-- `torch_remote/services/storage_resolver.py` - Storage-to-machine mapping and validation
+### Utility Modules
+- `torch_remote/_tensor_utils.py` - Tensor metadata, serialization, and transfer utilities
+- `torch_remote/_storage.py` - Storage ID mapping and cross-device validation
 
 ### Simple Operation Dispatch
 - Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns

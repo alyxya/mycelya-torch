@@ -425,7 +425,7 @@ def _handle_scalar_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: An
 
 def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
-    from ._meta_parser import TensorMetadataConverter
+    from ._tensor_utils import TensorMetadataConverter
     
     op_name = op.overloadpacket._qualified_op_name
     
@@ -530,7 +530,7 @@ def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
 
 def _execute_non_tensor_result(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], meta_result: Any) -> Any:
     """Handle operations that return non-tensor results."""
-    from ._meta_parser import TensorMetadataConverter
+    from ._tensor_utils import TensorMetadataConverter
     
     op_name = op.overloadpacket._qualified_op_name
     log.debug(f"Non-tensor result from {op_name}, executing remotely")
@@ -629,7 +629,7 @@ def _create_new_output_tensor(meta_output: torch.Tensor, remote_device: torch.de
 
 def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], output_tensors: List) -> None:
     """Execute the operation remotely using the orchestrator."""
-    from ._meta_parser import TensorMetadataConverter
+    from ._tensor_utils import TensorMetadataConverter
     
     op_name = op.overloadpacket._qualified_op_name
     
