@@ -7,6 +7,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
+from torch.utils._pytree import tree_map
 
 log = logging.getLogger(__name__)
 
@@ -514,37 +515,13 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         original_tensors[id(meta_tensor)] = tensor
         return meta_tensor
     
-    # Convert args with device validation (handle both individual tensors and lists/tuples of tensors)
-    for i, arg in enumerate(args):
-        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            meta_args.append(validate_and_convert_to_meta_tensor(arg, i))
-        elif isinstance(arg, (list, tuple)):
-            # Handle lists/tuples that may contain tensors (e.g., torch.cat([tensor1, tensor2], dim=0))
-            converted_sequence = []
-            for j, item in enumerate(arg):
-                if isinstance(item, torch.Tensor) and item.device.type == "remote":
-                    converted_sequence.append(validate_and_convert_to_meta_tensor(item, f"{i}[{j}]"))
-                else:
-                    converted_sequence.append(item)
-            meta_args.append(type(arg)(converted_sequence))  # Preserve list vs tuple type
-        else:
-            meta_args.append(arg)
+    # Convert args and kwargs with device validation using tree_map
+    def convert_to_meta_tensor(obj):
+        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+            return validate_and_convert_to_meta_tensor(obj, "auto")
+        return obj
     
-    # Convert kwargs with device validation (handle both individual tensors and lists/tuples of tensors)
-    for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            meta_kwargs[key] = validate_and_convert_to_meta_tensor(value, f"kwargs[{key}]")
-        elif isinstance(value, (list, tuple)):
-            # Handle lists/tuples that may contain tensors
-            converted_sequence = []
-            for j, item in enumerate(value):
-                if isinstance(item, torch.Tensor) and item.device.type == "remote":
-                    converted_sequence.append(validate_and_convert_to_meta_tensor(item, f"kwargs[{key}][{j}]"))
-                else:
-                    converted_sequence.append(item)
-            meta_kwargs[key] = type(value)(converted_sequence)  # Preserve list vs tuple type
-        else:
-            meta_kwargs[key] = value
+    meta_args, meta_kwargs = tree_map(convert_to_meta_tensor, (args, kwargs))
     
     # If no remote tensors found, this shouldn't have been called - but handle gracefully
     if remote_device is None:
@@ -674,18 +651,14 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         log.debug(f"🔧 STEP 6: Executing {op_name} remotely with meta-based output handling")
         
         # Separate input and output tensors (handle nested lists/tuples)
-        def collect_remote_tensors(obj, collected_tensors):
-            if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-                collected_tensors.append(obj)
-            elif isinstance(obj, (list, tuple)):
-                for item in obj:
-                    collect_remote_tensors(item, collected_tensors)
-        
+        # Collect all remote tensors from args and kwargs using tree_map
         input_tensors = []
-        for arg in args:
-            collect_remote_tensors(arg, input_tensors)
-        for value in kwargs.values():
-            collect_remote_tensors(value, input_tensors)
+        def collect_tensor(obj):
+            if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+                input_tensors.append(obj)
+            return obj
+        
+        tree_map(collect_tensor, (args, kwargs))
         
         log.debug(f"🔧 About to call orchestrator with {len(input_tensors)} input tensors, {len(output_tensors)} output tensors")
         

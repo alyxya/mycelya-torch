@@ -15,6 +15,7 @@ import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+from torch.utils._pytree import tree_map
 
 from .device import RemoteMachine, get_device_registry
 from .backends.client_interface import extract_storage_ids
@@ -180,7 +181,7 @@ class RemoteOrchestrator:
 
             # Replace remote tensors in args/kwargs with placeholders
             # to avoid serialization issues (handle nested lists/tuples)
-            def replace_tensors_with_placeholders(obj):
+            def replace_tensor_with_placeholder(obj):
                 if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
                     # Find this tensor in our metadata list
                     obj_storage_id = obj.untyped_storage().data_ptr()
@@ -190,20 +191,10 @@ class RemoteOrchestrator:
                     # Tensor not found in metadata - this shouldn't happen
                     log.warning(f"Remote tensor not found in metadata for {op_name}")
                     return obj
-                elif isinstance(obj, (list, tuple)):
-                    # Recursively handle lists/tuples (e.g., torch.cat([tensor1, tensor2]))
-                    converted = [replace_tensors_with_placeholders(item) for item in obj]
-                    return type(obj)(converted)  # Preserve list vs tuple type
-                else:
-                    return obj
+                return obj
             
-            processed_args = []
-            for arg in args:
-                processed_args.append(replace_tensors_with_placeholders(arg))
-            
-            processed_kwargs = {}
-            for key, value in kwargs.items():
-                processed_kwargs[key] = replace_tensors_with_placeholders(value)
+            # Replace tensors with placeholders using tree_map
+            processed_args, processed_kwargs = tree_map(replace_tensor_with_placeholder, (args, kwargs))
 
             # Execute remotely using new interface
             log.info(f"🚀 ORCHESTRATOR: Calling modal execution for {op_name}")

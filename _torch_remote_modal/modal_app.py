@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import modal
 import torch
+from torch.utils._pytree import tree_map
 
 log = logging.getLogger(__name__)
 
@@ -433,28 +434,18 @@ def _create_modal_app_for_gpu(
                         output_storage_ids.append(storage_id)
                         output_metadata_list.append(metadata)
                 
-                # Replace tensor placeholders with actual reconstructed tensors (handle nested lists/tuples)
-                def replace_placeholders_with_tensors(obj):
+                # Replace tensor placeholders with actual reconstructed tensors using tree_map
+                def replace_placeholder_with_tensor(obj):
                     if isinstance(obj, str) and obj.startswith("__TENSOR_"):
                         idx = int(obj.split("_")[-1])
                         if idx < len(tensors):
                             return tensors[idx]
                         else:
                             raise IndexError(f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)")
-                    elif isinstance(obj, (list, tuple)):
-                        # Recursively handle lists/tuples (e.g., ["__TENSOR_0", "__TENSOR_1"] -> [tensor0, tensor1])
-                        converted = [replace_placeholders_with_tensors(item) for item in obj]
-                        return type(obj)(converted)  # Preserve list vs tuple type
-                    else:
-                        return obj
+                    return obj
                 
-                processed_args = []
-                for arg in args:
-                    processed_args.append(replace_placeholders_with_tensors(arg))
-                
-                processed_kwargs = {}
-                for key, value in kwargs.items():
-                    processed_kwargs[key] = replace_placeholders_with_tensors(value)
+                # Use tree_map to handle nested structure traversal automatically
+                processed_args, processed_kwargs = tree_map(replace_placeholder_with_tensor, (args, kwargs))
                 
                 # Get the operation
                 op_name_fixed = op_name.replace("::", ".")
