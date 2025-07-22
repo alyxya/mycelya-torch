@@ -11,32 +11,29 @@ from torch.utils._pytree import tree_map, tree_map_only
 class RemoteTensorMeta:
     def __init__(
         self,
-        data_ptr: int,
+        storage_id: int,
         size: torch.Size,
         stride: Tuple[int, ...],
         storage_offset: int,
         dtype: torch.dtype,
         nelem_in_bytes: int,
-        storage_id: Optional[int] = None,
     ) -> None:
         """Create RemoteTensorMeta with explicit metadata.
 
         Args:
-            data_ptr: Tensor ID/storage ID
+            storage_id: Tensor storage ID
             size: Tensor shape
             stride: Tensor stride
             storage_offset: Storage offset
             dtype: Data type
             nelem_in_bytes: Number of elements in bytes
-            storage_id: Optional storage ID for view tracking
         """
-        self.data_ptr = data_ptr
+        self.storage_id = storage_id
         self.size = size
         self.stride = stride
         self.storage_offset = storage_offset
         self.dtype = dtype
         self.nelem_in_bytes = nelem_in_bytes
-        self.storage_id = storage_id
 
     @classmethod
     def from_tensor(
@@ -60,7 +57,7 @@ class RemoteTensorMeta:
             )
         
         return cls(
-            data_ptr=tensor.untyped_storage().data_ptr(),
+            storage_id=tensor.untyped_storage().data_ptr(),
             size=tensor.size(),
             stride=tensor.stride(),
             storage_offset=tensor.storage_offset(),
@@ -82,18 +79,17 @@ class RemoteTensorMeta:
         """
         storage_id = tensor.untyped_storage().data_ptr()
         return cls(
-            data_ptr=storage_id,
+            storage_id=storage_id,
             size=tensor.size(),
             stride=tensor.stride(),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
-            nelem_in_bytes=tensor.numel() * tensor.element_size(),
-            storage_id=storage_id
+            nelem_in_bytes=tensor.numel() * tensor.element_size()
         )
 
     def __repr__(self) -> str:
         return (
-            f"RemoteTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
+            f"RemoteTensorMeta({self.storage_id=}, {self.size=}, {self.stride=}, "
             f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=})"
         )
 
@@ -263,7 +259,7 @@ class TensorMetadataConverter:
             Dictionary ready for serialization/transport
         """
         result = {
-            "storage_id": meta.storage_id or meta.data_ptr,
+            "storage_id": meta.storage_id,
             "shape": list(meta.size),
             "stride": list(meta.stride),
             "storage_offset": meta.storage_offset,

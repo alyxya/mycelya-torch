@@ -155,7 +155,7 @@ class RemoteOrchestrator:
         if not input_metadata:
             raise RuntimeError(f"No input metadata provided for operation {op_name}")
             
-        storage_id = input_metadata[0].storage_id or input_metadata[0].data_ptr
+        storage_id = input_metadata[0].storage_id
         machine = self._get_machine_for_storage(storage_id)
         
         # Execute with pure metadata interface
