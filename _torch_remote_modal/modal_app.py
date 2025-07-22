@@ -433,29 +433,28 @@ def _create_modal_app_for_gpu(
                         output_storage_ids.append(storage_id)
                         output_metadata_list.append(metadata)
                 
-                # Replace tensor placeholders in args with actual reconstructed tensors
+                # Replace tensor placeholders with actual reconstructed tensors (handle nested lists/tuples)
+                def replace_placeholders_with_tensors(obj):
+                    if isinstance(obj, str) and obj.startswith("__TENSOR_"):
+                        idx = int(obj.split("_")[-1])
+                        if idx < len(tensors):
+                            return tensors[idx]
+                        else:
+                            raise IndexError(f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)")
+                    elif isinstance(obj, (list, tuple)):
+                        # Recursively handle lists/tuples (e.g., ["__TENSOR_0", "__TENSOR_1"] -> [tensor0, tensor1])
+                        converted = [replace_placeholders_with_tensors(item) for item in obj]
+                        return type(obj)(converted)  # Preserve list vs tuple type
+                    else:
+                        return obj
+                
                 processed_args = []
                 for arg in args:
-                    if isinstance(arg, str) and arg.startswith("__TENSOR_"):
-                        idx = int(arg.split("_")[-1])
-                        if idx < len(tensors):
-                            processed_args.append(tensors[idx])
-                        else:
-                            raise IndexError(f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)")
-                    else:
-                        processed_args.append(arg)
+                    processed_args.append(replace_placeholders_with_tensors(arg))
                 
-                # Process kwargs similarly
                 processed_kwargs = {}
                 for key, value in kwargs.items():
-                    if isinstance(value, str) and value.startswith("__TENSOR_"):
-                        idx = int(value.split("_")[-1])
-                        if idx < len(tensors):
-                            processed_kwargs[key] = tensors[idx]
-                        else:
-                            raise IndexError(f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)")
-                    else:
-                        processed_kwargs[key] = value
+                    processed_kwargs[key] = replace_placeholders_with_tensors(value)
                 
                 # Get the operation
                 op_name_fixed = op_name.replace("::", ".")

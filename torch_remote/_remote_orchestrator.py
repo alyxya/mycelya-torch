@@ -179,41 +179,31 @@ class RemoteOrchestrator:
                     tensor_metadata.append(metadata)
 
             # Replace remote tensors in args/kwargs with placeholders
-            # to avoid serialization issues
-            processed_args = []
-            tensor_index = 0
-            for arg in args:
-                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
+            # to avoid serialization issues (handle nested lists/tuples)
+            def replace_tensors_with_placeholders(obj):
+                if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
                     # Find this tensor in our metadata list
-                    arg_storage_id = arg.untyped_storage().data_ptr()
+                    obj_storage_id = obj.untyped_storage().data_ptr()
                     for i, metadata in enumerate(tensor_metadata):
-                        if metadata["storage_id"] == arg_storage_id:
-                            processed_args.append(f"__TENSOR_{i}")
-                            break
-                    else:
-                        # Tensor not found in metadata - this shouldn't happen
-                        log.warning(
-                            f"Remote tensor not found in metadata for {op_name}"
-                        )
-                        processed_args.append(arg)
+                        if metadata["storage_id"] == obj_storage_id:
+                            return f"__TENSOR_{i}"
+                    # Tensor not found in metadata - this shouldn't happen
+                    log.warning(f"Remote tensor not found in metadata for {op_name}")
+                    return obj
+                elif isinstance(obj, (list, tuple)):
+                    # Recursively handle lists/tuples (e.g., torch.cat([tensor1, tensor2]))
+                    converted = [replace_tensors_with_placeholders(item) for item in obj]
+                    return type(obj)(converted)  # Preserve list vs tuple type
                 else:
-                    processed_args.append(arg)
+                    return obj
+            
+            processed_args = []
+            for arg in args:
+                processed_args.append(replace_tensors_with_placeholders(arg))
             
             processed_kwargs = {}
             for key, value in kwargs.items():
-                if isinstance(value, torch.Tensor) and value.device.type == "remote":
-                    # Find this tensor in our metadata list
-                    value_storage_id = value.untyped_storage().data_ptr()
-                    for i, metadata in enumerate(tensor_metadata):
-                        if metadata["storage_id"] == value_storage_id:
-                            processed_kwargs[key] = f"__TENSOR_{i}"
-                            break
-                    else:
-                        # Tensor not found in metadata - this shouldn't happen
-                        log.warning(f"Remote tensor not found in metadata for {op_name}")
-                        processed_kwargs[key] = value
-                else:
-                    processed_kwargs[key] = value
+                processed_kwargs[key] = replace_tensors_with_placeholders(value)
 
             # Execute remotely using new interface
             log.info(f"🚀 ORCHESTRATOR: Calling modal execution for {op_name}")

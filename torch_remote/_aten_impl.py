@@ -342,6 +342,25 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
     op_name = op.overloadpacket._qualified_op_name
     thread_id = threading.get_ident()
     
+    # Debug: Log tensor devices to understand why we're being called
+    tensor_devices = []
+    for i, arg in enumerate(args):
+        if isinstance(arg, torch.Tensor):
+            tensor_devices.append(f"args[{i}]: {arg.device.type}")
+        elif isinstance(arg, (list, tuple)) and arg and isinstance(arg[0], torch.Tensor):
+            tensor_devices.append(f"args[{i}]: [{', '.join(t.device.type for t in arg if isinstance(t, torch.Tensor))}]")
+    
+    for key, value in kwargs.items():
+        if isinstance(value, torch.Tensor):
+            tensor_devices.append(f"{key}: {value.device.type}")
+        elif isinstance(value, (list, tuple)) and value and isinstance(value[0], torch.Tensor):
+            tensor_devices.append(f"{key}: [{', '.join(t.device.type for t in value if isinstance(t, torch.Tensor))}]")
+    
+    log.info(f"📱 FALLBACK CALLED: {op_name} with tensors on devices: {tensor_devices}")
+    log.info(f"📋 OP DETAILS: {op}")
+    log.info(f"📋 ARGS: {[type(arg).__name__ + (f'[{len(arg)}]' if isinstance(arg, (list, tuple)) else '') for arg in args]}")
+    log.info(f"📋 KWARGS: {list(kwargs.keys())}")
+    
     # Debug: Track call depth to detect recursion
     if not hasattr(_remote_kernel_fallback, '_call_stack'):
         _remote_kernel_fallback._call_stack = {}
@@ -495,17 +514,35 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         original_tensors[id(meta_tensor)] = tensor
         return meta_tensor
     
-    # Convert args with device validation
+    # Convert args with device validation (handle both individual tensors and lists/tuples of tensors)
     for i, arg in enumerate(args):
         if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
             meta_args.append(validate_and_convert_to_meta_tensor(arg, i))
+        elif isinstance(arg, (list, tuple)):
+            # Handle lists/tuples that may contain tensors (e.g., torch.cat([tensor1, tensor2], dim=0))
+            converted_sequence = []
+            for j, item in enumerate(arg):
+                if isinstance(item, torch.Tensor) and item.device.type == "remote":
+                    converted_sequence.append(validate_and_convert_to_meta_tensor(item, f"{i}[{j}]"))
+                else:
+                    converted_sequence.append(item)
+            meta_args.append(type(arg)(converted_sequence))  # Preserve list vs tuple type
         else:
             meta_args.append(arg)
     
-    # Convert kwargs with device validation
+    # Convert kwargs with device validation (handle both individual tensors and lists/tuples of tensors)
     for key, value in kwargs.items():
         if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            meta_kwargs[key] = validate_and_convert_to_meta_tensor(value, len(args) + len(meta_kwargs))
+            meta_kwargs[key] = validate_and_convert_to_meta_tensor(value, f"kwargs[{key}]")
+        elif isinstance(value, (list, tuple)):
+            # Handle lists/tuples that may contain tensors
+            converted_sequence = []
+            for j, item in enumerate(value):
+                if isinstance(item, torch.Tensor) and item.device.type == "remote":
+                    converted_sequence.append(validate_and_convert_to_meta_tensor(item, f"kwargs[{key}][{j}]"))
+                else:
+                    converted_sequence.append(item)
+            meta_kwargs[key] = type(value)(converted_sequence)  # Preserve list vs tuple type
         else:
             meta_kwargs[key] = value
     
@@ -521,6 +558,7 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     
     try:
         log.debug(f"🔧 About to execute meta operation: {op_name}")
+        log.debug(f"Meta args: {[type(arg).__name__ + (' on ' + arg.device.type if isinstance(arg, torch.Tensor) else '') for arg in meta_args]}")
         meta_result = op(*meta_args, **meta_kwargs)
         log.debug(f"✅ Meta execution completed successfully for {op_name}")
     except Exception as e:
@@ -635,14 +673,19 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     if orchestrator is not None:
         log.debug(f"🔧 STEP 6: Executing {op_name} remotely with meta-based output handling")
         
-        # Separate input and output tensors
+        # Separate input and output tensors (handle nested lists/tuples)
+        def collect_remote_tensors(obj, collected_tensors):
+            if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+                collected_tensors.append(obj)
+            elif isinstance(obj, (list, tuple)):
+                for item in obj:
+                    collect_remote_tensors(item, collected_tensors)
+        
         input_tensors = []
         for arg in args:
-            if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-                input_tensors.append(arg)
+            collect_remote_tensors(arg, input_tensors)
         for value in kwargs.values():
-            if isinstance(value, torch.Tensor) and value.device.type == "remote":
-                input_tensors.append(value)
+            collect_remote_tensors(value, input_tensors)
         
         log.debug(f"🔧 About to call orchestrator with {len(input_tensors)} input tensors, {len(output_tensors)} output tensors")
         
