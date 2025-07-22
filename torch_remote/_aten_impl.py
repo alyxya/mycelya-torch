@@ -507,7 +507,20 @@ def _remote_kernel_fallback_impl(
         log.debug(f"Non-tensor result from {op_name}, executing remotely")
         orchestrator = _get_remote_orchestrator()
         if orchestrator is not None:
-            orchestrator.execute_remote_aten_operation_efficient(op_name, args, kwargs)
+            # Use the clean abstraction - convert tensors to metadata first
+            processed_args, processed_kwargs, input_metadata = (
+                TensorMetadataConverter.args_to_metadata_with_placeholders(
+                    args, kwargs, operation_context=op_name
+                )
+            )
+            
+            # No output tensors for non-tensor results
+            output_metadata = []
+            
+            # Execute with clean interface - only metadata crosses boundary
+            orchestrator.execute_remote_aten_operation(
+                op_name, input_metadata, output_metadata, processed_args, processed_kwargs
+            )
             return meta_result
         else:
             raise RuntimeError(
