@@ -23,28 +23,8 @@ from .device import RemoteMachine, get_device_registry
 log = logging.getLogger(__name__)
 
 
-class RemoteTensorError(Exception):
-    """Base exception for remote tensor operations."""
-
-    pass
-
-
-class StaleReferenceError(RemoteTensorError):
-    """Raised when trying to access a tensor that no longer exists on remote machine."""
-
-    pass
-
-
-class ConnectionError(RemoteTensorError):
-    """Raised when remote machine connection is lost."""
-
-    pass
-
-
-class RemoteExecutionError(RemoteTensorError):
-    """Raised when remote execution fails."""
-
-    pass
+# Exception handling is done through standard RuntimeError
+# Custom exceptions removed as they were not used elsewhere in the codebase
 
 
 def with_error_handling(func):
@@ -54,18 +34,18 @@ def with_error_handling(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            # Check for specific error patterns
+            # Check for specific error patterns and provide helpful context
             error_msg = str(e).lower()
 
             if "storage id" in error_msg and "not found" in error_msg:
-                raise StaleReferenceError(f"Storage reference is stale: {e}")
+                raise RuntimeError(f"Storage reference is stale: {e}") from e
             elif "machine" in error_msg and "not running" in error_msg:
-                raise ConnectionError(f"Remote machine connection lost: {e}")
+                raise RuntimeError(f"Remote machine connection lost: {e}") from e
             elif "remote execution failed" in error_msg:
-                raise RemoteExecutionError(f"Remote execution failed: {e}")
+                raise RuntimeError(f"Remote execution failed: {e}") from e
             else:
-                # Re-raise as generic remote tensor error
-                raise RemoteTensorError(f"Remote operation failed: {e}")
+                # Re-raise with context about remote operation failure
+                raise RuntimeError(f"Remote operation failed: {e}") from e
 
     return wrapper
 
