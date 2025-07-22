@@ -79,6 +79,10 @@ class RemoteStorageRegistry:
         # Current device tracking
         self._current_device: int = 0
 
+        # Stream management
+        self._current_streams: Dict[int, int] = {}  # device_idx -> stream_id
+        self._stream_counter: Dict[int, int] = {}  # device_idx -> counter
+
     def generate_storage_id(self) -> int:
         """
         Generate a unique storage ID with duplicate validation.
@@ -185,8 +189,6 @@ class RemoteStorageRegistry:
 
         return True
 
-    # Note: GPU registration is now handled directly in create_storage_with_id
-
     def _cleanup_remote_storage(self, storage_id: int, device_idx: int) -> None:
         """Clean up storage on remote GPU device"""
         try:
@@ -249,7 +251,7 @@ class RemoteStorageRegistry:
         log.info(f"Storage copy requested: {src_id} -> {dest_id} ({count} bytes)")
         return True
 
-    def device_count_method(self) -> int:
+    def get_device_count(self) -> int:
         """Return number of devices"""
         # Get actual device count from the device registry
         from torch_remote.device import get_device_registry
@@ -263,7 +265,7 @@ class RemoteStorageRegistry:
 
     def set_device(self, device_idx: int) -> int:
         """Set current device index"""
-        device_count = self.device_count_method()
+        device_count = self.get_device_count()
         if device_idx < 0 or device_idx >= device_count:
             raise ValueError(f"Invalid device index: {device_idx}")
         old_device = self._current_device
@@ -273,193 +275,16 @@ class RemoteStorageRegistry:
 
     def has_primary_context(self, device_idx: int) -> bool:
         """Check if device has primary context"""
-        device_count = self.device_count_method()
+        device_count = self.get_device_count()
         return device_idx >= 0 and device_idx < device_count
 
-
-class Driver:
-    """Simplified driver that only manages storage IDs without local simulation"""
-
-    def __init__(self) -> None:
-        self.registry_obj = RemoteStorageRegistry()
-
-        # Register this instance for cleanup
-        atexit.register(self._cleanup)
-
-    def _cleanup(self) -> None:
-        """Clean up storage ID mappings on exit"""
-        self.registry_obj.storage_id_to_device.clear()
-        self.registry_obj.generated_storage_ids.clear()
-
-    def exec(self, cmd: str, *args: Any) -> Any:
-        """Execute a command on the storage ID registry"""
-        log.info(f"Executing command: {cmd}(*{args[:2]}...)")  # Limit args in log
-
-        # Handle operations that need special error handling
-        if cmd in ["create_storage_with_id", "free_storage_with_id"]:
-            if hasattr(self.registry_obj, cmd):
-                method = getattr(self.registry_obj, cmd)
-                result = method(*args)
-                if not result:
-                    storage_id = args[0]
-                    if cmd == "create_storage_with_id":
-                        nbytes, device_index = args[1], args[2]
-                        raise RuntimeError(
-                            f"Failed to create storage with ID {storage_id} ({nbytes} bytes) on device {device_index}"
-                        )
-                    elif cmd == "free_storage_with_id":
-                        raise RuntimeError(
-                            f"Failed to free storage with ID {storage_id}"
-                        )
-                return result
-            else:
-                raise RuntimeError(f"Unknown command: {cmd}")
-        elif hasattr(self.registry_obj, cmd):
-            method = getattr(self.registry_obj, cmd)
-            result = method(*args)
-            log.info(f"Command {cmd} result: {result}")
-            return result
-        elif cmd == "deviceCount":
-            return self.registry_obj.device_count_method()
-        elif cmd == "getDevice":
-            return self.registry_obj.get_device()
-        elif cmd == "setDevice":
-            return self.registry_obj.set_device(*args)
-        elif cmd == "uncheckedSetDevice":
-            return self.registry_obj.set_device(*args)
-        elif cmd == "exchangeDevice":
-            old_device = self.registry_obj.get_device()
-            self.registry_obj.set_device(*args)
-            return old_device
-        elif cmd == "hasPrimaryContext":
-            return self.registry_obj.has_primary_context(*args)
-        elif cmd == "getStream":
-            # Return current stream ID for the device (default 0)
-            device_idx = args[0] if args else self.registry_obj.get_device()
-            return getattr(self.registry_obj, "_current_streams", {}).get(device_idx, 0)
-        elif cmd == "getNewStream":
-            # Create a new stream ID
-            device_idx = args[0]
-            _priority = args[1] if len(args) > 1 else 0
-            if not hasattr(self.registry_obj, "_stream_counter"):
-                self.registry_obj._stream_counter = {}
-            counter = self.registry_obj._stream_counter.get(device_idx, 0) + 1
-            self.registry_obj._stream_counter[device_idx] = counter
-            return counter
-        elif cmd == "exchangeStream":
-            # Exchange current stream with new stream
-            stream = args[0]
-            device_idx = stream.device_index
-            if not hasattr(self.registry_obj, "_current_streams"):
-                self.registry_obj._current_streams = {}
-            old_stream = self.registry_obj._current_streams.get(device_idx, 0)
-            self.registry_obj._current_streams[device_idx] = stream.stream_id
-            return old_stream
-        elif cmd == "queryStream":
-            # Always return True (stream is ready)
-            return True
-        elif cmd == "synchronizeStream":
-            # No-op for remote streams
-            return None
-        elif cmd == "synchronizeEvent":
-            # No-op for remote events
-            return None
-        elif cmd == "getDefaultStream":
-            # Return default stream (0) for device
-            device_idx = args[0] if args else self.registry_obj.get_device()
-            import torch
-
-            return torch.Stream(device=torch.device("remote", device_idx), priority=0)
-        elif cmd == "getStreamFromGlobalPool":
-            # Return a stream from global pool (just use default stream for now)
-            device_idx = args[0] if args else self.registry_obj.get_device()
-            _is_high_priority = args[1] if len(args) > 1 else False
-            import torch
-
-            return torch.Stream(device=torch.device("remote", device_idx), priority=0)
-        elif cmd == "record":
-            # No-op for event recording on remote
-            return None
-        elif cmd == "destroyEvent":
-            # No-op for event destruction on remote
-            return None
-        elif cmd == "block":
-            # No-op for event blocking on remote
-            return None
-        elif cmd == "queryEvent":
-            # Always return True (event is ready)
-            return True
-        elif cmd == "elapsedTime":
-            # Return 0 for elapsed time between events
-            return 0.0
-        elif cmd == "recordDataPtrOnStream":
-            # No-op for data pointer recording (args: data_ptr_int64, stream)
-            return None
-        elif cmd == "resize_storage_by_id":
-            # Resize remote storage by storage ID
-            storage_id, nbytes = args
-            return self._resize_storage_by_id(storage_id, nbytes)
-        else:
-            raise RuntimeError(f"Unknown command: {cmd}")
-
-    # Registry methods for C++ driver interface
-    registry: Dict[str, Callable] = {}
-
-    @register(registry)
-    def deviceCount(self, *args: Any) -> int:
-        return self.registry_obj.device_count_method()
-
-    @register(registry)
-    def getDevice(self) -> int:
-        return self.registry_obj.get_device()
-
-    @register(registry)
-    def setDevice(self, device_idx: int) -> int:
-        return self.registry_obj.set_device(device_idx)
-
-    @register(registry)
-    def uncheckedSetDevice(self, device_idx: int) -> int:
-        return self.registry_obj.set_device(device_idx)
-
-    @register(registry)
-    def exchangeDevice(self, device_idx: int) -> int:
-        old_device = self.registry_obj.get_device()
-        self.registry_obj.set_device(device_idx)
-        return old_device
-
-    @register(registry)
-    def hasPrimaryContext(self, device_idx: int) -> bool:
-        return self.registry_obj.has_primary_context(device_idx)
-
-    @register(registry)
-    def create_storage_with_id(
-        self, storage_id: int, nbytes: int, device_index: int
-    ) -> bool:
-        return self.registry_obj.create_storage_with_id(
-            storage_id, nbytes, device_index
-        )
-
-    @register(registry)
-    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
-        return self.registry_obj.copy_data_by_id(dest_id, src_id, count)
-
-    # Note: register_storage_with_gpu removed as it was redundant with create_storage_with_id
-
-    @register(registry)
-    def generate_storage_id(self) -> int:
-        return self.registry_obj.generate_storage_id()
-
-    @register(registry)
-    def free_storage_with_id(self, storage_id: int) -> bool:
-        return self.registry_obj.free_storage_with_id(storage_id)
-
-    def _resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
+    def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         """Resize remote storage by storage ID"""
         try:
             storage_id = int(storage_id)
 
             # Get device index for this storage
-            device_idx = self.registry_obj.get_storage_device(storage_id)
+            device_idx = self.get_storage_device(storage_id)
             if device_idx is None:
                 log.warning(f"No device found for storage {storage_id}")
                 return False
@@ -504,6 +329,200 @@ class Driver:
         except Exception as e:
             log.warning(f"Failed to resize remote storage {storage_id}: {e}")
             return False
+
+    # Stream management methods
+    def get_stream(self, device_idx: int) -> int:
+        """Get current stream ID for device"""
+        return self._current_streams.get(device_idx, 0)
+
+    def create_new_stream(self, device_idx: int, priority: int = 0) -> int:
+        """Create a new stream ID"""
+        counter = self._stream_counter.get(device_idx, 0) + 1
+        self._stream_counter[device_idx] = counter
+        return counter
+
+    def exchange_stream(self, stream) -> int:
+        """Exchange current stream with new stream"""
+        device_idx = stream.device_index
+        old_stream = self._current_streams.get(device_idx, 0)
+        self._current_streams[device_idx] = stream.stream_id
+        return old_stream
+
+
+class Driver:
+    """Simplified driver that manages storage IDs with registry-based dispatch"""
+
+    registry: Dict[str, Callable] = {}
+
+    def __init__(self) -> None:
+        self.registry_obj = RemoteStorageRegistry()
+
+        # Register this instance for cleanup
+        atexit.register(self._cleanup)
+
+    def _cleanup(self) -> None:
+        """Clean up storage ID mappings on exit"""
+        self.registry_obj.storage_id_to_device.clear()
+        self.registry_obj.generated_storage_ids.clear()
+
+    def exec(self, cmd: str, *args: Any) -> Any:
+        """Execute a command using the registry pattern"""
+        log.info(f"Executing command: {cmd}(*{args[:2]}...)")  # Limit args in log
+
+        if cmd in Driver.registry:
+            res = Driver.registry[cmd](self, *args)
+        else:
+            raise RuntimeError(f"Unknown command: {cmd}")
+
+        log.info(f"Command {cmd} result: {res}")
+        return res
+
+    # Storage operations
+    @register(registry)
+    def generate_storage_id(self) -> int:
+        return self.registry_obj.generate_storage_id()
+
+    @register(registry)
+    def create_storage_with_id(
+        self, storage_id: int, nbytes: int, device_index: int
+    ) -> bool:
+        result = self.registry_obj.create_storage_with_id(
+            storage_id, nbytes, device_index
+        )
+        if not result:
+            raise RuntimeError(
+                f"Failed to create storage with ID {storage_id} ({nbytes} bytes) on device {device_index}"
+            )
+        return result
+
+    @register(registry)
+    def free_storage_with_id(self, storage_id: int) -> bool:
+        result = self.registry_obj.free_storage_with_id(storage_id)
+        if not result:
+            raise RuntimeError(f"Failed to free storage with ID {storage_id}")
+        return result
+
+    @register(registry)
+    def get_storage_device(self, storage_id: int) -> Optional[int]:
+        return self.registry_obj.get_storage_device(storage_id)
+
+    @register(registry)
+    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
+        return self.registry_obj.copy_data_by_id(dest_id, src_id, count)
+
+    @register(registry)
+    def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
+        return self.registry_obj.resize_storage_by_id(storage_id, nbytes)
+
+    # Device operations
+    @register(registry)
+    def deviceCount(self, *args: Any) -> int:
+        assert len(args) == 0
+        return self.registry_obj.get_device_count()
+
+    @register(registry)
+    def getDevice(self) -> int:
+        return self.registry_obj.get_device()
+
+    @register(registry)
+    def setDevice(self, device_idx: int) -> int:
+        return self.registry_obj.set_device(device_idx)
+
+    @register(registry)
+    def uncheckedSetDevice(self, device_idx: int) -> int:
+        return self.registry_obj.set_device(device_idx)
+
+    @register(registry)
+    def exchangeDevice(self, device_idx: int) -> int:
+        old_device = self.registry_obj.get_device()
+        self.registry_obj.set_device(device_idx)
+        return old_device
+
+    @register(registry)
+    def hasPrimaryContext(self, device_idx: int) -> bool:
+        return self.registry_obj.has_primary_context(device_idx)
+
+    # Stream operations
+    @register(registry)
+    def getStream(self, device_idx: Optional[int] = None) -> int:
+        if device_idx is None:
+            device_idx = self.registry_obj.get_device()
+        return self.registry_obj.get_stream(device_idx)
+
+    @register(registry)
+    def getNewStream(self, device_idx: int, priority: int = 0) -> int:
+        return self.registry_obj.create_new_stream(device_idx, priority)
+
+    @register(registry)
+    def exchangeStream(self, stream) -> int:
+        return self.registry_obj.exchange_stream(stream)
+
+    @register(registry)
+    def queryStream(self, stream) -> bool:
+        # Always return True (stream is ready)
+        return True
+
+    @register(registry)
+    def synchronizeStream(self, stream) -> None:
+        # No-op for remote streams
+        pass
+
+    @register(registry)
+    def getDefaultStream(self, device_idx: Optional[int] = None) -> Any:
+        # Return default stream (0) for device
+        if device_idx is None:
+            device_idx = self.registry_obj.get_device()
+        import torch
+
+        return torch.Stream(device=torch.device("remote", device_idx), priority=0)
+
+    @register(registry)
+    def getStreamFromGlobalPool(
+        self, device_idx: Optional[int] = None, is_high_priority: bool = False
+    ) -> Any:
+        # Return a stream from global pool (just use default stream for now)
+        if device_idx is None:
+            device_idx = self.registry_obj.get_device()
+        import torch
+
+        return torch.Stream(device=torch.device("remote", device_idx), priority=0)
+
+    # Event operations
+    @register(registry)
+    def synchronizeEvent(self, event) -> None:
+        # No-op for remote events
+        pass
+
+    @register(registry)
+    def record(self, event, stream, device_index, flags) -> None:
+        # No-op for event recording on remote
+        pass
+
+    @register(registry)
+    def destroyEvent(self, event, device_index) -> None:
+        # No-op for event destruction on remote
+        pass
+
+    @register(registry)
+    def block(self, event, stream) -> None:
+        # No-op for event blocking on remote
+        pass
+
+    @register(registry)
+    def queryEvent(self, event) -> bool:
+        # Always return True (event is ready)
+        return True
+
+    @register(registry)
+    def elapsedTime(self, event1, event2, device_index) -> float:
+        # Return 0 for elapsed time between events
+        return 0.0
+
+    # Data operations
+    @register(registry)
+    def recordDataPtrOnStream(self, data_ptr_int64, stream) -> None:
+        # No-op for data pointer recording
+        pass
 
 
 # Global driver instance

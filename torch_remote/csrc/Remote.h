@@ -14,7 +14,7 @@ namespace remote {
 using remote_ptr_t = uint64_t;
 using storage_id_t = uint64_t;  // Changed from string to integer for efficient storage as data pointer
 
-void set_driver_exec(PyObject* driver_exec_fn);
+void set_impl_factory(PyObject* factory);
 py::function get_method(const char* name);
 
 static constexpr char kCreateStorageMethod[] = "create_storage_with_id";

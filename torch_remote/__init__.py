@@ -6,26 +6,33 @@ from typing import Any, Optional, Union
 
 import torch
 
-# Direct driver access for C++ - eliminates impl_factory pattern entirely
+# Direct driver access for C++ via factory pattern
 from ._device_daemon import driver
 
 
-def driver_exec(name: str, *args, **kwargs):
-    """Execute a command on the remote device driver.
+# Factory pattern for C++ method access with caching
+_IMPL_REGISTRY = {}
 
-    This function provides direct access to the remote device driver,
-    eliminating the need for factory patterns. Used internally by
-    the C++ extension and remote execution system.
+
+def impl_factory(name: str):
+    """Factory function that returns cached method implementations.
+
+    This follows the pytorch-openreg-2 pattern for cleaner C++ integration.
 
     Args:
-        name: Command name to execute
-        *args: Command arguments
-        **kwargs: Command keyword arguments
+        name: Method name to get implementation for
 
     Returns:
-        Result of the driver command
+        Callable that executes the named method
     """
-    return driver.exec(name, *args, **kwargs)
+    if name in _IMPL_REGISTRY:
+        return _IMPL_REGISTRY[name]
+
+    def _method_impl(*args, **kwargs):
+        return driver.exec(name, *args, **kwargs)
+
+    _IMPL_REGISTRY[name] = _method_impl
+    return _method_impl
 
 
 # Load the C++ Module
