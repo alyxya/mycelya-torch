@@ -13,8 +13,8 @@ Run with: pytest tests/test_regression.py -v
 
 import pytest
 import torch
+
 import torch_remote
-from test_utilities import DeviceTestUtils
 
 
 @pytest.mark.critical

@@ -11,7 +11,15 @@ along with related functionality for creating and managing Modal applications.
 import logging
 from typing import Any, Dict, List
 
-from ..client_interface import ClientInterface
+from ..client_interface import (
+    ClientConfig,
+    ClientInterface,
+    ConnectionError,
+    ExecutionOptions,
+    StorageError,
+    StorageOptions,
+    extract_storage_ids,
+)
 
 log = logging.getLogger(__name__)
 
@@ -28,8 +36,8 @@ class ModalClient(ClientInterface):
     protocols while maintaining state and connection management.
     """
 
-    def __init__(self, gpu_type: str, machine_id: str):
-        super().__init__(gpu_type, machine_id)
+    def __init__(self, gpu_type: str, machine_id: str, config: ClientConfig = None):
+        super().__init__(gpu_type, machine_id, config)
         self._app = None
         self._server_class = None
         self._server_instance = None
@@ -71,24 +79,35 @@ class ModalClient(ClientInterface):
         """Check if the machine is currently running."""
         return self._app_context is not None
 
-    def create_storage(self, nbytes: int, storage_id: int, lazy: bool = False) -> None:
+    def create_storage(self, nbytes: int, storage_id: int, options: StorageOptions = None) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             nbytes: Number of bytes to allocate for the storage
             storage_id: Specific ID to use for the storage (required)
-            lazy: If True, defer actual GPU allocation until first use
+            options: Storage creation options (provider-agnostic)
 
         Returns:
             None
         """
         if not self.is_running():
-            raise RuntimeError(
+            raise ConnectionError(
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._server_instance.create_storage.remote(nbytes, storage_id, lazy)
+        # Extract standard storage options
+        storage_options = options or StorageOptions()
+        lazy = storage_options.lazy_allocation  # Standard parameter all providers should support
+
+        # Handle truly provider-specific options if needed
+        modal_options = storage_options.provider_options.get('modal', {})
+        # Example: modal_options.get('container_memory_gb', 8)
+
+        try:
+            self._server_instance.create_storage.remote(nbytes, storage_id, lazy)
+        except Exception as e:
+            raise StorageError(f"Failed to create storage {storage_id}: {e}") from e
 
     def update_storage(self, tensor_data: bytes, storage_id: int) -> None:
         """
@@ -162,6 +181,7 @@ class ModalClient(ClientInterface):
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any],
+        execution_options: ExecutionOptions = None,
     ) -> None:
         """
         Execute an aten operation with explicit input/output tensor separation.
@@ -183,7 +203,6 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        from ..client_interface import extract_storage_ids
 
         storage_ids = extract_storage_ids(tensor_metadata)
         log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")

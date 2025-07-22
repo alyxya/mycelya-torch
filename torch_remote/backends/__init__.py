@@ -13,10 +13,46 @@ Future backends may include:
 - Lambda Labs (torch_remote.backends.lambda_labs)
 """
 
+# Import standardized interface components
+from .client_interface import (
+    ClientConfig,
+    ClientError,
+    ClientInterface,
+    ConnectionError,
+    ExecutionOptions,
+    RemoteExecutionError,
+    ResourceNotFoundError,
+    StorageError,
+    StorageOptions,
+    extract_storage_ids,
+)
+
 # Import available backends
 try:
     from . import modal
-
-    __all__ = ["modal"]
+    __all__ = [
+        "ClientInterface",
+        "ClientConfig",
+        "StorageOptions",
+        "ExecutionOptions",
+        "ClientError",
+        "ConnectionError",
+        "RemoteExecutionError",
+        "StorageError",
+        "ResourceNotFoundError",
+        "extract_storage_ids",
+        "modal"
+    ]
 except ImportError:
-    __all__ = []
+    __all__ = [
+        "ClientInterface",
+        "ClientConfig",
+        "StorageOptions",
+        "ExecutionOptions",
+        "ClientError",
+        "ConnectionError",
+        "RemoteExecutionError",
+        "StorageError",
+        "ResourceNotFoundError",
+        "extract_storage_ids",
+    ]

@@ -9,7 +9,6 @@ import torch
 # Direct driver access for C++ via factory pattern
 from ._device_daemon import driver
 
-
 # Factory pattern for C++ method access with caching
 _IMPL_REGISTRY = {}
 
@@ -196,6 +195,11 @@ def _create_module() -> types.ModuleType:
 torch.utils.rename_privateuse1_backend("remote")
 torch._register_device_module("remote", _create_module())
 
+
+# Initialize dependency injection container
+from .core.container import register_default_services
+
+register_default_services()
 
 # Import device management
 # Import ATen implementations to ensure PyTorch registrations are executed

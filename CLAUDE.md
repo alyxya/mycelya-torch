@@ -43,14 +43,27 @@ To run type checking:
 
 ### Core Modules
 - `torch_remote/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
-- `torch_remote/_aten_impl.py` - ATen operation dispatch system with remote execution routing
-- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration and coordination
+- `torch_remote/_aten_impl.py` - ATen operation dispatch system using strategy pattern
+- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration with dependency injection
 - `torch_remote/_device_daemon.py` - Local tensor ID registry and device daemon interface  
 - `torch_remote/device.py` - RemoteMachine abstraction and device management
 
+### Service Architecture (New)
+- `torch_remote/services/tensor_transfer.py` - Extracted tensor serialization/transfer logic
+- `torch_remote/services/connection_pool.py` - Client lifecycle and connection management
+- `torch_remote/services/storage_resolver.py` - Storage-to-machine mapping and validation
+- `torch_remote/core/container.py` - Dependency injection container for service management
+
+### Operation Dispatch System (New)
+- `torch_remote/dispatch/operation_classifier.py` - Centralized operation categorization
+- `torch_remote/dispatch/execution_strategies.py` - Strategy pattern for operation execution
+
+### Provider Interface
+- `torch_remote/backends/client_interface.py` - Standardized provider interface with agnostic parameters
+- `torch_remote/backends/modal/client.py` - Modal provider implementation
+
 ### Remote Execution Provider
 - `_torch_remote_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
-- `_torch_remote_modal/client.py` - ModalClient implementing provider interface
 
 ### C++ Backend Integration
 - `torch_remote/csrc/RemoteMem.cpp` - Custom allocator storing tensor IDs as data pointers
@@ -183,12 +196,22 @@ for data, target in dataloader:
 - Regression tests cover: imports, device creation, basic operations, transfers, gradients
 - Target runtime: <30 seconds for critical tests, 2-5 minutes for fast functional tests
 
+#### Architectural Refactoring (2025-07-22)
+- **Service Extraction**: Extracted TensorTransferService, ConnectionPoolManager, and StorageMachineResolver from monolithic orchestrator
+- **Strategy Pattern**: Implemented operation classification and execution strategies for clean dispatch
+- **Dependency Injection**: Added ServiceContainer for managing service dependencies and reducing circular imports
+- **Provider Standardization**: Enhanced client interface with provider-agnostic parameters (lazy_allocation, compression, etc.)
+- **Clean Boundaries**: Established early conversion boundary where tensors become metadata at PyTorch integration layer
+- **Eliminated Technical Debt**: Removed deprecated fields, circular import workarounds, and large conditional logic blocks
+
 #### Current Status
 - Core functionality stable and tested
 - Memory efficiency optimizations in place
 - Clean error handling throughout
 - Modal provider fully functional
 - Minimal regression test suite in place
+- Clean service-oriented architecture with dependency injection
+- Strategy pattern for extensible operation dispatch
 - Ready for additional provider implementations
 
 Last updated: 2025-07-22

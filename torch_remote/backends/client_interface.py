@@ -9,7 +9,80 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+
+class ClientError(Exception):
+    """Base exception for client errors."""
+    pass
+
+
+class ConnectionError(ClientError):
+    """Raised when connection to remote provider fails."""
+    pass
+
+
+class RemoteExecutionError(ClientError):
+    """Raised when remote operation execution fails."""
+    pass
+
+
+class StorageError(ClientError):
+    """Raised when storage operations fail."""
+    pass
+
+
+class ResourceNotFoundError(ClientError):
+    """Raised when requested resource is not found."""
+    pass
+
+
+@dataclass
+class ClientConfig:
+    """Configuration for client behavior and provider-specific options."""
+    timeout: int = 300
+    retries: int = 2
+    auto_reconnect: bool = True
+    provider_options: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class StorageOptions:
+    """Options for storage operations that should be standardized across providers.
+    
+    Standard Options (all providers should support):
+    - lazy_allocation: Defer GPU memory allocation until first use (optimization)
+    - compression: Standard compression formats for storage efficiency
+    - memory_type: Standard memory hierarchy options
+    - priority: Standard priority levels for resource allocation
+    
+    Provider-specific options go in provider_options dict.
+    """
+    lazy_allocation: bool = False  # Defer GPU allocation until first use
+    compression: Optional[str] = None  # "gzip", "lz4", "zstd", None
+    memory_type: Optional[str] = None  # "gpu", "cpu", "unified"
+    priority: Optional[str] = None  # "high", "normal", "low"
+    provider_options: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ExecutionOptions:
+    """Options for operation execution that should be standardized across providers.
+    
+    Standard Options (all providers should support):
+    - priority: Standard priority levels for operation scheduling
+    - timeout_override: Override default timeout for specific operations
+    - enable_profiling: Standard profiling/timing collection
+    - synchronous: Whether to wait for operation completion
+    
+    Provider-specific options go in provider_options dict.
+    """
+    priority: Optional[str] = None  # "high", "normal", "low"
+    timeout_override: Optional[int] = None  # Seconds
+    enable_profiling: bool = False  # Collect timing/performance data
+    synchronous: bool = True  # Wait for operation completion
+    provider_options: Dict[str, Any] = field(default_factory=dict)
 
 
 def extract_storage_ids(tensor_metadata: List[Dict[str, Any]]) -> List[int]:
@@ -33,16 +106,18 @@ class ClientInterface(ABC):
     class and implement all abstract methods to ensure consistent API across providers.
     """
 
-    def __init__(self, gpu_type: str, machine_id: str):
+    def __init__(self, gpu_type: str, machine_id: str, config: Optional[ClientConfig] = None):
         """
-        Initialize the client with GPU type and machine ID.
+        Initialize the client with GPU type, machine ID, and configuration.
 
         Args:
             gpu_type: The GPU type (e.g., "T4", "A100-40GB")
             machine_id: Unique machine identifier
+            config: Client configuration options
         """
         self.gpu_type = gpu_type
         self.machine_id = machine_id
+        self.config = config or ClientConfig()
 
     @abstractmethod
     def start(self) -> None:
@@ -74,14 +149,44 @@ class ClientInterface(ABC):
         """
         pass
 
+    def health_check(self) -> bool:
+        """
+        Perform a health check on the client connection.
+        
+        Default implementation delegates to is_running(). Providers can override
+        for more sophisticated health checking.
+
+        Returns:
+            True if client is healthy, False otherwise
+        """
+        return self.is_running()
+
+    def reconnect(self) -> bool:
+        """
+        Attempt to reconnect the client.
+        
+        Default implementation stops and starts the client. Providers can override
+        for more sophisticated reconnection logic.
+
+        Returns:
+            True if reconnection succeeded, False otherwise
+        """
+        try:
+            self.stop()
+            self.start()
+            return self.is_running()
+        except Exception:
+            return False
+
     @abstractmethod
-    def create_storage(self, nbytes: int, storage_id: int) -> None:
+    def create_storage(self, nbytes: int, storage_id: int, options: Optional[StorageOptions] = None) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             nbytes: Number of bytes to allocate for the storage
             storage_id: Specific ID to use for the storage (required)
+            options: Storage creation options (provider-agnostic)
 
         Returns:
             None
@@ -133,6 +238,7 @@ class ClientInterface(ABC):
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any],
+        execution_options: Optional[ExecutionOptions] = None,
     ) -> None:
         """
         Execute an aten operation on the remote machine.
@@ -143,6 +249,7 @@ class ClientInterface(ABC):
             tensor_metadata: Metadata for reconstructing all tensors (shape, stride, offset, storage_id)
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
+            execution_options: Options for operation execution (provider-agnostic)
 
         Returns:
             None (operation is executed in-place on pre-allocated tensors)
