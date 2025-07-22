@@ -19,11 +19,9 @@ from .client_interface import (
     ClientError,
     ClientInterface,
     ConnectionError,
-    ExecutionOptions,
     RemoteExecutionError,
     ResourceNotFoundError,
     StorageError,
-    StorageOptions,
     extract_storage_ids,
 )
 
@@ -33,8 +31,6 @@ try:
     __all__ = [
         "ClientInterface",
         "ClientConfig",
-        "StorageOptions",
-        "ExecutionOptions",
         "ClientError",
         "ConnectionError",
         "RemoteExecutionError",
@@ -47,8 +43,6 @@ except ImportError:
     __all__ = [
         "ClientInterface",
         "ClientConfig",
-        "StorageOptions",
-        "ExecutionOptions",
         "ClientError",
         "ConnectionError",
         "RemoteExecutionError",

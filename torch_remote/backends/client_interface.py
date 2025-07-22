@@ -47,42 +47,7 @@ class ClientConfig:
     provider_options: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class StorageOptions:
-    """Options for storage operations that should be standardized across providers.
-    
-    Standard Options (all providers should support):
-    - lazy_allocation: Defer GPU memory allocation until first use (optimization)
-    - compression: Standard compression formats for storage efficiency
-    - memory_type: Standard memory hierarchy options
-    - priority: Standard priority levels for resource allocation
-    
-    Provider-specific options go in provider_options dict.
-    """
-    lazy_allocation: bool = False  # Defer GPU allocation until first use
-    compression: Optional[str] = None  # "gzip", "lz4", "zstd", None
-    memory_type: Optional[str] = None  # "gpu", "cpu", "unified"
-    priority: Optional[str] = None  # "high", "normal", "low"
-    provider_options: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ExecutionOptions:
-    """Options for operation execution that should be standardized across providers.
-    
-    Standard Options (all providers should support):
-    - priority: Standard priority levels for operation scheduling
-    - timeout_override: Override default timeout for specific operations
-    - enable_profiling: Standard profiling/timing collection
-    - synchronous: Whether to wait for operation completion
-    
-    Provider-specific options go in provider_options dict.
-    """
-    priority: Optional[str] = None  # "high", "normal", "low"
-    timeout_override: Optional[int] = None  # Seconds
-    enable_profiling: bool = False  # Collect timing/performance data
-    synchronous: bool = True  # Wait for operation completion
-    provider_options: Dict[str, Any] = field(default_factory=dict)
+# Simplified options - only what's actually used right now
 
 
 def extract_storage_ids(tensor_metadata: List[Dict[str, Any]]) -> List[int]:
@@ -179,14 +144,14 @@ class ClientInterface(ABC):
             return False
 
     @abstractmethod
-    def create_storage(self, nbytes: int, storage_id: int, options: Optional[StorageOptions] = None) -> None:
+    def create_storage(self, nbytes: int, storage_id: int, lazy: bool = False) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             nbytes: Number of bytes to allocate for the storage
             storage_id: Specific ID to use for the storage (required)
-            options: Storage creation options (provider-agnostic)
+            lazy: Whether to defer GPU memory allocation until first use
 
         Returns:
             None
@@ -238,7 +203,6 @@ class ClientInterface(ABC):
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any],
-        execution_options: Optional[ExecutionOptions] = None,
     ) -> None:
         """
         Execute an aten operation on the remote machine.
@@ -249,7 +213,6 @@ class ClientInterface(ABC):
             tensor_metadata: Metadata for reconstructing all tensors (shape, stride, offset, storage_id)
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
-            execution_options: Options for operation execution (provider-agnostic)
 
         Returns:
             None (operation is executed in-place on pre-allocated tensors)

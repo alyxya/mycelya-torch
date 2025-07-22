@@ -199,7 +199,7 @@ for data, target in dataloader:
 - **Service Extraction**: Extracted TensorTransferService and StorageMachineResolver from monolithic orchestrator
 - **Strategy Pattern**: Implemented operation classification and execution strategies for clean dispatch
 - **Dependency Injection**: Added ServiceContainer for managing service dependencies and reducing circular imports
-- **Provider Standardization**: Enhanced client interface with provider-agnostic parameters (lazy_allocation, compression, etc.)
+- **Provider Standardization**: Enhanced client interface with simplified, focused parameters (lazy_allocation for storage)
 - **Clean Boundaries**: Established early conversion boundary where tensors become metadata at PyTorch integration layer
 - **Eliminated Technical Debt**: Removed deprecated fields, circular import workarounds, and large conditional logic blocks
 - **Simplified Architecture**: Removed over-engineered ConnectionPoolManager in favor of direct machine.get_client() calls

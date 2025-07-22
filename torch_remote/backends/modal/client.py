@@ -15,9 +15,7 @@ from ..client_interface import (
     ClientConfig,
     ClientInterface,
     ConnectionError,
-    ExecutionOptions,
     StorageError,
-    StorageOptions,
     extract_storage_ids,
 )
 
@@ -79,14 +77,14 @@ class ModalClient(ClientInterface):
         """Check if the machine is currently running."""
         return self._app_context is not None
 
-    def create_storage(self, nbytes: int, storage_id: int, options: StorageOptions = None) -> None:
+    def create_storage(self, nbytes: int, storage_id: int, lazy: bool = False) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             nbytes: Number of bytes to allocate for the storage
             storage_id: Specific ID to use for the storage (required)
-            options: Storage creation options (provider-agnostic)
+            lazy: Whether to defer GPU memory allocation until first use
 
         Returns:
             None
@@ -95,14 +93,6 @@ class ModalClient(ClientInterface):
             raise ConnectionError(
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
-
-        # Extract standard storage options
-        storage_options = options or StorageOptions()
-        lazy = storage_options.lazy_allocation  # Standard parameter all providers should support
-
-        # Handle truly provider-specific options if needed
-        modal_options = storage_options.provider_options.get('modal', {})
-        # Example: modal_options.get('container_memory_gb', 8)
 
         try:
             self._server_instance.create_storage.remote(nbytes, storage_id, lazy)
@@ -181,7 +171,6 @@ class ModalClient(ClientInterface):
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
         kwargs: Dict[str, Any],
-        execution_options: ExecutionOptions = None,
     ) -> None:
         """
         Execute an aten operation with explicit input/output tensor separation.
