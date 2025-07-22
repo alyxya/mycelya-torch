@@ -5,9 +5,27 @@ import atexit
 import io
 import logging
 import random
+import contextvars
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import torch
+
+# Context variable to track when lazy allocation should be used
+_lazy_allocation_context = contextvars.ContextVar('lazy_allocation', default=False)
+
+def lazy_allocation_context():
+    """Context manager to enable lazy allocation for storage creation within the context"""
+    from contextlib import contextmanager
+    
+    @contextmanager
+    def _context():
+        token = _lazy_allocation_context.set(True)
+        try:
+            yield
+        finally:
+            _lazy_allocation_context.reset(token)
+    
+    return _context()
 
 log = logging.getLogger(__name__)
 
@@ -91,10 +109,14 @@ class RemoteStorageRegistry:
 
 
     def create_storage_with_id(
-        self, storage_id: int, nbytes: int, device_index: int
+        self, storage_id: int, nbytes: int, device_index: int, lazy: bool = False
     ) -> bool:
         """Create remote storage with the given ID and return success status"""
         storage_id = int(storage_id)
+
+        # Check if lazy allocation is enabled in the current context
+        if not lazy:
+            lazy = _lazy_allocation_context.get(False)
 
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
@@ -115,7 +137,7 @@ class RemoteStorageRegistry:
                     if client and client.is_running():
                         # Create storage with exact byte size
                         # No garbage data needed
-                        client.create_storage(nbytes, storage_id)
+                        client.create_storage(nbytes, storage_id, lazy)
                         log.info(
                             f"Registered storage {storage_id} with client "
                             f"({nbytes} bytes)"

@@ -70,13 +70,14 @@ class ModalClient(ClientInterface):
         """Check if the machine is currently running."""
         return self._app_context is not None
 
-    def create_storage(self, nbytes: int, storage_id: int) -> None:
+    def create_storage(self, nbytes: int, storage_id: int, lazy: bool = False) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             nbytes: Number of bytes to allocate for the storage
             storage_id: Specific ID to use for the storage (required)
+            lazy: If True, defer actual GPU allocation until first use
 
         Returns:
             None
@@ -84,7 +85,7 @@ class ModalClient(ClientInterface):
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
 
-        self._server_instance.create_storage.remote(nbytes, storage_id)
+        self._server_instance.create_storage.remote(nbytes, storage_id, lazy)
 
     def update_storage(self, tensor_data: bytes, storage_id: int) -> None:
         """

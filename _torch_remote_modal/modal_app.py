@@ -115,7 +115,8 @@ def _create_modal_app_for_gpu(
         def create_storage(
             self,
             nbytes: int,
-            storage_id: int
+            storage_id: int,
+            lazy: bool = False
         ) -> None:
             """
             Create a new storage on the remote machine.
@@ -123,23 +124,28 @@ def _create_modal_app_for_gpu(
             Args:
                 nbytes: Number of bytes to allocate for the storage
                 storage_id: Specific ID to use for the storage (required)
+                lazy: If True, defer actual GPU allocation until first use
                 
             Returns:
                 None
             """
             import torch
             
-            # Create tensor directly on GPU with exact byte size
-            device = torch.device("cuda")
-            tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
-            
             # Store storage and original tensor data
             storages, lock = self._get_storages()
             with lock:
-                # Store tensor storage for all tensors
                 storage_id = int(storage_id)
-                storages[storage_id] = tensor.untyped_storage()
-                log.info(f"📥 CREATED Storage ID {storage_id} on Modal ({nbytes} bytes)")
+                
+                if lazy:
+                    # Store only the byte count for lazy allocation
+                    storages[storage_id] = nbytes
+                    log.info(f"📝 LAZY Storage ID {storage_id} registered ({nbytes} bytes)")
+                else:
+                    # Create tensor directly on GPU with exact byte size
+                    device = torch.device("cuda")
+                    tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
+                    storages[storage_id] = tensor.untyped_storage()
+                    log.info(f"📥 CREATED Storage ID {storage_id} on Modal ({nbytes} bytes)")
 
         @modal.method()
         def update_storage(
@@ -172,6 +178,12 @@ def _create_modal_app_for_gpu(
             storages, lock = self._get_storages()
             with lock:
                 storage_id = int(storage_id)
+                
+                # Check if storage was lazy-allocated and warn about direct update
+                if storage_id in storages and isinstance(storages[storage_id], int):
+                    lazy_bytes = storages[storage_id]
+                    log.warning(f"⚠️ Updating lazy storage ID {storage_id} ({lazy_bytes} bytes) with direct data")
+                
                 storages[storage_id] = tensor.untyped_storage()
                 log.info(f"📥 UPDATED Storage ID {storage_id} on Modal (shape: {tensor.shape})")
 
@@ -208,6 +220,14 @@ def _create_modal_app_for_gpu(
                     raise KeyError(f"Storage ID {storage_id} not found")
                 
                 storage = storages[storage_id]
+                
+                # Validate that storage is not a lazy allocation (int)
+                if isinstance(storage, int):
+                    raise RuntimeError(
+                        f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
+                        f"This indicates a bug: lazy storages should be converted to real storage "
+                        f"during operation execution before data retrieval."
+                    )
                 
                 # If view parameters are provided, create the view and make it contiguous
                 if shape is not None:
@@ -383,6 +403,14 @@ def _create_modal_app_for_gpu(
                             raise KeyError(f"Storage ID {storage_id} not found")
                         storage = storages[storage_id]
                     
+                    # Validate that storage is not a lazy allocation (int) 
+                    if isinstance(storage, int):
+                        raise RuntimeError(
+                            f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
+                            f"This indicates a bug: lazy storages should be converted to real storage "
+                            f"during operation execution before tensor reconstruction."
+                        )
+                    
                     # Parse dtype string back to torch.dtype
                     dtype_str = metadata["dtype"].replace("torch.", "")
                     dtype = getattr(torch, dtype_str)
@@ -467,7 +495,12 @@ def _create_modal_app_for_gpu(
                                     current_storage = storages[storage_id]
                                     result_storage = result_tensor.untyped_storage()
                                     
-                                    if current_storage is not result_storage:
+                                    # Handle lazy storage conversion
+                                    if isinstance(current_storage, int):
+                                        # Lazy storage being realized by operation execution
+                                        log.debug(f"📦 Converting lazy storage ID {storage_id} ({current_storage} bytes) to real storage")
+                                        storages[storage_id] = result_storage
+                                    elif current_storage is not result_storage:
                                         # Storage changed - update the mapping
                                         log.debug(f"📦 Updating storage mapping for ID {storage_id}")
                                         storages[storage_id] = result_storage

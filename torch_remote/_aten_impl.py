@@ -590,15 +590,20 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
                 # Output is new - create empty remote tensor with validated remote device
                 # Use the remote_device that was already validated to be consistent across all tensors
                 
-                # Create empty remote tensor (this will invoke the allocator and create storage ID)
-                log.debug(f"🔧 About to call torch.empty for output {i}")
-                new_tensor = torch.empty(
-                    meta_output.shape,
-                    dtype=meta_output.dtype,
-                    device=remote_device,
-                    requires_grad=meta_output.requires_grad
-                )
-                log.debug(f"✅ torch.empty completed for output {i}")
+                # Enable lazy allocation for new output tensors to avoid wasted GPU allocation
+                from torch_remote._device_daemon import lazy_allocation_context
+                
+                log.debug(f"🔧 Creating new output tensor {i} with lazy allocation")
+                with lazy_allocation_context():
+                    # Create empty remote tensor (this will invoke the allocator and create storage ID)
+                    log.debug(f"🔧 About to call torch.empty for output {i}")
+                    new_tensor = torch.empty(
+                        meta_output.shape,
+                        dtype=meta_output.dtype,
+                        device=remote_device,
+                        requires_grad=meta_output.requires_grad
+                    )
+                    log.debug(f"✅ torch.empty completed for output {i} with lazy allocation")
                 
                 # Apply stride if different from default
                 if meta_output.stride() != new_tensor.stride():
