@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import logging
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
-from .dispatch import ExecutionStrategyFactory, OperationClassifier
+# Simple operation dispatch - no complex patterns needed
 
 log = logging.getLogger(__name__)
 
@@ -346,15 +346,319 @@ def _remote_kernel_fallback(
 def _remote_kernel_fallback_impl(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> Any:
-    # Get operation name
+    """Execute PyTorch operations on remote devices using simple dispatch logic."""
     op_name = op.overloadpacket._qualified_op_name
 
-    # Use strategy pattern for operation execution
-    operation_type = OperationClassifier.classify_operation(op)
-    strategy = ExecutionStrategyFactory.get_strategy(operation_type)
+    # Simple operation classification - no complex pattern needed
+    if _is_view_operation(op):
+        log.info(f"🔍 View operation: {op_name}")
+        return _handle_view_operation(op, *args, **kwargs)
+    elif _is_scalar_operation(op):
+        log.info(f"📊 Scalar operation: {op_name}")
+        return _handle_scalar_operation(op, *args, **kwargs)
+    else:
+        # All other operations (compute, memory, creation) execute remotely
+        log.info(f"🚀 Remote operation: {op_name}")
+        return _execute_remote_operation(op, args, kwargs)
 
-    log.info(f"🎯 Executing {op_name} using {strategy.__class__.__name__} (type: {operation_type.value})")
-    return strategy.execute(op, args, kwargs)
+
+def _is_view_operation(op: torch._ops.OpOverload) -> bool:
+    """Check if operation is a view operation that should execute locally."""
+    # View operations create new tensor views sharing the same storage
+    view_ops = {
+        'aten::view', 'aten::reshape', 'aten::transpose', 'aten::permute', 
+        'aten::squeeze', 'aten::unsqueeze', 'aten::select', 'aten::slice',
+        'aten::narrow', 'aten::expand', 'aten::repeat', 'aten::as_strided',
+        'aten::unflatten', 'aten::flatten', 'aten::swapaxes', 'aten::swapdims',
+        'aten::movedim', 'aten::moveaxis', 'aten::contiguous'
+    }
+    return op._schema.name in view_ops
+
+
+def _is_scalar_operation(op: torch._ops.OpOverload) -> bool:
+    """Check if operation returns a scalar that can be computed locally from metadata."""
+    scalar_ops = {
+        'aten::item', 'aten::numel', 'aten::size', 'aten::stride', 
+        'aten::storage_offset', 'aten::dim', 'aten::ndimension',
+        'aten::element_size', 'aten::is_contiguous'
+    }
+    return op._schema.name in scalar_ops
+
+
+def _handle_scalar_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
+    """Handle scalar operations that can be computed locally from tensor metadata."""
+    op_name = op._schema.name
+    
+    if op_name == 'aten::item':
+        tensor = args[0]
+        if tensor.device.type == "remote":
+            # Transfer to CPU and extract item
+            cpu_tensor = tensor.cpu()
+            return cpu_tensor.item()
+        else:
+            return tensor.item()
+    
+    elif op_name in {'aten::numel', 'aten::size', 'aten::stride', 'aten::storage_offset', 'aten::dim', 'aten::ndimension'}:
+        # These can be computed locally from tensor metadata
+        tensor = args[0]
+        if op_name == 'aten::numel':
+            return tensor.numel()
+        elif op_name == 'aten::size':
+            dim = args[1] if len(args) > 1 else None
+            return tensor.size(dim) if dim is not None else tensor.size()
+        elif op_name == 'aten::stride':
+            dim = args[1] if len(args) > 1 else None
+            return tensor.stride(dim) if dim is not None else tensor.stride()
+        elif op_name == 'aten::storage_offset':
+            return tensor.storage_offset()
+        elif op_name in {'aten::dim', 'aten::ndimension'}:
+            return tensor.dim()
+        elif op_name == 'aten::element_size':
+            return tensor.element_size()
+        elif op_name == 'aten::is_contiguous':
+            return tensor.is_contiguous()
+    
+    # For other scalar operations, fall back to remote execution
+    log.warning(f"Unhandled scalar operation {op_name}, falling back to remote execution")
+    return _execute_remote_operation(op, args, kwargs)
+
+
+def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Any:
+    """Execute operation on remote device - simplified from complex strategy pattern."""
+    from ._meta_parser import TensorMetadataConverter
+    
+    op_name = op.overloadpacket._qualified_op_name
+    
+    # Step 1: Validate all remote tensors are on the same device and convert to meta tensors  
+    remote_device = None
+    original_tensors = {}  # Maps meta tensor id to original tensor
+    
+    def validate_and_convert_to_meta_tensor(tensor: torch.Tensor) -> torch.Tensor:
+        """Validate device consistency and convert a remote tensor to a meta tensor."""
+        nonlocal remote_device
+        
+        # Check device consistency for remote tensors
+        if tensor.device.type == "remote":
+            if remote_device is None:
+                remote_device = tensor.device
+                log.debug(f"Using remote device: {remote_device}")
+            elif tensor.device != remote_device:
+                from .device import get_device_registry
+                device_registry = get_device_registry()
+                first_device = device_registry.get_device_by_index(remote_device.index)
+                current_device = device_registry.get_device_by_index(tensor.device.index)
+                
+                first_device_name = first_device.machine_id if first_device else f"remote:{remote_device.index}"
+                current_device_name = current_device.machine_id if current_device else f"remote:{tensor.device.index}"
+                
+                raise RuntimeError(
+                    f"Cannot perform operations between tensors on different remote devices. "
+                    f'Operation "{op_name}" has tensors on: '
+                    f'"{first_device_name}" (index {remote_device.index}) and '
+                    f'"{current_device_name}" (index {tensor.device.index}). '
+                    f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"
+                )
+        
+        # Convert to meta tensor while preserving properties
+        meta_tensor = torch.empty(
+            tensor.shape,
+            dtype=tensor.dtype, 
+            device="meta",
+            requires_grad=tensor.requires_grad,
+        )
+        if tensor.stride() != meta_tensor.stride():
+            meta_tensor = torch.as_strided(
+                meta_tensor, tensor.shape, tensor.stride(), tensor.storage_offset()
+            )
+        
+        original_tensors[id(meta_tensor)] = tensor
+        return meta_tensor
+    
+    # Convert args and kwargs with device validation using tree_map
+    from torch.utils._pytree import tree_map
+    
+    def convert_to_meta_tensor(obj):
+        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+            return validate_and_convert_to_meta_tensor(obj)
+        return obj
+    
+    meta_args, meta_kwargs = tree_map(convert_to_meta_tensor, (args, kwargs))
+    
+    # If no remote tensors found, this indicates a dispatch logic error
+    if remote_device is None:
+        raise RuntimeError(
+            f"Remote kernel fallback called for operation {op_name} with no remote tensors. "
+            "This indicates a dispatch logic error."
+        )
+    
+    # Step 2: Execute the operation on meta tensors to determine outputs
+    log.debug(f"🔧 Executing {op_name} on meta tensors for shape inference")
+    
+    try:
+        meta_result = op(*meta_args, **meta_kwargs)
+        log.debug(f"✅ Meta execution completed successfully for {op_name}")
+    except Exception as e:
+        log.error(f"Meta execution failed for {op_name}: {e}")
+        raise RuntimeError(
+            f"Meta tensor execution failed for {op_name}: {e}. "
+            "This operation cannot be executed remotely without meta tensor support."
+        )
+    
+    # Handle both single tensor and tuple results
+    if isinstance(meta_result, torch.Tensor):
+        meta_outputs = [meta_result]
+        return_single = True
+    elif isinstance(meta_result, tuple):
+        meta_outputs = list(meta_result)
+        return_single = False
+    else:
+        # Non-tensor result, execute remotely and return as-is
+        return _execute_non_tensor_result(op, args, kwargs, meta_result)
+    
+    # Step 3: Create output tensors
+    output_tensors = _create_output_tensors(op, args, kwargs, meta_outputs, original_tensors, remote_device)
+    
+    # Step 4: Execute remotely with orchestrator
+    _execute_on_remote_device(op, args, kwargs, output_tensors)
+    
+    # Step 5: Return results
+    if return_single:
+        return output_tensors[0]
+    else:
+        return tuple(output_tensors)
+
+
+def _execute_non_tensor_result(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], meta_result: Any) -> Any:
+    """Handle operations that return non-tensor results."""
+    from ._meta_parser import TensorMetadataConverter
+    
+    op_name = op.overloadpacket._qualified_op_name
+    log.debug(f"Non-tensor result from {op_name}, executing remotely")
+    
+    # Use the clean abstraction - convert tensors to metadata first
+    processed_args, processed_kwargs, input_metadata = (
+        TensorMetadataConverter.args_to_metadata_with_placeholders(
+            args, kwargs, operation_context=op_name
+        )
+    )
+    
+    # No output tensors for non-tensor results
+    output_metadata = []
+    
+    # Execute with clean interface - only metadata crosses boundary
+    orchestrator = _get_remote_orchestrator()
+    orchestrator.execute_remote_aten_operation(
+        op_name,
+        input_metadata,
+        output_metadata,
+        processed_args,
+        processed_kwargs,
+    )
+    return meta_result
+
+
+def _create_output_tensors(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], 
+                         meta_outputs: List, original_tensors: Dict, remote_device: torch.device) -> List:
+    """Create output tensors based on meta execution results."""
+    op_name = op.overloadpacket._qualified_op_name
+    
+    # Check if any output meta tensors are the same object as input meta tensors
+    input_meta_tensor_ids = {
+        id(tensor) for tensor in args if isinstance(tensor, torch.Tensor)
+    }
+    input_meta_tensor_ids.update({
+        id(tensor) for tensor in kwargs.values() if isinstance(tensor, torch.Tensor)
+    })
+    
+    output_tensors = []
+    
+    # Special handling for "out" parameter
+    out_tensor = None
+    if ("out" in kwargs and isinstance(kwargs["out"], torch.Tensor) and 
+        kwargs["out"].device.type == "remote"):
+        out_tensor = kwargs["out"]
+        log.debug(f"Found 'out' parameter tensor with shape {out_tensor.shape}")
+    
+    # Process each output tensor
+    for i, meta_output in enumerate(meta_outputs):
+        log.debug(f"🔧 Processing output tensor {i}: meta_output.shape={meta_output.shape}")
+        
+        if id(meta_output) in input_meta_tensor_ids:
+            # Output shares storage with input - reuse the original input tensor
+            original_tensor = original_tensors[id(meta_output)]
+            output_tensors.append(original_tensor)
+            log.debug(f"✅ Output tensor {i} reuses input tensor storage (in-place operation)")
+        else:
+            # Check if this meta output corresponds to the "out" parameter
+            if out_tensor is not None and len(output_tensors) == i:
+                # Use the existing "out" tensor as the output tensor
+                output_tensors.append(out_tensor)
+                log.debug(f"✅ Using existing 'out' tensor as output {i}")
+            else:
+                log.debug(f"🔧 Creating new output tensor {i} with shape {meta_output.shape}")
+                
+                # Create new output tensor with lazy allocation
+                new_tensor = _create_new_output_tensor(meta_output, remote_device)
+                output_tensors.append(new_tensor)
+                log.debug(f"✅ Created new output tensor {i} with shape {meta_output.shape}")
+    
+    return output_tensors
+
+
+def _create_new_output_tensor(meta_output: torch.Tensor, remote_device: torch.device) -> torch.Tensor:
+    """Create a new output tensor on the remote device."""
+    # Create empty remote tensor (lazy allocation will be handled by device daemon)
+    new_tensor = torch.empty(
+        meta_output.shape,
+        dtype=meta_output.dtype,
+        device=remote_device,
+        requires_grad=meta_output.requires_grad,
+    )
+    
+    # Apply stride if different from default
+    if meta_output.stride() != new_tensor.stride():
+        new_tensor = torch.as_strided(
+            new_tensor,
+            meta_output.shape,
+            meta_output.stride(),
+            meta_output.storage_offset(),
+        )
+    
+    return new_tensor
+
+
+def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], output_tensors: List) -> None:
+    """Execute the operation remotely using the orchestrator."""
+    from ._meta_parser import TensorMetadataConverter
+    
+    op_name = op.overloadpacket._qualified_op_name
+    
+    log.debug(f"🔧 Executing {op_name} remotely with meta-based output handling")
+    
+    # Convert tensors to metadata at PyTorch boundary (early conversion)
+    processed_args, processed_kwargs, input_metadata = (
+        TensorMetadataConverter.args_to_metadata_with_placeholders(
+            args, kwargs, operation_context=op_name
+        )
+    )
+    
+    # Convert output tensors to metadata as well
+    output_metadata = [
+        TensorMetadataConverter.tensor_to_metadata(tensor, f"{op_name}_output")
+        for tensor in output_tensors
+    ]
+    
+    log.debug(
+        f"🔧 About to call orchestrator with {len(input_metadata)} input tensors, {len(output_metadata)} output tensors"
+    )
+    
+    # Use the new interface with pure metadata (no raw tensors cross this boundary)
+    orchestrator = _get_remote_orchestrator()
+    orchestrator.execute_remote_aten_operation(
+        op_name, input_metadata, output_metadata, processed_args, processed_kwargs
+    )
+    
+    log.debug(f"✅ Remote orchestrator execution completed for {op_name}")
 
 
 

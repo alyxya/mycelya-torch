@@ -53,9 +53,8 @@ To run type checking:
 - `torch_remote/services/storage_resolver.py` - Storage-to-machine mapping and validation
 - `torch_remote/core/container.py` - Dependency injection container for service management
 
-### Operation Dispatch System (New)
-- `torch_remote/dispatch/operation_classifier.py` - Centralized operation categorization
-- `torch_remote/dispatch/execution_strategies.py` - Strategy pattern for operation execution
+### Simple Operation Dispatch
+- Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns
 
 ### Provider Interface
 - `torch_remote/backends/client_interface.py` - Standardized provider interface with agnostic parameters
@@ -197,7 +196,7 @@ for data, target in dataloader:
 
 #### Architectural Refactoring (2025-07-22)
 - **Service Extraction**: Extracted TensorTransferService and StorageMachineResolver from monolithic orchestrator
-- **Strategy Pattern**: Implemented operation classification and execution strategies for clean dispatch
+- **Simple Dispatch**: Replaced over-engineered strategy pattern with straightforward if/elif logic
 - **Dependency Injection**: Added ServiceContainer for managing service dependencies and reducing circular imports
 - **Provider Standardization**: Enhanced client interface with simplified, focused parameters (lazy_allocation for storage)
 - **Clean Boundaries**: Established early conversion boundary where tensors become metadata at PyTorch integration layer
