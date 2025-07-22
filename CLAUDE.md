@@ -18,8 +18,12 @@ pytest tests/ -v
 
 To run linting:
 ```bash
-# No linting tools currently configured
-# Consider adding: flake8, black, or ruff
+ruff check .
+```
+
+To run formatting:
+```bash
+ruff format .
 ```
 
 To run type checking:

@@ -9,7 +9,9 @@ This script shows how to use different GPU types with torch_remote.
 """
 
 import torch
+
 import torch_remote
+
 
 def main():
     print("🚀 PyTorch Remote Device Backend Example")
@@ -45,20 +47,22 @@ def main():
 
     print(f"   T4 tensors: {x_t4.shape} ({x_t4.numel()} elements) on {x_t4.device}")
     print(f"   L4 tensors: {x_l4.shape} ({x_l4.numel()} elements) on {x_l4.device}")
-    print(f"   Total T4 elements: {x_t4.numel() + y_t4.numel()} (>1000 → should use REMOTE execution)")
-    print(f"   Total L4 elements: {x_l4.numel() + y_l4.numel()} (>1000 → should use REMOTE execution)")
+    print(
+        f"   Total T4 elements: {x_t4.numel() + y_t4.numel()} (>1000 → should use REMOTE execution)"
+    )
+    print(
+        f"   Total L4 elements: {x_l4.numel() + y_l4.numel()} (>1000 → should use REMOTE execution)"
+    )
 
     # Check device indices and get device IDs from registry
     registry = torch_remote.get_device_registry()
     t4_device_from_registry = registry.get_device_by_index(x_t4.device.index)
     l4_device_from_registry = registry.get_device_by_index(x_l4.device.index)
     t4_device_id = (
-        t4_device_from_registry.device_id if t4_device_from_registry
-        else 'NOT FOUND'
+        t4_device_from_registry.device_id if t4_device_from_registry else "NOT FOUND"
     )
     l4_device_id = (
-        l4_device_from_registry.device_id if l4_device_from_registry
-        else 'NOT FOUND'
+        l4_device_from_registry.device_id if l4_device_from_registry else "NOT FOUND"
     )
     print(f"   T4 device index: {x_t4.device.index}, ID: {t4_device_id}")
     print(f"   L4 device index: {x_l4.device.index}, ID: {l4_device_id}")
@@ -70,7 +74,9 @@ def main():
 
     try:
         # This should work - same device and trigger remote execution
-        print("   Executing T4 addition (should see '🚀 Creating remote job' message)...")
+        print(
+            "   Executing T4 addition (should see '🚀 Creating remote job' message)..."
+        )
         z_t4 = x_t4 + y_t4
         print(f"   ✅ T4: {x_t4.shape} + {y_t4.shape} = {z_t4.shape}")
     except Exception as e:
@@ -78,7 +84,9 @@ def main():
 
     try:
         # This should work - same device and trigger remote execution
-        print("   Executing L4 addition (should see '🚀 Creating remote job' message)...")
+        print(
+            "   Executing L4 addition (should see '🚀 Creating remote job' message)..."
+        )
         z_l4 = x_l4 + y_l4
         print(f"   ✅ L4: {x_l4.shape} + {y_l4.shape} = {z_l4.shape}")
     except Exception as e:
@@ -120,6 +128,7 @@ def main():
         print(f"   - {gpu_type.value}")
 
     print("\n✅ Example completed successfully!")
+
 
 if __name__ == "__main__":
     main()

@@ -2,21 +2,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import atexit
-import io
+import contextvars
 import logging
 import random
-import contextvars
-from typing import Any, Callable, Dict, List, Optional, Set
-
-import torch
+from typing import Any, Callable, Dict, Optional, Set
 
 # Context variable to track when lazy allocation should be used
-_lazy_allocation_context = contextvars.ContextVar('lazy_allocation', default=False)
+_lazy_allocation_context = contextvars.ContextVar("lazy_allocation", default=False)
+
 
 def lazy_allocation_context():
     """Context manager to enable lazy allocation for storage creation within the context"""
     from contextlib import contextmanager
-    
+
     @contextmanager
     def _context():
         token = _lazy_allocation_context.set(True)
@@ -24,8 +22,9 @@ def lazy_allocation_context():
             yield
         finally:
             _lazy_allocation_context.reset(token)
-    
+
     return _context()
+
 
 log = logging.getLogger(__name__)
 
@@ -38,9 +37,7 @@ MAX_STORAGE_ID = 2**64 - 1
 MAX_ID_GENERATION_ATTEMPTS = 1000
 
 
-def register(
-    registry: Dict[str, Callable]
-) -> Callable[[Callable], Callable]:
+def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
     """Decorator to register functions in a registry dictionary.
 
     This decorator adds the decorated function to the provided registry
@@ -53,9 +50,11 @@ def register(
     Returns:
         Decorator function that registers and returns the original function
     """
+
     def func(fn: Callable) -> Callable:
         registry[fn.__name__] = fn
         return fn
+
     return func
 
 
@@ -102,11 +101,14 @@ class RemoteStorageRegistry:
                 return storage_id
 
             attempt += 1
-            log.warning(f"Generated duplicate storage ID {storage_id}, retrying (attempt {attempt})")
+            log.warning(
+                f"Generated duplicate storage ID {storage_id}, retrying (attempt {attempt})"
+            )
 
         # If we couldn't generate a unique ID after MAX_ID_GENERATION_ATTEMPTS, raise an error
-        raise RuntimeError(f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts")
-
+        raise RuntimeError(
+            f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts"
+        )
 
     def create_storage_with_id(
         self, storage_id: int, nbytes: int, device_index: int, lazy: bool = False
@@ -143,9 +145,7 @@ class RemoteStorageRegistry:
                             f"({nbytes} bytes)"
                         )
         except Exception as e:
-            log.warning(
-                f"Failed to register storage {storage_id} with client: {e}"
-            )
+            log.warning(f"Failed to register storage {storage_id} with client: {e}")
 
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return True
@@ -155,7 +155,6 @@ class RemoteStorageRegistry:
         storage_id = int(storage_id)
         return self.storage_id_to_device.get(storage_id)
 
-
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID and perform remote cleanup"""
         storage_id = int(storage_id)
@@ -164,7 +163,7 @@ class RemoteStorageRegistry:
 
         # Get device index before cleanup
         device_idx = self.storage_id_to_device.get(storage_id)
-        
+
         if storage_id in self.storage_id_to_device:
             # Clean up storage tracking
             self.storage_id_to_device.pop(storage_id, None)
@@ -172,22 +171,19 @@ class RemoteStorageRegistry:
 
             # Call remote cleanup
             if device_idx is not None:
-                log.info(
-                f"Storage {storage_id} freed, initiating remote cleanup"
-            )
+                log.info(f"Storage {storage_id} freed, initiating remote cleanup")
                 self._cleanup_remote_storage(storage_id, device_idx)
             else:
                 log.info(
-                f"No device index found for storage {storage_id}, "
-                "skipping remote cleanup"
-            )
+                    f"No device index found for storage {storage_id}, "
+                    "skipping remote cleanup"
+                )
 
             log.info(f"Freed storage ID {storage_id}")
         else:
             log.warning(f"Attempted to free unknown storage {storage_id}")
 
         return True
-
 
     # Note: GPU registration is now handled directly in create_storage_with_id
 
@@ -197,11 +193,12 @@ class RemoteStorageRegistry:
             # Import here to avoid circular imports
             from ._remote_orchestrator import remote_orchestrator
             from .device import get_device_registry
+
             orchestrator = remote_orchestrator
             if orchestrator is None:
                 log.warning(
-                f"No remote orchestrator available for storage {storage_id} cleanup"
-            )
+                    f"No remote orchestrator available for storage {storage_id} cleanup"
+                )
                 return
 
             registry = get_device_registry()
@@ -209,15 +206,13 @@ class RemoteStorageRegistry:
 
             if device is None:
                 log.warning(
-                f"No device found for index {device_idx} during storage "
-                f"{storage_id} cleanup"
-            )
+                    f"No device found for index {device_idx} during storage "
+                    f"{storage_id} cleanup"
+                )
                 return
 
             # Attempt remote cleanup
-            log.info(
-                f"Calling remove_storage_from_remote for storage {storage_id}"
-            )
+            log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
             success = orchestrator.remove_tensor_from_remote(storage_id, device)
             if success:
                 log.info(
@@ -232,12 +227,12 @@ class RemoteStorageRegistry:
 
         except Exception as e:
             # Log but don't fail - local cleanup already completed
-            log.warning(f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}")
+            log.warning(
+                f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}"
+            )
             # Continue execution since local cleanup is already done
 
-    def copy_data_by_id(
-        self, dest_id: int, src_id: int, count: int
-    ) -> bool:
+    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
         """Copy data between storages identified by their storage IDs"""
         # This is a placeholder - actual copy operations should go through remote execution
         dest_device = self.storage_id_to_device.get(int(dest_id))
@@ -251,16 +246,14 @@ class RemoteStorageRegistry:
         # For storage ID system, copy operations should go through remote
         # aten execution. This is just a placeholder to indicate the operation
         # was requested
-        log.info(
-            f"Storage copy requested: {src_id} -> {dest_id} ({count} bytes)"
-        )
+        log.info(f"Storage copy requested: {src_id} -> {dest_id} ({count} bytes)")
         return True
-
 
     def device_count_method(self) -> int:
         """Return number of devices"""
         # Get actual device count from the device registry
         from torch_remote.device import get_device_registry
+
         registry = get_device_registry()
         return len(registry._devices)
 
@@ -311,9 +304,13 @@ class Driver:
                     storage_id = args[0]
                     if cmd == "create_storage_with_id":
                         nbytes, device_index = args[1], args[2]
-                        raise RuntimeError(f"Failed to create storage with ID {storage_id} ({nbytes} bytes) on device {device_index}")
+                        raise RuntimeError(
+                            f"Failed to create storage with ID {storage_id} ({nbytes} bytes) on device {device_index}"
+                        )
                     elif cmd == "free_storage_with_id":
-                        raise RuntimeError(f"Failed to free storage with ID {storage_id}")
+                        raise RuntimeError(
+                            f"Failed to free storage with ID {storage_id}"
+                        )
                 return result
             else:
                 raise RuntimeError(f"Unknown command: {cmd}")
@@ -339,11 +336,11 @@ class Driver:
         elif cmd == "getStream":
             # Return current stream ID for the device (default 0)
             device_idx = args[0] if args else self.registry_obj.get_device()
-            return getattr(self.registry_obj, '_current_streams', {}).get(device_idx, 0)
+            return getattr(self.registry_obj, "_current_streams", {}).get(device_idx, 0)
         elif cmd == "getNewStream":
             # Create a new stream ID
             device_idx, priority = args[0], args[1] if len(args) > 1 else 0
-            if not hasattr(self.registry_obj, '_stream_counter'):
+            if not hasattr(self.registry_obj, "_stream_counter"):
                 self.registry_obj._stream_counter = {}
             counter = self.registry_obj._stream_counter.get(device_idx, 0) + 1
             self.registry_obj._stream_counter[device_idx] = counter
@@ -352,7 +349,7 @@ class Driver:
             # Exchange current stream with new stream
             stream = args[0]
             device_idx = stream.device_index
-            if not hasattr(self.registry_obj, '_current_streams'):
+            if not hasattr(self.registry_obj, "_current_streams"):
                 self.registry_obj._current_streams = {}
             old_stream = self.registry_obj._current_streams.get(device_idx, 0)
             self.registry_obj._current_streams[device_idx] = stream.stream_id
@@ -370,12 +367,14 @@ class Driver:
             # Return default stream (0) for device
             device_idx = args[0] if args else self.registry_obj.get_device()
             import torch
+
             return torch.Stream(device=torch.device("remote", device_idx), priority=0)
         elif cmd == "getStreamFromGlobalPool":
             # Return a stream from global pool (just use default stream for now)
             device_idx = args[0] if args else self.registry_obj.get_device()
             is_high_priority = args[1] if len(args) > 1 else False
             import torch
+
             return torch.Stream(device=torch.device("remote", device_idx), priority=0)
         elif cmd == "record":
             # No-op for event recording on remote
@@ -432,8 +431,12 @@ class Driver:
         return self.registry_obj.has_primary_context(device_idx)
 
     @register(registry)
-    def create_storage_with_id(self, storage_id: int, nbytes: int, device_index: int) -> bool:
-        return self.registry_obj.create_storage_with_id(storage_id, nbytes, device_index)
+    def create_storage_with_id(
+        self, storage_id: int, nbytes: int, device_index: int
+    ) -> bool:
+        return self.registry_obj.create_storage_with_id(
+            storage_id, nbytes, device_index
+        )
 
     @register(registry)
     def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
@@ -453,46 +456,53 @@ class Driver:
         """Resize remote storage by storage ID"""
         try:
             storage_id = int(storage_id)
-            
+
             # Get device index for this storage
             device_idx = self.registry_obj.get_storage_device(storage_id)
             if device_idx is None:
                 log.warning(f"No device found for storage {storage_id}")
                 return False
-            
+
             # Import here to avoid circular imports
             from ._remote_orchestrator import remote_orchestrator
             from .device import get_device_registry
-            
+
             orchestrator = remote_orchestrator
             if orchestrator is None:
-                log.warning(f"No remote orchestrator available for storage {storage_id} resize")
+                log.warning(
+                    f"No remote orchestrator available for storage {storage_id} resize"
+                )
                 return False
-            
+
             registry = get_device_registry()
             device = registry.get_device_by_index(device_idx)
-            
+
             if device is None:
-                log.warning(f"No device found for index {device_idx} during storage {storage_id} resize")
+                log.warning(
+                    f"No device found for index {device_idx} during storage {storage_id} resize"
+                )
                 return False
-            
+
             # Get client and call resize_storage
             client = device.get_client()
             if client and client.is_running():
                 success = client.resize_storage(storage_id, nbytes)
                 if success:
-                    log.info(f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes")
+                    log.info(
+                        f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes"
+                    )
                 else:
-                    log.warning(f"❌ Remote resize returned false for storage {storage_id}")
+                    log.warning(
+                        f"❌ Remote resize returned false for storage {storage_id}"
+                    )
                 return success
             else:
                 log.warning(f"Client not available for storage {storage_id} resize")
                 return False
-                
+
         except Exception as e:
             log.warning(f"Failed to resize remote storage {storage_id}: {e}")
             return False
-
 
 
 # Global driver instance

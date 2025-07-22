@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from pprint import pformat
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
-from torch.utils._pytree import tree_map, tree_map_only
+from torch.utils._pytree import tree_map
 
 
 class RemoteTensorMeta:
@@ -38,7 +38,7 @@ class RemoteTensorMeta:
     @classmethod
     def from_tensor(
         cls, tensor: torch.Tensor, checked: bool = True
-    ) -> 'RemoteTensorMeta':
+    ) -> "RemoteTensorMeta":
         """Create RemoteTensorMeta from existing tensor.
 
         Args:
@@ -55,20 +55,18 @@ class RemoteTensorMeta:
             raise RuntimeError(
                 "Creating RemoteTensorMeta is only for Tensors on remote device"
             )
-        
+
         return cls(
             storage_id=tensor.untyped_storage().data_ptr(),
             size=tensor.size(),
             stride=tensor.stride(),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
-            nelem_in_bytes=tensor.nelement() * tensor.element_size()
+            nelem_in_bytes=tensor.nelement() * tensor.element_size(),
         )
 
     @classmethod
-    def from_remote_tensor(
-        cls, tensor: torch.Tensor
-    ) -> 'RemoteTensorMeta':
+    def from_remote_tensor(cls, tensor: torch.Tensor) -> "RemoteTensorMeta":
         """Create RemoteTensorMeta for remote tensor serialization.
 
         Args:
@@ -84,7 +82,7 @@ class RemoteTensorMeta:
             stride=tensor.stride(),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
-            nelem_in_bytes=tensor.numel() * tensor.element_size()
+            nelem_in_bytes=tensor.numel() * tensor.element_size(),
         )
 
     def __repr__(self) -> str:
@@ -116,6 +114,7 @@ def safe_str(args: Any) -> str:
     Returns:
         Safe string representation of the arguments
     """
+
     def convert(obj: Any) -> Any:
         if isinstance(obj, torch.Tensor):
             return str(RemoteTensorMeta.from_tensor(obj, checked=False))
@@ -139,6 +138,7 @@ def validate_send_queue_args(cmd: str, args: Any) -> None:
     Raises:
         RuntimeError: If invalid object types are found
     """
+
     def check(obj: Any) -> None:
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             if (
@@ -172,6 +172,7 @@ def prepare_for_sending(args: Any, kwargs: Any) -> Any:
     Raises:
         RuntimeError: If unsupported object types are found
     """
+
     def convert(obj: Any) -> Any:
         if type(obj) not in VALID_QUEUE_TYPES_IN:
             raise RuntimeError(
@@ -209,6 +210,7 @@ def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
     Raises:
         RuntimeError: If invalid object types are received
     """
+
     def convert(obj: Any) -> Any:
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             raise RuntimeError(
@@ -223,22 +225,23 @@ def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
     return tree_map(convert, (args, kwargs))
 
 
-
 class TensorMetadataConverter:
     """Centralized converter for tensor-to-metadata transformations.
-    
+
     This class provides a clean boundary for all tensor conversion operations,
     ensuring consistent handling across the entire execution pipeline.
     """
-    
+
     @staticmethod
-    def tensor_to_metadata(tensor: torch.Tensor, context: str = "default") -> RemoteTensorMeta:
+    def tensor_to_metadata(
+        tensor: torch.Tensor, context: str = "default"
+    ) -> RemoteTensorMeta:
         """Convert a single tensor to metadata.
-        
+
         Args:
             tensor: PyTorch tensor to convert
             context: Context for conversion (for debugging/logging)
-            
+
         Returns:
             RemoteTensorMeta object containing tensor metadata
         """
@@ -246,15 +249,15 @@ class TensorMetadataConverter:
             return RemoteTensorMeta.from_remote_tensor(tensor)
         else:
             return RemoteTensorMeta.from_tensor(tensor, checked=False)
-    
+
     @staticmethod
     def metadata_to_dict(meta: RemoteTensorMeta, **operation_flags) -> Dict[str, Any]:
         """Convert metadata to serializable dictionary.
-        
+
         Args:
             meta: RemoteTensorMeta object to convert
             **operation_flags: Additional flags (is_input, is_output, etc.)
-            
+
         Returns:
             Dictionary ready for serialization/transport
         """
@@ -264,63 +267,65 @@ class TensorMetadataConverter:
             "stride": list(meta.stride),
             "storage_offset": meta.storage_offset,
             "dtype": str(meta.dtype),
-            "numel": meta.nelem_in_bytes // torch.tensor([], dtype=meta.dtype).element_size()
+            "numel": meta.nelem_in_bytes
+            // torch.tensor([], dtype=meta.dtype).element_size(),
         }
         result.update(operation_flags)
         return result
-    
+
     @staticmethod
     def args_to_metadata_with_placeholders(
-        args: Tuple[Any, ...], 
+        args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-        operation_context: str = "default"
+        operation_context: str = "default",
     ) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMeta]]:
         """Convert args/kwargs, replacing tensors with placeholders and collecting metadata.
-        
+
         This is the core method for the early conversion boundary - it processes
         nested structures, extracts all remote tensors, and returns both the
         placeholder structure and collected metadata.
-        
+
         Args:
             args: Original arguments containing tensors
-            kwargs: Original keyword arguments containing tensors  
+            kwargs: Original keyword arguments containing tensors
             operation_context: Context string for debugging
-            
+
         Returns:
             Tuple of (processed_args, processed_kwargs, collected_metadata)
         """
         collected_metadata = []
-        
+
         def convert_tensor_to_placeholder(obj):
             if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
                 # Convert tensor to metadata and add to collection
-                metadata = TensorMetadataConverter.tensor_to_metadata(obj, operation_context)
+                metadata = TensorMetadataConverter.tensor_to_metadata(
+                    obj, operation_context
+                )
                 tensor_index = len(collected_metadata)
                 collected_metadata.append(metadata)
                 return f"__TENSOR_{tensor_index}"
             return obj
-        
+
         # Use tree_map to handle nested structures consistently
         processed_args, processed_kwargs = tree_map(
-            convert_tensor_to_placeholder, 
-            (args, kwargs)
+            convert_tensor_to_placeholder, (args, kwargs)
         )
-        
+
         return processed_args, processed_kwargs, collected_metadata
-    
+
     @staticmethod
     def metadata_list_to_dicts(
         metadata_list: List[RemoteTensorMeta],
         input_indices: Optional[set] = None,
-        output_indices: Optional[set] = None
+        output_indices: Optional[set] = None,
     ) -> List[Dict[str, Any]]:
         """Convert metadata list to serializable dictionaries with operation flags.
-        
+
         Args:
             metadata_list: List of RemoteTensorMeta objects
             input_indices: Set of indices that are input tensors
             output_indices: Set of indices that are output tensors
-            
+
         Returns:
             List of metadata dictionaries ready for transport
         """
@@ -331,28 +336,32 @@ class TensorMetadataConverter:
                 operation_flags["is_input"] = True
             if output_indices and i in output_indices:
                 operation_flags["is_output"] = True
-                
-            result.append(TensorMetadataConverter.metadata_to_dict(meta, **operation_flags))
-        
+
+            result.append(
+                TensorMetadataConverter.metadata_to_dict(meta, **operation_flags)
+            )
+
         return result
-    
+
     @staticmethod
-    def collect_remote_tensors(args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> List[torch.Tensor]:
+    def collect_remote_tensors(
+        args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> List[torch.Tensor]:
         """Collect all remote tensors from nested args/kwargs structure.
-        
+
         Args:
             args: Arguments to search
             kwargs: Keyword arguments to search
-            
+
         Returns:
             List of remote tensors found in the structure
         """
         tensors = []
-        
+
         def collect_tensor(obj):
             if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
                 tensors.append(obj)
             return obj
-        
+
         tree_map(collect_tensor, (args, kwargs))
         return tensors

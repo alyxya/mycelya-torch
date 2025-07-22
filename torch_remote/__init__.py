@@ -9,6 +9,7 @@ import torch
 # Direct driver access for C++ - eliminates impl_factory pattern entirely
 from ._device_daemon import driver
 
+
 def driver_exec(name: str, *args, **kwargs):
     """Execute a command on the remote device driver.
 
@@ -85,9 +86,7 @@ def _create_module() -> types.ModuleType:
         """
         return torch.accelerator.current_device_index()
 
-    def get_rng_state(
-        device: Union[str, int, torch.device] = "remote"
-    ) -> torch.Tensor:
+    def get_rng_state(device: Union[str, int, torch.device] = "remote") -> torch.Tensor:
         """Get the random number generator state for a remote device.
 
         Args:
@@ -107,8 +106,7 @@ def _create_module() -> types.ModuleType:
         return default_generator.get_state()
 
     def set_rng_state(
-        new_state: torch.Tensor,
-        device: Union[str, int, torch.device] = "remote"
+        new_state: torch.Tensor, device: Union[str, int, torch.device] = "remote"
     ) -> None:
         """Set the random number generator state for a remote device.
 
@@ -193,12 +191,12 @@ torch._register_device_module("remote", _create_module())
 
 
 # Import device management
+# Import ATen implementations to ensure PyTorch registrations are executed
+import torch_remote._aten_impl  # noqa: F401
+
 from .device import (
     GPUType,
     RemoteMachine,
     create_modal_machine,
     get_device_registry,
 )
-
-# Import ATen implementations to ensure PyTorch registrations are executed
-import torch_remote._aten_impl  # noqa: F401

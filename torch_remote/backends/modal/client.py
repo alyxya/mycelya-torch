@@ -9,7 +9,7 @@ along with related functionality for creating and managing Modal applications.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..client_interface import ClientInterface
 
@@ -42,6 +42,7 @@ class ModalClient(ClientInterface):
         """Initialize the Modal app and server class."""
         # Import here to avoid circular imports
         from _torch_remote_modal.modal_app import create_modal_app_for_gpu
+
         self._app, self._server_class = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id
         )
@@ -83,7 +84,9 @@ class ModalClient(ClientInterface):
             None
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
 
         self._server_instance.create_storage.remote(nbytes, storage_id, lazy)
 
@@ -99,7 +102,9 @@ class ModalClient(ClientInterface):
             None
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
 
         self._server_instance.update_storage.remote(tensor_data, storage_id)
 
@@ -125,7 +130,9 @@ class ModalClient(ClientInterface):
             Serialized tensor data (contiguous representation of the view)
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
 
         return self._server_instance.get_storage_data.remote(
             storage_id, shape, stride, storage_offset, dtype
@@ -143,8 +150,10 @@ class ModalClient(ClientInterface):
             True if resize succeeded, False if storage not found or nbytes <= current size
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
-            
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
         return self._server_instance.resize_storage.remote(storage_id, nbytes)
 
     def execute_aten_operation(
@@ -152,7 +161,7 @@ class ModalClient(ClientInterface):
         op_name: str,
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
-        kwargs: Dict[str, Any]
+        kwargs: Dict[str, Any],
     ) -> None:
         """
         Execute an aten operation with explicit input/output tensor separation.
@@ -170,15 +179,17 @@ class ModalClient(ClientInterface):
             None (operation results are written to output tensors)
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
 
         from ..client_interface import extract_storage_ids
+
         storage_ids = extract_storage_ids(tensor_metadata)
         log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")
         return self._server_instance.execute_aten_operation.remote(
             op_name, tensor_metadata, args, kwargs, self.machine_id
         )
-
 
     def remove_storage(self, storage_id: int) -> bool:
         """
@@ -191,7 +202,9 @@ class ModalClient(ClientInterface):
             True if removed, False if not found
         """
         if not self.is_running():
-            raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
 
         return self._server_instance.remove_storage.remote(storage_id)
 

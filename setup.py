@@ -11,7 +11,6 @@ from pathlib import Path
 from setuptools import find_packages, setup
 from setuptools.command.build_ext import build_ext
 
-
 PACKAGE_NAME = "torch_remote"
 version = "0.1.0"
 
@@ -23,6 +22,7 @@ def get_build_ext_class():
     """Get PyTorch's BuildExtension class, importing only when needed."""
     try:
         from torch.utils.cpp_extension import BuildExtension
+
         return BuildExtension.with_options(no_python_abi_suffix=True)
     except ImportError:
         # Fallback to standard build_ext if PyTorch not available
@@ -33,9 +33,11 @@ def get_extension_class():
     """Get appropriate Extension class."""
     try:
         from torch.utils.cpp_extension import CppExtension
+
         return CppExtension
     except ImportError:
         from setuptools import Extension
+
         return Extension
 
 
@@ -90,14 +92,12 @@ if __name__ == "__main__":
             "Remote GPU cloud execution extension for PyTorch "
             "supporting multiple providers"
         ),
-        packages=(
-            find_packages(exclude=("test",)) + ["_torch_remote_modal"]
-        ),
+        packages=(find_packages(exclude=("test",)) + ["_torch_remote_modal"]),
         package_data={
             PACKAGE_NAME: [
                 "*.dll",
-                "*.dylib", 
-                "*.so"  # Binary extensions
+                "*.dylib",
+                "*.so",  # Binary extensions
             ]
         },
         install_requires=[

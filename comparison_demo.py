@@ -7,7 +7,9 @@ Demonstration of memory efficiency improvements compared to previous implementat
 """
 
 import torch
+
 import torch_remote
+
 
 def demonstrate_memory_efficiency():
     """Demonstrate the memory efficiency of the remote tensor implementation."""
@@ -20,10 +22,10 @@ def demonstrate_memory_efficiency():
 
     # Test different tensor sizes
     test_sizes = [
-        (100, 100),      # 40KB
-        (1000, 1000),    # 4MB
-        (2000, 2000),    # 16MB
-        (3000, 3000),    # 36MB
+        (100, 100),  # 40KB
+        (1000, 1000),  # 4MB
+        (2000, 2000),  # 16MB
+        (3000, 3000),  # 36MB
     ]
 
     for size in test_sizes:
@@ -44,7 +46,9 @@ def demonstrate_memory_efficiency():
 
         # Check remote tensor implementation
         if remote_tensor.device.type == "remote":
-            print(f"   ✅ MEMORY EFFICIENT: Using remote tensors (minimal local overhead)")
+            print(
+                "   ✅ MEMORY EFFICIENT: Using remote tensors (minimal local overhead)"
+            )
         else:
             print(f"   ⚠️  UNEXPECTED: Using {remote_tensor.device.type} tensors")
 
@@ -57,6 +61,7 @@ def demonstrate_memory_efficiency():
             print(f"   ❌ DATA RETRIEVAL FAILED: {e}")
 
         print()
+
 
 def demonstrate_operations():
     """Demonstrate that operations still work with remote tensors."""
@@ -91,10 +96,13 @@ def demonstrate_operations():
             cpu_result = result.cpu()
             has_data = torch.any(cpu_result != 0) or cpu_result.sum().item() != 0
 
-            print(f"   ✅ {op_name}: remote={result_is_remote}, data_retrieved={has_data}")
+            print(
+                f"   ✅ {op_name}: remote={result_is_remote}, data_retrieved={has_data}"
+            )
 
         except Exception as e:
             print(f"   ❌ {op_name}: FAILED - {e}")
+
 
 def demonstrate_comparison_with_original():
     """Compare with what the original CPU-based approach would look like."""
@@ -107,8 +115,8 @@ def demonstrate_comparison_with_original():
     print("Current implementation (remote tensors):")
     current_tensor = torch.randn(1000, 1000, device=machine.device())
     print(f"   Underlying device: {current_tensor.data.device}")
-    print(f"   Local memory for metadata: ~0 MB (efficient remote tensor)")
-    print(f"   ✅ Zero local memory overhead")
+    print("   Local memory for metadata: ~0 MB (efficient remote tensor)")
+    print("   ✅ Zero local memory overhead")
 
     print()
 
@@ -122,11 +130,14 @@ def demonstrate_comparison_with_original():
 
     # Show the improvement
     tensor_size_mb = 1000 * 1000 * 4 / (1024 * 1024)
-    print(f"📊 Memory efficiency improvement:")
+    print("📊 Memory efficiency improvement:")
     print(f"   Tensor data size: {tensor_size_mb:.1f} MB")
     print(f"   Previous overhead: {tensor_size_mb:.1f} MB (100%)")
-    print(f"   Current overhead: ~0 MB (0%)")
-    print(f"   🎉 Memory efficiency improvement: {tensor_size_mb:.1f} MB saved per tensor!")
+    print("   Current overhead: ~0 MB (0%)")
+    print(
+        f"   🎉 Memory efficiency improvement: {tensor_size_mb:.1f} MB saved per tensor!"
+    )
+
 
 def run_demonstration():
     """Run the complete demonstration."""
@@ -149,6 +160,7 @@ def run_demonstration():
     print("   • Preserved all existing functionality")
     print("   • Enhanced memory efficiency without sacrificing performance")
     print("   • Combined best aspects of both implementations")
+
 
 if __name__ == "__main__":
     run_demonstration()

@@ -9,16 +9,16 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 def extract_storage_ids(tensor_metadata: List[Dict[str, Any]]) -> List[int]:
     """
     Extract storage IDs from tensor metadata.
-    
+
     Args:
         tensor_metadata: List of metadata dictionaries, each containing a "storage_id" field
-        
+
     Returns:
         List of storage IDs in the same order as the metadata
     """
@@ -132,7 +132,7 @@ class ClientInterface(ABC):
         op_name: str,
         tensor_metadata: List[Dict[str, Any]],
         args: List[Any],
-        kwargs: Dict[str, Any]
+        kwargs: Dict[str, Any],
     ) -> None:
         """
         Execute an aten operation on the remote machine.
@@ -148,8 +148,6 @@ class ClientInterface(ABC):
             None (operation is executed in-place on pre-allocated tensors)
         """
         pass
-
-
 
     @abstractmethod
     def resize_storage(self, storage_id: int, nbytes: int) -> bool:

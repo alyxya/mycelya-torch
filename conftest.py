@@ -9,14 +9,14 @@ This module provides shared device fixtures to avoid recreating devices
 for each test, improving test efficiency and reducing GPU resource usage.
 """
 
-import pytest
-import torch
-import torch_remote
 import logging
 
+import pytest
+import torch
+
+import torch_remote
+
 log = logging.getLogger(__name__)
-
-
 
 
 @pytest.fixture(scope="session")
@@ -59,7 +59,11 @@ def clean_registry():
     for device in existing_devices:
         # Only re-register if this looks like a session device (has a running client)
         try:
-            if hasattr(device, "get_client") and device.get_client() and device.get_client().is_running():
+            if (
+                hasattr(device, "get_client")
+                and device.get_client()
+                and device.get_client().is_running()
+            ):
                 registry.register_device(device)
         except Exception:
             # If there's any issue checking device state, skip re-registration
@@ -116,12 +120,8 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "gpu: marks tests that require GPU resources"
-    )
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
+    config.addinivalue_line("markers", "gpu: marks tests that require GPU resources")
 
 
 def pytest_collection_modifyitems(config, items):

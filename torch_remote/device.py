@@ -6,6 +6,7 @@ Backend device management for torch_remote.
 
 This module provides device abstraction for different GPU cloud providers and GPU types.
 """
+
 import atexit
 import logging
 import uuid
@@ -19,6 +20,7 @@ log = logging.getLogger(__name__)
 
 class GPUType(Enum):
     """Supported GPU types across cloud providers."""
+
     T4 = "T4"
     L4 = "L4"
     A10G = "A10G"
@@ -33,6 +35,7 @@ class GPUType(Enum):
 
 class BackendProvider(Enum):
     """Supported cloud providers."""
+
     MODAL = "modal"
     # Future providers can be added here
     # RUNPOD = "runpod"
@@ -48,7 +51,9 @@ class RemoteMachine:
     instances are blocked with explicit error messages.
     """
 
-    def __init__(self, provider: BackendProvider, gpu_type: GPUType, **kwargs: Any) -> None:
+    def __init__(
+        self, provider: BackendProvider, gpu_type: GPUType, **kwargs: Any
+    ) -> None:
         """
         Initialize a backend device.
 
@@ -87,7 +92,9 @@ class RemoteMachine:
             # Modal supports all current GPU types
             supported_gpus = set(GPUType)
             if self.gpu_type not in supported_gpus:
-                raise ValueError(f"GPU type {self.gpu_type.value} not supported by {self.provider.value}")
+                raise ValueError(
+                    f"GPU type {self.gpu_type.value} not supported by {self.provider.value}"
+                )
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
 
@@ -97,7 +104,10 @@ class RemoteMachine:
             if self.provider == BackendProvider.MODAL:
                 # Import here to avoid circular imports
                 from .backends.modal.client import create_modal_app_for_gpu
-                self._client = create_modal_app_for_gpu(self.gpu_type.value, self.machine_id)
+
+                self._client = create_modal_app_for_gpu(
+                    self.gpu_type.value, self.machine_id
+                )
                 self._client.start()
                 log.info(f"Started client: {self._client}")
             else:
@@ -121,7 +131,9 @@ class RemoteMachine:
                 log.info(f"Stopped client: {self.machine_id}")
             except Exception as e:
                 # Don't log full stack traces during shutdown
-                log.warning(f"Error stopping client {self.machine_id}: {type(e).__name__}")
+                log.warning(
+                    f"Error stopping client {self.machine_id}: {type(e).__name__}"
+                )
         self._client = None
 
     def __str__(self) -> str:
@@ -138,7 +150,6 @@ class RemoteMachine:
 
     def __hash__(self) -> int:
         return hash(self.machine_id)
-
 
     @property
     def device_name(self) -> str:
@@ -222,7 +233,9 @@ class DeviceRegistry:
                 return index
         return None
 
-    def devices_compatible(self, machine1: RemoteMachine, machine2: RemoteMachine) -> bool:
+    def devices_compatible(
+        self, machine1: RemoteMachine, machine2: RemoteMachine
+    ) -> bool:
         """Check if two machines are compatible for operations."""
         # Machines are compatible if they are the same instance
         return machine1 is machine2
@@ -271,15 +284,11 @@ def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine:
             gpu_type = GPUType(gpu)
         except ValueError:
             valid_gpus = [g.value for g in GPUType]
-            raise ValueError(f"Invalid GPU type \"{gpu}\". Valid types: {valid_gpus}")
+            raise ValueError(f'Invalid GPU type "{gpu}". Valid types: {valid_gpus}')
     else:
         gpu_type = gpu
 
-    machine = RemoteMachine(
-        provider=BackendProvider.MODAL,
-        gpu_type=gpu_type,
-        **kwargs
-    )
+    machine = RemoteMachine(provider=BackendProvider.MODAL, gpu_type=gpu_type, **kwargs)
 
     # Register the machine
     _device_registry.register_device(machine)

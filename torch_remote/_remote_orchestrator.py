@@ -8,6 +8,7 @@ Supports multiple remote execution providers.
 This module provides a generic interface for remote execution of PyTorch operations.
 Currently supports Modal as the first provider implementation.
 """
+
 import io
 import logging
 import time
@@ -15,38 +16,40 @@ import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
-from torch.utils._pytree import tree_map
 
-from ._meta_parser import TensorMetadataConverter, RemoteTensorMeta
-
+from ._meta_parser import RemoteTensorMeta, TensorMetadataConverter
 from .device import RemoteMachine, get_device_registry
-from .backends.client_interface import extract_storage_ids
 
 log = logging.getLogger(__name__)
 
 
 class RemoteTensorError(Exception):
     """Base exception for remote tensor operations."""
+
     pass
 
 
 class StaleReferenceError(RemoteTensorError):
     """Raised when trying to access a tensor that no longer exists on remote machine."""
+
     pass
 
 
 class ConnectionError(RemoteTensorError):
     """Raised when remote machine connection is lost."""
+
     pass
 
 
 class RemoteExecutionError(RemoteTensorError):
     """Raised when remote execution fails."""
+
     pass
 
 
 def with_error_handling(func):
     """Decorator to add error handling to remote operations."""
+
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -69,7 +72,6 @@ def with_error_handling(func):
 
 # Try to load the remote execution module (Modal provider implementation)
 try:
-    from .backends.modal import client as modal_client
     log.info("Loaded modal client")
 except Exception as e:
     log.warning(f"Modal client not available: {e}")
@@ -85,7 +87,9 @@ class RemoteOrchestrator:
 
     def __init__(self):
         self._device_apps: Dict[str, Any] = {}  # Cache for device-specific clients
-        self._last_heartbeat: Dict[str, float] = {}  # Track last successful communication per device
+        self._last_heartbeat: Dict[
+            str, float
+        ] = {}  # Track last successful communication per device
 
     def _get_device_client(self, machine: "RemoteMachine"):
         """Get the active ModalClient for a specific machine."""
@@ -96,7 +100,9 @@ class RemoteOrchestrator:
             raise RuntimeError(f"No client available for machine {machine.machine_id}")
 
         if not client.is_running():
-            raise RuntimeError(f"Client for machine {machine.machine_id} is not running")
+            raise RuntimeError(
+                f"Client for machine {machine.machine_id} is not running"
+            )
 
         return client
 
@@ -104,18 +110,18 @@ class RemoteOrchestrator:
         """Get the machine that owns a specific storage ID."""
         # Import here to avoid circular imports
         from . import driver
-        
+
         # Get device index for this storage
         device_idx = driver.exec("get_storage_device", storage_id)
         if device_idx is None:
             raise RuntimeError(f"No device found for storage {storage_id}")
-            
+
         # Get machine for device index
         registry = get_device_registry()
         machine = registry.get_device_by_index(device_idx)
         if machine is None:
             raise RuntimeError(f"No machine found for device index {device_idx}")
-            
+
         return machine
 
     def execute_remote_aten_operation(
@@ -124,48 +130,45 @@ class RemoteOrchestrator:
         input_metadata: List[RemoteTensorMeta],
         output_metadata: List[RemoteTensorMeta],
         args: Tuple[Any, ...],
-        kwargs: Dict[str, Any]
+        kwargs: Dict[str, Any],
     ) -> None:
         """Execute remote operation with pure metadata (early conversion boundary).
-        
+
         This method represents the new clean boundary where all tensors have been
         converted to metadata at the PyTorch integration layer. No raw tensors
         should be passed to this method.
-        
+
         Args:
             op_name: Name of the operation to execute
             input_metadata: Metadata for input tensors
-            output_metadata: Metadata for output tensors  
+            output_metadata: Metadata for output tensors
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
         """
         log.info(f"🎯 ORCHESTRATOR: Executing {op_name} with pure metadata boundary")
-        
+
         # Determine input/output indices for metadata list
         total_metadata = input_metadata + output_metadata
         input_indices = set(range(len(input_metadata)))
         output_indices = set(range(len(input_metadata), len(total_metadata)))
-        
+
         # Convert metadata to serializable dictionaries with operation flags
         tensor_metadata_dicts = TensorMetadataConverter.metadata_list_to_dicts(
             total_metadata, input_indices, output_indices
         )
-        
+
         # Get the machine from first input tensor's storage ID
         if not input_metadata:
             raise RuntimeError(f"No input metadata provided for operation {op_name}")
-            
+
         storage_id = input_metadata[0].storage_id
         machine = self._get_machine_for_storage(storage_id)
-        
+
         # Execute with pure metadata interface
         client = self._get_device_client(machine)
-        client.execute_aten_operation(
-            op_name, tensor_metadata_dicts, args, kwargs
-        )
-        
-        log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata boundary")
+        client.execute_aten_operation(op_name, tensor_metadata_dicts, args, kwargs)
 
+        log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata boundary")
 
     def execute_remote_aten_operation_efficient(
         self,
@@ -225,11 +228,11 @@ class RemoteOrchestrator:
                         "storage_offset": arg.storage_offset(),
                         "dtype": str(arg.dtype),
                         # Note: requires_grad is NOT sent to remote - autograd happens locally
-                        "storage_id": storage_id
+                        "storage_id": storage_id,
                     }
                     tensor_metadata.append(metadata)
 
-                    processed_args.append(f"__TENSOR_{len(storage_ids)-1}")
+                    processed_args.append(f"__TENSOR_{len(storage_ids) - 1}")
                 else:
                     processed_args.append(arg)
 
@@ -240,7 +243,9 @@ class RemoteOrchestrator:
 
                     # Check for empty tensors (data_ptr == 0) - these should not be sent to remote
                     if storage_id == 0:
-                        log.warning(f"Skipping empty tensor with data_ptr=0 in remote operation {op_name} kwarg '{key}'. This may cause unexpected behavior.")
+                        log.warning(
+                            f"Skipping empty tensor with data_ptr=0 in remote operation {op_name} kwarg '{key}'. This may cause unexpected behavior."
+                        )
                         # For now, replace with a placeholder - in the future we should handle this properly
                         processed_kwargs[key] = None
                         continue
@@ -254,11 +259,11 @@ class RemoteOrchestrator:
                         "storage_offset": value.storage_offset(),
                         "dtype": str(value.dtype),
                         # Note: requires_grad is NOT sent to remote - autograd happens locally
-                        "storage_id": storage_id
+                        "storage_id": storage_id,
                     }
                     tensor_metadata.append(metadata)
 
-                    processed_kwargs[key] = f"__TENSOR_{len(storage_ids)-1}"
+                    processed_kwargs[key] = f"__TENSOR_{len(storage_ids) - 1}"
                 else:
                     processed_kwargs[key] = value
 
@@ -266,25 +271,23 @@ class RemoteOrchestrator:
             # Execute the operation remotely - all operations work in-place on pre-allocated tensors
             log.info(f"🚀 Sending Storage IDs to {op_name}: {storage_ids}")
             client = self._get_device_client(machine)
-            client.execute_aten_operation(op_name, tensor_metadata, list(processed_args), processed_kwargs)
+            client.execute_aten_operation(
+                op_name, tensor_metadata, list(processed_args), processed_kwargs
+            )
 
             # Operation completed successfully - all operations are in-place
             log.debug(f"✅ Remote operation {op_name} completed successfully")
             return None
 
         except Exception as e:
-            log.error(f"❌ Error in efficient remote aten execution of {op_name}: {str(e)}")
+            log.error(
+                f"❌ Error in efficient remote aten execution of {op_name}: {str(e)}"
+            )
             traceback.print_exc()
             raise
 
-
-
-
     def create_tensor_on_remote(
-        self,
-        tensor_data: bytes,
-        machine: "RemoteMachine",
-        storage_id: int
+        self, tensor_data: bytes, machine: "RemoteMachine", storage_id: int
     ) -> None:
         """
         Create a tensor on the remote machine.
@@ -300,7 +303,9 @@ class RemoteOrchestrator:
         client = self._get_device_client(machine)
         client.update_storage(tensor_data, storage_id)
 
-    def get_tensor_data_from_remote(self, storage_id: int, device_index: int) -> torch.Tensor:
+    def get_tensor_data_from_remote(
+        self, storage_id: int, device_index: int
+    ) -> torch.Tensor:
         """
         Get tensor data from remote machine by ID.
 
@@ -320,9 +325,9 @@ class RemoteOrchestrator:
         tensor_data = client.get_storage_data(storage_id)
         return self._deserialize_tensor(tensor_data)
 
-
-
-    def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
+    def remove_tensor_from_remote(
+        self, storage_id: int, machine: "RemoteMachine"
+    ) -> bool:
         """
         Remove a tensor from remote machine.
 
@@ -355,7 +360,9 @@ class RemoteOrchestrator:
         except Exception:
             return False
 
-    def validate_tensor_reference(self, storage_id: int, machine: "RemoteMachine") -> bool:
+    def validate_tensor_reference(
+        self, storage_id: int, machine: "RemoteMachine"
+    ) -> bool:
         """
         Validate that a tensor reference is still valid.
 
@@ -430,7 +437,6 @@ class RemoteOrchestrator:
             log.error(f"Error during reconnection to device {device.machine_id}: {e}")
             return False
 
-
     def cleanup(self):
         """Clean up the remote orchestrator."""
         # No longer needed since machines are managed by devices
@@ -446,7 +452,9 @@ class RemoteOrchestrator:
         machine = registry.get_device_by_index(remote_tensor.device.index)
 
         if machine is None:
-            raise RuntimeError(f"No RemoteMachine found for remote device index {remote_tensor.device.index}")
+            raise RuntimeError(
+                f"No RemoteMachine found for remote device index {remote_tensor.device.index}"
+            )
 
         # Get the client for this machine
         client = machine.get_client()
@@ -463,17 +471,21 @@ class RemoteOrchestrator:
             shape=list(remote_tensor.shape),
             stride=list(remote_tensor.stride()),
             storage_offset=remote_tensor.storage_offset(),
-            dtype=str(remote_tensor.dtype)
+            dtype=str(remote_tensor.dtype),
         )
 
         # Deserialize the tensor
         return self._deserialize_tensor(tensor_data)
 
-    def _cpu_tensor_to_remote(self, cpu_tensor: torch.Tensor, machine: "RemoteMachine") -> torch.Tensor:
+    def _cpu_tensor_to_remote(
+        self, cpu_tensor: torch.Tensor, machine: "RemoteMachine"
+    ) -> torch.Tensor:
         """Convert CPU tensor to remote tensor."""
         # Create a new remote tensor from the CPU tensor using the RemoteMachine
         if machine is None:
-            raise RuntimeError("RemoteMachine must be specified for remote tensor creation")
+            raise RuntimeError(
+                "RemoteMachine must be specified for remote tensor creation"
+            )
 
         # Convert to remote device - no need to manually attach _device_id anymore
         result = cpu_tensor.to(machine.device())
@@ -496,14 +508,14 @@ class RemoteOrchestrator:
         # Since we serialize with .contiguous(), the deserialized tensor should already be contiguous
         # with storage_offset=0 and optimal stride. No view reconstruction needed.
         # Just ensure we have untyped storage for consistency with the remote tensor system.
-        if hasattr(tensor, 'untyped_storage'):
+        if hasattr(tensor, "untyped_storage"):
             untyped_storage = tensor.untyped_storage()
             # The tensor should already be contiguous, so we preserve its natural layout
             tensor = torch.empty(0, dtype=tensor.dtype, device=tensor.device).set_(
                 untyped_storage,
                 0,  # storage_offset should be 0 for contiguous tensors
                 tensor.shape,
-                tensor.stride()
+                tensor.stride(),
             )
         return tensor
 
@@ -513,10 +525,12 @@ class RemoteOrchestrator:
             "shape": list(tensor.shape),
             "dtype": str(tensor.dtype),
             "size": tensor.numel(),
-            "element_size": tensor.element_size()
+            "element_size": tensor.element_size(),
         }
 
-    def _detect_device_from_tensors(self, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Optional[RemoteMachine]:
+    def _detect_device_from_tensors(
+        self, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> Optional[RemoteMachine]:
         """Detect RemoteMachine from tensors in arguments."""
         detected_machine = None
 
@@ -528,7 +542,9 @@ class RemoteOrchestrator:
                 machine = registry.get_device_by_index(tensor.device.index)
 
                 if machine is None:
-                    raise RuntimeError(f"No RemoteMachine found for remote device index {tensor.device.index}")
+                    raise RuntimeError(
+                        f"No RemoteMachine found for remote device index {tensor.device.index}"
+                    )
 
                 if detected_machine is None:
                     detected_machine = machine
@@ -536,8 +552,8 @@ class RemoteOrchestrator:
                     # Different machines found - this is not allowed
                     raise RuntimeError(
                         f"Cannot perform operations between tensors on different remote machines: "
-                        f"\"{detected_machine.machine_id}\" (index {detected_machine.remote_index}) and "
-                        f"\"{machine.machine_id}\" (index {machine.remote_index})\")"
+                        f'"{detected_machine.machine_id}" (index {detected_machine.remote_index}) and '
+                        f'"{machine.machine_id}" (index {machine.remote_index})")'
                     )
 
         # Check args for remote tensors
@@ -553,5 +569,3 @@ class RemoteOrchestrator:
 
 # Global orchestrator instance (Modal provider implementation)
 remote_orchestrator = RemoteOrchestrator()
-
-
