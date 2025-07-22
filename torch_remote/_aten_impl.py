@@ -836,34 +836,19 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     return result
 
 
-def _remote_item_impl(self: torch.Tensor):
-    """Custom implementation of item() for remote tensors.
-    
-    This function efficiently retrieves only the scalar value from the remote device
-    by getting raw bytes and directly converting to the appropriate Python type,
-    avoiding the overhead of creating a full CPU tensor.
-    
-    Args:
-        self: The remote tensor (must be a scalar)
-        
-    Returns:
-        Python scalar value
-    """
-    if self.device.type != "remote":
-        # Fallback to default implementation for non-remote tensors
-        return torch.ops.aten.item.default(self)
-    
+def _local_scalar_dense(self: torch.Tensor):
+    """Custom implementation of _local_scalar_dense for remote tensors."""
     # Check that tensor is scalar (replicate PyTorch's exact behavior)
     if self.numel() != 1:
         raise RuntimeError(f"a Tensor with {self.numel()} elements cannot be converted to Scalar")
     
-    # Get scalar value from remote device (optimized for single element)
-    log.info("🔢 Item operation: retrieving scalar value from remote device")
+    # Get scalar value from remote device
+    log.info("🔢 _local_scalar_dense operation: retrieving scalar value from remote device")
     
     # Get storage ID and remote machine
     storage_id = self.untyped_storage().data_ptr()
     
-    # Get the remote machine using device registry (same pattern as copy_from_device)
+    # Get the remote machine using device registry
     from .device import get_device_registry
     registry = get_device_registry()
     machine = registry.get_device_by_index(self.device.index)
@@ -992,7 +977,7 @@ _remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key="PrivateUse1")
 _remote_lib_aten.impl(
     "set_.source_Tensor", _set_source_tensor, dispatch_key="PrivateUse1"
 )
-_remote_lib_aten.impl("item", _remote_item_impl, dispatch_key="PrivateUse1")
+_remote_lib_aten.impl("_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1")
 
 # AUTOGRAD_"PrivateUse1" registrations removed for copy operations:
 # _copy_from and _to_copy were causing autograd issues because:
@@ -1002,12 +987,6 @@ _remote_lib_aten.impl("item", _remote_item_impl, dispatch_key="PrivateUse1")
 # 4. This remote tensor system doesn't need device-specific autograd behavior for data movement
 # 5. PyTorch's default autograd handles remote tensors correctly when only "PrivateUse1" is registered
 
-# However, item() is safe to register to AutogradPrivateUse1 because:
-# - It's a terminal operation that extracts scalar values
-# - It doesn't involve data movement or tensor creation
-# - It has well-defined behavior for tensors with requires_grad=True
-_remote_lib_aten_autograd = torch.library.Library("aten", "IMPL")
-_remote_lib_aten_autograd.impl("item", _remote_item_impl, dispatch_key="AutogradPrivateUse1")
 
 # Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
 # so we don't register a Python version to avoid conflicts
