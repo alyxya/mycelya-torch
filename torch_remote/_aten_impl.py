@@ -125,24 +125,6 @@ def _fallback_to_old_approach(
                 "remote execution not available"
             )
 
-    # Handle as_strided separately
-    elif op is torch.ops.aten.as_strided.default:
-        orchestrator = _get_remote_orchestrator()
-        if orchestrator is not None:
-            orchestrator.execute_remote_aten_operation_efficient(
-                op_name, args, kwargs
-            )
-            # Return the first tensor argument as the result
-            for arg in args:
-                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-                    return arg
-            raise RuntimeError(
-                f"No output tensor found for as_strided operation {op_name}"
-            )
-        else:
-            raise RuntimeError(
-                f"Cannot execute operation {op_name}: remote execution not available"
-            )
 
     # Everything else is a regular operation
     else:
@@ -434,10 +416,7 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         # Add more known view operations as needed
     }
     
-    is_view_operation = (
-        op_name in KNOWN_VIEW_OPERATIONS and
-        op is not torch.ops.aten.as_strided.default  # as_strided handled separately
-    )
+    is_view_operation = op_name in KNOWN_VIEW_OPERATIONS
     
     if is_view_operation:
         log.info(f"🔍 View operation: {op_name}")
@@ -525,10 +504,12 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     
     meta_args, meta_kwargs = tree_map(convert_to_meta_tensor, (args, kwargs))
     
-    # If no remote tensors found, this shouldn't have been called - but handle gracefully
+    # If no remote tensors found, this indicates a dispatch logic error
     if remote_device is None:
-        log.warning(f"No remote tensors found for operation {op_name}, using fallback approach")
-        return _fallback_to_old_approach(op, args, kwargs)
+        raise RuntimeError(
+            f"Remote kernel fallback called for operation {op_name} with no remote tensors. "
+            "This indicates a dispatch logic error."
+        )
     
     # Step 2: Execute the operation on meta tensors to determine outputs
     log.debug(f"🔧 STEP 2: Executing {op_name} on meta tensors for shape inference")
@@ -664,7 +645,7 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         log.debug(f"🔧 About to call orchestrator with {len(input_metadata)} input tensors, {len(output_metadata)} output tensors")
         
         # Use the new interface with pure metadata (no raw tensors cross this boundary)
-        orchestrator.execute_remote_aten_operation_with_metadata(
+        orchestrator.execute_remote_aten_operation(
             op_name, input_metadata, output_metadata, processed_args, processed_kwargs
         )
         

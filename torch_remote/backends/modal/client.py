@@ -179,18 +179,6 @@ class ModalClient(ClientInterface):
             op_name, tensor_metadata, args, kwargs, self.machine_id
         )
 
-    def execute_aten_operation_with_io_separation(
-        self,
-        op_name: str,
-        tensor_metadata: List[Dict[str, Any]],
-        args: List[Any],
-        kwargs: Dict[str, Any]
-    ) -> None:
-        """
-        Legacy method name for backward compatibility.
-        Delegates to execute_aten_operation which now uses IO separation.
-        """
-        return self.execute_aten_operation(op_name, tensor_metadata, args, kwargs)
 
     def remove_storage(self, storage_id: int) -> bool:
         """
