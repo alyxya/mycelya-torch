@@ -1,9 +1,7 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import contextlib
 import logging
-import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -71,83 +69,8 @@ from ._device_daemon import driver
 from ._meta_parser import prepare_for_sending
 
 
-# Thread-local storage for tracking whether we should disable remote fallback
-_local = threading.local()
 
 
-def _is_remote_fallback_disabled() -> bool:
-    """Check if remote fallback is currently disabled for this thread."""
-    return getattr(_local, 'disable_remote_fallback', False)
-
-
-@contextlib.contextmanager
-def _disable_remote_fallback():
-    """Context manager to temporarily disable remote fallback during meta execution."""
-    old_value = getattr(_local, 'disable_remote_fallback', False)
-    _local.disable_remote_fallback = True
-    try:
-        yield
-    finally:
-        _local.disable_remote_fallback = old_value
-
-
-def _fallback_to_old_approach(
-    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]
-) -> Any:
-    """
-    Fallback to the old implementation approach when meta execution fails.
-    This handles cases where meta tensor execution isn't supported for certain operations.
-    """
-    op_name = op.overloadpacket._qualified_op_name
-    log.warning(f"Using fallback approach for {op_name}")
-    
-    # Simple check for empty output tensors (legacy approach)
-    _check_and_fix_empty_output_tensors(args, kwargs)
-    
-    # Check for inplace operations
-    if op._schema.is_mutable or op is torch.ops.aten._copy_from.default:
-        # Inplace operations - execute remotely and return the mutated tensor
-        if "out" in kwargs:
-            result_tensor = kwargs["out"]
-        else:
-            result_tensor = args[0]
-
-        # Execute remotely
-        orchestrator = _get_remote_orchestrator()
-        if orchestrator is not None:
-            orchestrator.execute_remote_aten_operation_efficient(
-                op_name, args, kwargs
-            )
-            return result_tensor
-        else:
-            raise RuntimeError(
-                f"Cannot execute inplace operation {op_name}: "
-                "remote execution not available"
-            )
-
-
-    # Everything else is a regular operation
-    else:
-        orchestrator = _get_remote_orchestrator()
-        if orchestrator is not None:
-            orchestrator.execute_remote_aten_operation_efficient(
-                op_name, args, kwargs
-            )
-
-            # Check for 'out' parameter first
-            if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
-                return kwargs["out"]
-
-            # Find output tensor in args (typically the last tensor argument)
-            for arg in reversed(args):
-                if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-                    return arg
-
-            raise RuntimeError(f"No output tensor found for operation {op_name}")
-        else:
-            raise RuntimeError(
-                f"Cannot execute operation {op_name}: remote execution not available"
-            )
 
 
 
@@ -379,11 +302,6 @@ def _remote_kernel_fallback(op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 
 
 def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
-    # Check if remote fallback is disabled (during meta execution)
-    if _is_remote_fallback_disabled():
-        log.debug(f"Remote fallback disabled, executing {op.overloadpacket._qualified_op_name} normally")
-        # Execute the operation normally without remote fallback
-        return op(*args, **kwargs)
     
     # Get operation name
     op_name = op.overloadpacket._qualified_op_name
@@ -498,8 +416,9 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         log.debug(f"✅ Meta execution completed successfully for {op_name}")
     except Exception as e:
         log.error(f"Meta execution failed for {op_name}: {e}")
-        # Fallback to the old approach if meta execution fails
-        return _fallback_to_old_approach(op, args, kwargs)
+        # Meta execution is required for proper tensor creation
+        raise RuntimeError(f"Meta tensor execution failed for {op_name}: {e}. "
+                          "This operation cannot be executed remotely without meta tensor support.")
     
     # Handle both single tensor and tuple results
     if isinstance(meta_result, torch.Tensor):

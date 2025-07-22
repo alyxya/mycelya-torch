@@ -265,9 +265,8 @@ class RemoteOrchestrator:
             # Execute remotely using storage IDs and tensor metadata
             # Execute the operation remotely - all operations work in-place on pre-allocated tensors
             log.info(f"🚀 Sending Storage IDs to {op_name}: {storage_ids}")
-            self._execute_remote_aten_operation_legacy(
-                op_name, tensor_metadata, tuple(processed_args), processed_kwargs, machine
-            )
+            client = self._get_device_client(machine)
+            client.execute_aten_operation(op_name, tensor_metadata, list(processed_args), processed_kwargs)
 
             # Operation completed successfully - all operations are in-place
             log.debug(f"✅ Remote operation {op_name} completed successfully")
@@ -322,27 +321,6 @@ class RemoteOrchestrator:
         return self._deserialize_tensor(tensor_data)
 
 
-    def _execute_remote_aten_operation_legacy(
-        self,
-        op_name: str,
-        tensor_metadata: List[Dict[str, Any]],
-        args: Tuple[Any, ...],
-        kwargs: Dict[str, Any],
-        machine: "RemoteMachine"
-    ) -> None:
-        """
-        Execute an aten operation using tensor IDs and metadata.
-        Operations execute in-place on pre-allocated tensors.
-
-        Args:
-            op_name: The aten operation name
-            tensor_metadata: Metadata for reconstructing tensors (shape, stride, offset, storage_id)
-            args: Operation arguments
-            kwargs: Operation keyword arguments
-            machine: Target machine
-        """
-        client = self._get_device_client(machine)
-        client.execute_aten_operation(op_name, tensor_metadata, list(args), kwargs)
 
     def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """
