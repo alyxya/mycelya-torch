@@ -19,12 +19,12 @@ PyObject *py_factory;
 
 static c10::DeviceIndex device_count() {
   py::gil_scoped_acquire acquire;
-  return get_method("deviceCount")().cast<c10::DeviceIndex>();
+  return get_method("device_count")().cast<c10::DeviceIndex>();
 }
 
 static c10::DeviceIndex current_device_idx() {
   py::gil_scoped_acquire acquire;
-  return get_method("getDevice")().cast<c10::DeviceIndex>();
+  return get_method("get_device")().cast<c10::DeviceIndex>();
 }
 
 class RemoteGeneratorImpl : public at::CPUGeneratorImpl {
@@ -49,7 +49,7 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
 
   bool hasPrimaryContext(c10::DeviceIndex device_index) const override {
     py::gil_scoped_acquire acquire;
-    return get_method("hasPrimaryContext")(device_index).cast<bool>();
+    return get_method("has_primary_context")(device_index).cast<bool>();
   }
 
   at::Allocator *getPinnedMemoryAllocator() const override {
@@ -139,7 +139,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
     TORCH_INTERNAL_ASSERT(d.is_privateuseone());
     py::gil_scoped_acquire acquire;
     auto old_device_index =
-        get_method("exchangeDevice")(d.index()).cast<c10::DeviceIndex>();
+        get_method("exchange_device")(d.index()).cast<c10::DeviceIndex>();
     return c10::Device(static_type, old_device_index);
   }
 
@@ -150,43 +150,43 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   void setDevice(c10::Device d) const override {
     TORCH_INTERNAL_ASSERT(d.is_privateuseone());
     py::gil_scoped_acquire acquire;
-    auto device = get_method("setDevice")(d.index());
+    auto device = get_method("set_device")(d.index());
   }
 
   void uncheckedSetDevice(c10::Device d) const noexcept override {
     py::gil_scoped_acquire acquire;
-    auto device = get_method("uncheckedSetDevice")(d.index());
+    auto device = get_method("unchecked_set_device")(d.index());
   }
 
   c10::Stream getStream(c10::Device d) const noexcept override {
     py::gil_scoped_acquire acquire;
-    auto stream_id = get_method("getStream")(d.index()).cast<c10::StreamId>();
+    auto stream_id = get_method("get_stream")(d.index()).cast<c10::StreamId>();
     return c10::Stream(c10::Stream::UNSAFE, d, stream_id);
   }
 
   c10::Stream getDefaultStream(c10::Device d) const override {
     py::gil_scoped_acquire acquire;
-    return get_method("getDefaultStream")(d.index()).cast<c10::Stream>();
+    return get_method("get_default_stream")(d.index()).cast<c10::Stream>();
   }
 
   c10::Stream
   getStreamFromGlobalPool(c10::Device d,
                           bool isHighPriority = false) const override {
     py::gil_scoped_acquire acquire;
-    return get_method("getStreamFromGlobalPool")(d.index(), isHighPriority)
+    return get_method("get_stream_from_global_pool")(d.index(), isHighPriority)
         .cast<c10::Stream>();
   }
 
   c10::Stream getNewStream(c10::Device d, int priority = 0) const override {
     py::gil_scoped_acquire acquire;
     auto stream_id =
-        get_method("getNewStream")(d.index(), priority).cast<c10::StreamId>();
+        get_method("get_new_stream")(d.index(), priority).cast<c10::StreamId>();
     return c10::Stream(c10::Stream::UNSAFE, d, stream_id);
   }
 
   c10::Stream exchangeStream(c10::Stream s) const noexcept override {
     py::gil_scoped_acquire acquire;
-    auto stream_id = get_method("exchangeStream")(s).cast<c10::StreamId>();
+    auto stream_id = get_method("exchange_stream")(s).cast<c10::StreamId>();
     return c10::Stream(c10::Stream::UNSAFE, s.device(), stream_id);
   }
 
@@ -194,7 +194,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   destroyEvent(void *event,
                const c10::DeviceIndex device_index) const noexcept override {
     py::gil_scoped_acquire acquire;
-    get_method("destroyEvent")((int64_t)event, device_index);
+    get_method("destroy_event")((int64_t)event, device_index);
   }
 
   void record(void **event, const c10::Stream &stream,
@@ -211,7 +211,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
 
   bool queryEvent(void *event) const override {
     py::gil_scoped_acquire acquire;
-    return get_method("queryEvent")((int64_t)event).cast<bool>();
+    return get_method("query_event")((int64_t)event).cast<bool>();
   }
 
   c10::DeviceIndex deviceCount() const noexcept override {
@@ -220,24 +220,24 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
 
   bool queryStream(const c10::Stream &stream) const override {
     py::gil_scoped_acquire acquire;
-    return get_method("queryStream")(stream).cast<bool>();
+    return get_method("query_stream")(stream).cast<bool>();
   }
 
   virtual void synchronizeStream(const c10::Stream &stream) const override {
     py::gil_scoped_acquire acquire;
-    get_method("synchronizeStream")(stream);
+    get_method("synchronize_stream")(stream);
   }
 
   void synchronizeEvent(void *event) const override {
     py::gil_scoped_acquire acquire;
-    get_method("synchronizeEvent")((int64_t)event);
+    get_method("synchronize_event")((int64_t)event);
   }
 
   void recordDataPtrOnStream(const c10::DataPtr &data_ptr,
                              const c10::Stream &stream) const override {
     py::gil_scoped_acquire acquire;
     // Convert DataPtr to int64_t to avoid pybind11 registration issues
-    get_method("recordDataPtrOnStream")(
+    get_method("record_data_ptr_on_stream")(
         static_cast<int64_t>(reinterpret_cast<uintptr_t>(data_ptr.get())),
         stream);
   }
@@ -245,7 +245,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   double elapsedTime(void *event1, void *event2,
                      const c10::DeviceIndex device_index) const override {
     py::gil_scoped_acquire acquire;
-    return get_method("elapsedTime")((int64_t)event1, (int64_t)event2,
+    return get_method("elapsed_time")((int64_t)event1, (int64_t)event2,
                                      device_index)
         .cast<double>();
   }

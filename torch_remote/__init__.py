@@ -64,10 +64,10 @@ def _create_module() -> types.ModuleType:
             self.prev_idx = -1
 
         def __enter__(self) -> None:
-            self.prev_idx = driver.exec("exchangeDevice", self.idx)
+            self.prev_idx = driver.exec("exchange_device", self.idx)
 
         def __exit__(self, type: Any, value: Any, traceback: Any) -> None:
-            self.idx = driver.exec("uncheckedSetDevice", self.prev_idx)
+            self.idx = driver.exec("unchecked_set_device", self.prev_idx)
 
     def device_count() -> int:
         """Get the number of available remote devices.
@@ -75,7 +75,7 @@ def _create_module() -> types.ModuleType:
         Returns:
             Number of remote devices available
         """
-        return driver.exec("deviceCount")
+        return driver.exec("device_count")
 
     def is_available() -> bool:
         """Check if remote device support is available.

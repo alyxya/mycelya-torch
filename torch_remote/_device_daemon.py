@@ -416,59 +416,59 @@ class Driver:
 
     # Device operations
     @register(registry)
-    def deviceCount(self, *args: Any) -> int:
+    def device_count(self, *args: Any) -> int:
         assert len(args) == 0
         return self.registry_obj.get_device_count()
 
     @register(registry)
-    def getDevice(self) -> int:
+    def get_device(self) -> int:
         return self.registry_obj.get_device()
 
     @register(registry)
-    def setDevice(self, device_idx: int) -> int:
+    def set_device(self, device_idx: int) -> int:
         return self.registry_obj.set_device(device_idx)
 
     @register(registry)
-    def uncheckedSetDevice(self, device_idx: int) -> int:
+    def unchecked_set_device(self, device_idx: int) -> int:
         return self.registry_obj.set_device(device_idx)
 
     @register(registry)
-    def exchangeDevice(self, device_idx: int) -> int:
+    def exchange_device(self, device_idx: int) -> int:
         old_device = self.registry_obj.get_device()
         self.registry_obj.set_device(device_idx)
         return old_device
 
     @register(registry)
-    def hasPrimaryContext(self, device_idx: int) -> bool:
+    def has_primary_context(self, device_idx: int) -> bool:
         return self.registry_obj.has_primary_context(device_idx)
 
     # Stream operations
     @register(registry)
-    def getStream(self, device_idx: Optional[int] = None) -> int:
+    def get_stream(self, device_idx: Optional[int] = None) -> int:
         if device_idx is None:
             device_idx = self.registry_obj.get_device()
         return self.registry_obj.get_stream(device_idx)
 
     @register(registry)
-    def getNewStream(self, device_idx: int, priority: int = 0) -> int:
+    def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
         return self.registry_obj.create_new_stream(device_idx, priority)
 
     @register(registry)
-    def exchangeStream(self, stream) -> int:
+    def exchange_stream(self, stream) -> int:
         return self.registry_obj.exchange_stream(stream)
 
     @register(registry)
-    def queryStream(self, stream) -> bool:
+    def query_stream(self, stream) -> bool:
         # Always return True (stream is ready)
         return True
 
     @register(registry)
-    def synchronizeStream(self, stream) -> None:
+    def synchronize_stream(self, stream) -> None:
         # No-op for remote streams
         pass
 
     @register(registry)
-    def getDefaultStream(self, device_idx: Optional[int] = None) -> Any:
+    def get_default_stream(self, device_idx: Optional[int] = None) -> Any:
         # Return default stream (0) for device
         if device_idx is None:
             device_idx = self.registry_obj.get_device()
@@ -477,7 +477,7 @@ class Driver:
         return torch.Stream(device=torch.device("remote", device_idx), priority=0)
 
     @register(registry)
-    def getStreamFromGlobalPool(
+    def get_stream_from_global_pool(
         self, device_idx: Optional[int] = None, is_high_priority: bool = False
     ) -> Any:
         # Return a stream from global pool (just use default stream for now)
@@ -489,7 +489,7 @@ class Driver:
 
     # Event operations
     @register(registry)
-    def synchronizeEvent(self, event) -> None:
+    def synchronize_event(self, event) -> None:
         # No-op for remote events
         pass
 
@@ -499,7 +499,7 @@ class Driver:
         pass
 
     @register(registry)
-    def destroyEvent(self, event, device_index) -> None:
+    def destroy_event(self, event, device_index) -> None:
         # No-op for event destruction on remote
         pass
 
@@ -509,18 +509,18 @@ class Driver:
         pass
 
     @register(registry)
-    def queryEvent(self, event) -> bool:
+    def query_event(self, event) -> bool:
         # Always return True (event is ready)
         return True
 
     @register(registry)
-    def elapsedTime(self, event1, event2, device_index) -> float:
+    def elapsed_time(self, event1, event2, device_index) -> float:
         # Return 0 for elapsed time between events
         return 0.0
 
     # Data operations
     @register(registry)
-    def recordDataPtrOnStream(self, data_ptr_int64, stream) -> None:
+    def record_data_ptr_on_stream(self, data_ptr_int64, stream) -> None:
         # No-op for data pointer recording
         pass
 

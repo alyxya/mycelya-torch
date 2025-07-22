@@ -513,13 +513,17 @@ def _remote_kernel_fallback_impl(
                     args, kwargs, operation_context=op_name
                 )
             )
-            
+
             # No output tensors for non-tensor results
             output_metadata = []
-            
+
             # Execute with clean interface - only metadata crosses boundary
             orchestrator.execute_remote_aten_operation(
-                op_name, input_metadata, output_metadata, processed_args, processed_kwargs
+                op_name,
+                input_metadata,
+                output_metadata,
+                processed_args,
+                processed_kwargs,
             )
             return meta_result
         else:
@@ -531,11 +535,13 @@ def _remote_kernel_fallback_impl(
     input_meta_tensor_ids = {
         id(tensor) for tensor in meta_args if isinstance(tensor, torch.Tensor)
     }
-    input_meta_tensor_ids.update({
-        id(tensor)
-        for tensor in meta_kwargs.values()
-        if isinstance(tensor, torch.Tensor)
-    })
+    input_meta_tensor_ids.update(
+        {
+            id(tensor)
+            for tensor in meta_kwargs.values()
+            if isinstance(tensor, torch.Tensor)
+        }
+    )
 
     # Step 4: Create output tensors - reuse input tensors or create new ones
     output_tensors = []

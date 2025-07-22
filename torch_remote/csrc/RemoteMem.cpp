@@ -20,7 +20,7 @@ struct RemoteAllocator final : at::Allocator {
 
   at::DataPtr allocate(size_t nbytes) override {
     py::gil_scoped_acquire acquire;
-    auto curr_device_idx = get_method("getDevice")().cast<c10::DeviceIndex>();
+    auto curr_device_idx = get_method("get_device")().cast<c10::DeviceIndex>();
     auto curr_device =
         c10::Device(c10::DeviceType::PrivateUse1, curr_device_idx);
     void *data = nullptr;
@@ -67,7 +67,7 @@ REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_remote_alloc);
 bool validate_device_index(c10::DeviceIndex device_index) {
   py::gil_scoped_acquire acquire;
   try {
-    auto device_count = get_method("deviceCount")().cast<c10::DeviceIndex>();
+    auto device_count = get_method("device_count")().cast<c10::DeviceIndex>();
     return device_index >= 0 && device_index < device_count;
   } catch (...) {
     return false;
