@@ -256,19 +256,20 @@ def _create_modal_app_for_gpu(
                 return buffer.getvalue()
 
         @modal.method()
-        def resize_storage(self, storage_id: int, new_bytes: int) -> bool:
+        def resize_storage(self, storage_id: int, nbytes: int) -> bool:
             """
             Resize a storage to accommodate new byte size.
             
             This handles the case where resize_ needs more storage space than currently allocated.
-            Only resizes if new_bytes > current storage size.
+            Uses tensor.resize_() to properly handle storage resizing and updates the storage mapping.
+            Only resizes if nbytes > current storage size.
             
             Args:
                 storage_id: The storage ID to resize
-                new_bytes: The new size in bytes
+                nbytes: The number of bytes needed for the new storage size
                 
             Returns:
-                True if resize succeeded, False if storage not found or new_bytes <= current size
+                True if resize succeeded, False if storage not found or nbytes <= current size
             """
             import torch
             
@@ -284,40 +285,35 @@ def _create_modal_app_for_gpu(
                 current_bytes = old_storage.nbytes()
                 
                 # Check if resize is actually needed (should be bigger)
-                if new_bytes <= current_bytes:
+                if nbytes <= current_bytes:
                     log.debug(
                         f"Storage {storage_id} resize skipped: "
-                        f"new_bytes ({new_bytes}) <= current_bytes ({current_bytes})"
+                        f"nbytes ({nbytes}) <= current_bytes ({current_bytes})"
                     )
                     return True  # No-op, but success
                 
                 device = old_storage.device
                 
-                # Allocate new storage with the bigger size
-                new_storage = torch.UntypedStorage(new_bytes, device=device)
+                # Create a tensor that uses the existing storage to leverage tensor.resize_()
+                # Use uint8 dtype for byte-level operations
+                current_element_count = current_bytes // torch.uint8().element_size()
+                temp_tensor = torch.tensor([], dtype=torch.uint8, device=device)
+                temp_tensor.set_(old_storage, offset=0, size=[current_element_count])
                 
-                # Copy old storage bytes into the beginning of new storage
-                if current_bytes > 0:
-                    # Create byte views of both storages for copying
-                    old_bytes = old_storage.data_ptr()
-                    new_bytes_ptr = new_storage.data_ptr()
-                    
-                    # Use torch.from_buffer to create tensors from raw bytes for copying
-                    old_byte_tensor = torch.frombuffer(
-                        old_storage, dtype=torch.uint8, count=current_bytes
-                    )
-                    new_byte_tensor = torch.frombuffer(
-                        new_storage, dtype=torch.uint8, count=new_bytes
-                    )
-                    
-                    # Copy old data to beginning of new storage
-                    new_byte_tensor[:current_bytes] = old_byte_tensor
+                # Calculate new element count for the resized tensor
+                new_element_count = nbytes // torch.uint8().element_size()
                 
-                # Replace the storage
+                # Use tensor.resize_() to handle the storage resize properly
+                temp_tensor.resize_([new_element_count])
+                
+                # Get the new storage after resize
+                new_storage = temp_tensor.untyped_storage()
+                
+                # Update the storage mapping
                 storages[storage_id] = new_storage
                 log.info(
                     f"🔄 Resized storage {storage_id} from {current_bytes} "
-                    f"to {new_bytes} bytes"
+                    f"to {nbytes} bytes using tensor.resize_()"
                 )
                 return True
 

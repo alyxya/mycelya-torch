@@ -131,21 +131,21 @@ class ModalClient(ClientInterface):
             storage_id, shape, stride, storage_offset, dtype
         )
 
-    def resize_storage(self, storage_id: int, new_bytes: int) -> bool:
+    def resize_storage(self, storage_id: int, nbytes: int) -> bool:
         """
         Resize a storage on the remote machine.
 
         Args:
             storage_id: The storage ID to resize
-            new_bytes: The new size in bytes
+            nbytes: The number of bytes needed for the new storage size
 
         Returns:
-            True if resize succeeded, False if storage not found or new_bytes <= current size
+            True if resize succeeded, False if storage not found or nbytes <= current size
         """
         if not self.is_running():
             raise RuntimeError(f"Machine {self.machine_id} is not running. Call start() first.")
             
-        return self._server_instance.resize_storage.remote(storage_id, new_bytes)
+        return self._server_instance.resize_storage.remote(storage_id, nbytes)
 
     def execute_aten_operation(
         self,

@@ -176,19 +176,19 @@ class ClientInterface(ABC):
 
 
     @abstractmethod
-    def resize_storage(self, storage_id: int, new_bytes: int) -> bool:
+    def resize_storage(self, storage_id: int, nbytes: int) -> bool:
         """
         Resize a storage to accommodate new byte size.
 
         This handles the case where resize_ needs more storage space than currently allocated.
-        Only resizes if new_bytes > current storage size.
+        Only resizes if nbytes > current storage size.
 
         Args:
             storage_id: The storage ID to resize
-            new_bytes: The new size in bytes
+            nbytes: The number of bytes needed for the new storage size
 
         Returns:
-            True if resize succeeded, False if storage not found or new_bytes <= current size
+            True if resize succeeded, False if storage not found or nbytes <= current size
         """
         pass
 

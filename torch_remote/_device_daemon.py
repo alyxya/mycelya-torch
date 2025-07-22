@@ -397,8 +397,8 @@ class Driver:
             return None
         elif cmd == "resize_storage_by_id":
             # Resize remote storage by storage ID
-            storage_id, new_bytes = args
-            return self._resize_storage_by_id(storage_id, new_bytes)
+            storage_id, nbytes = args
+            return self._resize_storage_by_id(storage_id, nbytes)
         else:
             raise RuntimeError(f"Unknown command: {cmd}")
 
@@ -449,7 +449,7 @@ class Driver:
     def free_storage_with_id(self, storage_id: int) -> bool:
         return self.registry_obj.free_storage_with_id(storage_id)
 
-    def _resize_storage_by_id(self, storage_id: int, new_bytes: int) -> bool:
+    def _resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         """Resize remote storage by storage ID"""
         try:
             storage_id = int(storage_id)
@@ -479,9 +479,9 @@ class Driver:
             # Get client and call resize_storage
             client = device.get_client()
             if client and client.is_running():
-                success = client.resize_storage(storage_id, new_bytes)
+                success = client.resize_storage(storage_id, nbytes)
                 if success:
-                    log.info(f"✅ Successfully resized remote storage {storage_id} to {new_bytes} bytes")
+                    log.info(f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes")
                 else:
                     log.warning(f"❌ Remote resize returned false for storage {storage_id}")
                 return success
