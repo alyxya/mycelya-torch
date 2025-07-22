@@ -296,12 +296,13 @@ def _create_modal_app_for_gpu(
                 
                 # Create a tensor that uses the existing storage to leverage tensor.resize_()
                 # Use uint8 dtype for byte-level operations
-                current_element_count = current_bytes // torch.uint8().element_size()
-                temp_tensor = torch.tensor([], dtype=torch.uint8, device=device)
-                temp_tensor.set_(old_storage, offset=0, size=[current_element_count])
+                uint8_dtype = torch.uint8
+                current_element_count = current_bytes // torch.tensor([], dtype=uint8_dtype).element_size()
+                temp_tensor = torch.tensor([], dtype=uint8_dtype, device=device)
+                temp_tensor.set_(old_storage, storage_offset=0, size=(current_element_count,))
                 
                 # Calculate new element count for the resized tensor
-                new_element_count = nbytes // torch.uint8().element_size()
+                new_element_count = nbytes // torch.tensor([], dtype=uint8_dtype).element_size()
                 
                 # Use tensor.resize_() to handle the storage resize properly
                 temp_tensor.resize_([new_element_count])
