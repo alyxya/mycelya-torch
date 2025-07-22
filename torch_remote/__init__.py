@@ -196,11 +196,6 @@ torch.utils.rename_privateuse1_backend("remote")
 torch._register_device_module("remote", _create_module())
 
 
-# Initialize dependency injection container
-from .core.container import register_default_services
-
-register_default_services()
-
 # Import device management
 # Import ATen implementations to ensure PyTorch registrations are executed
 import torch_remote._aten_impl  # noqa: F401

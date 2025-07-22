@@ -10,12 +10,11 @@ Currently supports Modal as the first provider implementation.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import torch
 
 from ._meta_parser import RemoteTensorMeta, TensorMetadataConverter
-from .core.container import get_service
 from .device import RemoteMachine
 from .services.storage_resolver import StorageMachineResolver
 from .services.tensor_transfer import TensorTransferService
@@ -66,9 +65,9 @@ class RemoteOrchestrator:
     """
 
     def __init__(self):
-        # Use dependency injection for services - clean architecture with no deprecated fields
-        self._tensor_transfer = get_service(TensorTransferService)
-        self._storage_resolver = get_service(StorageMachineResolver)
+        # Use simple service instances - no DI container needed for 2 services
+        self._tensor_transfer = TensorTransferService()
+        self._storage_resolver = StorageMachineResolver()
 
     def _get_device_client(self, machine: "RemoteMachine"):
         """Get the active client for a specific machine."""

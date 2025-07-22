@@ -43,15 +43,14 @@ To run type checking:
 
 ### Core Modules
 - `torch_remote/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
-- `torch_remote/_aten_impl.py` - ATen operation dispatch system using strategy pattern
-- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration with dependency injection
+- `torch_remote/_aten_impl.py` - ATen operation dispatch system with simple conditionals
+- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration with direct service instances
 - `torch_remote/_device_daemon.py` - Local tensor ID registry and device daemon interface  
 - `torch_remote/device.py` - RemoteMachine abstraction and device management
 
-### Service Architecture (New)
-- `torch_remote/services/tensor_transfer.py` - Extracted tensor serialization/transfer logic
+### Service Architecture
+- `torch_remote/services/tensor_transfer.py` - Tensor serialization/transfer logic
 - `torch_remote/services/storage_resolver.py` - Storage-to-machine mapping and validation
-- `torch_remote/core/container.py` - Dependency injection container for service management
 
 ### Simple Operation Dispatch
 - Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns
