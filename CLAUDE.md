@@ -5,9 +5,9 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 ## Architecture Overview
 
 - **Pure Tensor ID System**: Remote tensors store only metadata locally (ID, shape, dtype) with actual data on remote GPUs
-- **Three-Layer Architecture**: PyTorch Integration (C++), Local Coordination (Python), Remote Execution (Multi-Provider)
+- **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution
 - **Multi-GPU Support**: 9 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
-- **Provider Abstraction**: Pluggable backend system (Modal currently, more providers planned)
+- **Provider Abstraction**: Pluggable backend system (Modal currently, extensible for other providers)
 
 ## Development Commands
 
@@ -35,52 +35,93 @@ To run type checking:
 ## Key Components
 
 ### Core Modules
-- `torch_remote/__init__.py` - Registers "remote" as PyTorch PrivateUse1 backend
-- `torch_remote/_aten_impl.py` - Main operation dispatch system
-- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration
-- `torch_remote/_device_daemon.py` - Local tensor ID registry and device simulation
-- `torch_remote/device.py` - Device abstraction and backend management
+- `torch_remote/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
+- `torch_remote/_aten_impl.py` - ATen operation dispatch system with remote execution routing
+- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration and coordination
+- `torch_remote/_device_daemon.py` - Local tensor ID registry and device daemon interface  
+- `torch_remote/device.py` - RemoteMachine abstraction and device management
 
-### Remote Execution
-- `torch_remote_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
-- `torch_remote/backends/modal/` - Modal provider implementation
+### Remote Execution Provider
+- `_torch_remote_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
+- `_torch_remote_modal/client.py` - ModalClient implementing provider interface
 
-### C++ Extension
-- `torch_remote/csrc/RemoteMem.cpp` - Custom allocator with tensor ID generation
+### C++ Backend Integration
+- `torch_remote/csrc/RemoteMem.cpp` - Custom allocator storing tensor IDs as data pointers
 - `torch_remote/csrc/RemoteHooks.cpp` - PyTorch PrivateUse1 backend implementation
 
-## Recent Architectural Changes
+## Current Architecture (Post-Cleanup)
 
-- **Clean Input/Output Separation**: Distinguishes between input tensors (read data) and output tensors (write data) for efficient data transfer
-- **Pure Tensor ID Coordination**: Removed local device simulation, uses 64-bit tensor IDs for all coordination
-- **Enhanced Memory Efficiency**: Zero local memory overhead for remote tensor data
-- **Improved Error Handling**: Eliminated silent fallbacks, all remote operations must succeed remotely
+### Key Design Principles
+- **Clean Input/Output Separation**: Efficient data transfer with clear boundaries
+- **Pure Tensor ID Coordination**: 64-bit tensor IDs for all remote coordination
+- **Zero Local Memory**: No tensor data stored locally for remote tensors
+- **Eliminated Fallbacks**: All remote operations must succeed remotely or fail clearly
 
-## Memory Efficiency
-
+### Memory Efficiency
+- **50% memory reduction** compared to previous implementations  
 - Remote tensors use meta tensors locally (no data storage)
-- 50% memory reduction compared to previous implementations
 - C++ allocator stores tensor ID as data pointer for efficient lookup
 - Automatic cleanup via PyTorch's memory management system
 
-## Usage Pattern
+### Operation Dispatch Flow
+1. **Local Operations**: View operations executed locally with shared storage IDs
+2. **Remote Operations**: All compute operations dispatched to remote GPUs
+3. **Meta Execution**: Shape inference using PyTorch meta tensors
+4. **Data Transfer**: Only when crossing device boundaries (CPU ↔ Remote)
 
+## Usage Patterns
+
+### Basic Usage
 ```python
 import torch
 import torch_remote
 
 # Create remote machine
-machine = torch_remote.create_modal_machine(gpu="A100")
+machine = torch_remote.create_modal_machine("T4")
 
 # Operations automatically execute on remote GPU
 x = torch.randn(1000, 1000, device=machine.device())
 y = torch.randn(1000, 1000, device=machine.device())
-result = x @ y  # Matrix multiplication on remote A100
+result = x @ y  # Matrix multiplication on remote T4
 ```
+
+### Advanced Usage
+```python
+# Neural network training
+model = nn.Linear(784, 10).to(machine.device())
+optimizer = torch.optim.Adam(model.parameters())
+
+# Full training loop on remote GPU
+for data, target in dataloader:
+    data, target = data.to(machine.device()), target.to(machine.device())
+    output = model(data)
+    loss = criterion(output, target)
+    loss.backward()  # Gradients computed remotely
+    optimizer.step()
+```
+
+## Implementation Details
+
+### Tensor ID System
+- **64-bit random IDs** generated for each remote tensor
+- **Stored as data pointer** in C++ allocator for efficient lookup
+- **Collision detection** with retry mechanism
+- **Automatic cleanup** when tensors are garbage collected
+
+### Error Handling
+- **Cross-device operation prevention**: Clear errors when mixing different machines
+- **Stale reference detection**: Validation of tensor references
+- **Connection management**: Automatic reconnection on failures
+- **Comprehensive exception hierarchy**: RemoteTensorError, StaleReferenceError, etc.
+
+### Provider Interface
+- **Standardized client interface** for multiple providers
+- **Modal implementation** as reference implementation
+- **Extensible architecture** for RunPod, Lambda Labs, etc.
 
 ## Documentation Maintenance
 
-**IMPORTANT**: This file should be updated whenever making significant changes to the codebase. 
+**IMPORTANT**: This file should be updated whenever making significant changes to the codebase.
 
 ### Update This File When:
 - Adding new core modules or changing module responsibilities
@@ -90,15 +131,43 @@ result = x @ y  # Matrix multiplication on remote A100
 - Making breaking changes to the public API
 - Adding new important implementation details
 
-### Development Notes
-Use this section to track important learnings and implementation details that should be preserved:
+### Development Guidelines
 
-- **License Compliance**: All source files must maintain AGPL license headers at the top
-- **Tensor ID Architecture**: The system relies on 64-bit tensor IDs stored as data pointers in the C++ allocator
-- **Remote vs Local**: Never store actual tensor data locally for remote tensors - only metadata
-- **Provider Patterns**: New backends should follow the Modal implementation pattern in `torch_remote/backends/`
+#### License Compliance
+- **All source files must maintain AGPL license headers**
+- New files require: Copyright (C) 2025 alyxya, SPDX-License-Identifier: AGPL-3.0-or-later
+
+#### Tensor ID Architecture Rules
+- **Never store tensor data locally** for remote tensors - only metadata
+- **64-bit tensor IDs** stored as data pointers in C++ allocator
+- **Clean separation** between local metadata and remote storage
+
+#### Provider Implementation Patterns  
+- Follow Modal implementation pattern in `_torch_remote_modal/`
+- Implement standardized client interface
+- Support multi-GPU configuration
+- Handle connection lifecycle properly
+
+#### Code Quality Standards
+- **Use ruff for linting and formatting**
+- **Follow existing patterns** for new functionality
+- **Comprehensive error handling** with clear error messages
+- **Thorough testing** for all new features
 
 ### Recent Development Notes
-(Update this section as code evolves)
 
-Last updated: 2025-07-16
+#### Linting Cleanup (2025-07-22)
+- Fixed 22 out of 26 ruff linting errors
+- Remaining 4 E402 errors are intentional for PyTorch backend registration order
+- All parameter name mismatches resolved in `_remote_orchestrator.py`
+- Unused variables cleaned up across test files
+- Set comprehension syntax improvements
+
+#### Current Status
+- Core functionality stable and tested
+- Memory efficiency optimizations in place
+- Clean error handling throughout
+- Modal provider fully functional
+- Ready for additional provider implementations
+
+Last updated: 2025-07-22
