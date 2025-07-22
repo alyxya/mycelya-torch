@@ -13,6 +13,13 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 
 To run tests:
 ```bash
+# Minimal regression tests (every commit, <30 seconds)
+pytest tests/test_regression.py::TestCriticalRegression -v
+
+# Fast functional tests (PR reviews, ~2-5 minutes)  
+pytest tests/test_regression.py -v
+
+# Full comprehensive test suite
 pytest tests/ -v
 ```
 
@@ -150,9 +157,16 @@ for data, target in dataloader:
 
 #### Code Quality Standards
 - **Use ruff for linting and formatting**
+- **Run minimal regression tests on every commit**
 - **Follow existing patterns** for new functionality
 - **Comprehensive error handling** with clear error messages
 - **Thorough testing** for all new features
+
+#### Testing Strategy
+- **Critical regression tests**: 12 essential tests covering core functionality (~30 seconds)
+- **Fast functional tests**: Extended coverage for PR reviews (~2-5 minutes)
+- **Full test suite**: Comprehensive validation for releases (~10-30 minutes)
+- **Test markers**: Use `@pytest.mark.critical` and `@pytest.mark.fast` for categorization
 
 ### Recent Development Notes
 
@@ -163,11 +177,18 @@ for data, target in dataloader:
 - Unused variables cleaned up across test files
 - Set comprehension syntax improvements
 
+#### Minimal Regression Test Suite (2025-07-22)
+- Created `tests/test_regression.py` with 12 critical tests for every commit
+- Added pytest markers for test categorization (critical, fast, slow, integration)
+- Regression tests cover: imports, device creation, basic operations, transfers, gradients
+- Target runtime: <30 seconds for critical tests, 2-5 minutes for fast functional tests
+
 #### Current Status
 - Core functionality stable and tested
 - Memory efficiency optimizations in place
 - Clean error handling throughout
 - Modal provider fully functional
+- Minimal regression test suite in place
 - Ready for additional provider implementations
 
 Last updated: 2025-07-22

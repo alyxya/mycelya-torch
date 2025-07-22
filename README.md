@@ -128,7 +128,13 @@ PyTorch Remote uses a three-layer architecture:
 ### Running Tests
 
 ```bash
-# Run all tests
+# Minimal regression tests (run on every commit, <30 seconds)
+pytest tests/test_regression.py::TestCriticalRegression -v
+
+# Fast functional tests (run on PR reviews, ~2-5 minutes)
+pytest tests/test_regression.py -v
+
+# Full test suite (comprehensive, run on releases)
 pytest tests/ -v
 
 # Run specific test categories
