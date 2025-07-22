@@ -400,20 +400,31 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     # View operations are handled locally without remote execution
     # Use a whitelist approach for known view operations to avoid false positives
     KNOWN_VIEW_OPERATIONS = {
-        "aten.view", "aten.view.default",
-        "aten.reshape", "aten.reshape.default", 
-        "aten.transpose", "aten.transpose.default",
-        "aten.permute", "aten.permute.default",
-        "aten.squeeze", "aten.squeeze.default", "aten.squeeze.dim", "aten.squeeze.dims",
-        "aten.unsqueeze", "aten.unsqueeze.default",
-        "aten.flatten", "aten.flatten.default",
-        "aten.unflatten", "aten.unflatten.default",
-        "aten.select", "aten.select.default",
-        "aten.slice", "aten.slice.default",
-        "aten.narrow", "aten.narrow.default",
-        "aten.expand", "aten.expand.default",
-        "aten.t", "aten.t.default",
-        # Add more known view operations as needed
+        "aten::view", "aten::view.default",
+        "aten::reshape", "aten::reshape.default", 
+        "aten::transpose", "aten::transpose.default",
+        "aten::permute", "aten::permute.default",
+        "aten::squeeze", "aten::squeeze.default", "aten::squeeze.dim", "aten::squeeze.dims",
+        "aten::unsqueeze", "aten::unsqueeze.default",
+        "aten::flatten", "aten::flatten.default",
+        "aten::unflatten", "aten::unflatten.default",
+        "aten::select", "aten::select.default",
+        "aten::slice", "aten::slice.default",
+        "aten::narrow", "aten::narrow.default",
+        "aten::expand", "aten::expand.default",
+        "aten::t", "aten::t.default",
+        # Additional common view operations
+        "aten::contiguous", "aten::contiguous.default",
+        "aten::as_strided", "aten::as_strided.default",
+        "aten::diagonal", "aten::diagonal.default",
+        "aten::movedim", "aten::movedim.default",
+        "aten::moveaxis", "aten::moveaxis.default",
+        "aten::swapaxes", "aten::swapaxes.default",
+        "aten::swapdims", "aten::swapdims.default",
+        "aten::flip", "aten::flip.default",
+        "aten::rot90", "aten::rot90.default",
+        "aten::repeat", "aten::repeat.default",
+        "aten::tile", "aten::tile.default",
     }
     
     is_view_operation = op_name in KNOWN_VIEW_OPERATIONS
