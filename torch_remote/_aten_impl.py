@@ -515,14 +515,14 @@ def _remote_kernel_fallback_impl(
             )
 
     # Step 3: Check if any output meta tensors are the same object as input meta tensors
-    input_meta_tensor_ids = set(
+    input_meta_tensor_ids = {
         id(tensor) for tensor in meta_args if isinstance(tensor, torch.Tensor)
-    )
-    input_meta_tensor_ids.update(
+    }
+    input_meta_tensor_ids.update({
         id(tensor)
         for tensor in meta_kwargs.values()
         if isinstance(tensor, torch.Tensor)
-    )
+    })
 
     # Step 4: Create output tensors - reuse input tensors or create new ones
     output_tensors = []

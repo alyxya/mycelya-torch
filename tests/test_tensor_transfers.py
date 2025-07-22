@@ -322,7 +322,7 @@ class TestTransferMemoryEfficiency:
         base_tensor = torch.randn(10, 10)
 
         # Perform multiple transfer cycles
-        for i in range(10):
+        for _i in range(10):
             remote_tensor = base_tensor.to(shared_devices["t4"].device())
             back_to_cpu = remote_tensor.cpu()
 

@@ -353,7 +353,7 @@ class RemoteOrchestrator:
             True if tensor exists, False otherwise
         """
         try:
-            client = self._get_device_client(machine)
+            _client = self._get_device_client(machine)
             # Since we removed get_tensor_metadata, assume tensor exists if machine is running
             self._update_heartbeat(machine.machine_id)
             return True
@@ -373,10 +373,10 @@ class RemoteOrchestrator:
         Returns:
             True if reference is valid, False otherwise
         """
-        if not self.is_device_connected(device):
+        if not self.is_device_connected(machine):
             return False
 
-        return self.check_tensor_exists(storage_id, device)
+        return self.check_tensor_exists(storage_id, machine)
 
     def is_device_connected(self, machine: "RemoteMachine") -> bool:
         """
@@ -394,8 +394,8 @@ class RemoteOrchestrator:
                 return False
 
             # Try to get registry stats as a ping
-            stats = client.get_registry_stats()
-            self._update_heartbeat(device.machine_id)
+            _stats = client.get_registry_stats()
+            self._update_heartbeat(machine.machine_id)
             return True
         except Exception:
             return False
@@ -419,22 +419,22 @@ class RemoteOrchestrator:
             True if reconnection successful, False otherwise
         """
         try:
-            client = device.get_client()
+            client = machine.get_client()
             if client:
                 # Stop and restart the client
                 client.stop()
                 client.start()
 
                 # Test connection
-                if self.is_device_connected(device):
-                    log.info(f"Successfully reconnected to device {device.machine_id}")
+                if self.is_device_connected(machine):
+                    log.info(f"Successfully reconnected to device {machine.machine_id}")
                     return True
                 else:
-                    log.warning(f"Failed to reconnected to device {device.machine_id}")
+                    log.warning(f"Failed to reconnected to device {machine.machine_id}")
                     return False
             return False
         except Exception as e:
-            log.error(f"Error during reconnection to device {device.machine_id}: {e}")
+            log.error(f"Error during reconnection to device {machine.machine_id}: {e}")
             return False
 
     def cleanup(self):

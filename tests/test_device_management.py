@@ -139,7 +139,7 @@ def test_device_cleanup_behavior(shared_devices):
     """Test that device cleanup works properly."""
     # Create multiple tensors
     tensors = []
-    for i in range(5):
+    for _i in range(5):
         tensor = DeviceTestUtils.create_remote_tensor((2, 2), shared_devices)
         tensors.append(tensor)
 

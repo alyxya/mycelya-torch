@@ -476,9 +476,6 @@ class TestLossNumericalStability:
 
     def test_cross_entropy_numerical_stability(self, shared_devices):
         """Test cross entropy loss with extreme values."""
-        batch_size = 2
-        num_classes = 3
-
         # Create inputs with extreme values
         inputs_cpu = torch.tensor(
             [

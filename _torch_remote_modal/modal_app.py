@@ -486,7 +486,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
 
                     # Update storage mapping for each output tensor
                     with lock:
-                        for i, (storage_id, metadata) in enumerate(
+                        for i, (storage_id, _metadata) in enumerate(
                             zip(output_storage_ids, output_metadata_list)
                         ):
                             if i < len(result_tensors):

@@ -339,7 +339,8 @@ class Driver:
             return getattr(self.registry_obj, "_current_streams", {}).get(device_idx, 0)
         elif cmd == "getNewStream":
             # Create a new stream ID
-            device_idx, priority = args[0], args[1] if len(args) > 1 else 0
+            device_idx = args[0]
+            _priority = args[1] if len(args) > 1 else 0
             if not hasattr(self.registry_obj, "_stream_counter"):
                 self.registry_obj._stream_counter = {}
             counter = self.registry_obj._stream_counter.get(device_idx, 0) + 1
@@ -372,7 +373,7 @@ class Driver:
         elif cmd == "getStreamFromGlobalPool":
             # Return a stream from global pool (just use default stream for now)
             device_idx = args[0] if args else self.registry_obj.get_device()
-            is_high_priority = args[1] if len(args) > 1 else False
+            _is_high_priority = args[1] if len(args) > 1 else False
             import torch
 
             return torch.Stream(device=torch.device("remote", device_idx), priority=0)

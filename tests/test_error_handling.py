@@ -223,7 +223,7 @@ class TestTypeErrorHandling:
             bool_tensor = torch.tensor(
                 [True, False], device=shared_devices["t4"].device()
             )
-            result = bool_tensor.mm(bool_tensor)
+            bool_tensor.mm(bool_tensor)
             # If this succeeds, that's fine too
         except (RuntimeError, TypeError, NotImplementedError):
             # Expected for unsupported operations
@@ -287,7 +287,7 @@ class TestOperationNotImplementedHandling:
             mask = torch.tensor(
                 [True, False, True], device=shared_devices["t4"].device()
             )
-            result = tensor[mask]
+            tensor[mask]
         except (RuntimeError, NotImplementedError):
             # Advanced indexing might not be implemented
             pass
@@ -295,7 +295,7 @@ class TestOperationNotImplementedHandling:
         try:
             # Fancy indexing
             indices = torch.tensor([0, 2], device=shared_devices["t4"].device())
-            result = tensor[indices]
+            tensor[indices]
         except (RuntimeError, NotImplementedError):
             # Fancy indexing might not be implemented
             pass
@@ -363,7 +363,7 @@ class TestRobustnessAndRecovery:
         # Attempt an operation that might fail
         try:
             bad_tensor = DeviceTestUtils.create_remote_tensor((3, 4), shared_devices)
-            bad_result = tensor1.mm(bad_tensor)  # Should fail due to shape mismatch
+            tensor1.mm(bad_tensor)  # Should fail due to shape mismatch
         except (RuntimeError, ValueError):
             # Expected to fail
             pass

@@ -154,7 +154,7 @@ class ErrorTestUtils:
     ) -> bool:
         """Test that an operation either succeeds or fails gracefully with expected exceptions."""
         try:
-            result = operation_fn()
+            operation_fn()
             return True
         except expected_exceptions:
             return True
