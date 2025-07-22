@@ -9,6 +9,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import torch
 from torch.utils._pytree import tree_map
 
+from ._meta_parser import TensorMetadataConverter
+
 log = logging.getLogger(__name__)
 
 # Thread-local storage removed - meta execution tracking simplified
@@ -650,21 +652,20 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     if orchestrator is not None:
         log.debug(f"🔧 STEP 6: Executing {op_name} remotely with meta-based output handling")
         
-        # Separate input and output tensors (handle nested lists/tuples)
-        # Collect all remote tensors from args and kwargs using tree_map
-        input_tensors = []
-        def collect_tensor(obj):
-            if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-                input_tensors.append(obj)
-            return obj
+        # Convert tensors to metadata at PyTorch boundary (early conversion)
+        processed_args, processed_kwargs, input_metadata = TensorMetadataConverter.args_to_metadata_with_placeholders(
+            args, kwargs, operation_context=op_name
+        )
         
-        tree_map(collect_tensor, (args, kwargs))
+        # Convert output tensors to metadata as well
+        output_metadata = [TensorMetadataConverter.tensor_to_metadata(tensor, f"{op_name}_output") 
+                          for tensor in output_tensors]
         
-        log.debug(f"🔧 About to call orchestrator with {len(input_tensors)} input tensors, {len(output_tensors)} output tensors")
+        log.debug(f"🔧 About to call orchestrator with {len(input_metadata)} input tensors, {len(output_metadata)} output tensors")
         
-        # Use the new interface with explicit input/output separation
-        orchestrator.execute_remote_aten_operation_with_outputs(
-            op_name, input_tensors, output_tensors, args, kwargs
+        # Use the new interface with pure metadata (no raw tensors cross this boundary)
+        orchestrator.execute_remote_aten_operation_with_metadata(
+            op_name, input_metadata, output_metadata, processed_args, processed_kwargs
         )
         
         log.debug(f"✅ Remote orchestrator execution completed for {op_name}")

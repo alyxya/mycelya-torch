@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 from torch.utils._pytree import tree_map
 
+from ._meta_parser import TensorMetadataConverter, RemoteTensorMeta
+
 from .device import RemoteMachine, get_device_registry
 from .backends.client_interface import extract_storage_ids
 
@@ -97,6 +99,72 @@ class RemoteOrchestrator:
             raise RuntimeError(f"Client for machine {machine.machine_id} is not running")
 
         return client
+
+    def _get_machine_for_storage(self, storage_id: int) -> "RemoteMachine":
+        """Get the machine that owns a specific storage ID."""
+        # Import here to avoid circular imports
+        from . import driver
+        
+        # Get device index for this storage
+        device_idx = driver.exec("get_storage_device", storage_id)
+        if device_idx is None:
+            raise RuntimeError(f"No device found for storage {storage_id}")
+            
+        # Get machine for device index
+        registry = get_device_registry()
+        machine = registry.get_device_by_index(device_idx)
+        if machine is None:
+            raise RuntimeError(f"No machine found for device index {device_idx}")
+            
+        return machine
+
+    def execute_remote_aten_operation_with_metadata(
+        self,
+        op_name: str,
+        input_metadata: List[RemoteTensorMeta],
+        output_metadata: List[RemoteTensorMeta],
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any]
+    ) -> None:
+        """Execute remote operation with pure metadata (early conversion boundary).
+        
+        This method represents the new clean boundary where all tensors have been
+        converted to metadata at the PyTorch integration layer. No raw tensors
+        should be passed to this method.
+        
+        Args:
+            op_name: Name of the operation to execute
+            input_metadata: Metadata for input tensors
+            output_metadata: Metadata for output tensors  
+            args: Processed args with tensor placeholders
+            kwargs: Processed kwargs with tensor placeholders
+        """
+        log.info(f"🎯 ORCHESTRATOR: Executing {op_name} with pure metadata boundary")
+        
+        # Determine input/output indices for metadata list
+        total_metadata = input_metadata + output_metadata
+        input_indices = set(range(len(input_metadata)))
+        output_indices = set(range(len(input_metadata), len(total_metadata)))
+        
+        # Convert metadata to serializable dictionaries with operation flags
+        tensor_metadata_dicts = TensorMetadataConverter.metadata_list_to_dicts(
+            total_metadata, input_indices, output_indices
+        )
+        
+        # Get the machine from first input tensor's storage ID
+        if not input_metadata:
+            raise RuntimeError(f"No input metadata provided for operation {op_name}")
+            
+        storage_id = input_metadata[0].storage_id or input_metadata[0].data_ptr
+        machine = self._get_machine_for_storage(storage_id)
+        
+        # Execute with pure metadata interface
+        client = self._get_device_client(machine)
+        client.execute_aten_operation(
+            op_name, tensor_metadata_dicts, args, kwargs
+        )
+        
+        log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata boundary")
 
     def execute_remote_aten_operation_with_outputs(
         self,
