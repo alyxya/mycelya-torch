@@ -16,12 +16,7 @@ Future backends may include:
 # Import standardized interface components
 from .client_interface import (
     ClientConfig,
-    ClientError,
     ClientInterface,
-    ConnectionError,
-    RemoteExecutionError,
-    ResourceNotFoundError,
-    StorageError,
     extract_storage_ids,
 )
 
@@ -31,11 +26,6 @@ try:
     __all__ = [
         "ClientInterface",
         "ClientConfig",
-        "ClientError",
-        "ConnectionError",
-        "RemoteExecutionError",
-        "StorageError",
-        "ResourceNotFoundError",
         "extract_storage_ids",
         "modal"
     ]
@@ -43,10 +33,5 @@ except ImportError:
     __all__ = [
         "ClientInterface",
         "ClientConfig",
-        "ClientError",
-        "ConnectionError",
-        "RemoteExecutionError",
-        "StorageError",
-        "ResourceNotFoundError",
         "extract_storage_ids",
     ]

@@ -14,8 +14,6 @@ from typing import Any, Dict, List
 from ..client_interface import (
     ClientConfig,
     ClientInterface,
-    ConnectionError,
-    StorageError,
     extract_storage_ids,
 )
 
@@ -90,14 +88,14 @@ class ModalClient(ClientInterface):
             None
         """
         if not self.is_running():
-            raise ConnectionError(
+            raise RuntimeError(
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
         try:
             self._server_instance.create_storage.remote(nbytes, storage_id, lazy)
         except Exception as e:
-            raise StorageError(f"Failed to create storage {storage_id}: {e}") from e
+            raise RuntimeError(f"Failed to create storage {storage_id}: {e}") from e
 
     def update_storage(self, tensor_data: bytes, storage_id: int) -> None:
         """

@@ -13,29 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 
-class ClientError(Exception):
-    """Base exception for client errors."""
-    pass
-
-
-class ConnectionError(ClientError):
-    """Raised when connection to remote provider fails."""
-    pass
-
-
-class RemoteExecutionError(ClientError):
-    """Raised when remote operation execution fails."""
-    pass
-
-
-class StorageError(ClientError):
-    """Raised when storage operations fail."""
-    pass
-
-
-class ResourceNotFoundError(ClientError):
-    """Raised when requested resource is not found."""
-    pass
+# Custom exceptions removed - use descriptive RuntimeError messages instead
 
 
 @dataclass

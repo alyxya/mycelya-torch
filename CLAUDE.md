@@ -203,6 +203,7 @@ for data, target in dataloader:
 - **Clean Boundaries**: Established early conversion boundary where tensors become metadata at PyTorch integration layer
 - **Eliminated Technical Debt**: Removed deprecated fields, circular import workarounds, and large conditional logic blocks
 - **Simplified Architecture**: Removed over-engineered ConnectionPoolManager in favor of direct machine.get_client() calls
+- **Simplified Error Handling**: Removed custom exception hierarchy in favor of descriptive RuntimeError messages
 
 #### Current Status
 - Core functionality stable and tested
