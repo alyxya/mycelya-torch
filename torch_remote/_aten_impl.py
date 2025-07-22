@@ -427,15 +427,18 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
         "aten::tile", "aten::tile.default",
     }
     
-    is_view_operation = op_name in KNOWN_VIEW_OPERATIONS
+    # Use PyTorch's schema information to detect view operations
+    has_alias_info = any(r.alias_info is not None for r in op._schema.returns)
+    is_mutable = op._schema.is_mutable
+    is_view_operation = has_alias_info and not is_mutable
     
     if is_view_operation:
-        log.info(f"🔍 View operation: {op_name}")
+        log.info(f"🔍 View operation (detected via alias_info): {op_name}")
         return _handle_view_operation(op, *args, **kwargs)
     
-    # Debug: Log operations that have alias_info but aren't treated as view operations
-    if any(r.alias_info is not None for r in op._schema.returns):
-        log.info(f"🚨 Operation with alias_info (NOT treated as view): {op_name}")
+    # Debug: Log non-view operations that have alias_info (e.g., mutable ops)
+    if has_alias_info and is_mutable:
+        log.info(f"🚨 Mutable operation with alias_info (NOT treated as view): {op_name}")
         log.info(f"   - is_mutable: {op._schema.is_mutable}")
         log.info(f"   - contains 'loss': {'loss' in op_name.lower()}")
         log.info(f"   - contains 'reduce': {'reduce' in op_name.lower()}")
