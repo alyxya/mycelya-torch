@@ -150,14 +150,6 @@ def _fallback_to_old_approach(
             )
 
 
-# View operations that should be handled locally with shared storage IDs
-VIEW_OPERATIONS = {
-    "aten.view.default",
-    "aten.view",
-    "aten::view",
-    "aten.as_strided.default",
-    "aten.as_strided",
-}
 
 
 # Lazy import to avoid import errors if remote execution is not available
@@ -395,37 +387,6 @@ def _remote_kernel_fallback_impl(op: torch._ops.OpOverload, *args: Any, **kwargs
     
     # Get operation name
     op_name = op.overloadpacket._qualified_op_name
-    
-    # Handle view operations first (they don't need meta execution)
-    # View operations are handled locally without remote execution
-    # Use a whitelist approach for known view operations to avoid false positives
-    KNOWN_VIEW_OPERATIONS = {
-        "aten::view", "aten::view.default",
-        "aten::reshape", "aten::reshape.default", 
-        "aten::transpose", "aten::transpose.default",
-        "aten::permute", "aten::permute.default",
-        "aten::squeeze", "aten::squeeze.default", "aten::squeeze.dim", "aten::squeeze.dims",
-        "aten::unsqueeze", "aten::unsqueeze.default",
-        "aten::flatten", "aten::flatten.default",
-        "aten::unflatten", "aten::unflatten.default",
-        "aten::select", "aten::select.default",
-        "aten::slice", "aten::slice.default",
-        "aten::narrow", "aten::narrow.default",
-        "aten::expand", "aten::expand.default",
-        "aten::t", "aten::t.default",
-        # Additional common view operations
-        "aten::contiguous", "aten::contiguous.default",
-        "aten::as_strided", "aten::as_strided.default",
-        "aten::diagonal", "aten::diagonal.default",
-        "aten::movedim", "aten::movedim.default",
-        "aten::moveaxis", "aten::moveaxis.default",
-        "aten::swapaxes", "aten::swapaxes.default",
-        "aten::swapdims", "aten::swapdims.default",
-        "aten::flip", "aten::flip.default",
-        "aten::rot90", "aten::rot90.default",
-        "aten::repeat", "aten::repeat.default",
-        "aten::tile", "aten::tile.default",
-    }
     
     # Use PyTorch's schema information to detect view operations
     has_alias_info = any(r.alias_info is not None for r in op._schema.returns)
