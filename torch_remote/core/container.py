@@ -200,13 +200,11 @@ def clear_container() -> None:
 # Service registration function for bootstrap
 def register_default_services() -> None:
     """Register default torch_remote services with the container."""
-    from ..services.connection_pool import ConnectionPoolManager
     from ..services.storage_resolver import StorageMachineResolver
     from ..services.tensor_transfer import TensorTransferService
 
     # Register core services as singletons
     register_service(TensorTransferService, singleton=True)
-    register_service(ConnectionPoolManager, singleton=True)
     register_service(StorageMachineResolver, singleton=True)
 
     log.info("Registered default torch_remote services")

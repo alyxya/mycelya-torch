@@ -50,7 +50,6 @@ To run type checking:
 
 ### Service Architecture (New)
 - `torch_remote/services/tensor_transfer.py` - Extracted tensor serialization/transfer logic
-- `torch_remote/services/connection_pool.py` - Client lifecycle and connection management
 - `torch_remote/services/storage_resolver.py` - Storage-to-machine mapping and validation
 - `torch_remote/core/container.py` - Dependency injection container for service management
 
@@ -197,12 +196,13 @@ for data, target in dataloader:
 - Target runtime: <30 seconds for critical tests, 2-5 minutes for fast functional tests
 
 #### Architectural Refactoring (2025-07-22)
-- **Service Extraction**: Extracted TensorTransferService, ConnectionPoolManager, and StorageMachineResolver from monolithic orchestrator
+- **Service Extraction**: Extracted TensorTransferService and StorageMachineResolver from monolithic orchestrator
 - **Strategy Pattern**: Implemented operation classification and execution strategies for clean dispatch
 - **Dependency Injection**: Added ServiceContainer for managing service dependencies and reducing circular imports
 - **Provider Standardization**: Enhanced client interface with provider-agnostic parameters (lazy_allocation, compression, etc.)
 - **Clean Boundaries**: Established early conversion boundary where tensors become metadata at PyTorch integration layer
 - **Eliminated Technical Debt**: Removed deprecated fields, circular import workarounds, and large conditional logic blocks
+- **Simplified Architecture**: Removed over-engineered ConnectionPoolManager in favor of direct machine.get_client() calls
 
 #### Current Status
 - Core functionality stable and tested

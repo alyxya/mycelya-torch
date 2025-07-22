@@ -17,7 +17,6 @@ import torch
 from ._meta_parser import RemoteTensorMeta, TensorMetadataConverter
 from .core.container import get_service
 from .device import RemoteMachine
-from .services.connection_pool import ConnectionPoolManager
 from .services.storage_resolver import StorageMachineResolver
 from .services.tensor_transfer import TensorTransferService
 
@@ -69,12 +68,11 @@ class RemoteOrchestrator:
     def __init__(self):
         # Use dependency injection for services - clean architecture with no deprecated fields
         self._tensor_transfer = get_service(TensorTransferService)
-        self._connection_pool = get_service(ConnectionPoolManager)
         self._storage_resolver = get_service(StorageMachineResolver)
 
     def _get_device_client(self, machine: "RemoteMachine"):
-        """Get the active client for a specific machine using connection pool."""
-        return self._connection_pool.get_client(machine)
+        """Get the active client for a specific machine."""
+        return machine.get_client()
 
     def _get_machine_for_storage(self, storage_id: int) -> "RemoteMachine":
         """Get the machine that owns a specific storage ID using storage resolver."""
@@ -126,23 +124,10 @@ class RemoteOrchestrator:
 
         log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata boundary")
 
-    def _update_heartbeat(self, machine_id: str) -> None:
-        """Update the last successful communication timestamp for a device."""
-        # Delegate to connection pool
-        self._connection_pool._update_heartbeat(machine_id)
-
-    def get_last_heartbeat(self, machine_id: str) -> Optional[float]:
-        """Get the timestamp of last successful communication with a device."""
-        return self._connection_pool.get_last_heartbeat(machine_id)
-
-    def reconnect_device(self, machine: "RemoteMachine") -> bool:
-        """Attempt to reconnect to a device using connection pool."""
-        return self._connection_pool.reconnect_client(machine)
-
     def cleanup(self):
         """Clean up the remote orchestrator."""
-        # Delegate cleanup to connection pool
-        self._connection_pool.close_all_connections()
+        # Note: Individual machine cleanup is handled by RemoteMachine instances
+        pass
 
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
