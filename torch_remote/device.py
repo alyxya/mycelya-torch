@@ -49,6 +49,13 @@ class RemoteMachine:
     Each RemoteMachine instance represents a unique remote machine instance
     that can host one or more GPUs. Operations between different RemoteMachine
     instances are blocked with explicit error messages.
+    
+    Can be used as a context manager for automatic resource cleanup:
+    
+        >>> with RemoteMachine(BackendProvider.MODAL, GPUType.T4) as machine:
+        ...     x = torch.randn(100, 100, device=machine.device())
+        ...     result = x @ x.T
+        >>> # Machine automatically stopped when exiting context
     """
 
     def __init__(
@@ -148,6 +155,16 @@ class RemoteMachine:
                     f"Error stopping client {self.machine_id}: {type(e).__name__}"
                 )
         self._client = None
+
+    def __enter__(self) -> "RemoteMachine":
+        """Enter the context manager and ensure client is started."""
+        if self._client is None or not self._client.is_running():
+            self.start()
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Exit the context manager and clean up resources."""
+        self.stop()
 
     def __str__(self) -> str:
         return f"RemoteMachine(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.machine_id})"
