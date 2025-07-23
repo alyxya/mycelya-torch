@@ -52,7 +52,7 @@ class RemoteMachine:
     """
 
     def __init__(
-        self, provider: BackendProvider, gpu_type: GPUType, **kwargs: Any
+        self, provider: BackendProvider, gpu_type: GPUType, start: bool = True, **kwargs: Any
     ) -> None:
         """
         Initialize a backend device.
@@ -60,6 +60,7 @@ class RemoteMachine:
         Args:
             provider: The cloud provider (e.g., Modal)
             gpu_type: The GPU type (e.g., A100-40GB)
+            start: Whether to start the client immediately (default: True)
             **kwargs: Additional provider-specific configuration
         """
         self.provider = provider
@@ -72,8 +73,12 @@ class RemoteMachine:
         # Validate GPU type is supported by provider
         self._validate_gpu_support()
 
-        # Create and start the client
-        self._create_and_start_client()
+        # Create the client
+        self._create_client()
+        
+        # Start the client if requested
+        if start:
+            self.start()
 
     def _generate_machine_id(self) -> str:
         """Generate a human-readable machine ID with provider and GPU info."""
@@ -98,8 +103,8 @@ class RemoteMachine:
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
 
-    def _create_and_start_client(self) -> None:
-        """Create and start the client for this device."""
+    def _create_client(self) -> None:
+        """Create the client for this device."""
         try:
             if self.provider == BackendProvider.MODAL:
                 # Import here to avoid circular imports
@@ -108,22 +113,30 @@ class RemoteMachine:
                 self._client = create_modal_app_for_gpu(
                     self.gpu_type.value, self.machine_id
                 )
-                self._client.start()
-                log.info(f"Started client: {self._client}")
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
         except ImportError as e:
             log.warning(f"Remote execution not available: {e}")
             # Continue without remote execution capability
         except Exception as e:
+            log.error(f"Failed to create client: {e}")
+            # Continue without remote execution capability
+            
+    def start(self) -> None:
+        """Start the client for this device."""
+        if self._client is None:
+            log.warning("Cannot start: client not created")
+            return
+            
+        try:
+            self._client.start()
+            log.info(f"Started client: {self._client}")
+        except Exception as e:
             log.error(f"Failed to start client: {e}")
             # Continue without remote execution capability
 
-    def get_client(self) -> Optional[Any]:
-        """Get the active client for this device."""
-        return self._client
 
-    def stop_client(self) -> None:
+    def stop(self) -> None:
         """Stop the client for this device."""
         if self._client and self._client.is_running():
             try:
@@ -245,12 +258,13 @@ _device_registry = DeviceRegistry()
 # for proper resource management in standalone usage scenarios.
 
 
-def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine:
+def create_modal_machine(gpu: Union[str, GPUType], start: bool = True, **kwargs) -> RemoteMachine:
     """
     Create a Modal remote machine with the specified GPU type.
 
     Args:
         gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB)
+        start: Whether to start the client immediately (default: True)
         **kwargs: Additional Modal-specific configuration
 
     Returns:
@@ -259,6 +273,10 @@ def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine:
     Example:
         >>> machine = create_modal_machine("A100-40GB")
         >>> tensor = torch.randn(3, 3, device=machine.device())
+        >>> 
+        >>> # Create without starting
+        >>> machine = create_modal_machine("A100-40GB", start=False)
+        >>> machine.start()  # Start manually later
     """
     if isinstance(gpu, str):
         try:
@@ -269,13 +287,13 @@ def create_modal_machine(gpu: Union[str, GPUType], **kwargs) -> RemoteMachine:
     else:
         gpu_type = gpu
 
-    machine = RemoteMachine(provider=BackendProvider.MODAL, gpu_type=gpu_type, **kwargs)
+    machine = RemoteMachine(provider=BackendProvider.MODAL, gpu_type=gpu_type, start=start, **kwargs)
 
     # Register the machine
     _device_registry.register_device(machine)
 
     # Register atexit cleanup for this specific machine
-    atexit.register(machine.stop_client)
+    atexit.register(machine.stop)
 
     return machine
 

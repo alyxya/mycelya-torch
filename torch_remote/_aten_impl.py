@@ -682,7 +682,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
             )
 
         # Get the client for this device
-        client = device.get_client()
+        client = device._client
         if client is None or not client.is_running():
             raise RuntimeError(f"Client not available for device {device.machine_id}")
 
@@ -742,7 +742,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
             )
 
         # Get the client for this device
-        client = device.get_client()
+        client = device._client
         if client is None or not client.is_running():
             raise RuntimeError(f"Client not available for device {device.machine_id}")
 

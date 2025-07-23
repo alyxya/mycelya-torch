@@ -140,7 +140,7 @@ class RemoteStorageRegistry:
                 device = registry.get_device_by_index(device_index)
 
                 if device is not None:
-                    client = device.get_client()
+                    client = device._client
                     if client and client.is_running():
                         # Create storage with exact byte size
                         # No garbage data needed
@@ -311,7 +311,7 @@ class RemoteStorageRegistry:
                 return False
 
             # Get client and call resize_storage
-            client = device.get_client()
+            client = device._client
             if client and client.is_running():
                 success = client.resize_storage(storage_id, nbytes)
                 if success:

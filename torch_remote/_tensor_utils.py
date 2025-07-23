@@ -182,7 +182,7 @@ def remote_tensor_to_cpu(remote_tensor: torch.Tensor) -> torch.Tensor:
         )
 
     # Get the client for this machine
-    client = machine.get_client()
+    client = machine._client
     if client is None or not client.is_running():
         raise RuntimeError(f"Client not available for machine {machine.machine_id}")
 

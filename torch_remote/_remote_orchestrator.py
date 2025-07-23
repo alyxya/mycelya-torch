@@ -77,7 +77,7 @@ class RemoteOrchestrator:
 
     def _get_device_client(self, machine: "RemoteMachine"):
         """Get the active client for a specific machine."""
-        return machine.get_client()
+        return machine._client
 
     def _get_machine_for_storage(self, storage_id: int) -> "RemoteMachine":
         """Get the machine that owns a specific storage ID."""
