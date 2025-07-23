@@ -52,7 +52,7 @@ class RemoteMachine:
     """
 
     def __init__(
-        self, provider: BackendProvider, gpu_type: GPUType, start: bool = True, **kwargs: Any
+        self, provider: BackendProvider, gpu_type: GPUType, start: bool = True
     ) -> None:
         """
         Initialize a backend device.
@@ -61,12 +61,10 @@ class RemoteMachine:
             provider: The cloud provider (e.g., Modal)
             gpu_type: The GPU type (e.g., A100-40GB)
             start: Whether to start the client immediately (default: True)
-            **kwargs: Additional provider-specific configuration
         """
         self.provider = provider
         self.gpu_type = gpu_type
         self.machine_id = self._generate_machine_id()
-        self.config = kwargs
         self._initialized = False
         self._client = None
 
@@ -258,14 +256,13 @@ _device_registry = DeviceRegistry()
 # for proper resource management in standalone usage scenarios.
 
 
-def create_modal_machine(gpu: Union[str, GPUType], start: bool = True, **kwargs) -> RemoteMachine:
+def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> RemoteMachine:
     """
     Create a Modal remote machine with the specified GPU type.
 
     Args:
         gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB)
         start: Whether to start the client immediately (default: True)
-        **kwargs: Additional Modal-specific configuration
 
     Returns:
         RemoteMachine instance for the specified GPU
@@ -287,7 +284,7 @@ def create_modal_machine(gpu: Union[str, GPUType], start: bool = True, **kwargs)
     else:
         gpu_type = gpu
 
-    machine = RemoteMachine(provider=BackendProvider.MODAL, gpu_type=gpu_type, start=start, **kwargs)
+    machine = RemoteMachine(provider=BackendProvider.MODAL, gpu_type=gpu_type, start=start)
 
     # Register the machine
     _device_registry.register_device(machine)
