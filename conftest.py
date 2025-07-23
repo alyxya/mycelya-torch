@@ -36,43 +36,8 @@ def shared_devices():
     # Cleanup if needed
 
 
-@pytest.fixture
-def sample_tensors():
-    """
-    Function-scoped fixture providing common test tensors.
-
-    Returns a dict of various tensor shapes and types commonly used in tests.
-    """
-    return {
-        "small_2d": torch.randn(2, 2),
-        "medium_2d": torch.randn(3, 3),
-        "large_2d": torch.randn(500, 500),
-        "small_3d": torch.randn(2, 2, 2),
-        "vector": torch.randn(100),
-        "scalar": torch.tensor(5.0),
-        "int_tensor": torch.ones(2, 2, dtype=torch.int32),
-        "float64_tensor": torch.randn(2, 2, dtype=torch.float64),
-    }
 
 
-@pytest.fixture
-def device_tensors(shared_devices, sample_tensors):
-    """
-    Function-scoped fixture providing tensors already on the remote device.
-
-    This provides pre-configured remote tensors for test convenience.
-    Note: Function-scoped, so tensors are recreated for each test function.
-    """
-    remote_tensors = {}
-    t4_device = shared_devices["t4"]
-    for name, cpu_tensor in sample_tensors.items():
-        try:
-            remote_tensors[name] = cpu_tensor.to(t4_device.device())
-        except Exception as e:
-            # Some tensor types might not be supported, skip them
-            log.warning(f"Could not create remote tensor for {name}: {e}")
-
-    return remote_tensors
 
 
 # Test configuration hooks
