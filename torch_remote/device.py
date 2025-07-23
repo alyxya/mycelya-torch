@@ -233,27 +233,8 @@ class DeviceRegistry:
                 return index
         return None
 
-    def devices_compatible(
-        self, machine1: RemoteMachine, machine2: RemoteMachine
-    ) -> bool:
-        """Check if two machines are compatible for operations."""
-        # Machines are compatible if they are the same instance
-        return machine1 is machine2
 
-    def clear(self) -> None:
-        """Clear all registered machines."""
-        self._devices.clear()
-        self._next_index = 0
 
-    def shutdown_all_machines(self) -> None:
-        """Stop all clients without clearing the registry."""
-        for machine in self._devices.values():
-            if machine._client and machine._client.is_running():
-                try:
-                    machine._client.stop()
-                except Exception:
-                    # Silently ignore errors during shutdown
-                    pass
 
 
 # Global device registry
