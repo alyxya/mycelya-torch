@@ -1,7 +1,6 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import atexit
 import contextvars
 import random
 from typing import Any, Callable, Dict, Optional, Set
@@ -358,13 +357,6 @@ class Driver:
     def __init__(self) -> None:
         self.registry_obj = RemoteStorageRegistry()
 
-        # Register this instance for cleanup
-        atexit.register(self._cleanup)
-
-    def _cleanup(self) -> None:
-        """Clean up storage ID mappings on exit"""
-        self.registry_obj.storage_id_to_device.clear()
-        self.registry_obj.generated_storage_ids.clear()
 
     def exec(self, cmd: str, *args: Any) -> Any:
         """Execute a command using the registry pattern"""
@@ -528,6 +520,3 @@ class Driver:
 
 # Global driver instance
 driver = Driver()
-
-# Register global cleanup for all contexts
-atexit.register(driver._cleanup)
