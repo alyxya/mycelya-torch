@@ -206,3 +206,13 @@ from .device import (
     create_modal_machine,
     get_device_registry,
 )
+
+# Import logging utilities
+from ._logging import (
+    set_logging_level,
+    get_logging_level,
+    disable_logging,
+    enable_debug_logging,
+    enable_info_logging,
+    reset_logging,
+)

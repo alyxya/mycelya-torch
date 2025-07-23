@@ -1,14 +1,14 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
 # Simple operation dispatch - no complex patterns needed
+from ._logging import get_logger
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # Thread-local storage removed - meta execution tracking simplified
 

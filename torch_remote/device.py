@@ -8,14 +8,14 @@ This module provides device abstraction for different GPU cloud providers and GP
 """
 
 import atexit
-import logging
+from ._logging import get_logger
 import uuid
 from enum import Enum
 from typing import Any, Dict, Optional, Union
 
 import torch
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 class GPUType(Enum):

@@ -3,9 +3,10 @@
 
 import atexit
 import contextvars
-import logging
 import random
 from typing import Any, Callable, Dict, Optional, Set
+
+from ._logging import get_logger
 
 # Context variable to track when lazy allocation should be used
 _lazy_allocation_context = contextvars.ContextVar("lazy_allocation", default=False)
@@ -26,7 +27,7 @@ def lazy_allocation_context():
     return _context()
 
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # Simple storage ID tracking for remote storages
 # No local device simulation - remote storages exist purely as IDs

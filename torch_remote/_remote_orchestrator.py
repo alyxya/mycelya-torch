@@ -9,11 +9,11 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 
-import logging
 from typing import Any, Dict, List, Tuple
 
 import torch
 
+from ._logging import get_logger
 from ._tensor_utils import (
     RemoteTensorMeta,
     TensorMetadataConverter,
@@ -26,7 +26,7 @@ from ._tensor_utils import (
 from ._storage import get_machine_for_storage
 from .device import RemoteMachine
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # Exception handling is done through standard RuntimeError

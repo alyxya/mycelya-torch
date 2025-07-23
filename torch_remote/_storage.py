@@ -15,12 +15,12 @@ Handles the local mapping of storage IDs to devices and provides validation
 for cross-device operations to ensure tensors are on compatible machines.
 """
 
-import logging
 from typing import List, Set
 
+from ._logging import get_logger
 from .device import RemoteMachine, get_device_registry
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 def get_machine_for_storage(storage_id: int) -> RemoteMachine:

@@ -13,17 +13,18 @@ This module consolidates all tensor-related operations:
 """
 
 import io
-import logging
 from pprint import pformat
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import torch
 from torch.utils._pytree import tree_map
 
+from ._logging import get_logger
+
 if TYPE_CHECKING:
     from .device import RemoteMachine
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 class RemoteTensorMeta:

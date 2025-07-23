@@ -8,16 +8,16 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-import logging
 from typing import Any, Dict, List
 
+from ..._logging import get_logger
 from ..client_interface import (
     ClientConfig,
     ClientInterface,
     extract_storage_ids,
 )
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # Cache for ModalClient instances
 _clients: Dict[str, "ModalClient"] = {}
