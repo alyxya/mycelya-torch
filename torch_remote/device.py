@@ -33,7 +33,7 @@ class GPUType(Enum):
     B200 = "B200"
 
 
-class BackendProvider(Enum):
+class CloudProvider(Enum):
     """Supported cloud providers."""
 
     MODAL = "modal"
@@ -52,14 +52,14 @@ class RemoteMachine:
     
     Can be used as a context manager for automatic resource cleanup:
     
-        >>> with RemoteMachine(BackendProvider.MODAL, GPUType.T4) as machine:
+        >>> with RemoteMachine(CloudProvider.MODAL, GPUType.T4) as machine:
         ...     x = torch.randn(100, 100, device=machine.device())
         ...     result = x @ x.T
         >>> # Machine automatically stopped when exiting context
     """
 
     def __init__(
-        self, provider: BackendProvider, gpu_type: GPUType, start: bool = True
+        self, provider: CloudProvider, gpu_type: GPUType, start: bool = True
     ) -> None:
         """
         Initialize a backend device.
@@ -100,7 +100,7 @@ class RemoteMachine:
 
     def _validate_gpu_support(self) -> None:
         """Validate that the GPU type is supported by the provider."""
-        if self.provider == BackendProvider.MODAL:
+        if self.provider == CloudProvider.MODAL:
             # Modal supports all current GPU types
             supported_gpus = set(GPUType)
             if self.gpu_type not in supported_gpus:
@@ -113,7 +113,7 @@ class RemoteMachine:
     def _create_client(self) -> None:
         """Create the client for this device."""
         try:
-            if self.provider == BackendProvider.MODAL:
+            if self.provider == CloudProvider.MODAL:
                 # Import here to avoid circular imports
                 from .backends.modal.client import create_modal_app_for_gpu
 
@@ -189,7 +189,7 @@ class RemoteMachine:
     @property
     def modal_gpu_spec(self) -> str:
         """Get the Modal GPU specification string."""
-        if self.provider != BackendProvider.MODAL:
+        if self.provider != CloudProvider.MODAL:
             raise ValueError("modal_gpu_spec only available for Modal provider")
         return self.gpu_type.value
 
@@ -303,7 +303,7 @@ def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> Remote
     else:
         gpu_type = gpu
 
-    machine = RemoteMachine(provider=BackendProvider.MODAL, gpu_type=gpu_type, start=start)
+    machine = RemoteMachine(provider=CloudProvider.MODAL, gpu_type=gpu_type, start=start)
 
     # Register the machine
     _device_registry.register_device(machine)

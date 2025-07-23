@@ -201,6 +201,7 @@ torch._register_device_module("remote", _create_module())
 import torch_remote._aten_impl  # noqa: F401
 
 from .device import (
+    CloudProvider,
     GPUType,
     RemoteMachine,
     create_modal_machine,
