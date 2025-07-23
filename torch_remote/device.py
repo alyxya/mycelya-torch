@@ -65,7 +65,6 @@ class RemoteMachine:
         self.provider = provider
         self.gpu_type = gpu_type
         self.machine_id = self._generate_machine_id()
-        self._initialized = False
         self._client = None
 
         # Validate GPU type is supported by provider
