@@ -76,6 +76,9 @@ class RemoteMachine:
         # Start the client if requested
         if start:
             self.start()
+            
+        # Register cleanup on exit
+        atexit.register(self.stop)
 
     def _generate_machine_id(self) -> str:
         """Generate a human-readable machine ID with provider and GPU info."""
@@ -287,9 +290,6 @@ def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> Remote
 
     # Register the machine
     _device_registry.register_device(machine)
-
-    # Register atexit cleanup for this specific machine
-    atexit.register(machine.stop)
 
     return machine
 
