@@ -45,7 +45,9 @@ def args_to_metadata_with_placeholders(args, kwargs, operation_context=None):
     return tuple(processed_args), processed_kwargs, metadata_list
 
 
-def tensor_to_metadata(tensor: torch.Tensor, context: str = "default") -> TensorMetadata:
+def tensor_to_metadata(
+    tensor: torch.Tensor, context: str = "default"
+) -> TensorMetadata:
     """Convert a tensor to metadata."""
     if tensor.device.type == "remote":
         return TensorMetadata.from_remote_tensor(tensor)
@@ -414,11 +416,25 @@ def _is_view_operation(op: torch._ops.OpOverload) -> bool:
     """Check if operation is a view operation that should execute locally."""
     # View operations create new tensor views sharing the same storage
     view_ops = {
-        'aten::view', 'aten::reshape', 'aten::transpose', 'aten::permute',
-        'aten::squeeze', 'aten::unsqueeze', 'aten::select', 'aten::slice',
-        'aten::narrow', 'aten::expand', 'aten::repeat', 'aten::as_strided',
-        'aten::unflatten', 'aten::flatten', 'aten::swapaxes', 'aten::swapdims',
-        'aten::movedim', 'aten::moveaxis', 'aten::contiguous'
+        "aten::view",
+        "aten::reshape",
+        "aten::transpose",
+        "aten::permute",
+        "aten::squeeze",
+        "aten::unsqueeze",
+        "aten::select",
+        "aten::slice",
+        "aten::narrow",
+        "aten::expand",
+        "aten::repeat",
+        "aten::as_strided",
+        "aten::unflatten",
+        "aten::flatten",
+        "aten::swapaxes",
+        "aten::swapdims",
+        "aten::movedim",
+        "aten::moveaxis",
+        "aten::contiguous",
     }
     return op._schema.name in view_ops
 
@@ -426,18 +442,26 @@ def _is_view_operation(op: torch._ops.OpOverload) -> bool:
 def _is_scalar_operation(op: torch._ops.OpOverload) -> bool:
     """Check if operation returns a scalar that can be computed locally from metadata."""
     scalar_ops = {
-        'aten::item', 'aten::numel', 'aten::size', 'aten::stride',
-        'aten::storage_offset', 'aten::dim', 'aten::ndimension',
-        'aten::element_size', 'aten::is_contiguous'
+        "aten::item",
+        "aten::numel",
+        "aten::size",
+        "aten::stride",
+        "aten::storage_offset",
+        "aten::dim",
+        "aten::ndimension",
+        "aten::element_size",
+        "aten::is_contiguous",
     }
     return op._schema.name in scalar_ops
 
 
-def _handle_scalar_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: Any) -> Any:
+def _handle_scalar_operation(
+    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
+) -> Any:
     """Handle scalar operations that can be computed locally from tensor metadata."""
     op_name = op._schema.name
 
-    if op_name == 'aten::item':
+    if op_name == "aten::item":
         tensor = args[0]
         if tensor.device.type == "remote":
             # Transfer to CPU and extract item
@@ -446,32 +470,43 @@ def _handle_scalar_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: An
         else:
             return tensor.item()
 
-    elif op_name in {'aten::numel', 'aten::size', 'aten::stride', 'aten::storage_offset', 'aten::dim', 'aten::ndimension'}:
+    elif op_name in {
+        "aten::numel",
+        "aten::size",
+        "aten::stride",
+        "aten::storage_offset",
+        "aten::dim",
+        "aten::ndimension",
+    }:
         # These can be computed locally from tensor metadata
         tensor = args[0]
-        if op_name == 'aten::numel':
+        if op_name == "aten::numel":
             return tensor.numel()
-        elif op_name == 'aten::size':
+        elif op_name == "aten::size":
             dim = args[1] if len(args) > 1 else None
             return tensor.size(dim) if dim is not None else tensor.size()
-        elif op_name == 'aten::stride':
+        elif op_name == "aten::stride":
             dim = args[1] if len(args) > 1 else None
             return tensor.stride(dim) if dim is not None else tensor.stride()
-        elif op_name == 'aten::storage_offset':
+        elif op_name == "aten::storage_offset":
             return tensor.storage_offset()
-        elif op_name in {'aten::dim', 'aten::ndimension'}:
+        elif op_name in {"aten::dim", "aten::ndimension"}:
             return tensor.dim()
-        elif op_name == 'aten::element_size':
+        elif op_name == "aten::element_size":
             return tensor.element_size()
-        elif op_name == 'aten::is_contiguous':
+        elif op_name == "aten::is_contiguous":
             return tensor.is_contiguous()
 
     # For other scalar operations, fall back to remote execution
-    log.warning(f"Unhandled scalar operation {op_name}, falling back to remote execution")
+    log.warning(
+        f"Unhandled scalar operation {op_name}, falling back to remote execution"
+    )
     return _execute_remote_operation(op, args, kwargs)
 
 
-def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Any:
+def _execute_remote_operation(
+    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
 
     op_name = op.overloadpacket._qualified_op_name
@@ -491,12 +526,23 @@ def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
                 log.debug(f"Using remote device: {remote_device}")
             elif tensor.device != remote_device:
                 from .device import get_device_registry
+
                 device_registry = get_device_registry()
                 first_device = device_registry.get_device_by_index(remote_device.index)
-                current_device = device_registry.get_device_by_index(tensor.device.index)
+                current_device = device_registry.get_device_by_index(
+                    tensor.device.index
+                )
 
-                first_device_name = first_device.machine_id if first_device else f"remote:{remote_device.index}"
-                current_device_name = current_device.machine_id if current_device else f"remote:{tensor.device.index}"
+                first_device_name = (
+                    first_device.machine_id
+                    if first_device
+                    else f"remote:{remote_device.index}"
+                )
+                current_device_name = (
+                    current_device.machine_id
+                    if current_device
+                    else f"remote:{tensor.device.index}"
+                )
 
                 raise RuntimeError(
                     f"Cannot perform operations between tensors on different remote devices. "
@@ -563,7 +609,9 @@ def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
         return _execute_non_tensor_result(op, args, kwargs, meta_result)
 
     # Step 3: Create output tensors
-    output_tensors = _create_output_tensors(op, args, kwargs, meta_outputs, original_tensors, remote_device)
+    output_tensors = _create_output_tensors(
+        op, args, kwargs, meta_outputs, original_tensors, remote_device
+    )
 
     # Step 4: Execute remotely with orchestrator
     _execute_on_remote_device(op, args, kwargs, output_tensors)
@@ -575,7 +623,12 @@ def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
         return tuple(output_tensors)
 
 
-def _execute_non_tensor_result(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], meta_result: Any) -> Any:
+def _execute_non_tensor_result(
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    meta_result: Any,
+) -> Any:
     """Handle operations that return non-tensor results."""
 
     op_name = op.overloadpacket._qualified_op_name
@@ -583,9 +636,7 @@ def _execute_non_tensor_result(op: torch._ops.OpOverload, args: Tuple[Any, ...],
 
     # Use the clean abstraction - convert tensors to metadata first
     processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(
-            args, kwargs, operation_context=op_name
-        )
+        args_to_metadata_with_placeholders(args, kwargs, operation_context=op_name)
     )
 
     # No output tensors for non-tensor results
@@ -603,36 +654,49 @@ def _execute_non_tensor_result(op: torch._ops.OpOverload, args: Tuple[Any, ...],
     return meta_result
 
 
-def _create_output_tensors(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any],
-                         meta_outputs: List, original_tensors: Dict, remote_device: torch.device) -> List:
+def _create_output_tensors(
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    meta_outputs: List,
+    original_tensors: Dict,
+    remote_device: torch.device,
+) -> List:
     """Create output tensors based on meta execution results."""
 
     # Check if any output meta tensors are the same object as input meta tensors
     input_meta_tensor_ids = {
         id(tensor) for tensor in args if isinstance(tensor, torch.Tensor)
     }
-    input_meta_tensor_ids.update({
-        id(tensor) for tensor in kwargs.values() if isinstance(tensor, torch.Tensor)
-    })
+    input_meta_tensor_ids.update(
+        {id(tensor) for tensor in kwargs.values() if isinstance(tensor, torch.Tensor)}
+    )
 
     output_tensors = []
 
     # Special handling for "out" parameter
     out_tensor = None
-    if ("out" in kwargs and isinstance(kwargs["out"], torch.Tensor) and
-        kwargs["out"].device.type == "remote"):
+    if (
+        "out" in kwargs
+        and isinstance(kwargs["out"], torch.Tensor)
+        and kwargs["out"].device.type == "remote"
+    ):
         out_tensor = kwargs["out"]
         log.debug(f"Found 'out' parameter tensor with shape {out_tensor.shape}")
 
     # Process each output tensor
     for i, meta_output in enumerate(meta_outputs):
-        log.debug(f"🔧 Processing output tensor {i}: meta_output.shape={meta_output.shape}")
+        log.debug(
+            f"🔧 Processing output tensor {i}: meta_output.shape={meta_output.shape}"
+        )
 
         if id(meta_output) in input_meta_tensor_ids:
             # Output shares storage with input - reuse the original input tensor
             original_tensor = original_tensors[id(meta_output)]
             output_tensors.append(original_tensor)
-            log.debug(f"✅ Output tensor {i} reuses input tensor storage (in-place operation)")
+            log.debug(
+                f"✅ Output tensor {i} reuses input tensor storage (in-place operation)"
+            )
         else:
             # Check if this meta output corresponds to the "out" parameter
             if out_tensor is not None and len(output_tensors) == i:
@@ -640,17 +704,23 @@ def _create_output_tensors(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwa
                 output_tensors.append(out_tensor)
                 log.debug(f"✅ Using existing 'out' tensor as output {i}")
             else:
-                log.debug(f"🔧 Creating new output tensor {i} with shape {meta_output.shape}")
+                log.debug(
+                    f"🔧 Creating new output tensor {i} with shape {meta_output.shape}"
+                )
 
                 # Create new output tensor with lazy allocation
                 new_tensor = _create_new_output_tensor(meta_output, remote_device)
                 output_tensors.append(new_tensor)
-                log.debug(f"✅ Created new output tensor {i} with shape {meta_output.shape}")
+                log.debug(
+                    f"✅ Created new output tensor {i} with shape {meta_output.shape}"
+                )
 
     return output_tensors
 
 
-def _create_new_output_tensor(meta_output: torch.Tensor, remote_device: torch.device) -> torch.Tensor:
+def _create_new_output_tensor(
+    meta_output: torch.Tensor, remote_device: torch.device
+) -> torch.Tensor:
     """Create a new output tensor on the remote device."""
     # Create empty remote tensor (lazy allocation will be handled by device daemon)
     new_tensor = torch.empty(
@@ -672,7 +742,12 @@ def _create_new_output_tensor(meta_output: torch.Tensor, remote_device: torch.de
     return new_tensor
 
 
-def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], output_tensors: List) -> None:
+def _execute_on_remote_device(
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    output_tensors: List,
+) -> None:
     """Execute the operation remotely using the orchestrator."""
 
     op_name = op.overloadpacket._qualified_op_name
@@ -681,15 +756,12 @@ def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
 
     # Convert tensors to metadata at PyTorch boundary (early conversion)
     processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(
-            args, kwargs, operation_context=op_name
-        )
+        args_to_metadata_with_placeholders(args, kwargs, operation_context=op_name)
     )
 
     # Convert output tensors to metadata as well
     output_metadata = [
-        tensor_to_metadata(tensor, f"{op_name}_output")
-        for tensor in output_tensors
+        tensor_to_metadata(tensor, f"{op_name}_output") for tensor in output_tensors
     ]
 
     log.debug(
@@ -703,7 +775,6 @@ def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
     )
 
     log.debug(f"✅ Remote orchestrator execution completed for {op_name}")
-
 
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:

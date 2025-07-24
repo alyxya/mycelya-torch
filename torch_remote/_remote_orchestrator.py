@@ -137,7 +137,9 @@ class RemoteOrchestrator:
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         if remote_tensor.device.type != "remote":
-            raise ValueError(f"Expected remote tensor, got device: {remote_tensor.device}")
+            raise ValueError(
+                f"Expected remote tensor, got device: {remote_tensor.device}"
+            )
 
         # Get device registry to find the machine
         from .device import get_device_registry
@@ -167,20 +169,19 @@ class RemoteOrchestrator:
             shape=list(metadata.shape),
             stride=list(metadata.stride),
             storage_offset=metadata.storage_offset,
-            dtype=str(metadata.dtype)
+            dtype=str(metadata.dtype),
         )
 
         # Convert bytes back to CPU tensor using metadata
         return metadata.to_cpu_tensor_from_bytes(tensor_data)
 
-
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
         """Serialize tensor to bytes, ensuring view data is contiguous."""
         return cpu_tensor_to_bytes(tensor)
 
-
-
-    def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
+    def remove_tensor_from_remote(
+        self, storage_id: int, machine: "RemoteMachine"
+    ) -> bool:
         """Remove a tensor from remote storage."""
         try:
             client = self._get_device_client(machine)

@@ -35,10 +35,6 @@ def shared_devices():
     # Cleanup if needed
 
 
-
-
-
-
 # Test configuration hooks
 def pytest_configure(config):
     """Configure pytest with custom markers and settings."""

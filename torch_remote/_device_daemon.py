@@ -357,7 +357,6 @@ class Driver:
     def __init__(self) -> None:
         self.registry_obj = RemoteStorageRegistry()
 
-
     def exec(self, cmd: str, *args: Any) -> Any:
         """Execute a command using the registry pattern"""
         log.info(f"Executing command: {cmd}(*{args[:2]}...)")  # Limit args in log

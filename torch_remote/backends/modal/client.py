@@ -190,7 +190,6 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-
         storage_ids = extract_storage_ids(tensor_metadata)
         log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")
         return self._server_instance.execute_aten_operation.remote(

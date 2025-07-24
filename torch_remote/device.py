@@ -143,7 +143,6 @@ class RemoteMachine:
             log.error(f"Failed to start client: {e}")
             # Continue without remote execution capability
 
-
     def stop(self) -> None:
         """Stop the client for this device."""
         if self._client and self._client.is_running():
@@ -265,9 +264,6 @@ class DeviceRegistry:
         return None
 
 
-
-
-
 # Global device registry
 _device_registry = DeviceRegistry()
 
@@ -304,7 +300,9 @@ def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> Remote
     else:
         gpu_type = gpu
 
-    machine = RemoteMachine(provider=CloudProvider.MODAL, gpu_type=gpu_type, start=start)
+    machine = RemoteMachine(
+        provider=CloudProvider.MODAL, gpu_type=gpu_type, start=start
+    )
 
     # Register the machine
     _device_registry.register_device(machine)

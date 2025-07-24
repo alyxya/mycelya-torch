@@ -23,12 +23,8 @@ from .client_interface import (
 # Import available backends
 try:
     from . import modal
-    __all__ = [
-        "ClientInterface",
-        "ClientConfig",
-        "extract_storage_ids",
-        "modal"
-    ]
+
+    __all__ = ["ClientInterface", "ClientConfig", "extract_storage_ids", "modal"]
 except ImportError:
     __all__ = [
         "ClientInterface",

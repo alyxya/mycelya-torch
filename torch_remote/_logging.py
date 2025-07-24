@@ -55,9 +55,7 @@ def _setup_default_logging():
     # Only add handler if none exists to avoid duplicates
     if not root_logger.handlers:
         handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            '[%(levelname)s] %(name)s: %(message)s'
-        )
+        formatter = logging.Formatter("[%(levelname)s] %(name)s: %(message)s")
         handler.setFormatter(formatter)
         root_logger.addHandler(handler)
 
@@ -87,14 +85,16 @@ def set_logging_level(level: Union[int, str]) -> None:
     if isinstance(level, str):
         level = level.upper()
         level_map = {
-            'DEBUG': logging.DEBUG,
-            'INFO': logging.INFO,
-            'WARNING': logging.WARNING,
-            'ERROR': logging.ERROR,
-            'CRITICAL': logging.CRITICAL
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
+            "CRITICAL": logging.CRITICAL,
         }
         if level not in level_map:
-            raise ValueError(f"Invalid logging level: {level}. Must be one of {list(level_map.keys())}")
+            raise ValueError(
+                f"Invalid logging level: {level}. Must be one of {list(level_map.keys())}"
+            )
         level = level_map[level]
 
     # Set the level on the root torch_remote logger

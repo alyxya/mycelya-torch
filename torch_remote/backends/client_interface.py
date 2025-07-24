@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class ClientConfig:
     """Configuration for client behavior and provider-specific options."""
+
     timeout: int = 300
     retries: int = 2
     auto_reconnect: bool = True
@@ -48,7 +49,9 @@ class ClientInterface(ABC):
     class and implement all abstract methods to ensure consistent API across providers.
     """
 
-    def __init__(self, gpu_type: str, machine_id: str, config: Optional[ClientConfig] = None):
+    def __init__(
+        self, gpu_type: str, machine_id: str, config: Optional[ClientConfig] = None
+    ):
         """
         Initialize the client with GPU type, machine ID, and configuration.
 
