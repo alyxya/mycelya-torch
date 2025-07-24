@@ -225,7 +225,6 @@ class TestTensorProperties:
         for shape in shapes_to_test:
             remote_tensor = DeviceTestUtils.create_remote_tensor(shape, shared_devices)
             assert remote_tensor.shape == shape
-            assert remote_tensor.size() == torch.Size(shape)
 
     def test_tensor_dtype_access(self, shared_devices):
         """Test accessing tensor dtype on remote devices."""

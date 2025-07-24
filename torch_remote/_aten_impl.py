@@ -257,7 +257,7 @@ def _handle_view_operation(
     for arg in args:
         if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
             # Convert remote tensor to meta tensor
-            meta_arg = torch.empty(arg.size(), dtype=arg.dtype, device="meta")
+            meta_arg = torch.empty(arg.shape, dtype=arg.dtype, device="meta")
             if arg.stride() != meta_arg.stride():
                 meta_arg = torch.as_strided(
                     meta_arg, arg.shape, arg.stride(), arg.storage_offset()
@@ -270,7 +270,7 @@ def _handle_view_operation(
     for key, value in kwargs.items():
         if isinstance(value, torch.Tensor) and value.device.type == "remote":
             # Convert remote tensor to meta tensor
-            meta_value = torch.empty(value.size(), dtype=value.dtype, device="meta")
+            meta_value = torch.empty(value.shape, dtype=value.dtype, device="meta")
             if value.stride() != meta_value.stride():
                 meta_value = torch.as_strided(
                     meta_value, value.shape, value.stride(), value.storage_offset()
@@ -282,7 +282,7 @@ def _handle_view_operation(
     meta_result = op(*meta_args, **meta_kwargs)
 
     # Extract new tensor metadata
-    new_shape = meta_result.size()
+    new_shape = meta_result.shape
     new_stride = meta_result.stride()
     new_storage_offset = meta_result.storage_offset()
 
@@ -291,8 +291,8 @@ def _handle_view_operation(
     result = torch.as_strided(base_tensor, new_shape, new_stride, new_storage_offset)
 
     # Verify the view was created correctly
-    assert result.size() == new_shape, (
-        f"View shape mismatch: expected {new_shape}, got {result.size()}"
+    assert result.shape == new_shape, (
+        f"View shape mismatch: expected {new_shape}, got {result.shape}"
     )
     assert result.stride() == new_stride, (
         f"View stride mismatch: expected {new_stride}, got {result.stride()}"
@@ -484,7 +484,7 @@ def _handle_scalar_operation(
             return tensor.numel()
         elif op_name == "aten::size":
             dim = args[1] if len(args) > 1 else None
-            return tensor.size(dim) if dim is not None else tensor.size()
+            return tensor.size(dim) if dim is not None else tensor.shape
         elif op_name == "aten::stride":
             dim = args[1] if len(args) > 1 else None
             return tensor.stride(dim) if dim is not None else tensor.stride()
@@ -820,9 +820,9 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         # the data that should be in the result tensor - no view reconstruction needed
         result = deserialize_tensor(tensor_data)
         # Verify the result has the expected shape (it should match the remote tensor's shape)
-        if result.size() != from_.size():
+        if result.shape != from_.shape:
             log.warning(
-                f"Deserialized tensor shape {result.size()} doesn't match remote tensor shape {from_.size()}"
+                f"Deserialized tensor shape {result.shape} doesn't match remote tensor shape {from_.shape}"
             )
 
         log.info(
@@ -1043,7 +1043,7 @@ def _to_copy(
     if output_device.type == "remote":
         # Create empty remote tensor - use contiguous format for remote tensors
         result = torch.empty(
-            input.size(),
+            input.shape,
             dtype=output_dtype,
             layout=output_layout,
             device=output_device,
@@ -1052,7 +1052,7 @@ def _to_copy(
     else:
         # Create empty tensor on target device
         result = torch.empty(
-            input.size(),
+            input.shape,
             dtype=output_dtype,
             layout=output_layout,
             device=output_device,
@@ -1091,7 +1091,7 @@ def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
         ten1,
         ten2.untyped_storage(),
         ten2.storage_offset(),
-        ten2.size(),
+        ten2.shape,
         ten2.stride(),
     )
 

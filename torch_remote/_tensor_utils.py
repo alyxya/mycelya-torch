@@ -60,7 +60,7 @@ class TensorMetadata:
 
         storage_id = tensor.untyped_storage().data_ptr()
         return cls(
-            shape=tuple(tensor.size()),
+            shape=tuple(tensor.shape),
             stride=tuple(tensor.stride()),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
@@ -74,7 +74,7 @@ class TensorMetadata:
             raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
 
         return cls(
-            shape=tuple(tensor.size()),
+            shape=tuple(tensor.shape),
             stride=tuple(tensor.stride()),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
@@ -88,7 +88,7 @@ class TensorMetadata:
             raise ValueError(f"Expected meta tensor, got device: {tensor.device}")
 
         return cls(
-            shape=tuple(tensor.size()),
+            shape=tuple(tensor.shape),
             stride=tuple(tensor.stride()),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
@@ -149,7 +149,7 @@ class TensorMetadata:
 
         # Apply the correct view if needed
         if (
-            tuple(tensor.size()) != self.shape
+            tuple(tensor.shape) != self.shape
             or tuple(tensor.stride()) != self.stride
             or tensor.storage_offset() != self.storage_offset
         ):
