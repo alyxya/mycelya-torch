@@ -866,7 +866,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
 
         # Serialize the CPU tensor
-        tensor_data = orchestrator._serialize_tensor(from_)
+        from ._tensor_utils import cpu_tensor_to_bytes
+        tensor_data = cpu_tensor_to_bytes(from_)
         # Use client to update tensor with specific ID
         # This will overwrite any existing empty tensor with the actual data
         client.update_storage(tensor_data, storage_id)

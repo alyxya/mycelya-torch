@@ -15,10 +15,7 @@ import torch
 
 from ._logging import get_logger
 from ._storage import get_machine_for_storage
-from ._tensor_utils import (
-    TensorMetadata,
-    cpu_tensor_to_bytes,
-)
+from ._tensor_utils import TensorMetadata
 from .device import RemoteMachine
 
 log = get_logger(__name__)
@@ -26,30 +23,6 @@ log = get_logger(__name__)
 
 # Exception handling is done through standard RuntimeError
 # Custom exceptions removed as they were not used elsewhere in the codebase
-
-
-def with_error_handling(func):
-    """Decorator to add error handling to remote operations."""
-
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            # Check for specific error patterns and provide helpful context
-            error_msg = str(e).lower()
-
-            if "storage id" in error_msg and "not found" in error_msg:
-                raise RuntimeError(f"Storage reference is stale: {e}") from e
-            elif "machine" in error_msg and "not running" in error_msg:
-                raise RuntimeError(f"Remote machine connection lost: {e}") from e
-            elif "remote execution failed" in error_msg:
-                raise RuntimeError(f"Remote execution failed: {e}") from e
-            else:
-                # Re-raise with context about remote operation failure
-                raise RuntimeError(f"Remote operation failed: {e}") from e
-
-    return wrapper
-
 
 # Try to load the remote execution module (Modal provider implementation)
 try:
@@ -74,9 +47,6 @@ class RemoteOrchestrator:
         """Get the active client for a specific machine."""
         return machine._client
 
-    def _get_machine_for_storage(self, storage_id: int) -> "RemoteMachine":
-        """Get the machine that owns a specific storage ID."""
-        return get_machine_for_storage(storage_id)
 
     def execute_remote_aten_operation(
         self,
@@ -129,10 +99,6 @@ class RemoteOrchestrator:
 
         log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata boundary")
 
-    def cleanup(self):
-        """Clean up the remote orchestrator."""
-        # Note: Individual machine cleanup is handled by RemoteMachine instances
-        pass
 
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
@@ -175,9 +141,6 @@ class RemoteOrchestrator:
         # Convert bytes back to CPU tensor using metadata
         return metadata.to_cpu_tensor_from_bytes(tensor_data)
 
-    def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
-        """Serialize tensor to bytes, ensuring view data is contiguous."""
-        return cpu_tensor_to_bytes(tensor)
 
     def remove_tensor_from_remote(
         self, storage_id: int, machine: "RemoteMachine"
