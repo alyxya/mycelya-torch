@@ -63,9 +63,9 @@ class RemoteMachine:
         self,
         provider: CloudProvider,
         gpu_type: GPUType,
+        timeout: int,
+        retries: int,
         start: bool = True,
-        timeout: int = 300,
-        retries: int = 1,
     ) -> None:
         """
         Initialize a backend device.
@@ -73,9 +73,9 @@ class RemoteMachine:
         Args:
             provider: The cloud provider (e.g., Modal)
             gpu_type: The GPU type (e.g., A100-40GB)
+            timeout: Function timeout in seconds
+            retries: Number of retries on failure
             start: Whether to start the client immediately (default: True)
-            timeout: Function timeout in seconds (default: 300)
-            retries: Number of retries on failure (default: 1)
         """
         self.provider = provider
         self.gpu_type = gpu_type
@@ -130,8 +130,8 @@ class RemoteMachine:
                 self._client = ModalClient(
                     self.gpu_type.value,
                     self.machine_id,
-                    timeout=self.timeout,
-                    retries=self.retries,
+                    self.timeout,
+                    self.retries,
                 )
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
@@ -319,9 +319,9 @@ def create_modal_machine(
     machine = RemoteMachine(
         provider=CloudProvider.MODAL,
         gpu_type=gpu_type,
-        start=start,
         timeout=timeout,
         retries=retries,
+        start=start,
     )
 
     # Register the machine

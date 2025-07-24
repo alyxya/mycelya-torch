@@ -9,20 +9,9 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Custom exceptions removed - use descriptive RuntimeError messages instead
-
-
-@dataclass
-class ClientConfig:
-    """Configuration for client behavior and provider-specific options."""
-
-    timeout: int = 300
-    retries: int = 2
-    auto_reconnect: bool = True
-    provider_options: Dict[str, Any] = field(default_factory=dict)
 
 
 # Simplified options - only what's actually used right now
@@ -49,20 +38,16 @@ class ClientInterface(ABC):
     class and implement all abstract methods to ensure consistent API across providers.
     """
 
-    def __init__(
-        self, gpu_type: str, machine_id: str, config: Optional[ClientConfig] = None
-    ):
+    def __init__(self, gpu_type: str, machine_id: str):
         """
         Initialize the client with GPU type, machine ID, and configuration.
 
         Args:
             gpu_type: The GPU type (e.g., "T4", "A100-40GB")
             machine_id: Unique machine identifier
-            config: Client configuration options
         """
         self.gpu_type = gpu_type
         self.machine_id = machine_id
-        self.config = config or ClientConfig()
 
     @abstractmethod
     def start(self) -> None:

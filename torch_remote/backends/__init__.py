@@ -15,7 +15,6 @@ Future backends may include:
 
 # Import standardized interface components
 from .client_interface import (
-    ClientConfig,
     ClientInterface,
     extract_storage_ids,
 )
@@ -24,10 +23,9 @@ from .client_interface import (
 try:
     from . import modal
 
-    __all__ = ["ClientInterface", "ClientConfig", "extract_storage_ids", "modal"]
+    __all__ = ["ClientInterface", "extract_storage_ids", "modal"]
 except ImportError:
     __all__ = [
         "ClientInterface",
-        "ClientConfig",
         "extract_storage_ids",
     ]

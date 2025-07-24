@@ -28,16 +28,12 @@ image = modal.Image.debian_slim().pip_install("numpy", "torch")
 # Cache for GPU-specific apps and their functions
 _gpu_apps: Dict[str, Tuple[modal.App, Any]] = {}
 
-# Default configuration for all GPU types
-DEFAULT_TIMEOUT = 300
-DEFAULT_RETRIES = 1
-
 
 def create_modal_app_for_gpu(
     gpu_type: str,
     machine_id: str,
-    timeout: int = DEFAULT_TIMEOUT,
-    retries: int = DEFAULT_RETRIES,
+    timeout: int,
+    retries: int,
 ) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and class for a specific GPU type and device.
@@ -45,8 +41,8 @@ def create_modal_app_for_gpu(
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
-        timeout: Function timeout in seconds (default: 300)
-        retries: Number of retries on failure (default: 1)
+        timeout: Function timeout in seconds
+        retries: Number of retries on failure
 
     Returns:
         Tuple of (modal_app, server_class) for the specified device

@@ -12,7 +12,6 @@ from typing import Any, Dict, List
 
 from ..._logging import get_logger
 from ..client_interface import (
-    ClientConfig,
     ClientInterface,
     extract_storage_ids,
 )
@@ -33,11 +32,10 @@ class ModalClient(ClientInterface):
         self,
         gpu_type: str,
         machine_id: str,
-        config: ClientConfig = None,
-        timeout: int = 300,
-        retries: int = 1,
+        timeout: int,
+        retries: int,
     ):
-        super().__init__(gpu_type, machine_id, config)
+        super().__init__(gpu_type, machine_id)
         self._app = None
         self._server_class = None
         self._server_instance = None
@@ -255,12 +253,13 @@ def get_modal_app_for_device(device) -> ModalClient:
     return ModalClient(
         device.gpu_type.value,
         device.machine_id,
-        timeout=device.timeout,
-        retries=device.retries,
+        device.timeout,
+        device.retries,
     )
 
 
 def clear_app_cache():
     """Clear the app cache."""
     from _torch_remote_modal.modal_app import _gpu_apps
+
     _gpu_apps.clear()
