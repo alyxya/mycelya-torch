@@ -11,14 +11,11 @@ This module provides a clean, minimal API for tensor conversions:
 """
 
 import io
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 
 from ._logging import get_logger
-
-if TYPE_CHECKING:
-    pass
 
 log = get_logger(__name__)
 
