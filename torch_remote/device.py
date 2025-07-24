@@ -60,7 +60,12 @@ class RemoteMachine:
     """
 
     def __init__(
-        self, provider: CloudProvider, gpu_type: GPUType, start: bool = True
+        self,
+        provider: CloudProvider,
+        gpu_type: GPUType,
+        start: bool = True,
+        timeout: int = 300,
+        retries: int = 1,
     ) -> None:
         """
         Initialize a backend device.
@@ -69,9 +74,13 @@ class RemoteMachine:
             provider: The cloud provider (e.g., Modal)
             gpu_type: The GPU type (e.g., A100-40GB)
             start: Whether to start the client immediately (default: True)
+            timeout: Function timeout in seconds (default: 300)
+            retries: Number of retries on failure (default: 1)
         """
         self.provider = provider
         self.gpu_type = gpu_type
+        self.timeout = timeout
+        self.retries = retries
         self.machine_id = self._generate_machine_id()
         self._client = None
 
@@ -116,10 +125,13 @@ class RemoteMachine:
         try:
             if self.provider == CloudProvider.MODAL:
                 # Import here to avoid circular imports
-                from .backends.modal.client import create_modal_app_for_gpu
+                from .backends.modal.client import ModalClient
 
-                self._client = create_modal_app_for_gpu(
-                    self.gpu_type.value, self.machine_id
+                self._client = ModalClient(
+                    self.gpu_type.value,
+                    self.machine_id,
+                    timeout=self.timeout,
+                    retries=self.retries,
                 )
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
@@ -272,13 +284,17 @@ _device_registry = DeviceRegistry()
 # for proper resource management in standalone usage scenarios.
 
 
-def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> RemoteMachine:
+def create_modal_machine(
+    gpu: Union[str, GPUType], start: bool = True, timeout: int = 300, retries: int = 1
+) -> RemoteMachine:
     """
     Create a Modal remote machine with the specified GPU type.
 
     Args:
         gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB)
         start: Whether to start the client immediately (default: True)
+        timeout: Function timeout in seconds (default: 300)
+        retries: Number of retries on failure (default: 1)
 
     Returns:
         RemoteMachine instance for the specified GPU
@@ -287,8 +303,8 @@ def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> Remote
         >>> machine = create_modal_machine("A100-40GB")
         >>> tensor = torch.randn(3, 3, device=machine.device())
         >>>
-        >>> # Create without starting
-        >>> machine = create_modal_machine("A100-40GB", start=False)
+        >>> # Create with custom timeout
+        >>> machine = create_modal_machine("A100-40GB", timeout=600, retries=3)
         >>> machine.start()  # Start manually later
     """
     if isinstance(gpu, str):
@@ -301,7 +317,11 @@ def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> Remote
         gpu_type = gpu
 
     machine = RemoteMachine(
-        provider=CloudProvider.MODAL, gpu_type=gpu_type, start=start
+        provider=CloudProvider.MODAL,
+        gpu_type=gpu_type,
+        start=start,
+        timeout=timeout,
+        retries=retries,
     )
 
     # Register the machine

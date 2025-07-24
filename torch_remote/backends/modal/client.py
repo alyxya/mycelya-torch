@@ -19,9 +19,6 @@ from ..client_interface import (
 
 log = get_logger(__name__)
 
-# Cache for ModalClient instances
-_clients: Dict[str, "ModalClient"] = {}
-
 
 class ModalClient(ClientInterface):
     """
@@ -32,12 +29,21 @@ class ModalClient(ClientInterface):
     protocols while maintaining state and connection management.
     """
 
-    def __init__(self, gpu_type: str, machine_id: str, config: ClientConfig = None):
+    def __init__(
+        self,
+        gpu_type: str,
+        machine_id: str,
+        config: ClientConfig = None,
+        timeout: int = 300,
+        retries: int = 1,
+    ):
         super().__init__(gpu_type, machine_id, config)
         self._app = None
         self._server_class = None
         self._server_instance = None
         self._app_context = None
+        self.timeout = timeout
+        self.retries = retries
 
         # Initialize the Modal app and server
         self._initialize()
@@ -48,7 +54,7 @@ class ModalClient(ClientInterface):
         from _torch_remote_modal.modal_app import create_modal_app_for_gpu
 
         self._app, self._server_class = create_modal_app_for_gpu(
-            self.gpu_type, self.machine_id
+            self.gpu_type, self.machine_id, self.timeout, self.retries
         )
 
     def start(self):
@@ -230,27 +236,6 @@ class ModalClient(ClientInterface):
         )
 
 
-def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> ModalClient:
-    """
-    Create a ModalClient for a specific GPU type and machine.
-
-    Args:
-        gpu_type: The GPU type (e.g., "T4", "A100-40GB")
-        machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
-
-    Returns:
-        ModalClient instance for communicating with Modal GPU infrastructure
-    """
-    # Check cache first
-    if machine_id in _clients:
-        return _clients[machine_id]
-
-    # Create new client and cache it
-    client = ModalClient(gpu_type, machine_id)
-    _clients[machine_id] = client
-    return client
-
-
 # PytorchServer and app creation logic is in _torch_remote_modal.modal_app
 
 
@@ -267,10 +252,15 @@ def get_modal_app_for_device(device) -> ModalClient:
     if hasattr(device, "provider") and device.provider.value != "modal":
         raise ValueError(f"Device provider {device.provider.value} is not Modal")
 
-    return create_modal_app_for_gpu(device.gpu_type.value, device.machine_id)
+    return ModalClient(
+        device.gpu_type.value,
+        device.machine_id,
+        timeout=device.timeout,
+        retries=device.retries,
+    )
 
 
 def clear_app_cache():
     """Clear the app cache."""
-    global _clients
-    _clients.clear()
+    from _torch_remote_modal.modal_app import _gpu_apps
+    _gpu_apps.clear()

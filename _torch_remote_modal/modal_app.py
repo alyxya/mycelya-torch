@@ -28,28 +28,25 @@ image = modal.Image.debian_slim().pip_install("numpy", "torch")
 # Cache for GPU-specific apps and their functions
 _gpu_apps: Dict[str, Tuple[modal.App, Any]] = {}
 
-# GPU configuration mapping
-GPU_CONFIG = {
-    "T4": {"timeout": 300, "retries": 2},
-    "L4": {"timeout": 300, "retries": 2},
-    "A10G": {"timeout": 450, "retries": 2},
-    "A100": {"timeout": 450, "retries": 2},
-    "A100-40GB": {"timeout": 450, "retries": 2},
-    "A100-80GB": {"timeout": 450, "retries": 2},
-    "L40S": {"timeout": 450, "retries": 2},
-    "H100": {"timeout": 450, "retries": 2},
-    "H200": {"timeout": 450, "retries": 2},
-    "B200": {"timeout": 450, "retries": 2},
-}
+# Default configuration for all GPU types
+DEFAULT_TIMEOUT = 300
+DEFAULT_RETRIES = 1
 
 
-def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
+def create_modal_app_for_gpu(
+    gpu_type: str,
+    machine_id: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    retries: int = DEFAULT_RETRIES,
+) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and class for a specific GPU type and device.
 
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
+        timeout: Function timeout in seconds (default: 300)
+        retries: Number of retries on failure (default: 1)
 
     Returns:
         Tuple of (modal_app, server_class) for the specified device
@@ -57,20 +54,13 @@ def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App,
     if machine_id in _gpu_apps:
         return _gpu_apps[machine_id]
 
-    if gpu_type not in GPU_CONFIG:
-        raise ValueError(
-            f'GPU type "{gpu_type}" is not supported. '
-            f"Available types: {list(GPU_CONFIG.keys())}"
-        )
-
-    config = GPU_CONFIG[gpu_type]
     app = modal.App(f"torch-remote-{machine_id}")
 
     @app.cls(
         image=image,
         gpu=gpu_type,
-        timeout=config["timeout"],
-        retries=config["retries"],
+        timeout=timeout,
+        retries=retries,
         serialized=True,
         max_containers=1,
     )
