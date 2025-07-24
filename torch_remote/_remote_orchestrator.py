@@ -15,11 +15,11 @@ import torch
 
 from ._logging import get_logger
 from ._tensor_utils import (
-    RemoteTensorMeta,
+    TensorMetadata,
     TensorMetadataConverter,
     remote_tensor_to_cpu,
     cpu_tensor_to_remote,
-    serialize_tensor,
+    cpu_tensor_to_bytes,
     deserialize_tensor,
     get_tensor_metadata,
 )
@@ -86,8 +86,8 @@ class RemoteOrchestrator:
     def execute_remote_aten_operation(
         self,
         op_name: str,
-        input_metadata: List[RemoteTensorMeta],
-        output_metadata: List[RemoteTensorMeta],
+        input_metadata: List[TensorMetadata],
+        output_metadata: List[TensorMetadata],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
     ) -> None:
@@ -146,7 +146,7 @@ class RemoteOrchestrator:
 
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
         """Serialize tensor to bytes, ensuring view data is contiguous."""
-        return serialize_tensor(tensor)
+        return cpu_tensor_to_bytes(tensor)
 
     def _deserialize_tensor(self, data: bytes) -> torch.Tensor:
         """Deserialize tensor from bytes as a contiguous tensor."""
@@ -155,6 +155,17 @@ class RemoteOrchestrator:
     def _get_tensor_metadata(self, tensor: torch.Tensor) -> Dict[str, Any]:
         """Get tensor metadata."""
         return get_tensor_metadata(tensor)
+
+    def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
+        """Remove a tensor from remote storage."""
+        try:
+            client = self._get_device_client(machine)
+            if client and client.is_running():
+                return client.remove_storage(storage_id)
+            return False
+        except Exception as e:
+            log.warning(f"Failed to remove storage {storage_id}: {e}")
+            return False
 
 
 # Global orchestrator instance (Modal provider implementation)

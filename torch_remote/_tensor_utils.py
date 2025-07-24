@@ -4,20 +4,16 @@
 """
 Tensor utilities for metadata handling, serialization, and device transfers.
 
-This module consolidates all tensor-related operations:
-- Tensor metadata extraction and conversion
-- Serialization/deserialization of tensors
-- Remote-to-CPU and CPU-to-remote transfers
-- Tensor creation from metadata
-- Argument processing for remote operations
+This module provides a clean, minimal API for tensor conversions:
+- TensorMetadata class for unified tensor metadata representation
+- Methods for converting between CPU, remote, and meta tensors
+- Serialization utilities for data transfer
 """
 
 import io
-from pprint import pformat
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import torch
-from torch.utils._pytree import tree_map
 
 from ._logging import get_logger
 
@@ -27,488 +23,352 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-class RemoteTensorMeta:
-    """Metadata representation of a remote tensor."""
+class TensorMetadata:
+    """
+    Metadata representation of tensors (CPU, remote, or meta).
+    
+    Stores tensor shape, layout, and type information. For remote tensors,
+    also includes the storage_id for referencing data on remote devices.
+    """
 
     def __init__(
         self,
-        storage_id: int,
-        size: torch.Size,
+        shape: Tuple[int, ...],
         stride: Tuple[int, ...],
         storage_offset: int,
         dtype: torch.dtype,
-        nelem_in_bytes: int,
-    ) -> None:
-        """Create RemoteTensorMeta with explicit metadata.
-
-        Args:
-            storage_id: Tensor storage ID
-            size: Tensor shape
-            stride: Tensor stride
-            storage_offset: Storage offset
-            dtype: Data type
-            nelem_in_bytes: Number of elements in bytes
+        storage_id: Optional[int] = None
+    ):
         """
-        self.storage_id = storage_id
-        self.size = size
+        Initialize tensor metadata.
+        
+        Args:
+            shape: Tensor dimensions
+            stride: Tensor stride for memory layout
+            storage_offset: Offset into storage
+            dtype: PyTorch data type
+            storage_id: Storage ID for remote tensors (None for CPU/meta)
+        """
+        self.shape = shape
         self.stride = stride
         self.storage_offset = storage_offset
         self.dtype = dtype
-        self.nelem_in_bytes = nelem_in_bytes
+        self.storage_id = storage_id
+        
+        # Calculate derived properties
+        self.nelem_in_bytes = self._calculate_nelem_in_bytes()
+
+    def _calculate_nelem_in_bytes(self) -> int:
+        """Calculate the number of elements needed in storage."""
+        if not self.shape:
+            return self.dtype.itemsize  # scalar
+        
+        # Calculate the highest address accessed
+        max_index = self.storage_offset
+        for dim_size, dim_stride in zip(self.shape, self.stride):
+            if dim_size > 1:
+                max_index += (dim_size - 1) * abs(dim_stride)
+        
+        return (max_index + 1) * self.dtype.itemsize
 
     @classmethod
-    def from_tensor(
-        cls, tensor: torch.Tensor, checked: bool = True
-    ) -> "RemoteTensorMeta":
-        """Create RemoteTensorMeta from existing tensor.
-
-        Args:
-            tensor: Source tensor to extract metadata from
-            checked: Whether to validate tensor is on remote device
-
-        Returns:
-            RemoteTensorMeta instance with tensor's metadata
-
-        Raises:
-            RuntimeError: If checked=True and tensor is not on remote device
-        """
-        if checked and tensor.device.type != "remote":
-            raise RuntimeError(
-                "Creating RemoteTensorMeta is only for Tensors on remote device"
-            )
-
-        return cls(
-            storage_id=tensor.untyped_storage().data_ptr(),
-            size=tensor.size(),
-            stride=tensor.stride(),
-            storage_offset=tensor.storage_offset(),
-            dtype=tensor.dtype,
-            nelem_in_bytes=tensor.nelement() * tensor.element_size(),
-        )
-
-    @classmethod
-    def from_remote_tensor(cls, tensor: torch.Tensor) -> "RemoteTensorMeta":
-        """Create RemoteTensorMeta for remote tensor serialization.
-
-        Args:
-            tensor: Remote tensor to create metadata from
-
-        Returns:
-            RemoteTensorMeta instance with storage_id set for view tracking
-        """
+    def from_remote_tensor(cls, tensor: torch.Tensor) -> "TensorMetadata":
+        """Create metadata from a remote tensor."""
+        if tensor.device.type != "remote":
+            raise ValueError(f"Expected remote tensor, got device: {tensor.device}")
+        
         storage_id = tensor.untyped_storage().data_ptr()
         return cls(
-            storage_id=storage_id,
-            size=tensor.size(),
-            stride=tensor.stride(),
+            shape=tuple(tensor.size()),
+            stride=tuple(tensor.stride()),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
-            nelem_in_bytes=tensor.numel() * tensor.element_size(),
+            storage_id=storage_id
         )
+
+    @classmethod
+    def from_cpu_tensor(cls, tensor: torch.Tensor) -> "TensorMetadata":
+        """Create metadata from a CPU tensor."""
+        if tensor.device.type != "cpu":
+            raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
+        
+        return cls(
+            shape=tuple(tensor.size()),
+            stride=tuple(tensor.stride()),
+            storage_offset=tensor.storage_offset(),
+            dtype=tensor.dtype,
+            storage_id=None
+        )
+
+    @classmethod
+    def from_meta_tensor(cls, tensor: torch.Tensor) -> "TensorMetadata":
+        """Create metadata from a meta tensor."""
+        if tensor.device.type != "meta":
+            raise ValueError(f"Expected meta tensor, got device: {tensor.device}")
+        
+        return cls(
+            shape=tuple(tensor.size()),
+            stride=tuple(tensor.stride()),
+            storage_offset=tensor.storage_offset(),
+            dtype=tensor.dtype,
+            storage_id=None
+        )
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TensorMetadata":
+        """Create metadata from a dictionary representation."""
+        return cls(
+            shape=tuple(data["shape"]),
+            stride=tuple(data["stride"]),
+            storage_offset=data["storage_offset"],
+            dtype=getattr(torch, data["dtype"]),
+            storage_id=data.get("storage_id")
+        )
+
+    def to_remote_tensor(self, device: torch.device) -> torch.Tensor:
+        """
+        Create a remote tensor from this metadata.
+        
+        Args:
+            device: Remote device to create tensor on
+            
+        Returns:
+            Remote tensor with this metadata
+        """
+        if device.type != "remote":
+            raise ValueError(f"Expected remote device, got: {device}")
+        
+        if self.storage_id is None:
+            raise ValueError("Cannot create remote tensor without storage_id")
+        
+        # Create remote tensor using storage ID as data pointer
+        from ._device_daemon import driver
+        
+        # Create storage on device first
+        storage_bytes = self.nelem_in_bytes
+        driver.exec("create_storage_with_id", self.storage_id, storage_bytes)
+        
+        # Create tensor with the storage ID as data pointer
+        storage = torch.UntypedStorage.from_buffer(
+            bytearray(storage_bytes), dtype=torch.uint8
+        )
+        storage._set_cdata(self.storage_id)  # Use storage_id as data pointer
+        
+        # Create tensor from storage
+        tensor = torch.tensor([], dtype=self.dtype, device=device)
+        tensor = tensor.set_(storage, self.storage_offset, self.shape, self.stride)
+        
+        return tensor
+
+    def to_meta_tensor(self) -> torch.Tensor:
+        """Create a meta tensor from this metadata."""
+        # Create meta tensor with same shape and dtype
+        return torch.empty(
+            self.shape,
+            dtype=self.dtype,
+            device="meta"
+        ).as_strided(self.shape, self.stride, self.storage_offset)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert metadata to dictionary representation."""
+        result = {
+            "shape": list(self.shape),
+            "stride": list(self.stride),
+            "storage_offset": self.storage_offset,
+            "dtype": str(self.dtype).split(".")[-1],  # e.g., "float32"
+            "nelem_in_bytes": self.nelem_in_bytes
+        }
+        
+        if self.storage_id is not None:
+            result["storage_id"] = self.storage_id
+            
+        return result
+
+    def to_cpu_tensor_from_bytes(self, data: bytes) -> torch.Tensor:
+        """
+        Create a CPU tensor from bytes using this metadata.
+        
+        Args:
+            data: Serialized tensor data
+            
+        Returns:
+            CPU tensor reconstructed from bytes
+        """
+        # Deserialize the tensor data
+        buffer = io.BytesIO(data)
+        tensor = torch.load(buffer, map_location="cpu", weights_only=False)
+        
+        # Verify the tensor matches our metadata
+        if tensor.dtype != self.dtype:
+            raise ValueError(f"Dtype mismatch: expected {self.dtype}, got {tensor.dtype}")
+        
+        # Apply the correct view if needed
+        if (tuple(tensor.size()) != self.shape or 
+            tuple(tensor.stride()) != self.stride or 
+            tensor.storage_offset() != self.storage_offset):
+            
+            tensor = tensor.as_strided(self.shape, self.stride, self.storage_offset)
+        
+        return tensor
 
     def __repr__(self) -> str:
-        return (
-            f"RemoteTensorMeta({self.storage_id=}, {self.size=}, {self.stride=}, "
-            f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=})"
-        )
+        storage_info = f", storage_id={self.storage_id}" if self.storage_id else ""
+        return (f"TensorMetadata(shape={self.shape}, stride={self.stride}, "
+                f"storage_offset={self.storage_offset}, dtype={self.dtype}{storage_info})")
 
 
-# Tensor serialization and transfer utilities
-def serialize_tensor(tensor: torch.Tensor) -> bytes:
-    """Serialize tensor to bytes, ensuring view data is contiguous.
-
-    Args:
-        tensor: Tensor to serialize
-
-    Returns:
-        Serialized tensor data as bytes
+def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     """
+    Convert a CPU tensor to bytes for data transfer.
+    
+    Args:
+        tensor: CPU tensor to serialize
+        
+    Returns:
+        Serialized tensor data
+    """
+    if tensor.device.type != "cpu":
+        raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
+    
+    # Make tensor contiguous for efficient serialization
+    if not tensor.is_contiguous():
+        tensor = tensor.contiguous()
+    
+    # Serialize to bytes
     buffer = io.BytesIO()
-    # Convert to pure CPU tensor and make contiguous to serialize only the view's data
-    # This ensures views are serialized as their actual data, not the full underlying storage
-    cpu_tensor = tensor.cpu().detach().contiguous()
-    torch.save(cpu_tensor, buffer)
+    torch.save(tensor, buffer)
     return buffer.getvalue()
 
 
-def deserialize_tensor(data: bytes) -> torch.Tensor:
-    """Deserialize tensor from bytes as a contiguous tensor.
-
-    Args:
-        data: Serialized tensor data
-
-    Returns:
-        Deserialized tensor on CPU
-    """
-    buffer = io.BytesIO(data)
-    tensor = torch.load(buffer, map_location="cpu")
-
-    # Since we serialize with .contiguous(), the deserialized tensor should already be contiguous
-    # with storage_offset=0 and optimal stride. No view reconstruction needed.
-    # Just ensure we have untyped storage for consistency with the remote tensor system.
-    if hasattr(tensor, "untyped_storage"):
-        untyped_storage = tensor.untyped_storage()
-        # The tensor should already be contiguous, so we preserve its natural layout
-        tensor = torch.empty(0, dtype=tensor.dtype, device=tensor.device).set_(
-            untyped_storage,
-            0,  # storage_offset should be 0 for contiguous tensors
-            tensor.shape,
-            tensor.stride(),
-        )
-    return tensor
-
-
 def remote_tensor_to_cpu(remote_tensor: torch.Tensor) -> torch.Tensor:
-    """Convert remote tensor to CPU tensor by retrieving data from remote GPU.
-
-    Args:
-        remote_tensor: Tensor on remote device to transfer
-
-    Returns:
-        Tensor on CPU with same data
-
-    Raises:
-        RuntimeError: If no machine found for device or client not available
     """
+    Transfer a remote tensor to CPU.
+    
+    Args:
+        remote_tensor: Remote tensor to transfer
+        
+    Returns:
+        CPU tensor with the same data
+    """
+    if remote_tensor.device.type != "remote":
+        raise ValueError(f"Expected remote tensor, got device: {remote_tensor.device}")
+    
+    # Get device registry to find the machine
     from .device import get_device_registry
-
-    # Get the machine backend
+    
     registry = get_device_registry()
     machine = registry.get_device_by_index(remote_tensor.device.index)
-
+    
     if machine is None:
         raise RuntimeError(
             f"No RemoteMachine found for remote device index {remote_tensor.device.index}"
         )
-
+    
     # Get the client for this machine
     client = machine._client
     if client is None or not client.is_running():
         raise RuntimeError(f"Client not available for machine {machine.machine_id}")
-
+    
     # Get tensor data using storage ID
     storage_id = remote_tensor.untyped_storage().data_ptr()
-
-    # Use client to get tensor data by ID with view information
-    # Pass tensor metadata so remote side can serialize just the view's data
+    
+    # Create metadata for the remote tensor
+    metadata = TensorMetadata.from_remote_tensor(remote_tensor)
+    
+    # Get serialized data from remote storage
     tensor_data = client.get_storage_data(
         storage_id,
-        shape=list(remote_tensor.shape),
-        stride=list(remote_tensor.stride()),
-        storage_offset=remote_tensor.storage_offset(),
-        dtype=str(remote_tensor.dtype),
+        shape=list(metadata.shape),
+        stride=list(metadata.stride),
+        storage_offset=metadata.storage_offset,
+        dtype=str(metadata.dtype)
     )
+    
+    # Convert bytes back to CPU tensor using metadata
+    return metadata.to_cpu_tensor_from_bytes(tensor_data)
 
-    # Deserialize the tensor
-    return deserialize_tensor(tensor_data)
+
+# ============================================================================
+# Legacy functions that still need updating throughout the codebase
+# ============================================================================
+
+def serialize_tensor(tensor: torch.Tensor) -> bytes:
+    """Legacy function - use cpu_tensor_to_bytes() instead."""
+    return cpu_tensor_to_bytes(tensor)
 
 
-def cpu_tensor_to_remote(
-    cpu_tensor: torch.Tensor, machine: "RemoteMachine"
-) -> torch.Tensor:
-    """Convert CPU tensor to remote tensor.
-
-    Args:
-        cpu_tensor: Tensor on CPU to transfer
-        machine: Target remote machine
-
-    Returns:
-        Tensor on remote device
-
-    Raises:
-        RuntimeError: If machine is None
-    """
-    if machine is None:
-        raise RuntimeError("RemoteMachine must be specified for remote tensor creation")
-
-    # Convert to remote device - delegates to PyTorch's device transfer system
-    result = cpu_tensor.to(machine.device())
-    return result
+def deserialize_tensor(data: bytes) -> torch.Tensor:
+    """Legacy function - use TensorMetadata.to_cpu_tensor_from_bytes() instead."""
+    buffer = io.BytesIO(data)
+    return torch.load(buffer, map_location="cpu", weights_only=False)
 
 
 def get_tensor_metadata(tensor: torch.Tensor) -> Dict[str, Any]:
-    """Get tensor metadata as a dictionary.
-
-    Args:
-        tensor: Tensor to extract metadata from
-
-    Returns:
-        Dictionary containing tensor metadata
-    """
-    return {
-        "shape": list(tensor.shape),
-        "dtype": str(tensor.dtype),
-        "size": tensor.numel(),
-        "element_size": tensor.element_size(),
-    }
+    """Legacy function - use TensorMetadata.from_*().to_dict() instead."""
+    if tensor.device.type == "remote":
+        return TensorMetadata.from_remote_tensor(tensor).to_dict()
+    elif tensor.device.type == "cpu":
+        return TensorMetadata.from_cpu_tensor(tensor).to_dict()
+    elif tensor.device.type == "meta":
+        return TensorMetadata.from_meta_tensor(tensor).to_dict()
+    else:
+        raise ValueError(f"Unsupported device type: {tensor.device.type}")
 
 
-# Argument processing utilities
-VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float, torch.dtype}
-VALID_QUEUE_TYPES_OUT = {RemoteTensorMeta, int, float, str, torch.dtype}
-
-
-def safe_str(args: Any) -> str:
-    """Convert arguments to a safe string representation for logging.
-
-    Converts torch.Tensor objects to RemoteTensorMeta strings to avoid
-    potential issues with remote tensor string representation.
-
-    Args:
-        args: Arguments to convert to string
-
-    Returns:
-        Safe string representation of the arguments
-    """
-
-    def convert(obj: Any) -> Any:
-        if isinstance(obj, torch.Tensor):
-            return str(RemoteTensorMeta.from_tensor(obj, checked=False))
-        else:
-            return obj
-
-    new_args = tree_map(convert, args)
-    return pformat(new_args)
-
-
-def validate_send_queue_args(cmd: str, args: Any) -> None:
-    """Validate that arguments are safe to send through the remote queue.
-
-    Ensures that only supported object types are sent over the remote
-    communication channel to prevent serialization errors.
-
-    Args:
-        cmd: Command name for context in error messages
-        args: Arguments to validate
-
-    Raises:
-        RuntimeError: If invalid object types are found
-    """
-
-    def check(obj: Any) -> None:
-        if type(obj) not in VALID_QUEUE_TYPES_OUT:
-            if (
-                cmd == "recv_data"
-                and type(obj) in [torch.Tensor]
-                and obj.device.type == "cpu"
-            ):
-                # Only HtoD copy command can send cpu Tensors over
-                return
-            raise RuntimeError(
-                f"Trying to send invalid object through queue: {type(obj)}"
-            )
-
-    tree_map(check, args)
-
-
-def prepare_for_sending(args: Any, kwargs: Any) -> Any:
-    """Prepare arguments for sending to remote device.
-
-    Converts torch.Tensor objects to RemoteTensorMeta for efficient
-    transmission. Remote tensors are converted to metadata only,
-    while CPU tensors include full tensor data.
-
-    Args:
-        args: Positional arguments to prepare
-        kwargs: Keyword arguments to prepare
-
-    Returns:
-        Converted arguments ready for remote transmission
-
-    Raises:
-        RuntimeError: If unsupported object types are found
-    """
-
-    def convert(obj: Any) -> Any:
-        if type(obj) not in VALID_QUEUE_TYPES_IN:
-            raise RuntimeError(
-                f"Cannot send object of type {type(obj)} over remote device pipe."
-            )
-
-        if isinstance(obj, torch.Tensor):
-            if obj.device.type == "remote":
-                # For remote tensors, send storage_id + metadata instead of full tensor data
-                return RemoteTensorMeta.from_remote_tensor(obj)
-            else:
-                # For non-remote tensors, use original behavior
-                return RemoteTensorMeta.from_tensor(obj)
-        else:
-            return obj
-
-    return tree_map(convert, (args, kwargs))
-
-
-def receive_after_sending(allocator: Any, args: Any, kwargs: Any) -> Any:
-    """Process arguments received from remote device.
-
-    Converts RemoteTensorMeta objects back to torch.Tensor using
-    the provided allocator. Handles reconstruction of tensor objects
-    from metadata.
-
-    Args:
-        allocator: Allocator to create tensors from metadata
-        args: Received positional arguments
-        kwargs: Received keyword arguments
-
-    Returns:
-        Reconstructed arguments with tensor objects
-
-    Raises:
-        RuntimeError: If invalid object types are received
-    """
-
-    def convert(obj: Any) -> Any:
-        if type(obj) not in VALID_QUEUE_TYPES_OUT:
-            raise RuntimeError(
-                f"Received invalid object of type {type(obj)} over remote device pipe."
-            )
-
-        if isinstance(obj, RemoteTensorMeta):
-            return allocator.tensor_from_meta(obj)
-        else:
-            return obj
-
-    return tree_map(convert, (args, kwargs))
+def cpu_tensor_to_remote(cpu_tensor: torch.Tensor, machine) -> torch.Tensor:
+    """Legacy function - this is complex and should be refactored."""
+    raise NotImplementedError("cpu_tensor_to_remote needs to be refactored to use new API")
 
 
 class TensorMetadataConverter:
-    """Centralized converter for tensor-to-metadata transformations.
-
-    This class provides a clean boundary for all tensor conversion operations,
-    ensuring consistent handling across the entire execution pipeline.
-    """
-
+    """Legacy compatibility class - use TensorMetadata methods instead."""
+    
     @staticmethod
-    def tensor_to_metadata(
-        tensor: torch.Tensor, context: str = "default"
-    ) -> RemoteTensorMeta:
-        """Convert a single tensor to metadata.
-
-        Args:
-            tensor: PyTorch tensor to convert
-            context: Context for conversion (for debugging/logging)
-
-        Returns:
-            RemoteTensorMeta object containing tensor metadata
-        """
+    def tensor_to_metadata(tensor: torch.Tensor, name: str) -> TensorMetadata:
+        """Convert tensor to metadata."""
         if tensor.device.type == "remote":
-            return RemoteTensorMeta.from_remote_tensor(tensor)
+            return TensorMetadata.from_remote_tensor(tensor)
+        elif tensor.device.type == "cpu":
+            return TensorMetadata.from_cpu_tensor(tensor)
+        elif tensor.device.type == "meta":
+            return TensorMetadata.from_meta_tensor(tensor)
         else:
-            return RemoteTensorMeta.from_tensor(tensor, checked=False)
-
-    @staticmethod
-    def metadata_to_dict(meta: RemoteTensorMeta, **operation_flags) -> Dict[str, Any]:
-        """Convert metadata to serializable dictionary.
-
-        Args:
-            meta: RemoteTensorMeta object to convert
-            **operation_flags: Additional flags (is_input, is_output, etc.)
-
-        Returns:
-            Dictionary ready for serialization/transport
-        """
-        result = {
-            "storage_id": meta.storage_id,
-            "shape": list(meta.size),
-            "stride": list(meta.stride),
-            "storage_offset": meta.storage_offset,
-            "dtype": str(meta.dtype),
-            "numel": meta.nelem_in_bytes
-            // torch.tensor([], dtype=meta.dtype).element_size(),
-        }
-        result.update(operation_flags)
-        return result
-
-    @staticmethod
-    def args_to_metadata_with_placeholders(
-        args: Tuple[Any, ...],
-        kwargs: Dict[str, Any],
-        operation_context: str = "default",
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMeta]]:
-        """Convert args/kwargs, replacing tensors with placeholders and collecting metadata.
-
-        This is the core method for the early conversion boundary - it processes
-        nested structures, extracts all remote tensors, and returns both the
-        placeholder structure and collected metadata.
-
-        Args:
-            args: Original arguments containing tensors
-            kwargs: Original keyword arguments containing tensors
-            operation_context: Context string for debugging
-
-        Returns:
-            Tuple of (processed_args, processed_kwargs, collected_metadata)
-        """
-        collected_metadata = []
-
-        def convert_tensor_to_placeholder(obj):
-            if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-                # Convert tensor to metadata and add to collection
-                metadata = TensorMetadataConverter.tensor_to_metadata(
-                    obj, operation_context
-                )
-                tensor_index = len(collected_metadata)
-                collected_metadata.append(metadata)
-                return f"__TENSOR_{tensor_index}"
-            return obj
-
-        # Use tree_map to handle nested structures consistently
-        processed_args, processed_kwargs = tree_map(
-            convert_tensor_to_placeholder, (args, kwargs)
-        )
-
-        return processed_args, processed_kwargs, collected_metadata
-
+            raise ValueError(f"Unsupported device type: {tensor.device.type}")
+    
     @staticmethod
     def metadata_list_to_dicts(
-        metadata_list: List[RemoteTensorMeta],
-        input_indices: Optional[set] = None,
-        output_indices: Optional[set] = None,
-    ) -> List[Dict[str, Any]]:
-        """Convert metadata list to serializable dictionaries with operation flags.
-
-        Args:
-            metadata_list: List of RemoteTensorMeta objects
-            input_indices: Set of indices that are input tensors
-            output_indices: Set of indices that are output tensors
-
-        Returns:
-            List of metadata dictionaries ready for transport
-        """
-        result = []
-        for i, meta in enumerate(metadata_list):
-            operation_flags = {}
-            if input_indices and i in input_indices:
-                operation_flags["is_input"] = True
-            if output_indices and i in output_indices:
-                operation_flags["is_output"] = True
-
-            result.append(
-                TensorMetadataConverter.metadata_to_dict(meta, **operation_flags)
-            )
-
-        return result
-
+        metadata_list: list, 
+        include_set=None, 
+        exclude_set=None
+    ) -> list:
+        """Convert list of metadata to list of dicts."""
+        return [meta.to_dict() for meta in metadata_list]
+    
     @staticmethod
-    def collect_remote_tensors(
-        args: Tuple[Any, ...], kwargs: Dict[str, Any]
-    ) -> List[torch.Tensor]:
-        """Collect all remote tensors from nested args/kwargs structure.
-
-        Args:
-            args: Arguments to search
-            kwargs: Keyword arguments to search
-
-        Returns:
-            List of remote tensors found in the structure
-        """
-        tensors = []
-
-        def collect_tensor(obj):
-            if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-                tensors.append(obj)
-            return obj
-
-        tree_map(collect_tensor, (args, kwargs))
-        return tensors
-
+    def args_to_metadata_with_placeholders(args, kwargs, op_name=None, operation_context=None):
+        """Legacy function - needs refactoring."""
+        metadata_list = []
+        processed_args = []
+        processed_kwargs = {}
+        
+        # Process args
+        for arg in args:
+            if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
+                metadata = TensorMetadata.from_remote_tensor(arg)
+                tensor_index = len(metadata_list)
+                metadata_list.append(metadata)
+                processed_args.append(f"__TENSOR_{tensor_index}")
+            else:
+                processed_args.append(arg)
+        
+        # Process kwargs
+        for key, value in kwargs.items():
+            if isinstance(value, torch.Tensor) and value.device.type == "remote":
+                metadata = TensorMetadata.from_remote_tensor(value)
+                tensor_index = len(metadata_list)
+                metadata_list.append(metadata)
+                processed_kwargs[key] = f"__TENSOR_{tensor_index}"
+            else:
+                processed_kwargs[key] = value
+        
+        return tuple(processed_args), processed_kwargs, metadata_list
