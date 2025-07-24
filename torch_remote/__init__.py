@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import types
-from typing import Any, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 
@@ -10,10 +10,10 @@ import torch
 from ._device_daemon import driver
 
 # Factory pattern for C++ method access with caching
-_IMPL_REGISTRY = {}
+_IMPL_REGISTRY: Dict[str, Callable] = {}
 
 
-def impl_factory(name: str):
+def impl_factory(name: str) -> Callable:
     """Factory function that returns cached method implementations.
 
     This follows the pytorch-openreg-2 pattern for cleaner C++ integration.
@@ -27,7 +27,7 @@ def impl_factory(name: str):
     if name in _IMPL_REGISTRY:
         return _IMPL_REGISTRY[name]
 
-    def _method_impl(*args, **kwargs):
+    def _method_impl(*args: Any, **kwargs: Any) -> Any:
         return driver.exec(name, *args, **kwargs)
 
     _IMPL_REGISTRY[name] = _method_impl

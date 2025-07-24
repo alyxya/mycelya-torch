@@ -1,8 +1,8 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from typing import Any, Callable, Dict, Optional
 from collections import defaultdict
+from typing import Any, Callable, Dict, List, Optional
 
 import torch
 
@@ -48,7 +48,7 @@ class DeviceRegistry:
 
         # Stream management - no torch.Stream objects, only stream IDs
         self._current_streams: Dict[int, int] = defaultdict(lambda: 0)  # device_idx -> current stream_id
-        self._stream_registry: Dict[int, list] = defaultdict(lambda: [0])  # device_idx -> list of stream_ids
+        self._stream_registry: Dict[int, List[int]] = defaultdict(lambda: [0])  # device_idx -> list of stream_ids
 
     def get_device_count(self) -> int:
         """Return number of devices"""
@@ -90,16 +90,11 @@ class DeviceRegistry:
     # Stream management methods
     def get_stream(self, device_idx: int) -> int:
         """Get current stream ID for device"""
-        log.info(f"get_stream called with device_idx: {device_idx} (type: {type(device_idx)})")
-
         current_stream_id = self._current_streams[device_idx]  # defaultdict returns 0 if not set
-        log.info(f"get_stream returning stream_id: {current_stream_id} for device {device_idx}")
         return current_stream_id
 
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
         """Create new stream ID for device and add to registry"""
-        log.info(f"get_new_stream called with device_idx: {device_idx} (type: {type(device_idx)}), priority: {priority}")
-
         # Get next stream ID (start from 1, since 0 is default)
         registry = self._stream_registry[device_idx]  # defaultdict returns [0] if not set
         new_stream_id = len(registry)  # This will be 1 for first new stream (since [0] exists)
@@ -110,13 +105,10 @@ class DeviceRegistry:
         # Set as current stream for this device
         self._current_streams[device_idx] = new_stream_id
 
-        log.info(f"get_new_stream returning stream_id: {new_stream_id} for device {device_idx}")
         return new_stream_id
 
     def exchange_stream(self, stream_id: int, device_idx: int) -> int:
         """Exchange current stream ID and return previous stream ID"""
-        log.info(f"exchange_stream called with stream_id: {stream_id}, device_idx: {device_idx}")
-
         # Get the previous current stream ID
         previous_stream_id = self._current_streams[device_idx]  # defaultdict returns 0 if not set
 
@@ -128,7 +120,6 @@ class DeviceRegistry:
         if stream_id not in registry:
             registry.append(stream_id)
 
-        log.info(f"exchange_stream returning previous stream_id: {previous_stream_id}")
         return previous_stream_id
 
 
@@ -222,24 +213,15 @@ class Driver:
     # Stream operations
     @register(registry)
     def get_stream(self, device_idx: int) -> int:
-        log.info(f"Driver.get_stream called with device_idx: {device_idx} (type: {type(device_idx)})")
-        result = self.registry_obj.get_stream(device_idx)
-        log.info(f"Driver.get_stream returning: {result} (type: {type(result)})")
-        return result
+        return self.registry_obj.get_stream(device_idx)
 
     @register(registry)
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
-        log.info(f"Driver.get_new_stream called with device_idx: {device_idx} (type: {type(device_idx)}), priority: {priority}")
-        result = self.registry_obj.get_new_stream(device_idx, priority)
-        log.info(f"Driver.get_new_stream returning: {result} (type: {type(result)})")
-        return result
+        return self.registry_obj.get_new_stream(device_idx, priority)
 
     @register(registry)
     def exchange_stream(self, stream_id: int, device_idx: int) -> int:
-        log.info(f"Driver.exchange_stream called with stream_id: {stream_id}, device_idx: {device_idx}")
-        result = self.registry_obj.exchange_stream(stream_id, device_idx)
-        log.info(f"Driver.exchange_stream returning: {result} (type: {type(result)})")
-        return result
+        return self.registry_obj.exchange_stream(stream_id, device_idx)
 
     # Event operations (placeholders for now)
     @register(registry)

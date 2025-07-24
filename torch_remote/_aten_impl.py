@@ -16,11 +16,13 @@ log = get_logger(__name__)
 # Thread-local storage removed - meta execution tracking simplified
 
 
-def args_to_metadata_with_placeholders(args, kwargs, operation_context=None):
+def args_to_metadata_with_placeholders(
+    args: Tuple[Any, ...], kwargs: Dict[str, Any], operation_context: Optional[str] = None
+) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[TensorMetadata]]:
     """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
-    metadata_list = []
-    processed_args = []
-    processed_kwargs = {}
+    metadata_list: List[TensorMetadata] = []
+    processed_args: List[Any] = []
+    processed_kwargs: Dict[str, Any] = {}
 
     # Process args
     for arg in args:
