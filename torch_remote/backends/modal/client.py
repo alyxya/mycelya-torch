@@ -11,10 +11,7 @@ along with related functionality for creating and managing Modal applications.
 from typing import Any, Dict, List
 
 from ..._logging import get_logger
-from ..client_interface import (
-    ClientInterface,
-    extract_storage_ids,
-)
+from ..client_interface import ClientInterface
 
 log = get_logger(__name__)
 
@@ -194,7 +191,7 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        storage_ids = extract_storage_ids(tensor_metadata)
+        storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
         log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")
         return self._server_instance.execute_aten_operation.remote(
             op_name, tensor_metadata, args, kwargs, self.machine_id

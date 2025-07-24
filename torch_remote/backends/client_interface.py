@@ -11,24 +11,6 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
-# Custom exceptions removed - use descriptive RuntimeError messages instead
-
-
-# Simplified options - only what's actually used right now
-
-
-def extract_storage_ids(tensor_metadata: List[Dict[str, Any]]) -> List[int]:
-    """
-    Extract storage IDs from tensor metadata.
-
-    Args:
-        tensor_metadata: List of metadata dictionaries, each containing a "storage_id" field
-
-    Returns:
-        List of storage IDs in the same order as the metadata
-    """
-    return [metadata["storage_id"] for metadata in tensor_metadata]
-
 
 class ClientInterface(ABC):
     """
