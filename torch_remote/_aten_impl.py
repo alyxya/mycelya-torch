@@ -45,20 +45,6 @@ def args_to_metadata_with_placeholders(args, kwargs, operation_context=None):
     return tuple(processed_args), processed_kwargs, metadata_list
 
 
-def tensor_to_metadata(
-    tensor: torch.Tensor, context: str = "default"
-) -> TensorMetadata:
-    """Convert a tensor to metadata."""
-    if tensor.device.type == "remote":
-        return TensorMetadata.from_remote_tensor(tensor)
-    elif tensor.device.type == "cpu":
-        return TensorMetadata.from_cpu_tensor(tensor)
-    elif tensor.device.type == "meta":
-        return TensorMetadata.from_meta_tensor(tensor)
-    else:
-        raise ValueError(f"Unsupported device type: {tensor.device.type}")
-
-
 def deserialize_tensor(data: bytes) -> torch.Tensor:
     """Deserialize tensor from bytes."""
     buffer = io.BytesIO(data)
@@ -761,7 +747,7 @@ def _execute_on_remote_device(
 
     # Convert output tensors to metadata as well
     output_metadata = [
-        tensor_to_metadata(tensor, f"{op_name}_output") for tensor in output_tensors
+        TensorMetadata.from_remote_tensor(tensor) for tensor in output_tensors
     ]
 
     log.debug(
