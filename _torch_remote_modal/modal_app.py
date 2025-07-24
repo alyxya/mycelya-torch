@@ -86,6 +86,7 @@ def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App
         timeout=config["timeout"],
         retries=config["retries"],
         serialized=True,
+        max_containers=1,
     )
     class PytorchServer:
         def _get_storages(self):
