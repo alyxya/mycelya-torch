@@ -24,12 +24,6 @@ log = get_logger(__name__)
 # Exception handling is done through standard RuntimeError
 # Custom exceptions removed as they were not used elsewhere in the codebase
 
-# Try to load the remote execution module (Modal provider implementation)
-try:
-    log.info("Loaded modal client")
-except Exception as e:
-    log.warning(f"Modal client not available: {e}")
-
 
 class RemoteOrchestrator:
     """Orchestrates remote execution of aten operations across remote machines.
