@@ -1,16 +1,65 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import io
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
 # Simple operation dispatch - no complex patterns needed
 from ._logging import get_logger
+from ._tensor_utils import TensorMetadata
 
 log = get_logger(__name__)
 
 # Thread-local storage removed - meta execution tracking simplified
+
+
+def args_to_metadata_with_placeholders(args, kwargs, operation_context=None):
+    """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
+    metadata_list = []
+    processed_args = []
+    processed_kwargs = {}
+    
+    # Process args
+    for arg in args:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
+            metadata = TensorMetadata.from_remote_tensor(arg)
+            tensor_index = len(metadata_list)
+            metadata_list.append(metadata)
+            processed_args.append(f"__TENSOR_{tensor_index}")
+        else:
+            processed_args.append(arg)
+    
+    # Process kwargs
+    for key, value in kwargs.items():
+        if isinstance(value, torch.Tensor) and value.device.type == "remote":
+            metadata = TensorMetadata.from_remote_tensor(value)
+            tensor_index = len(metadata_list)
+            metadata_list.append(metadata)
+            processed_kwargs[key] = f"__TENSOR_{tensor_index}"
+        else:
+            processed_kwargs[key] = value
+    
+    return tuple(processed_args), processed_kwargs, metadata_list
+
+
+def tensor_to_metadata(tensor: torch.Tensor, context: str = "default") -> TensorMetadata:
+    """Convert a tensor to metadata."""
+    if tensor.device.type == "remote":
+        return TensorMetadata.from_remote_tensor(tensor)
+    elif tensor.device.type == "cpu":
+        return TensorMetadata.from_cpu_tensor(tensor)
+    elif tensor.device.type == "meta":
+        return TensorMetadata.from_meta_tensor(tensor)
+    else:
+        raise ValueError(f"Unsupported device type: {tensor.device.type}")
+
+
+def deserialize_tensor(data: bytes) -> torch.Tensor:
+    """Deserialize tensor from bytes."""
+    buffer = io.BytesIO(data)
+    return torch.load(buffer, map_location="cpu", weights_only=False)
 
 
 def _check_and_fix_empty_output_tensors(
@@ -425,7 +474,6 @@ def _handle_scalar_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: An
 
 def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
-    from ._tensor_utils import args_to_metadata_with_placeholders, tensor_to_metadata
     
     op_name = op.overloadpacket._qualified_op_name
     
@@ -530,7 +578,6 @@ def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
 
 def _execute_non_tensor_result(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], meta_result: Any) -> Any:
     """Handle operations that return non-tensor results."""
-    from ._tensor_utils import args_to_metadata_with_placeholders, tensor_to_metadata
     
     op_name = op.overloadpacket._qualified_op_name
     log.debug(f"Non-tensor result from {op_name}, executing remotely")
@@ -629,7 +676,6 @@ def _create_new_output_tensor(meta_output: torch.Tensor, remote_device: torch.de
 
 def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], output_tensors: List) -> None:
     """Execute the operation remotely using the orchestrator."""
-    from ._tensor_utils import args_to_metadata_with_placeholders, tensor_to_metadata
     
     op_name = op.overloadpacket._qualified_op_name
     
@@ -703,7 +749,6 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         # Deserialize the tensor data as contiguous representation
         # Since we now serialize with .contiguous(), the deserialized tensor contains exactly
         # the data that should be in the result tensor - no view reconstruction needed
-        from ._tensor_utils import deserialize_tensor
         result = deserialize_tensor(tensor_data)
         # Verify the result has the expected shape (it should match the remote tensor's shape)
         if result.size() != from_.size():
@@ -869,7 +914,6 @@ def _local_scalar_dense(self: torch.Tensor):
             "Cannot retrieve scalar value: remote execution not available"
         )
 
-    from ._tensor_utils import deserialize_tensor
     cpu_tensor = deserialize_tensor(tensor_data)
 
     # Call item() on the CPU tensor to get the Python scalar
