@@ -52,22 +52,6 @@ class TensorMetadata:
         self.dtype = dtype
         self.storage_id = storage_id
 
-        # Calculate derived properties
-        self.nelem_in_bytes = self._calculate_nelem_in_bytes()
-
-    def _calculate_nelem_in_bytes(self) -> int:
-        """Calculate the number of elements needed in storage."""
-        if not self.shape:
-            return self.dtype.itemsize  # scalar
-
-        # Calculate the highest address accessed
-        max_index = self.storage_offset
-        for dim_size, dim_stride in zip(self.shape, self.stride):
-            if dim_size > 1:
-                max_index += (dim_size - 1) * abs(dim_stride)
-
-        return (max_index + 1) * self.dtype.itemsize
-
     @classmethod
     def from_remote_tensor(cls, tensor: torch.Tensor) -> "TensorMetadata":
         """Create metadata from a remote tensor."""
@@ -136,7 +120,6 @@ class TensorMetadata:
             "stride": list(self.stride),
             "storage_offset": self.storage_offset,
             "dtype": str(self.dtype).split(".")[-1],  # e.g., "float32"
-            "nelem_in_bytes": self.nelem_in_bytes,
         }
 
         if self.storage_id is not None:
