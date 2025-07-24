@@ -45,20 +45,6 @@ GPU_CONFIG = {
 
 def create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
     """
-    Create a Modal app and server class for a specific GPU type and machine.
-
-    Args:
-        gpu_type: The GPU type (e.g., "T4", "A100-40GB")
-        machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
-
-    Returns:
-        Tuple of (modal_app, server_class) for the specified device
-    """
-    return _create_modal_app_for_gpu(gpu_type, machine_id)
-
-
-def _create_modal_app_for_gpu(gpu_type: str, machine_id: str) -> Tuple[modal.App, Any]:
-    """
     Create a Modal app and class for a specific GPU type and device.
 
     Args:
