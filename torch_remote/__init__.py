@@ -57,7 +57,7 @@ def _create_module() -> types.ModuleType:
         Returns:
             Number of remote devices available
         """
-        return driver.exec("device_count")
+        return driver.device_count()
 
     def is_available() -> bool:
         """Check if remote device support is available.
@@ -67,67 +67,89 @@ def _create_module() -> types.ModuleType:
         """
         return True
 
-    def current_device() -> int:
-        """Get the current remote device index.
 
-        Returns:
-            Index of the currently selected remote device
-        """
-        return torch.accelerator.current_device_index()
-
-    def get_rng_state(device: Union[str, int, torch.device] = "remote") -> torch.Tensor:
+    def get_rng_state(device: Union[int, torch.device]) -> torch.Tensor:
         """Get the random number generator state for a remote device.
 
         Args:
-            device: Remote device to get RNG state from
+            device: Remote device index or torch.device to get RNG state from
 
         Returns:
             Tensor containing the RNG state
         """
-        if isinstance(device, str):
-            device = torch.device(device)
-        elif isinstance(device, int):
-            device = torch.device("remote", device)
-        idx = device.index
-        if idx is None:
-            idx = current_device()
+        if isinstance(device, int):
+            idx = device
+        elif isinstance(device, torch.device):
+            if device.index is None:
+                raise ValueError("Device index must be specified for remote devices")
+            idx = device.index
+        else:
+            raise TypeError("Device must be int index or torch.device with index")
+
         default_generator = torch_remote._C._get_default_generator(idx)
         return default_generator.get_state()
 
     def set_rng_state(
-        new_state: torch.Tensor, device: Union[str, int, torch.device] = "remote"
+        new_state: torch.Tensor, device: Union[int, torch.device]
     ) -> None:
         """Set the random number generator state for a remote device.
 
         Args:
             new_state: Tensor containing the new RNG state
-            device: Remote device to set RNG state for
+            device: Remote device index or torch.device to set RNG state for
         """
-        if isinstance(device, str):
-            device = torch.device(device)
-        elif isinstance(device, int):
-            device = torch.device("remote", device)
-        idx = device.index
-        if idx is None:
-            idx = current_device()
+        if isinstance(device, int):
+            idx = device
+        elif isinstance(device, torch.device):
+            if device.index is None:
+                raise ValueError("Device index must be specified for remote devices")
+            idx = device.index
+        else:
+            raise TypeError("Device must be int index or torch.device with index")
+
         default_generator = torch_remote._C._get_default_generator(idx)
         default_generator.set_state(new_state)
 
-    def initial_seed() -> int:
+    def initial_seed(device: Union[int, torch.device]) -> int:
+        """Get the initial seed for a remote device.
+
+        Args:
+            device: Remote device index or torch.device to get initial seed from
+
+        Returns:
+            Initial seed value
+        """
         _lazy_init()
-        idx = current_device()
+        if isinstance(device, int):
+            idx = device
+        elif isinstance(device, torch.device):
+            if device.index is None:
+                raise ValueError("Device index must be specified for remote devices")
+            idx = device.index
+        else:
+            raise TypeError("Device must be int index or torch.device with index")
+
         default_generator = torch_remote._C._get_default_generator(idx)
         return default_generator.initial_seed()
 
-    def manual_seed(seed: int) -> None:
-        """Set the random seed for the current remote device.
+    def manual_seed(seed: int, device: Union[int, torch.device]) -> None:
+        """Set the random seed for a remote device.
 
         Args:
             seed: Random seed value
+            device: Remote device index or torch.device to set seed for
         """
         seed = int(seed)
 
-        idx = current_device()
+        if isinstance(device, int):
+            idx = device
+        elif isinstance(device, torch.device):
+            if device.index is None:
+                raise ValueError("Device index must be specified for remote devices")
+            idx = device.index
+        else:
+            raise TypeError("Device must be int index or torch.device with index")
+
         default_generator = torch_remote._C._get_default_generator(idx)
         default_generator.manual_seed(seed)
 
@@ -160,7 +182,6 @@ def _create_module() -> types.ModuleType:
     module.is_initialized = is_initialized  # type: ignore[assignment]
 
     module.device_count = device_count  # type: ignore[assignment]
-    module.current_device = current_device  # type: ignore[assignment]
     module.get_rng_state = get_rng_state  # type: ignore[assignment]
     module.set_rng_state = set_rng_state  # type: ignore[assignment]
     module.initial_seed = initial_seed  # type: ignore[assignment]
