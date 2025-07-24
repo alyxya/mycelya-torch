@@ -41,7 +41,6 @@ class RemoteOrchestrator:
         """Get the active client for a specific machine."""
         return machine._client
 
-
     def execute_remote_aten_operation(
         self,
         op_name: str,
@@ -93,7 +92,6 @@ class RemoteOrchestrator:
 
         log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata boundary")
 
-
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         if remote_tensor.device.type != "remote":
@@ -134,7 +132,6 @@ class RemoteOrchestrator:
 
         # Convert bytes back to CPU tensor using metadata
         return metadata.to_cpu_tensor_from_bytes(tensor_data)
-
 
     def remove_tensor_from_remote(
         self, storage_id: int, machine: "RemoteMachine"
