@@ -425,7 +425,7 @@ def _handle_scalar_operation(op: torch._ops.OpOverload, *args: Any, **kwargs: An
 
 def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
-    from ._tensor_utils import TensorMetadataConverter
+    from ._tensor_utils import args_to_metadata_with_placeholders, tensor_to_metadata
     
     op_name = op.overloadpacket._qualified_op_name
     
@@ -530,14 +530,14 @@ def _execute_remote_operation(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
 
 def _execute_non_tensor_result(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], meta_result: Any) -> Any:
     """Handle operations that return non-tensor results."""
-    from ._tensor_utils import TensorMetadataConverter
+    from ._tensor_utils import args_to_metadata_with_placeholders, tensor_to_metadata
     
     op_name = op.overloadpacket._qualified_op_name
     log.debug(f"Non-tensor result from {op_name}, executing remotely")
     
     # Use the clean abstraction - convert tensors to metadata first
     processed_args, processed_kwargs, input_metadata = (
-        TensorMetadataConverter.args_to_metadata_with_placeholders(
+        args_to_metadata_with_placeholders(
             args, kwargs, operation_context=op_name
         )
     )
@@ -629,7 +629,7 @@ def _create_new_output_tensor(meta_output: torch.Tensor, remote_device: torch.de
 
 def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], output_tensors: List) -> None:
     """Execute the operation remotely using the orchestrator."""
-    from ._tensor_utils import TensorMetadataConverter
+    from ._tensor_utils import args_to_metadata_with_placeholders, tensor_to_metadata
     
     op_name = op.overloadpacket._qualified_op_name
     
@@ -637,14 +637,14 @@ def _execute_on_remote_device(op: torch._ops.OpOverload, args: Tuple[Any, ...], 
     
     # Convert tensors to metadata at PyTorch boundary (early conversion)
     processed_args, processed_kwargs, input_metadata = (
-        TensorMetadataConverter.args_to_metadata_with_placeholders(
+        args_to_metadata_with_placeholders(
             args, kwargs, operation_context=op_name
         )
     )
     
     # Convert output tensors to metadata as well
     output_metadata = [
-        TensorMetadataConverter.tensor_to_metadata(tensor, f"{op_name}_output")
+        tensor_to_metadata(tensor, f"{op_name}_output")
         for tensor in output_tensors
     ]
     
@@ -703,7 +703,8 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         # Deserialize the tensor data as contiguous representation
         # Since we now serialize with .contiguous(), the deserialized tensor contains exactly
         # the data that should be in the result tensor - no view reconstruction needed
-        result = orchestrator._deserialize_tensor(tensor_data)
+        from ._tensor_utils import deserialize_tensor
+        result = deserialize_tensor(tensor_data)
         # Verify the result has the expected shape (it should match the remote tensor's shape)
         if result.size() != from_.size():
             log.warning(
@@ -868,7 +869,8 @@ def _local_scalar_dense(self: torch.Tensor):
             "Cannot retrieve scalar value: remote execution not available"
         )
 
-    cpu_tensor = orchestrator._deserialize_tensor(tensor_data)
+    from ._tensor_utils import deserialize_tensor
+    cpu_tensor = deserialize_tensor(tensor_data)
 
     # Call item() on the CPU tensor to get the Python scalar
     return cpu_tensor.item()

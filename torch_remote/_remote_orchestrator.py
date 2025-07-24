@@ -16,12 +16,8 @@ import torch
 from ._logging import get_logger
 from ._tensor_utils import (
     TensorMetadata,
-    TensorMetadataConverter,
     remote_tensor_to_cpu,
-    cpu_tensor_to_remote,
     cpu_tensor_to_bytes,
-    deserialize_tensor,
-    get_tensor_metadata,
 )
 from ._storage import get_machine_for_storage
 from .device import RemoteMachine
@@ -112,9 +108,14 @@ class RemoteOrchestrator:
         output_indices = set(range(len(input_metadata), len(total_metadata)))
 
         # Convert metadata to serializable dictionaries with operation flags
-        tensor_metadata_dicts = TensorMetadataConverter.metadata_list_to_dicts(
-            total_metadata, input_indices, output_indices
-        )
+        tensor_metadata_dicts = []
+        for i, metadata in enumerate(total_metadata):
+            meta_dict = metadata.to_dict()
+            if i in input_indices:
+                meta_dict["is_input"] = True
+            if i in output_indices:
+                meta_dict["is_output"] = True
+            tensor_metadata_dicts.append(meta_dict)
 
         # Get the machine from first input tensor's storage ID
         if not input_metadata:
@@ -138,23 +139,12 @@ class RemoteOrchestrator:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         return remote_tensor_to_cpu(remote_tensor)
 
-    def _cpu_tensor_to_remote(
-        self, cpu_tensor: torch.Tensor, machine: "RemoteMachine"
-    ) -> torch.Tensor:
-        """Convert CPU tensor to remote tensor."""
-        return cpu_tensor_to_remote(cpu_tensor, machine)
 
     def _serialize_tensor(self, tensor: torch.Tensor) -> bytes:
         """Serialize tensor to bytes, ensuring view data is contiguous."""
         return cpu_tensor_to_bytes(tensor)
 
-    def _deserialize_tensor(self, data: bytes) -> torch.Tensor:
-        """Deserialize tensor from bytes as a contiguous tensor."""
-        return deserialize_tensor(data)
 
-    def _get_tensor_metadata(self, tensor: torch.Tensor) -> Dict[str, Any]:
-        """Get tensor metadata."""
-        return get_tensor_metadata(tensor)
 
     def remove_tensor_from_remote(self, storage_id: int, machine: "RemoteMachine") -> bool:
         """Remove a tensor from remote storage."""

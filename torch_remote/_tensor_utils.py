@@ -288,87 +288,50 @@ def remote_tensor_to_cpu(remote_tensor: torch.Tensor) -> torch.Tensor:
     return metadata.to_cpu_tensor_from_bytes(tensor_data)
 
 
-# ============================================================================
-# Legacy functions that still need updating throughout the codebase
-# ============================================================================
+def args_to_metadata_with_placeholders(args, kwargs, operation_context=None):
+    """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
+    metadata_list = []
+    processed_args = []
+    processed_kwargs = {}
+    
+    # Process args
+    for arg in args:
+        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
+            metadata = TensorMetadata.from_remote_tensor(arg)
+            tensor_index = len(metadata_list)
+            metadata_list.append(metadata)
+            processed_args.append(f"__TENSOR_{tensor_index}")
+        else:
+            processed_args.append(arg)
+    
+    # Process kwargs
+    for key, value in kwargs.items():
+        if isinstance(value, torch.Tensor) and value.device.type == "remote":
+            metadata = TensorMetadata.from_remote_tensor(value)
+            tensor_index = len(metadata_list)
+            metadata_list.append(metadata)
+            processed_kwargs[key] = f"__TENSOR_{tensor_index}"
+        else:
+            processed_kwargs[key] = value
+    
+    return tuple(processed_args), processed_kwargs, metadata_list
 
-def serialize_tensor(tensor: torch.Tensor) -> bytes:
-    """Legacy function - use cpu_tensor_to_bytes() instead."""
-    return cpu_tensor_to_bytes(tensor)
 
-
-def deserialize_tensor(data: bytes) -> torch.Tensor:
-    """Legacy function - use TensorMetadata.to_cpu_tensor_from_bytes() instead."""
-    buffer = io.BytesIO(data)
-    return torch.load(buffer, map_location="cpu", weights_only=False)
-
-
-def get_tensor_metadata(tensor: torch.Tensor) -> Dict[str, Any]:
-    """Legacy function - use TensorMetadata.from_*().to_dict() instead."""
+def tensor_to_metadata(tensor: torch.Tensor, context: str = "default") -> TensorMetadata:
+    """Convert a tensor to metadata."""
     if tensor.device.type == "remote":
-        return TensorMetadata.from_remote_tensor(tensor).to_dict()
+        return TensorMetadata.from_remote_tensor(tensor)
     elif tensor.device.type == "cpu":
-        return TensorMetadata.from_cpu_tensor(tensor).to_dict()
+        return TensorMetadata.from_cpu_tensor(tensor)
     elif tensor.device.type == "meta":
-        return TensorMetadata.from_meta_tensor(tensor).to_dict()
+        return TensorMetadata.from_meta_tensor(tensor)
     else:
         raise ValueError(f"Unsupported device type: {tensor.device.type}")
 
 
-def cpu_tensor_to_remote(cpu_tensor: torch.Tensor, machine) -> torch.Tensor:
-    """Legacy function - this is complex and should be refactored."""
-    raise NotImplementedError("cpu_tensor_to_remote needs to be refactored to use new API")
+def deserialize_tensor(data: bytes) -> torch.Tensor:
+    """Deserialize tensor from bytes."""
+    buffer = io.BytesIO(data)
+    return torch.load(buffer, map_location="cpu", weights_only=False)
 
 
-class TensorMetadataConverter:
-    """Legacy compatibility class - use TensorMetadata methods instead."""
-    
-    @staticmethod
-    def tensor_to_metadata(tensor: torch.Tensor, name: str) -> TensorMetadata:
-        """Convert tensor to metadata."""
-        if tensor.device.type == "remote":
-            return TensorMetadata.from_remote_tensor(tensor)
-        elif tensor.device.type == "cpu":
-            return TensorMetadata.from_cpu_tensor(tensor)
-        elif tensor.device.type == "meta":
-            return TensorMetadata.from_meta_tensor(tensor)
-        else:
-            raise ValueError(f"Unsupported device type: {tensor.device.type}")
-    
-    @staticmethod
-    def metadata_list_to_dicts(
-        metadata_list: list, 
-        include_set=None, 
-        exclude_set=None
-    ) -> list:
-        """Convert list of metadata to list of dicts."""
-        return [meta.to_dict() for meta in metadata_list]
-    
-    @staticmethod
-    def args_to_metadata_with_placeholders(args, kwargs, op_name=None, operation_context=None):
-        """Legacy function - needs refactoring."""
-        metadata_list = []
-        processed_args = []
-        processed_kwargs = {}
-        
-        # Process args
-        for arg in args:
-            if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-                metadata = TensorMetadata.from_remote_tensor(arg)
-                tensor_index = len(metadata_list)
-                metadata_list.append(metadata)
-                processed_args.append(f"__TENSOR_{tensor_index}")
-            else:
-                processed_args.append(arg)
-        
-        # Process kwargs
-        for key, value in kwargs.items():
-            if isinstance(value, torch.Tensor) and value.device.type == "remote":
-                metadata = TensorMetadata.from_remote_tensor(value)
-                tensor_index = len(metadata_list)
-                metadata_list.append(metadata)
-                processed_kwargs[key] = f"__TENSOR_{tensor_index}"
-            else:
-                processed_kwargs[key] = value
-        
-        return tuple(processed_args), processed_kwargs, metadata_list
