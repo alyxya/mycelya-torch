@@ -219,7 +219,7 @@ def create_modal_app_for_gpu(
                 return buffer.getvalue()
 
         @modal.method()
-        def resize_storage(self, storage_id: int, nbytes: int) -> bool:
+        def resize_storage(self, storage_id: int, nbytes: int) -> None:
             """
             Resize a storage to accommodate new byte size.
 
@@ -232,7 +232,7 @@ def create_modal_app_for_gpu(
                 nbytes: The number of bytes needed for the new storage size
 
             Returns:
-                True if resize succeeded, False if storage not found or nbytes <= current size
+                None
             """
             import torch
 
@@ -253,7 +253,7 @@ def create_modal_app_for_gpu(
                         f"Storage {storage_id} resize skipped: "
                         f"nbytes ({nbytes}) <= current_bytes ({current_bytes})"
                     )
-                    return True  # No-op, but success
+                    return  # No-op
 
                 device = old_storage.device
 
@@ -285,10 +285,9 @@ def create_modal_app_for_gpu(
                     f"🔄 Resized storage {storage_id} from {current_bytes} "
                     f"to {nbytes} bytes using tensor.resize_()"
                 )
-                return True
 
         @modal.method()
-        def remove_storage(self, storage_id: int) -> bool:
+        def remove_storage(self, storage_id: int) -> None:
             """
             Remove a storage from the registry.
 
@@ -296,17 +295,17 @@ def create_modal_app_for_gpu(
                 storage_id: The storage ID
 
             Returns:
-                True if removed, False if not found
+                None
             """
             storages, lock = self._get_storages()
 
             with lock:
                 storage_id = int(storage_id)
-                removed = storage_id in storages
-                if removed:
+                if storage_id in storages:
                     del storages[storage_id]
                     log.info(f"🗑️ Removed storage {storage_id}")
-                return removed
+                else:
+                    log.debug(f"Storage {storage_id} not found for removal")
 
         @modal.method()
         def execute_aten_operation(

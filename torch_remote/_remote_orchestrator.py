@@ -140,7 +140,8 @@ class RemoteOrchestrator:
         try:
             client = self._get_device_client(machine)
             if client and client.is_running():
-                return client.remove_storage(storage_id)
+                client.remove_storage(storage_id)
+                return True
             return False
         except Exception as e:
             log.warning(f"Failed to remove storage {storage_id}: {e}")

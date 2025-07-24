@@ -265,17 +265,11 @@ class StorageRegistry:
             # Get client and call resize_storage
             client = device._client
             if client and client.is_running():
-                success = client.resize_storage(storage_id, nbytes)
-                if success:
-                    log.info(
-                        f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes"
-                    )
-                    return True
-                else:
-                    log.warning(
-                        f"❌ Remote resize returned false for storage {storage_id}"
-                    )
-                    return False
+                client.resize_storage(storage_id, nbytes)
+                log.info(
+                    f"✅ Successfully initiated resize of remote storage {storage_id} to {nbytes} bytes"
+                )
+                return True
             else:
                 log.warning(f"Client not available for storage {storage_id} resize")
                 return False

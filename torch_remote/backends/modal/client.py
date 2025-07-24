@@ -94,7 +94,7 @@ class ModalClient(ClientInterface):
             )
 
         try:
-            self._server_instance.create_storage.remote(nbytes, storage_id, lazy)
+            self._server_instance.create_storage.spawn(nbytes, storage_id, lazy)
         except Exception as e:
             raise RuntimeError(f"Failed to create storage {storage_id}: {e}") from e
 
@@ -114,7 +114,7 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._server_instance.update_storage.remote(tensor_data, storage_id)
+        self._server_instance.update_storage.spawn(tensor_data, storage_id)
 
     def get_storage_data(
         self,
@@ -146,7 +146,7 @@ class ModalClient(ClientInterface):
             storage_id, shape, stride, storage_offset, dtype
         )
 
-    def resize_storage(self, storage_id: int, nbytes: int) -> bool:
+    def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """
         Resize a storage on the remote machine.
 
@@ -155,14 +155,14 @@ class ModalClient(ClientInterface):
             nbytes: The number of bytes needed for the new storage size
 
         Returns:
-            True if resize succeeded, False if storage not found or nbytes <= current size
+            None
         """
         if not self.is_running():
             raise RuntimeError(
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        return self._server_instance.resize_storage.remote(storage_id, nbytes)
+        self._server_instance.resize_storage.spawn(storage_id, nbytes)
 
     def execute_aten_operation(
         self,
@@ -193,11 +193,11 @@ class ModalClient(ClientInterface):
 
         storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
         log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")
-        return self._server_instance.execute_aten_operation.remote(
+        self._server_instance.execute_aten_operation.spawn(
             op_name, tensor_metadata, args, kwargs, self.machine_id
         )
 
-    def remove_storage(self, storage_id: int) -> bool:
+    def remove_storage(self, storage_id: int) -> None:
         """
         Remove a storage from the remote machine.
 
@@ -205,14 +205,14 @@ class ModalClient(ClientInterface):
             storage_id: The storage ID
 
         Returns:
-            True if removed, False if not found
+            None
         """
         if not self.is_running():
             raise RuntimeError(
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        return self._server_instance.remove_storage.remote(storage_id)
+        self._server_instance.remove_storage.spawn(storage_id)
 
     def __enter__(self):
         """Context manager entry - starts the machine."""

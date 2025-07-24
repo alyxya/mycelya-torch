@@ -167,7 +167,7 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def resize_storage(self, storage_id: int, nbytes: int) -> bool:
+    def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """
         Resize a storage to accommodate new byte size.
 
@@ -179,12 +179,12 @@ class ClientInterface(ABC):
             nbytes: The number of bytes needed for the new storage size
 
         Returns:
-            True if resize succeeded, False if storage not found or nbytes <= current size
+            None
         """
         pass
 
     @abstractmethod
-    def remove_storage(self, storage_id: int) -> bool:
+    def remove_storage(self, storage_id: int) -> None:
         """
         Remove a storage from the remote machine.
 
@@ -192,7 +192,7 @@ class ClientInterface(ABC):
             storage_id: The storage ID to remove
 
         Returns:
-            True if storage was removed, False if not found
+            None
         """
         pass
 
