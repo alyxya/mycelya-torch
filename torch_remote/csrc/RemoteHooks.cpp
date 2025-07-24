@@ -171,8 +171,8 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   c10::Stream
   getStreamFromGlobalPool(c10::Device d,
                           bool isHighPriority = false) const override {
-    // For simplicity, just return a new stream
-    return getNewStream(d, isHighPriority ? 1 : 0);
+    // Default to stream ID 0 like getDefaultStream
+    return c10::Stream(c10::Stream::UNSAFE, d, 0);
   }
 
   c10::Stream getNewStream(c10::Device d, int priority = 0) const override {
