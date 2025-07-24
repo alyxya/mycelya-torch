@@ -50,23 +50,6 @@ def _create_module() -> types.ModuleType:
     """
     module = types.ModuleType("_RemoteMod")
 
-    class device:
-        r"""Context-manager that changes the selected device.
-
-        Args:
-            device (torch.device or int): device index to select. It's a no-op if
-                this argument is a negative integer or ``None``.
-        """
-
-        def __init__(self, device: Union[torch.device, int, str]) -> None:
-            self.idx = torch.accelerator._get_device_index(device, optional=True)
-            self.prev_idx = -1
-
-        def __enter__(self) -> None:
-            self.prev_idx = driver.exec("exchange_device", self.idx)
-
-        def __exit__(self, type: Any, value: Any, traceback: Any) -> None:
-            self.idx = driver.exec("unchecked_set_device", self.prev_idx)
 
     def device_count() -> int:
         """Get the number of available remote devices.
@@ -163,8 +146,6 @@ def _create_module() -> types.ModuleType:
     def is_initialized() -> bool:
         return module._initialized
 
-    def _is_in_bad_fork() -> bool:
-        return False
 
     def _lazy_init() -> None:
         if is_initialized():
@@ -178,12 +159,10 @@ def _create_module() -> types.ModuleType:
     module._lazy_init = _lazy_init  # type: ignore[assignment]
     module.is_initialized = is_initialized  # type: ignore[assignment]
 
-    module.device = device  # type: ignore[assignment]
     module.device_count = device_count  # type: ignore[assignment]
     module.current_device = current_device  # type: ignore[assignment]
     module.get_rng_state = get_rng_state  # type: ignore[assignment]
     module.set_rng_state = set_rng_state  # type: ignore[assignment]
-    module._is_in_bad_fork = _is_in_bad_fork  # type: ignore[assignment]
     module.initial_seed = initial_seed  # type: ignore[assignment]
     module.manual_seed = manual_seed  # type: ignore[assignment]
     module.manual_seed_all = manual_seed_all  # type: ignore[assignment]
