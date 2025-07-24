@@ -122,39 +122,6 @@ class TensorMetadata:
             storage_id=data.get("storage_id"),
         )
 
-    def to_remote_tensor(self, storage_id: int) -> torch.Tensor:
-        """
-        Create a remote tensor from this metadata using the given storage ID.
-
-        Args:
-            storage_id: Storage ID to use for the tensor (device is implied by storage_id)
-
-        Returns:
-            Remote tensor with this metadata
-        """
-        # Get device from storage_id using the device daemon registry directly
-        from ._device_daemon import driver
-
-        device_index = driver.registry_obj.get_storage_device(storage_id)
-        if device_index is None:
-            raise ValueError(
-                f"Storage ID {storage_id} not found or not associated with any device"
-            )
-
-        device = torch.device("remote", device_index)
-
-        # Create tensor with the storage ID as data pointer
-        storage = torch.UntypedStorage.from_buffer(
-            bytearray(self.nelem_in_bytes), dtype=torch.uint8
-        )
-        storage._set_cdata(storage_id)  # Use storage_id as data pointer
-
-        # Create tensor from storage
-        tensor = torch.tensor([], dtype=self.dtype, device=device)
-        tensor = tensor.set_(storage, self.storage_offset, self.shape, self.stride)
-
-        return tensor
-
     def to_meta_tensor(self) -> torch.Tensor:
         """Create a meta tensor from this metadata."""
         # Create meta tensor with same shape and dtype
