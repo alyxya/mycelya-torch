@@ -235,31 +235,3 @@ class ModalClient(ClientInterface):
 
 
 # PytorchServer and app creation logic is in _torch_remote_modal.modal_app
-
-
-def get_modal_app_for_device(device) -> ModalClient:
-    """
-    Get the ModalClient for a specific machine.
-
-    Args:
-        device: The RemoteMachine to get the client for
-
-    Returns:
-        ModalClient for the machine's GPU type
-    """
-    if hasattr(device, "provider") and device.provider.value != "modal":
-        raise ValueError(f"Device provider {device.provider.value} is not Modal")
-
-    return ModalClient(
-        device.gpu_type.value,
-        device.machine_id,
-        device.timeout,
-        device.retries,
-    )
-
-
-def clear_app_cache():
-    """Clear the app cache."""
-    from _torch_remote_modal.modal_app import _gpu_apps
-
-    _gpu_apps.clear()

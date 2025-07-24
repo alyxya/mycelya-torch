@@ -513,9 +513,3 @@ def create_modal_app_for_gpu(
 
     _gpu_apps[machine_id] = (app, PytorchServer)
     return app, PytorchServer
-
-
-def clear_app_cache():
-    """Clear the app cache."""
-    global _gpu_apps
-    _gpu_apps.clear()
