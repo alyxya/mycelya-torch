@@ -3,6 +3,8 @@
 
 from typing import Any, Callable, Dict, Optional
 
+import torch
+
 from ._logging import get_logger
 
 log = get_logger(__name__)
@@ -82,20 +84,15 @@ class DeviceRegistry:
 
         return self._current_streams.get(device_idx, 0)
 
-    def get_default_stream(self, device_idx: int) -> int:
+    def get_default_stream(self, device_idx: int) -> torch.Stream:
         """Get default stream for device"""
-        # Default stream is always stream 0 for remote devices
-        return 0
+        # C++ expects c10::Stream object, so return torch.Stream
+        return torch.Stream(device=f"remote:{device_idx}")
 
-    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> int:
+    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> torch.Stream:
         """Get stream from global pool"""
-        # For simplicity, just return a counter-based stream ID
-        if device_idx not in self._stream_counter:
-            self._stream_counter[device_idx] = 1
-
-        stream_id = self._stream_counter[device_idx]
-        self._stream_counter[device_idx] += 1
-        return stream_id
+        # C++ expects c10::Stream object, so return torch.Stream
+        return torch.Stream(device=f"remote:{device_idx}")
 
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
         """Get new stream for device"""
@@ -106,10 +103,14 @@ class DeviceRegistry:
         self._stream_counter[device_idx] += 1
         return stream_id
 
-    def exchange_stream(self, stream_id: int) -> int:
+    def exchange_stream(self, stream: torch.Stream) -> int:
         """Exchange current stream"""
-        old_stream = self._current_streams.get(self._current_device, 0)
-        self._current_streams[self._current_device] = stream_id
+        # Extract device index and stream ID from the torch.Stream object
+        device_idx = stream.device.index if stream.device.index is not None else 0
+        stream_id = stream.stream_id
+        
+        old_stream = self._current_streams.get(device_idx, 0)
+        self._current_streams[device_idx] = stream_id
         return old_stream
 
 
@@ -208,11 +209,11 @@ class Driver:
         return self.registry_obj.get_stream(device_idx)
 
     @register(registry)
-    def get_default_stream(self, device_idx: int) -> int:
+    def get_default_stream(self, device_idx: int) -> torch.Stream:
         return self.registry_obj.get_default_stream(device_idx)
 
     @register(registry)
-    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> int:
+    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> torch.Stream:
         return self.registry_obj.get_stream_from_global_pool(device_idx, high_priority)
 
     @register(registry)
@@ -220,8 +221,8 @@ class Driver:
         return self.registry_obj.get_new_stream(device_idx, priority)
 
     @register(registry)
-    def exchange_stream(self, stream_id: int) -> int:
-        return self.registry_obj.exchange_stream(stream_id)
+    def exchange_stream(self, stream: torch.Stream) -> int:
+        return self.registry_obj.exchange_stream(stream)
 
     # Event operations (placeholders for now)
     @register(registry)
