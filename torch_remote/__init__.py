@@ -34,8 +34,8 @@ def impl_factory(name: str):
     return _method_impl
 
 
-# Load the C++ Module
-import torch_remote._C  # isort:skip # type: ignore[import] # noqa: F401,E402
+# Load the C++ Module (must come after impl_factory definition)
+import torch_remote._C  # noqa: E402
 
 
 def _create_module() -> types.ModuleType:
@@ -195,12 +195,10 @@ def _create_module() -> types.ModuleType:
 torch.utils.rename_privateuse1_backend("remote")
 torch._register_device_module("remote", _create_module())
 
-
-# Import device management
 # Import ATen implementations to ensure PyTorch registrations are executed
-import torch_remote._aten_impl  # noqa: F401,E402
+import torch_remote._aten_impl  # noqa: E402
 
-# Import logging utilities
+# Import public API components
 from ._logging import (  # noqa: E402
     disable_logging,
     enable_debug_logging,
