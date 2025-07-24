@@ -2,24 +2,322 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Storage management for tracking storage-to-machine mappings.
+Storage management for torch-remote.
 
-This module manages the mapping between storage IDs and remote machines:
-- Storage ID to machine resolution
+This module manages storage IDs and their lifecycle:
+- Storage ID generation and tracking
+- Storage-to-machine mappings and resolution
 - Cross-device operation validation
+- Remote storage creation and cleanup
 - Storage statistics and information
-
-Handles the local mapping of storage IDs to devices and provides validation
-for cross-device operations to ensure tensors are on compatible machines.
-Storage lifecycle (creation/destruction) is handled by the C++ allocator.
 """
 
-from typing import List, Set
+import random
+from contextlib import contextmanager
+from typing import Dict, List, Optional, Set
 
 from ._logging import get_logger
 from .device import RemoteMachine, get_device_registry
 
 log = get_logger(__name__)
+
+# Constants for storage ID generation
+MAX_ID_GENERATION_ATTEMPTS = 100
+MIN_STORAGE_ID = 1
+MAX_STORAGE_ID = 2**63 - 1  # 64-bit signed integer max
+
+
+@contextmanager
+def lazy_allocation_mode():
+    """Context manager to enable lazy allocation for storage creation within the context"""
+    global _lazy_allocation_enabled
+    old_value = _lazy_allocation_enabled
+    _lazy_allocation_enabled = True
+    try:
+        yield
+    finally:
+        _lazy_allocation_enabled = old_value
+
+
+# Global flag for lazy allocation mode
+_lazy_allocation_enabled = False
+
+
+class StorageRegistry:
+    """
+    Simplified registry to track remote storage IDs only.
+
+    Key concepts:
+    - storage_id: Identifies remote memory allocation on clients
+    - No local device simulation or memory allocation
+    - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
+    - Storage cleanup: Handles remote storage cleanup when tensors are freed
+    """
+
+    def __init__(self) -> None:
+        # Storage ID tracking - maps storage to device
+        self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
+
+        # Set for tracking all generated storage IDs to avoid duplicates
+        self.generated_storage_ids: Set[int] = set()
+
+        log.info("🚀 Storage registry initialized")
+
+    def generate_storage_id(self) -> int:
+        """
+        Generate a unique storage ID with duplicate validation.
+
+        Returns:
+            int: A unique 64-bit storage ID
+        """
+        global MAX_ID_GENERATION_ATTEMPTS
+
+        for attempt in range(1, MAX_ID_GENERATION_ATTEMPTS + 1):
+            # Generate a random 64-bit integer within the valid range
+            storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
+
+            # Check if this ID is already in use
+            if storage_id not in self.generated_storage_ids:
+                self.generated_storage_ids.add(storage_id)
+                log.info(f"🆔 GENERATED Storage ID: {storage_id}")
+                return storage_id
+            else:
+                log.debug(
+                    f"Generated duplicate storage ID {storage_id}, retrying (attempt {attempt})"
+                )
+
+        raise RuntimeError(
+            f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts"
+        )
+
+    def create_storage_with_id(
+        self, storage_id: int, nbytes: int, device_index: int, lazy: bool = False
+    ) -> bool:
+        """Create remote storage with the given ID and return success status"""
+        storage_id = int(storage_id)
+
+        global _lazy_allocation_enabled
+        if _lazy_allocation_enabled:
+            lazy = True
+
+        # Always track the storage ID for all tensors
+        self.storage_id_to_device[storage_id] = device_index
+
+        # Register the storage with the client immediately for all allocations
+        try:
+            device_registry = get_device_registry()
+            device = device_registry.get_device_by_index(device_index)
+            if device is not None:
+                client = device._client
+                if client:
+                    try:
+                        # Create storage with exact byte size
+                        client.create_storage(nbytes, storage_id, lazy)
+                        log.info(
+                            f"Registered storage {storage_id} with client "
+                            f"({nbytes} bytes, lazy={lazy})"
+                        )
+                    except Exception as e:
+                        log.warning(f"Failed to register storage {storage_id} with client: {e}")
+                        return False
+        except Exception as e:
+            log.warning(f"Failed to register storage {storage_id} with client: {e}")
+            return False
+
+        log.info(f"Registered storage ID {storage_id} on device {device_index}")
+        return True
+
+    def get_storage_device(self, storage_id: int) -> Optional[int]:
+        """Get device index for a storage ID"""
+        storage_id = int(storage_id)
+        return self.storage_id_to_device.get(storage_id)
+
+    def free_storage_with_id(self, storage_id: int) -> bool:
+        """Free storage by storage ID and perform remote cleanup"""
+        storage_id = int(storage_id)
+        if storage_id == 0:  # Empty storage
+            return True
+
+        # Get device information before cleanup
+        device_idx = self.storage_id_to_device.get(storage_id)
+
+        if storage_id in self.storage_id_to_device:
+            # Clean up storage tracking
+            self.storage_id_to_device.pop(storage_id, None)
+            self.generated_storage_ids.discard(storage_id)
+
+            # Remote cleanup if device information is available
+            if device_idx is not None:
+                log.info(f"Storage {storage_id} freed, initiating remote cleanup")
+                self._cleanup_remote_storage(storage_id, device_idx)
+            else:
+                log.debug(
+                    f"No device index found for storage {storage_id}, "
+                    "skipping remote cleanup"
+                )
+
+            log.info(f"Freed storage ID {storage_id}")
+            return True
+        else:
+            log.warning(f"Attempted to free unknown storage {storage_id}")
+            return False
+
+    def _cleanup_remote_storage(self, storage_id: int, device_idx: int) -> None:
+        """Clean up storage on remote GPU device"""
+        try:
+            # Import here to avoid circular imports
+            from ._remote_orchestrator import remote_orchestrator
+
+            # Get the device registry to find the machine
+            orchestrator = remote_orchestrator
+            if orchestrator is None:
+                log.warning(
+                    f"No remote orchestrator available for storage {storage_id} cleanup"
+                )
+                return
+
+            device_registry = get_device_registry()
+            device = device_registry.get_device_by_index(device_idx)
+            if device is None:
+                log.warning(
+                    f"No device found for index {device_idx} during storage "
+                    f"{storage_id} cleanup"
+                )
+                return
+
+            # Call cleanup on orchestrator
+            log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
+            success = orchestrator.remove_tensor_from_remote(storage_id, device)
+
+            if success:
+                log.info(
+                    f"✅ Successfully cleaned up remote storage {storage_id} "
+                    f"on device {device_idx}"
+                )
+            else:
+                log.warning(
+                    f"❌ Remote cleanup returned false for storage {storage_id} "
+                    f"on device {device_idx}"
+                )
+
+        except Exception as e:
+            log.error(
+                f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}"
+            )
+
+    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> None:
+        """Copy data between storages identified by their storage IDs"""
+        # Get device indices
+        dest_device = self.storage_id_to_device.get(int(dest_id))
+        src_device = self.storage_id_to_device.get(int(src_id))
+
+        if dest_device is None or src_device is None:
+            raise RuntimeError(
+                f"Copy failed: storage IDs {dest_id} or {src_id} not found"
+            )
+
+        # For storage ID system, copy operations should go through remote
+        # orchestrator for proper device coordination
+        log.debug(f"Copy requested: {src_id} -> {dest_id} ({count} bytes)")
+
+        if dest_device != src_device:
+            raise RuntimeError(
+                f"Cross-device copy not supported: "
+                f"dest device {dest_device}, src device {src_device}"
+            )
+
+        # Same device copy - this could be handled by the remote client
+        # For now, we'll let the remote side handle it through proper tensor operations
+        log.debug(
+            f"Same-device copy: {src_id} -> {dest_id} on device {dest_device}"
+        )
+
+    def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
+        """Resize remote storage by storage ID"""
+        try:
+            storage_id = int(storage_id)
+
+            # Get device index for this storage
+            device_idx = self.get_storage_device(storage_id)
+            if device_idx is None:
+                log.warning(f"No device found for storage {storage_id}")
+                return False
+
+            # Import here to avoid circular imports
+            from ._remote_orchestrator import remote_orchestrator
+
+            # Get the device registry to find the machine
+            orchestrator = remote_orchestrator
+            if orchestrator is None:
+                log.warning(
+                    f"No remote orchestrator available for storage {storage_id} resize"
+                )
+                return False
+
+            device_registry = get_device_registry()
+            device = device_registry.get_device_by_index(device_idx)
+            if device is None:
+                log.warning(
+                    f"No device found for index {device_idx} during storage {storage_id} resize"
+                )
+                return False
+
+            # Get client and call resize_storage
+            client = device._client
+            if client and client.is_running():
+                success = client.resize_storage(storage_id, nbytes)
+                if success:
+                    log.info(
+                        f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes"
+                    )
+                    return True
+                else:
+                    log.warning(
+                        f"❌ Remote resize returned false for storage {storage_id}"
+                    )
+                    return False
+            else:
+                log.warning(f"Client not available for storage {storage_id} resize")
+                return False
+
+        except Exception as e:
+            log.warning(f"Failed to resize remote storage {storage_id}: {e}")
+            return False
+
+
+# Global storage registry instance
+_storage_registry = StorageRegistry()
+
+
+# Storage registry access functions
+def generate_storage_id() -> int:
+    """Generate a unique storage ID."""
+    return _storage_registry.generate_storage_id()
+
+
+def create_storage_with_id(storage_id: int, nbytes: int, device_index: int, lazy: bool = False) -> bool:
+    """Create remote storage with the given ID."""
+    return _storage_registry.create_storage_with_id(storage_id, nbytes, device_index, lazy)
+
+
+def free_storage_with_id(storage_id: int) -> bool:
+    """Free storage by storage ID."""
+    return _storage_registry.free_storage_with_id(storage_id)
+
+
+def get_storage_device(storage_id: int) -> Optional[int]:
+    """Get device index for a storage ID."""
+    return _storage_registry.get_storage_device(storage_id)
+
+
+def copy_data_by_id(dest_id: int, src_id: int, count: int) -> None:
+    """Copy data between storages identified by their storage IDs."""
+    return _storage_registry.copy_data_by_id(dest_id, src_id, count)
+
+
+def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:
+    """Resize remote storage by storage ID."""
+    return _storage_registry.resize_storage_by_id(storage_id, nbytes)
 
 
 def get_machine_for_storage(storage_id: int) -> RemoteMachine:
@@ -34,11 +332,8 @@ def get_machine_for_storage(storage_id: int) -> RemoteMachine:
     Raises:
         RuntimeError: If no device or machine found for storage
     """
-    # Import here to avoid circular imports
-    from . import driver
-
     # Get device index for this storage
-    device_idx = driver.exec("get_storage_device", storage_id)
+    device_idx = get_storage_device(storage_id)
     if device_idx is None:
         raise RuntimeError(f"No device found for storage {storage_id}")
 
@@ -61,9 +356,7 @@ def validate_storage_exists(storage_id: int) -> bool:
         True if storage exists, False otherwise
     """
     try:
-        from . import driver
-
-        device_idx = driver.exec("get_storage_device", storage_id)
+        device_idx = get_storage_device(storage_id)
         return device_idx is not None
     except Exception as e:
         log.warning(f"Failed to validate storage {storage_id}: {e}")

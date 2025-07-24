@@ -1,40 +1,11 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import contextvars
-import random
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, Optional
 
 from ._logging import get_logger
 
-# Context variable to track when lazy allocation should be used
-_lazy_allocation_context = contextvars.ContextVar("lazy_allocation", default=False)
-
-
-def lazy_allocation_context():
-    """Context manager to enable lazy allocation for storage creation within the context"""
-    from contextlib import contextmanager
-
-    @contextmanager
-    def _context():
-        token = _lazy_allocation_context.set(True)
-        try:
-            yield
-        finally:
-            _lazy_allocation_context.reset(token)
-
-    return _context()
-
-
 log = get_logger(__name__)
-
-# Simple storage ID tracking for remote storages
-# No local device simulation - remote storages exist purely as IDs
-
-# Constants for storage ID generation
-MIN_STORAGE_ID = 1
-MAX_STORAGE_ID = 2**64 - 1
-MAX_ID_GENERATION_ATTEMPTS = 1000
 
 
 def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
@@ -48,208 +19,33 @@ def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
         registry: Dictionary to register the function in
 
     Returns:
-        Decorator function that registers and returns the original function
+        Decorator function that registers the wrapped function
     """
 
-    def func(fn: Callable) -> Callable:
-        registry[fn.__name__] = fn
-        return fn
+    def decorator(func: Callable) -> Callable:
+        registry[func.__name__] = func
+        return func
 
-    return func
+    return decorator
 
 
-class RemoteStorageRegistry:
+class DeviceRegistry:
     """
-    Simplified registry to track remote storage IDs only.
+    Registry for device and stream management in torch-remote.
 
-    Architecture:
-    - storage_id: Identifies remote memory allocation on clients
-    - PyTorch tensors: Handle local identity and metadata naturally
-    - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
-    - Storage cleanup: Handles remote storage cleanup when tensors are freed
+    Handles:
+    - Current device tracking
+    - Stream management for each device
+    - Device count and validation
     """
 
     def __init__(self) -> None:
-        # Storage ID tracking - maps storage to device
-        self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
-
-        # Set for tracking all generated storage IDs to avoid duplicates
-        self.generated_storage_ids: Set[int] = set()
-
         # Current device tracking
         self._current_device: int = 0
 
         # Stream management
         self._current_streams: Dict[int, int] = {}  # device_idx -> stream_id
         self._stream_counter: Dict[int, int] = {}  # device_idx -> counter
-
-    def generate_storage_id(self) -> int:
-        """
-        Generate a unique storage ID with duplicate validation.
-
-        Returns:
-            int: A unique 64-bit storage ID
-        """
-        # Generate unique 64-bit integer IDs
-        # Use non-zero values to avoid confusion with null pointers
-        attempt = 0
-
-        while attempt < MAX_ID_GENERATION_ATTEMPTS:
-            # Generate a random 64-bit integer
-            storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
-
-            # Check if this ID is already used
-            if storage_id not in self.generated_storage_ids:
-                self.generated_storage_ids.add(storage_id)
-                log.info(f"🆔 GENERATED Storage ID: {storage_id}")
-                return storage_id
-
-            attempt += 1
-            log.warning(
-                f"Generated duplicate storage ID {storage_id}, retrying (attempt {attempt})"
-            )
-
-        # If we couldn't generate a unique ID after MAX_ID_GENERATION_ATTEMPTS, raise an error
-        raise RuntimeError(
-            f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts"
-        )
-
-    def create_storage_with_id(
-        self, storage_id: int, nbytes: int, device_index: int, lazy: bool = False
-    ) -> bool:
-        """Create remote storage with the given ID and return success status"""
-        storage_id = int(storage_id)
-
-        # Check if lazy allocation is enabled in the current context
-        if not lazy:
-            lazy = _lazy_allocation_context.get(False)
-
-        # Always track the storage ID for all tensors
-        self.storage_id_to_device[storage_id] = device_index
-
-        # Register the storage with the client immediately for all allocations
-        try:
-            # Import here to avoid circular imports
-            from ._remote_orchestrator import remote_orchestrator
-            from .device import get_device_registry
-
-            orchestrator = remote_orchestrator
-            if orchestrator is not None:
-                registry = get_device_registry()
-                device = registry.get_device_by_index(device_index)
-
-                if device is not None:
-                    client = device._client
-                    if client and client.is_running():
-                        # Create storage with exact byte size
-                        # No garbage data needed
-                        client.create_storage(nbytes, storage_id, lazy)
-                        log.info(
-                            f"Registered storage {storage_id} with client "
-                            f"({nbytes} bytes)"
-                        )
-        except Exception as e:
-            log.warning(f"Failed to register storage {storage_id} with client: {e}")
-
-        log.info(f"Registered storage ID {storage_id} on device {device_index}")
-        return True
-
-    def get_storage_device(self, storage_id: int) -> Optional[int]:
-        """Get device index for a storage ID"""
-        storage_id = int(storage_id)
-        return self.storage_id_to_device.get(storage_id)
-
-    def free_storage_with_id(self, storage_id: int) -> bool:
-        """Free storage by storage ID and perform remote cleanup"""
-        storage_id = int(storage_id)
-        if storage_id == 0:  # Empty storage
-            return True
-
-        # Get device index before cleanup
-        device_idx = self.storage_id_to_device.get(storage_id)
-
-        if storage_id in self.storage_id_to_device:
-            # Clean up storage tracking
-            self.storage_id_to_device.pop(storage_id, None)
-            self.generated_storage_ids.discard(storage_id)
-
-            # Call remote cleanup
-            if device_idx is not None:
-                log.info(f"Storage {storage_id} freed, initiating remote cleanup")
-                self._cleanup_remote_storage(storage_id, device_idx)
-            else:
-                log.info(
-                    f"No device index found for storage {storage_id}, "
-                    "skipping remote cleanup"
-                )
-
-            log.info(f"Freed storage ID {storage_id}")
-        else:
-            log.warning(f"Attempted to free unknown storage {storage_id}")
-
-        return True
-
-    def _cleanup_remote_storage(self, storage_id: int, device_idx: int) -> None:
-        """Clean up storage on remote GPU device"""
-        try:
-            # Import here to avoid circular imports
-            from ._remote_orchestrator import remote_orchestrator
-            from .device import get_device_registry
-
-            orchestrator = remote_orchestrator
-            if orchestrator is None:
-                log.warning(
-                    f"No remote orchestrator available for storage {storage_id} cleanup"
-                )
-                return
-
-            registry = get_device_registry()
-            device = registry.get_device_by_index(device_idx)
-
-            if device is None:
-                log.warning(
-                    f"No device found for index {device_idx} during storage "
-                    f"{storage_id} cleanup"
-                )
-                return
-
-            # Attempt remote cleanup
-            log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
-            success = orchestrator.remove_tensor_from_remote(storage_id, device)
-            if success:
-                log.info(
-                    f"✅ Successfully cleaned up remote storage {storage_id} "
-                    f"on device {device_idx}"
-                )
-            else:
-                log.warning(
-                    f"❌ Remote cleanup returned false for storage {storage_id} "
-                    f"on device {device_idx}"
-                )
-
-        except Exception as e:
-            # Log but don't fail - local cleanup already completed
-            log.warning(
-                f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}"
-            )
-            # Continue execution since local cleanup is already done
-
-    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
-        """Copy data between storages identified by their storage IDs"""
-        # This is a placeholder - actual copy operations should go through remote execution
-        dest_device = self.storage_id_to_device.get(int(dest_id))
-        src_device = self.storage_id_to_device.get(int(src_id))
-
-        if dest_device is None or src_device is None:
-            raise RuntimeError(
-                f"Copy failed: storage IDs {dest_id} or {src_id} not found"
-            )
-
-        # For storage ID system, copy operations should go through remote
-        # aten execution. This is just a placeholder to indicate the operation
-        # was requested
-        log.info(f"Storage copy requested: {src_id} -> {dest_id} ({count} bytes)")
-        return True
 
     def get_device_count(self) -> int:
         """Return number of devices"""
@@ -278,84 +74,52 @@ class RemoteStorageRegistry:
         device_count = self.get_device_count()
         return device_idx >= 0 and device_idx < device_count
 
-    def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
-        """Resize remote storage by storage ID"""
-        try:
-            storage_id = int(storage_id)
-
-            # Get device index for this storage
-            device_idx = self.get_storage_device(storage_id)
-            if device_idx is None:
-                log.warning(f"No device found for storage {storage_id}")
-                return False
-
-            # Import here to avoid circular imports
-            from ._remote_orchestrator import remote_orchestrator
-            from .device import get_device_registry
-
-            orchestrator = remote_orchestrator
-            if orchestrator is None:
-                log.warning(
-                    f"No remote orchestrator available for storage {storage_id} resize"
-                )
-                return False
-
-            registry = get_device_registry()
-            device = registry.get_device_by_index(device_idx)
-
-            if device is None:
-                log.warning(
-                    f"No device found for index {device_idx} during storage {storage_id} resize"
-                )
-                return False
-
-            # Get client and call resize_storage
-            client = device._client
-            if client and client.is_running():
-                success = client.resize_storage(storage_id, nbytes)
-                if success:
-                    log.info(
-                        f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes"
-                    )
-                else:
-                    log.warning(
-                        f"❌ Remote resize returned false for storage {storage_id}"
-                    )
-                return success
-            else:
-                log.warning(f"Client not available for storage {storage_id} resize")
-                return False
-
-        except Exception as e:
-            log.warning(f"Failed to resize remote storage {storage_id}: {e}")
-            return False
-
     # Stream management methods
-    def get_stream(self, device_idx: int) -> int:
-        """Get current stream ID for device"""
+    def get_stream(self, device_idx: Optional[int] = None) -> int:
+        """Get current stream for device"""
+        if device_idx is None:
+            device_idx = self._current_device
+
         return self._current_streams.get(device_idx, 0)
 
-    def create_new_stream(self, device_idx: int, priority: int = 0) -> int:
-        """Create a new stream ID"""
-        counter = self._stream_counter.get(device_idx, 0) + 1
-        self._stream_counter[device_idx] = counter
-        return counter
+    def get_default_stream(self, device_idx: int) -> int:
+        """Get default stream for device"""
+        # Default stream is always stream 0 for remote devices
+        return 0
 
-    def exchange_stream(self, stream) -> int:
-        """Exchange current stream with new stream"""
-        device_idx = stream.device_index
-        old_stream = self._current_streams.get(device_idx, 0)
-        self._current_streams[device_idx] = stream.stream_id
+    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> int:
+        """Get stream from global pool"""
+        # For simplicity, just return a counter-based stream ID
+        if device_idx not in self._stream_counter:
+            self._stream_counter[device_idx] = 1
+
+        stream_id = self._stream_counter[device_idx]
+        self._stream_counter[device_idx] += 1
+        return stream_id
+
+    def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
+        """Get new stream for device"""
+        if device_idx not in self._stream_counter:
+            self._stream_counter[device_idx] = 1
+
+        stream_id = self._stream_counter[device_idx]
+        self._stream_counter[device_idx] += 1
+        return stream_id
+
+    def exchange_stream(self, stream_id: int) -> int:
+        """Exchange current stream"""
+        old_stream = self._current_streams.get(self._current_device, 0)
+        self._current_streams[self._current_device] = stream_id
         return old_stream
 
 
 class Driver:
-    """Simplified driver that manages storage IDs with registry-based dispatch"""
+    """Driver that manages device operations with registry-based dispatch"""
 
     registry: Dict[str, Callable] = {}
 
     def __init__(self) -> None:
-        self.registry_obj = RemoteStorageRegistry()
+        self.registry_obj = DeviceRegistry()
 
     def exec(self, cmd: str, *args: Any) -> Any:
         """Execute a command using the registry pattern"""
@@ -369,18 +133,18 @@ class Driver:
         log.info(f"Command {cmd} result: {res}")
         return res
 
-    # Storage operations
+    # Storage operations - delegate to _storage module
     @register(registry)
     def generate_storage_id(self) -> int:
-        return self.registry_obj.generate_storage_id()
+        from ._storage import generate_storage_id
+        return generate_storage_id()
 
     @register(registry)
     def create_storage_with_id(
         self, storage_id: int, nbytes: int, device_index: int
     ) -> bool:
-        result = self.registry_obj.create_storage_with_id(
-            storage_id, nbytes, device_index
-        )
+        from ._storage import create_storage_with_id
+        result = create_storage_with_id(storage_id, nbytes, device_index)
         if not result:
             raise RuntimeError(
                 f"Failed to create storage with ID {storage_id} ({nbytes} bytes) on device {device_index}"
@@ -389,22 +153,26 @@ class Driver:
 
     @register(registry)
     def free_storage_with_id(self, storage_id: int) -> bool:
-        result = self.registry_obj.free_storage_with_id(storage_id)
+        from ._storage import free_storage_with_id
+        result = free_storage_with_id(storage_id)
         if not result:
             raise RuntimeError(f"Failed to free storage with ID {storage_id}")
         return result
 
     @register(registry)
     def get_storage_device(self, storage_id: int) -> Optional[int]:
-        return self.registry_obj.get_storage_device(storage_id)
+        from ._storage import get_storage_device
+        return get_storage_device(storage_id)
 
     @register(registry)
-    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> bool:
-        return self.registry_obj.copy_data_by_id(dest_id, src_id, count)
+    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> None:
+        from ._storage import copy_data_by_id
+        return copy_data_by_id(dest_id, src_id, count)
 
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
-        return self.registry_obj.resize_storage_by_id(storage_id, nbytes)
+        from ._storage import resize_storage_by_id
+        return resize_storage_by_id(storage_id, nbytes)
 
     # Device operations
     @register(registry)
@@ -437,84 +205,74 @@ class Driver:
     # Stream operations
     @register(registry)
     def get_stream(self, device_idx: Optional[int] = None) -> int:
-        if device_idx is None:
-            device_idx = self.registry_obj.get_device()
         return self.registry_obj.get_stream(device_idx)
 
     @register(registry)
+    def get_default_stream(self, device_idx: int) -> int:
+        return self.registry_obj.get_default_stream(device_idx)
+
+    @register(registry)
+    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> int:
+        return self.registry_obj.get_stream_from_global_pool(device_idx, high_priority)
+
+    @register(registry)
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
-        return self.registry_obj.create_new_stream(device_idx, priority)
+        return self.registry_obj.get_new_stream(device_idx, priority)
 
     @register(registry)
-    def exchange_stream(self, stream) -> int:
-        return self.registry_obj.exchange_stream(stream)
+    def exchange_stream(self, stream_id: int) -> int:
+        return self.registry_obj.exchange_stream(stream_id)
+
+    # Event operations (placeholders for now)
+    @register(registry)
+    def create_event(self, device_idx: int, flag: int) -> int:
+        """Create event - placeholder implementation"""
+        return 1
 
     @register(registry)
-    def query_stream(self, stream) -> bool:
-        # Always return True (stream is ready)
+    def destroy_event(self, event: int, device_idx: int) -> None:
+        """Destroy event - placeholder implementation"""
+        pass
+
+    @register(registry)
+    def record(self, event: int, stream: int, device_idx: int, flag: int) -> None:
+        """Record event - placeholder implementation"""
+        pass
+
+    @register(registry)
+    def block(self, event: int, stream: int) -> None:
+        """Block on event - placeholder implementation"""
+        pass
+
+    @register(registry)
+    def query_event(self, event: int) -> bool:
+        """Query event - placeholder implementation"""
         return True
 
     @register(registry)
-    def synchronize_stream(self, stream) -> None:
-        # No-op for remote streams
+    def synchronize_event(self, event: int) -> None:
+        """Synchronize event - placeholder implementation"""
         pass
 
     @register(registry)
-    def get_default_stream(self, device_idx: Optional[int] = None) -> Any:
-        # Return default stream (0) for device
-        if device_idx is None:
-            device_idx = self.registry_obj.get_device()
-        import torch
-
-        return torch.Stream(device=torch.device("remote", device_idx), priority=0)
-
-    @register(registry)
-    def get_stream_from_global_pool(
-        self, device_idx: Optional[int] = None, is_high_priority: bool = False
-    ) -> Any:
-        # Return a stream from global pool (just use default stream for now)
-        if device_idx is None:
-            device_idx = self.registry_obj.get_device()
-        import torch
-
-        return torch.Stream(device=torch.device("remote", device_idx), priority=0)
-
-    # Event operations
-    @register(registry)
-    def synchronize_event(self, event) -> None:
-        # No-op for remote events
-        pass
-
-    @register(registry)
-    def record(self, event, stream, device_index, flags) -> None:
-        # No-op for event recording on remote
-        pass
-
-    @register(registry)
-    def destroy_event(self, event, device_index) -> None:
-        # No-op for event destruction on remote
-        pass
-
-    @register(registry)
-    def block(self, event, stream) -> None:
-        # No-op for event blocking on remote
-        pass
-
-    @register(registry)
-    def query_event(self, event) -> bool:
-        # Always return True (event is ready)
+    def query_stream(self, stream: int) -> bool:
+        """Query stream - placeholder implementation"""
         return True
 
     @register(registry)
-    def elapsed_time(self, event1, event2, device_index) -> float:
-        # Return 0 for elapsed time between events
+    def synchronize_stream(self, stream: int) -> None:
+        """Synchronize stream - placeholder implementation"""
+        pass
+
+    @register(registry)
+    def record_data_ptr_on_stream(self, data_ptr: int, stream: int) -> None:
+        """Record data pointer on stream - placeholder implementation"""
+        pass
+
+    @register(registry)
+    def elapsed_time(self, event1: int, event2: int, device_idx: int) -> float:
+        """Get elapsed time between events - placeholder implementation"""
         return 0.0
-
-    # Data operations
-    @register(registry)
-    def record_data_ptr_on_stream(self, data_ptr_int64, stream) -> None:
-        # No-op for data pointer recording
-        pass
 
 
 # Global driver instance
