@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from typing import Any, Callable, Dict, Optional
+from collections import defaultdict
 
 import torch
 
@@ -45,9 +46,9 @@ class DeviceRegistry:
         # Current device tracking
         self._current_device: int = 0
 
-        # Stream management
-        self._current_streams: Dict[int, int] = {}  # device_idx -> stream_id
-        self._stream_counter: Dict[int, int] = {}  # device_idx -> counter
+        # Stream management - no torch.Stream objects, only stream IDs
+        self._current_streams: Dict[int, int] = defaultdict(lambda: 0)  # device_idx -> current stream_id
+        self._stream_registry: Dict[int, list] = defaultdict(lambda: [0])  # device_idx -> list of stream_ids
 
     def get_device_count(self) -> int:
         """Return number of devices"""
@@ -61,7 +62,7 @@ class DeviceRegistry:
         """Get current device index"""
         return self._current_device
 
-    def set_device(self, device_idx: int) -> int:
+    def set_device(self, device_idx: int) -> None:
         """Set current device index"""
         device_count = self.get_device_count()
         if device_idx < 0 or device_idx >= device_count:
@@ -69,49 +70,66 @@ class DeviceRegistry:
         old_device = self._current_device
         self._current_device = device_idx
         log.info(f"Device set from {old_device} to {device_idx}")
-        return old_device
 
     def has_primary_context(self, device_idx: int) -> bool:
         """Check if device has primary context"""
         device_count = self.get_device_count()
         return device_idx >= 0 and device_idx < device_count
 
+    def exchange_device(self, device_idx: int) -> int:
+        """Exchange current device and return previous device index"""
+        device_count = self.get_device_count()
+        if device_idx < 0 or device_idx >= device_count:
+            raise ValueError(f"Invalid device index: {device_idx}")
+
+        old_device_idx = self._current_device
+        self._current_device = device_idx
+        log.info(f"Device exchanged from {old_device_idx} to {device_idx}")
+        return old_device_idx
+
     # Stream management methods
-    def get_stream(self, device_idx: Optional[int] = None) -> int:
-        """Get current stream for device"""
-        if device_idx is None:
-            device_idx = self._current_device
+    def get_stream(self, device_idx: int) -> int:
+        """Get current stream ID for device"""
+        log.info(f"get_stream called with device_idx: {device_idx} (type: {type(device_idx)})")
 
-        return self._current_streams.get(device_idx, 0)
-
-    def get_default_stream(self, device_idx: int) -> torch.Stream:
-        """Get default stream for device"""
-        # C++ expects c10::Stream object, so return torch.Stream
-        return torch.Stream(device=f"remote:{device_idx}")
-
-    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> torch.Stream:
-        """Get stream from global pool"""
-        # C++ expects c10::Stream object, so return torch.Stream
-        return torch.Stream(device=f"remote:{device_idx}")
+        current_stream_id = self._current_streams[device_idx]  # defaultdict returns 0 if not set
+        log.info(f"get_stream returning stream_id: {current_stream_id} for device {device_idx}")
+        return current_stream_id
 
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
-        """Get new stream for device"""
-        if device_idx not in self._stream_counter:
-            self._stream_counter[device_idx] = 1
+        """Create new stream ID for device and add to registry"""
+        log.info(f"get_new_stream called with device_idx: {device_idx} (type: {type(device_idx)}), priority: {priority}")
 
-        stream_id = self._stream_counter[device_idx]
-        self._stream_counter[device_idx] += 1
-        return stream_id
+        # Get next stream ID (start from 1, since 0 is default)
+        registry = self._stream_registry[device_idx]  # defaultdict returns [0] if not set
+        new_stream_id = len(registry)  # This will be 1 for first new stream (since [0] exists)
 
-    def exchange_stream(self, stream: torch.Stream) -> int:
-        """Exchange current stream"""
-        # Extract device index and stream ID from the torch.Stream object
-        device_idx = stream.device.index if stream.device.index is not None else 0
-        stream_id = stream.stream_id
-        
-        old_stream = self._current_streams.get(device_idx, 0)
+        # Add to registry
+        registry.append(new_stream_id)
+
+        # Set as current stream for this device
+        self._current_streams[device_idx] = new_stream_id
+
+        log.info(f"get_new_stream returning stream_id: {new_stream_id} for device {device_idx}")
+        return new_stream_id
+
+    def exchange_stream(self, stream_id: int, device_idx: int) -> int:
+        """Exchange current stream ID and return previous stream ID"""
+        log.info(f"exchange_stream called with stream_id: {stream_id}, device_idx: {device_idx}")
+
+        # Get the previous current stream ID
+        previous_stream_id = self._current_streams[device_idx]  # defaultdict returns 0 if not set
+
+        # Set the new stream as current
         self._current_streams[device_idx] = stream_id
-        return old_stream
+
+        # Make sure this stream ID is in our registry
+        registry = self._stream_registry[device_idx]  # defaultdict returns [0] if not set
+        if stream_id not in registry:
+            registry.append(stream_id)
+
+        log.info(f"exchange_stream returning previous stream_id: {previous_stream_id}")
+        return previous_stream_id
 
 
 class Driver:
@@ -186,18 +204,16 @@ class Driver:
         return self.registry_obj.get_device()
 
     @register(registry)
-    def set_device(self, device_idx: int) -> int:
+    def set_device(self, device_idx: int) -> None:
         return self.registry_obj.set_device(device_idx)
 
     @register(registry)
-    def unchecked_set_device(self, device_idx: int) -> int:
+    def unchecked_set_device(self, device_idx: int) -> None:
         return self.registry_obj.set_device(device_idx)
 
     @register(registry)
     def exchange_device(self, device_idx: int) -> int:
-        old_device = self.registry_obj.get_device()
-        self.registry_obj.set_device(device_idx)
-        return old_device
+        return self.registry_obj.exchange_device(device_idx)
 
     @register(registry)
     def has_primary_context(self, device_idx: int) -> bool:
@@ -205,24 +221,25 @@ class Driver:
 
     # Stream operations
     @register(registry)
-    def get_stream(self, device_idx: Optional[int] = None) -> int:
-        return self.registry_obj.get_stream(device_idx)
-
-    @register(registry)
-    def get_default_stream(self, device_idx: int) -> torch.Stream:
-        return self.registry_obj.get_default_stream(device_idx)
-
-    @register(registry)
-    def get_stream_from_global_pool(self, device_idx: int, high_priority: bool = False) -> torch.Stream:
-        return self.registry_obj.get_stream_from_global_pool(device_idx, high_priority)
+    def get_stream(self, device_idx: int) -> int:
+        log.info(f"Driver.get_stream called with device_idx: {device_idx} (type: {type(device_idx)})")
+        result = self.registry_obj.get_stream(device_idx)
+        log.info(f"Driver.get_stream returning: {result} (type: {type(result)})")
+        return result
 
     @register(registry)
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
-        return self.registry_obj.get_new_stream(device_idx, priority)
+        log.info(f"Driver.get_new_stream called with device_idx: {device_idx} (type: {type(device_idx)}), priority: {priority}")
+        result = self.registry_obj.get_new_stream(device_idx, priority)
+        log.info(f"Driver.get_new_stream returning: {result} (type: {type(result)})")
+        return result
 
     @register(registry)
-    def exchange_stream(self, stream: torch.Stream) -> int:
-        return self.registry_obj.exchange_stream(stream)
+    def exchange_stream(self, stream_id: int, device_idx: int) -> int:
+        log.info(f"Driver.exchange_stream called with stream_id: {stream_id}, device_idx: {device_idx}")
+        result = self.registry_obj.exchange_stream(stream_id, device_idx)
+        log.info(f"Driver.exchange_stream returning: {result} (type: {type(result)})")
+        return result
 
     # Event operations (placeholders for now)
     @register(registry)
@@ -236,12 +253,12 @@ class Driver:
         pass
 
     @register(registry)
-    def record(self, event: int, stream: int, device_idx: int, flag: int) -> None:
+    def record(self, event: int, stream: torch.Stream, device_idx: int, flag: int) -> None:
         """Record event - placeholder implementation"""
         pass
 
     @register(registry)
-    def block(self, event: int, stream: int) -> None:
+    def block(self, event: int, stream: torch.Stream) -> None:
         """Block on event - placeholder implementation"""
         pass
 
@@ -256,17 +273,17 @@ class Driver:
         pass
 
     @register(registry)
-    def query_stream(self, stream: int) -> bool:
+    def query_stream(self, stream: torch.Stream) -> bool:
         """Query stream - placeholder implementation"""
         return True
 
     @register(registry)
-    def synchronize_stream(self, stream: int) -> None:
+    def synchronize_stream(self, stream: torch.Stream) -> None:
         """Synchronize stream - placeholder implementation"""
         pass
 
     @register(registry)
-    def record_data_ptr_on_stream(self, data_ptr: int, stream: int) -> None:
+    def record_data_ptr_on_stream(self, data_ptr: int, stream: torch.Stream) -> None:
         """Record data pointer on stream - placeholder implementation"""
         pass
 

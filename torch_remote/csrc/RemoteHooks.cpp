@@ -138,8 +138,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   c10::Device exchangeDevice(c10::Device d) const override {
     TORCH_INTERNAL_ASSERT(d.is_privateuseone());
     py::gil_scoped_acquire acquire;
-    auto old_device_index =
-        get_method("exchange_device")(d.index()).cast<c10::DeviceIndex>();
+    auto old_device_index = get_method("exchange_device")(d.index()).cast<c10::DeviceIndex>();
     return c10::Device(static_type, old_device_index);
   }
 
@@ -150,12 +149,12 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   void setDevice(c10::Device d) const override {
     TORCH_INTERNAL_ASSERT(d.is_privateuseone());
     py::gil_scoped_acquire acquire;
-    auto device = get_method("set_device")(d.index());
+    get_method("set_device")(d.index());
   }
 
   void uncheckedSetDevice(c10::Device d) const noexcept override {
     py::gil_scoped_acquire acquire;
-    auto device = get_method("unchecked_set_device")(d.index());
+    get_method("unchecked_set_device")(d.index());
   }
 
   c10::Stream getStream(c10::Device d) const noexcept override {
@@ -165,29 +164,27 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   }
 
   c10::Stream getDefaultStream(c10::Device d) const override {
-    py::gil_scoped_acquire acquire;
-    return get_method("get_default_stream")(d.index()).cast<c10::Stream>();
+    // Default stream is always stream ID 0
+    return c10::Stream(c10::Stream::UNSAFE, d, 0);
   }
 
   c10::Stream
   getStreamFromGlobalPool(c10::Device d,
                           bool isHighPriority = false) const override {
-    py::gil_scoped_acquire acquire;
-    return get_method("get_stream_from_global_pool")(d.index(), isHighPriority)
-        .cast<c10::Stream>();
+    // For simplicity, just return a new stream
+    return getNewStream(d, isHighPriority ? 1 : 0);
   }
 
   c10::Stream getNewStream(c10::Device d, int priority = 0) const override {
     py::gil_scoped_acquire acquire;
-    auto stream_id =
-        get_method("get_new_stream")(d.index(), priority).cast<c10::StreamId>();
+    auto stream_id = get_method("get_new_stream")(d.index(), priority).cast<c10::StreamId>();
     return c10::Stream(c10::Stream::UNSAFE, d, stream_id);
   }
 
   c10::Stream exchangeStream(c10::Stream s) const noexcept override {
     py::gil_scoped_acquire acquire;
-    auto stream_id = get_method("exchange_stream")(s).cast<c10::StreamId>();
-    return c10::Stream(c10::Stream::UNSAFE, s.device(), stream_id);
+    auto previous_stream_id = get_method("exchange_stream")(s.id(), s.device().index()).cast<c10::StreamId>();
+    return c10::Stream(c10::Stream::UNSAFE, s.device(), previous_stream_id);
   }
 
   void
