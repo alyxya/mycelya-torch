@@ -12,7 +12,6 @@ for each test, improving test efficiency and reducing GPU resource usage.
 import logging
 
 import pytest
-import torch
 
 import torch_remote
 

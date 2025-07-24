@@ -8,12 +8,13 @@ This module provides device abstraction for different GPU cloud providers and GP
 """
 
 import atexit
-from ._logging import get_logger
 import uuid
 from enum import Enum
 from typing import Any, Dict, Optional, Union
 
 import torch
+
+from ._logging import get_logger
 
 log = get_logger(__name__)
 
@@ -49,9 +50,9 @@ class RemoteMachine:
     Each RemoteMachine instance represents a unique remote machine instance
     that can host one or more GPUs. Operations between different RemoteMachine
     instances are blocked with explicit error messages.
-    
+
     Can be used as a context manager for automatic resource cleanup:
-    
+
         >>> with RemoteMachine(CloudProvider.MODAL, GPUType.T4) as machine:
         ...     x = torch.randn(100, 100, device=machine.device())
         ...     result = x @ x.T
@@ -79,11 +80,11 @@ class RemoteMachine:
 
         # Create the client
         self._create_client()
-        
+
         # Start the client if requested
         if start:
             self.start()
-            
+
         # Register cleanup on exit
         atexit.register(self.stop)
 
@@ -128,13 +129,13 @@ class RemoteMachine:
         except Exception as e:
             log.error(f"Failed to create client: {e}")
             # Continue without remote execution capability
-            
+
     def start(self) -> None:
         """Start the client for this device."""
         if self._client is None:
             log.warning("Cannot start: client not created")
             return
-            
+
         try:
             self._client.start()
             log.info(f"Started client: {self._client}")
@@ -289,7 +290,7 @@ def create_modal_machine(gpu: Union[str, GPUType], start: bool = True) -> Remote
     Example:
         >>> machine = create_modal_machine("A100-40GB")
         >>> tensor = torch.randn(3, 3, device=machine.device())
-        >>> 
+        >>>
         >>> # Create without starting
         >>> machine = create_modal_machine("A100-40GB", start=False)
         >>> machine.start()  # Start manually later

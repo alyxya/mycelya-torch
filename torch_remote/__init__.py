@@ -200,20 +200,19 @@ torch._register_device_module("remote", _create_module())
 # Import ATen implementations to ensure PyTorch registrations are executed
 import torch_remote._aten_impl  # noqa: F401
 
+# Import logging utilities
+from ._logging import (
+    disable_logging,
+    enable_debug_logging,
+    enable_info_logging,
+    get_logging_level,
+    reset_logging,
+    set_logging_level,
+)
 from .device import (
     CloudProvider,
     GPUType,
     RemoteMachine,
     create_modal_machine,
     get_device_registry,
-)
-
-# Import logging utilities
-from ._logging import (
-    set_logging_level,
-    get_logging_level,
-    disable_logging,
-    enable_debug_logging,
-    enable_info_logging,
-    reset_logging,
 )

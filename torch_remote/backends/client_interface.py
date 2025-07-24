@@ -12,7 +12,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-
 # Custom exceptions removed - use descriptive RuntimeError messages instead
 
 
@@ -95,7 +94,7 @@ class ClientInterface(ABC):
     def health_check(self) -> bool:
         """
         Perform a health check on the client connection.
-        
+
         Default implementation delegates to is_running(). Providers can override
         for more sophisticated health checking.
 
@@ -107,7 +106,7 @@ class ClientInterface(ABC):
     def reconnect(self) -> bool:
         """
         Attempt to reconnect the client.
-        
+
         Default implementation stops and starts the client. Providers can override
         for more sophisticated reconnection logic.
 

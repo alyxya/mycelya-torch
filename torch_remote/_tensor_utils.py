@@ -18,7 +18,7 @@ import torch
 from ._logging import get_logger
 
 if TYPE_CHECKING:
-    from .device import RemoteMachine
+    pass
 
 log = get_logger(__name__)
 
@@ -26,7 +26,7 @@ log = get_logger(__name__)
 class TensorMetadata:
     """
     Metadata representation of tensors (CPU, remote, or meta).
-    
+
     Stores tensor shape, layout, and type information. For remote tensors,
     also includes the storage_id for referencing data on remote devices.
     """
@@ -41,7 +41,7 @@ class TensorMetadata:
     ):
         """
         Initialize tensor metadata.
-        
+
         Args:
             shape: Tensor dimensions
             stride: Tensor stride for memory layout
@@ -54,7 +54,7 @@ class TensorMetadata:
         self.storage_offset = storage_offset
         self.dtype = dtype
         self.storage_id = storage_id
-        
+
         # Calculate derived properties
         self.nelem_in_bytes = self._calculate_nelem_in_bytes()
 
@@ -62,13 +62,13 @@ class TensorMetadata:
         """Calculate the number of elements needed in storage."""
         if not self.shape:
             return self.dtype.itemsize  # scalar
-        
+
         # Calculate the highest address accessed
         max_index = self.storage_offset
         for dim_size, dim_stride in zip(self.shape, self.stride):
             if dim_size > 1:
                 max_index += (dim_size - 1) * abs(dim_stride)
-        
+
         return (max_index + 1) * self.dtype.itemsize
 
     @classmethod
@@ -76,7 +76,7 @@ class TensorMetadata:
         """Create metadata from a remote tensor."""
         if tensor.device.type != "remote":
             raise ValueError(f"Expected remote tensor, got device: {tensor.device}")
-        
+
         storage_id = tensor.untyped_storage().data_ptr()
         return cls(
             shape=tuple(tensor.size()),
@@ -91,7 +91,7 @@ class TensorMetadata:
         """Create metadata from a CPU tensor."""
         if tensor.device.type != "cpu":
             raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
-        
+
         return cls(
             shape=tuple(tensor.size()),
             stride=tuple(tensor.stride()),
@@ -105,7 +105,7 @@ class TensorMetadata:
         """Create metadata from a meta tensor."""
         if tensor.device.type != "meta":
             raise ValueError(f"Expected meta tensor, got device: {tensor.device}")
-        
+
         return cls(
             shape=tuple(tensor.size()),
             stride=tuple(tensor.stride()),
@@ -128,36 +128,36 @@ class TensorMetadata:
     def to_remote_tensor(self, device: torch.device) -> torch.Tensor:
         """
         Create a remote tensor from this metadata.
-        
+
         Args:
             device: Remote device to create tensor on
-            
+
         Returns:
             Remote tensor with this metadata
         """
         if device.type != "remote":
             raise ValueError(f"Expected remote device, got: {device}")
-        
+
         if self.storage_id is None:
             raise ValueError("Cannot create remote tensor without storage_id")
-        
+
         # Create remote tensor using storage ID as data pointer
         from ._device_daemon import driver
-        
+
         # Create storage on device first
         storage_bytes = self.nelem_in_bytes
         driver.exec("create_storage_with_id", self.storage_id, storage_bytes)
-        
+
         # Create tensor with the storage ID as data pointer
         storage = torch.UntypedStorage.from_buffer(
             bytearray(storage_bytes), dtype=torch.uint8
         )
         storage._set_cdata(self.storage_id)  # Use storage_id as data pointer
-        
+
         # Create tensor from storage
         tensor = torch.tensor([], dtype=self.dtype, device=device)
         tensor = tensor.set_(storage, self.storage_offset, self.shape, self.stride)
-        
+
         return tensor
 
     def to_meta_tensor(self) -> torch.Tensor:
@@ -178,37 +178,37 @@ class TensorMetadata:
             "dtype": str(self.dtype).split(".")[-1],  # e.g., "float32"
             "nelem_in_bytes": self.nelem_in_bytes
         }
-        
+
         if self.storage_id is not None:
             result["storage_id"] = self.storage_id
-            
+
         return result
 
     def to_cpu_tensor_from_bytes(self, data: bytes) -> torch.Tensor:
         """
         Create a CPU tensor from bytes using this metadata.
-        
+
         Args:
             data: Serialized tensor data
-            
+
         Returns:
             CPU tensor reconstructed from bytes
         """
         # Deserialize the tensor data
         buffer = io.BytesIO(data)
         tensor = torch.load(buffer, map_location="cpu", weights_only=False)
-        
+
         # Verify the tensor matches our metadata
         if tensor.dtype != self.dtype:
             raise ValueError(f"Dtype mismatch: expected {self.dtype}, got {tensor.dtype}")
-        
+
         # Apply the correct view if needed
-        if (tuple(tensor.size()) != self.shape or 
-            tuple(tensor.stride()) != self.stride or 
+        if (tuple(tensor.size()) != self.shape or
+            tuple(tensor.stride()) != self.stride or
             tensor.storage_offset() != self.storage_offset):
-            
+
             tensor = tensor.as_strided(self.shape, self.stride, self.storage_offset)
-        
+
         return tensor
 
     def __repr__(self) -> str:
@@ -220,20 +220,20 @@ class TensorMetadata:
 def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     """
     Convert a CPU tensor to bytes for data transfer.
-    
+
     Args:
         tensor: CPU tensor to serialize
-        
+
     Returns:
         Serialized tensor data
     """
     if tensor.device.type != "cpu":
         raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
-    
+
     # Make tensor contiguous for efficient serialization
     if not tensor.is_contiguous():
         tensor = tensor.contiguous()
-    
+
     # Serialize to bytes
     buffer = io.BytesIO()
     torch.save(tensor, buffer)

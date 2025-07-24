@@ -14,11 +14,11 @@ from typing import Any, Dict, List, Tuple
 import torch
 
 from ._logging import get_logger
+from ._storage import get_machine_for_storage
 from ._tensor_utils import (
     TensorMetadata,
     cpu_tensor_to_bytes,
 )
-from ._storage import get_machine_for_storage
 from .device import RemoteMachine
 
 log = get_logger(__name__)
@@ -138,29 +138,29 @@ class RemoteOrchestrator:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         if remote_tensor.device.type != "remote":
             raise ValueError(f"Expected remote tensor, got device: {remote_tensor.device}")
-        
+
         # Get device registry to find the machine
         from .device import get_device_registry
-        
+
         registry = get_device_registry()
         machine = registry.get_device_by_index(remote_tensor.device.index)
-        
+
         if machine is None:
             raise RuntimeError(
                 f"No RemoteMachine found for remote device index {remote_tensor.device.index}"
             )
-        
+
         # Get the client for this machine
         client = machine._client
         if client is None or not client.is_running():
             raise RuntimeError(f"Client not available for machine {machine.machine_id}")
-        
+
         # Get tensor data using storage ID
         storage_id = remote_tensor.untyped_storage().data_ptr()
-        
+
         # Create metadata for the remote tensor
         metadata = TensorMetadata.from_remote_tensor(remote_tensor)
-        
+
         # Get serialized data from remote storage
         tensor_data = client.get_storage_data(
             storage_id,
@@ -169,7 +169,7 @@ class RemoteOrchestrator:
             storage_offset=metadata.storage_offset,
             dtype=str(metadata.dtype)
         )
-        
+
         # Convert bytes back to CPU tensor using metadata
         return metadata.to_cpu_tensor_from_bytes(tensor_data)
 

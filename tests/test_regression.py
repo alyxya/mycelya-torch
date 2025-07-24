@@ -143,7 +143,7 @@ class TestCriticalRegression:
         # Test invalid device operations don't crash the system
         try:
             device = torch.device("remote", 999)  # Invalid index
-            x = torch.randn(2, 2, device=device)
+            torch.randn(2, 2, device=device)
         except Exception:
             # Should fail gracefully, not crash
             pass

@@ -20,13 +20,13 @@ DEFAULT_LEVEL = logging.WARNING
 def get_logger(name: str) -> logging.Logger:
     """
     Get a logger for a torch_remote module.
-    
+
     This ensures all torch_remote loggers are children of the main torch_remote logger,
     allowing for centralized configuration.
-    
+
     Args:
         name: Module name (typically __name__)
-        
+
     Returns:
         Logger instance configured for torch_remote
     """
@@ -36,14 +36,14 @@ def get_logger(name: str) -> logging.Logger:
             name = "torch_remote"
         else:
             name = f"torch_remote.{name}"
-    
+
     logger = logging.getLogger(name)
-    
+
     # Set up the root torch_remote logger if this is the first time
     root_logger = logging.getLogger(TORCH_REMOTE_LOGGER)
     if not root_logger.handlers:
         _setup_default_logging()
-    
+
     return logger
 
 
@@ -51,7 +51,7 @@ def _setup_default_logging():
     """Set up default logging configuration for torch_remote."""
     root_logger = logging.getLogger(TORCH_REMOTE_LOGGER)
     root_logger.setLevel(DEFAULT_LEVEL)
-    
+
     # Only add handler if none exists to avoid duplicates
     if not root_logger.handlers:
         handler = logging.StreamHandler()
@@ -60,7 +60,7 @@ def _setup_default_logging():
         )
         handler.setFormatter(formatter)
         root_logger.addHandler(handler)
-        
+
         # Prevent propagation to avoid duplicate messages
         root_logger.propagate = False
 
@@ -68,15 +68,15 @@ def _setup_default_logging():
 def set_logging_level(level: Union[int, str]) -> None:
     """
     Set the logging level for all torch_remote modules.
-    
+
     This function provides a simple way to control the verbosity of torch_remote
     logging output, making it easier to debug issues without modifying code.
-    
+
     Args:
         level: Logging level. Can be:
             - String: 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
             - Integer: logging.DEBUG (10), logging.INFO (20), etc.
-            
+
     Examples:
         >>> import torch_remote
         >>> torch_remote.set_logging_level('DEBUG')  # Show all debug messages
@@ -88,7 +88,7 @@ def set_logging_level(level: Union[int, str]) -> None:
         level = level.upper()
         level_map = {
             'DEBUG': logging.DEBUG,
-            'INFO': logging.INFO, 
+            'INFO': logging.INFO,
             'WARNING': logging.WARNING,
             'ERROR': logging.ERROR,
             'CRITICAL': logging.CRITICAL
@@ -96,11 +96,11 @@ def set_logging_level(level: Union[int, str]) -> None:
         if level not in level_map:
             raise ValueError(f"Invalid logging level: {level}. Must be one of {list(level_map.keys())}")
         level = level_map[level]
-    
+
     # Set the level on the root torch_remote logger
     root_logger = logging.getLogger(TORCH_REMOTE_LOGGER)
     root_logger.setLevel(level)
-    
+
     # Ensure logging is set up
     if not root_logger.handlers:
         _setup_default_logging()
@@ -110,7 +110,7 @@ def set_logging_level(level: Union[int, str]) -> None:
 def get_logging_level() -> int:
     """
     Get the current logging level for torch_remote.
-    
+
     Returns:
         Current logging level as an integer
     """
