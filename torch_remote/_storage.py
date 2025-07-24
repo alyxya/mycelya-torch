@@ -7,12 +7,11 @@ Storage management for tracking storage-to-machine mappings.
 This module manages the mapping between storage IDs and remote machines:
 - Storage ID to machine resolution
 - Cross-device operation validation
-- Storage registration and tracking
-- Storage lifecycle management
-- Future: Local storage caching capabilities
+- Storage statistics and information
 
 Handles the local mapping of storage IDs to devices and provides validation
 for cross-device operations to ensure tensors are on compatible machines.
+Storage lifecycle (creation/destruction) is handled by the C++ allocator.
 """
 
 from typing import List, Set
@@ -132,37 +131,6 @@ def get_unique_machines_for_storages(storage_ids: List[int]) -> Set[RemoteMachin
     """
     machines = get_machines_for_storages(storage_ids)
     return set(machines)
-
-
-def register_storage(storage_id: int, machine: RemoteMachine) -> None:
-    """Register a storage ID with its owning machine.
-
-    Note: In the current architecture, storage registration is handled
-    by the device daemon when storage is created. This method is provided
-    for future extensibility and local caching features.
-
-    Args:
-        storage_id: Storage ID to register
-        machine: Machine that owns the storage
-    """
-    # Current implementation relies on the device daemon for registration
-    # This method is a placeholder for future enhancements like local caching
-    log.debug(f"Storage {storage_id} registered with machine {machine.machine_id}")
-
-
-def unregister_storage(storage_id: int) -> None:
-    """Unregister a storage ID.
-
-    Note: In the current architecture, storage cleanup is handled
-    by the device daemon. This method is provided for future extensibility
-    and local caching features.
-
-    Args:
-        storage_id: Storage ID to unregister
-    """
-    # Current implementation relies on the device daemon for cleanup
-    # This method is a placeholder for future enhancements like local caching
-    log.debug(f"Storage {storage_id} unregistered")
 
 
 def get_storage_stats() -> dict:
