@@ -209,5 +209,6 @@ from .device import (  # noqa: E402
     GPUType,
     RemoteMachine,
     create_modal_machine,
+    get_all_machines,
     get_device_registry,
 )

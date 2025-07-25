@@ -275,6 +275,10 @@ class DeviceRegistry:
                 return index
         return None
 
+    def get_all_machines(self) -> list[RemoteMachine]:
+        """Get a list of all registered machines."""
+        return list(self._devices.values())
+
 
 # Global device registry
 _device_registry = DeviceRegistry()
@@ -333,3 +337,20 @@ def create_modal_machine(
 def get_device_registry() -> DeviceRegistry:
     """Get the global device registry."""
     return _device_registry
+
+
+def get_all_machines() -> list[RemoteMachine]:
+    """
+    Get a list of all created machines.
+
+    Returns:
+        List of all RemoteMachine instances that have been created
+
+    Example:
+        >>> machine1 = create_modal_machine("T4")
+        >>> machine2 = create_modal_machine("A100-40GB")
+        >>> machines = get_all_machines()
+        >>> print(f"Created {len(machines)} machines")
+        Created 2 machines
+    """
+    return _device_registry.get_all_machines()
