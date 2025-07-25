@@ -59,7 +59,7 @@ def args_to_metadata_with_placeholders(
 
     def replace_remote_tensor_with_placeholder(obj):
         """Replace remote tensors with placeholders and collect metadata."""
-        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+        if isinstance(obj, torch.Tensor):
             metadata = RemoteTensorMetadata.from_remote_tensor(obj)
             tensor_index = len(metadata_list)
             metadata_list.append(metadata)
@@ -94,7 +94,7 @@ def _execute_meta_operation(
     original_tensors = {}
 
     def to_meta_tensor(obj):
-        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+        if isinstance(obj, torch.Tensor):
             if track_originals:
                 # Use .to("meta") for tracking originals (remote operations)
                 meta_tensor = obj.to("meta")
@@ -111,6 +111,17 @@ def _execute_meta_operation(
 
     meta_args, meta_kwargs = tree_map(to_meta_tensor, (args, kwargs))
     meta_result = op(*meta_args, **meta_kwargs)
+
+    # Special handling for "out" parameter: resize empty output tensors to match meta result
+    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
+        out_tensor = kwargs["out"]
+        if out_tensor.numel() == 0:
+            # Find the corresponding meta output tensor to get the expected shape
+            if "out" in meta_kwargs and isinstance(meta_kwargs["out"], torch.Tensor):
+                meta_out = meta_kwargs["out"]
+                if meta_out.shape != out_tensor.shape:
+                    log.debug(f"Resizing empty 'out' tensor from {out_tensor.shape} to {meta_out.shape}")
+                    out_tensor.resize_(meta_out.shape)
 
     return meta_result, original_tensors
 
