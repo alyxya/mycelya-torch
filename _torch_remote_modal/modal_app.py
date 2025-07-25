@@ -18,8 +18,6 @@ import logging
 from typing import Any, Dict, List, Tuple, Union
 
 import modal
-import torch
-from torch.utils._pytree import tree_map
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +56,8 @@ def create_modal_app_for_gpu(
     class PytorchServer:
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
+            import torch
+            
             if not hasattr(self, "_storages"):
                 # storage_id -> torch.Storage or int (for lazy allocation)
                 self._storages: Dict[int, Union[torch.Storage, int]] = {}
@@ -79,6 +79,8 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
+            import torch
+            
             # Store storage and original tensor data
             storages = self._get_storages()
             storage_id = int(storage_id)
@@ -108,6 +110,8 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
+            import torch
+            
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
             tensor = torch.load(buffer, map_location="cpu", weights_only=True)
@@ -155,6 +159,8 @@ def create_modal_app_for_gpu(
             Returns:
                 Serialized tensor data (contiguous representation of the view)
             """
+            import torch
+            
             storages = self._get_storages()
             storage_id = int(storage_id)
             if storage_id not in storages:
@@ -170,30 +176,30 @@ def create_modal_app_for_gpu(
                     f"during operation execution before data retrieval."
                 )
 
-                # If view parameters are provided, create the view and make it contiguous
-                if shape is not None:
-                    # Parse dtype string back to torch.dtype
-                    dtype_str = dtype.replace("torch.", "") if dtype else "float32"
-                    torch_dtype = getattr(torch, dtype_str)
+            # If view parameters are provided, create the view and make it contiguous
+            if shape is not None:
+                # Parse dtype string back to torch.dtype
+                dtype_str = dtype.replace("torch.", "") if dtype else "float32"
+                torch_dtype = getattr(torch, dtype_str)
 
-                    # Create tensor from storage with view parameters (with correct dtype!)
-                    tensor = torch.empty(
-                        0, dtype=torch_dtype, device=storage.device
-                    ).set_(storage, storage_offset, shape, stride or [])
-                    # Make contiguous to get only the view's data
-                    tensor = tensor.contiguous()
-                    log.info(
-                        f"📦 Serializing view of storage {storage_id}: "
-                        f"shape={shape}, stride={stride}, offset={storage_offset}"
-                    )
-                else:
-                    # Return full storage as before (backward compatibility)
-                    tensor = torch.empty(0, device=storage.device).set_(storage)
-                    log.info(f"📦 Serializing full storage {storage_id}")
+                # Create tensor from storage with view parameters (with correct dtype!)
+                tensor = torch.empty(
+                    0, dtype=torch_dtype, device=storage.device
+                ).set_(storage, storage_offset, shape, stride or [])
+                # Make contiguous to get only the view's data
+                tensor = tensor.contiguous()
+                log.info(
+                    f"📦 Serializing view of storage {storage_id}: "
+                    f"shape={shape}, stride={stride}, offset={storage_offset}"
+                )
+            else:
+                # Return full storage as before (backward compatibility)
+                tensor = torch.empty(0, device=storage.device).set_(storage)
+                log.info(f"📦 Serializing full storage {storage_id}")
 
-                buffer = io.BytesIO()
-                torch.save(tensor, buffer)
-                return buffer.getvalue()
+            buffer = io.BytesIO()
+            torch.save(tensor, buffer)
+            return buffer.getvalue()
 
         @modal.method()
         def resize_storage(self, storage_id: int, nbytes: int) -> None:
@@ -211,6 +217,8 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
+            import torch
+            
             storages = self._get_storages()
             storage_id = int(storage_id)
             if storage_id not in storages:
@@ -303,6 +311,10 @@ def create_modal_app_for_gpu(
             Returns:
                 None (operation results are written to output tensors)
             """
+            # Import torch and tree_map locally to avoid serialization issues
+            import torch
+            from torch.utils._pytree import tree_map
+            
             # Extract storage IDs from metadata
             storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
 
