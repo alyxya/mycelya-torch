@@ -358,8 +358,8 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     """Copy data from one tensor to another, handling remote device transfers.
 
     This function implements the core copy operation for remote tensors,
-    supporting CPU↔remote transfers and preventing cross-device transfers
-    between different remote devices.
+    supporting CPU↔remote transfers and same-device remote copies.
+    Cross-device remote transfers and non-remote device copies are blocked.
 
     Args:
         from_: Source tensor to copy from
@@ -369,44 +369,43 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
         Target tensor with copied data
 
     Raises:
-        RuntimeError: If attempting to transfer between different remote devices
+        RuntimeError: If attempting unsupported copy operations
     """
-    # Simplified copy implementation - remote tensors are now regular torch.Tensor
-    # with proper device handling via C++ allocator
-
-    if from_.device.type == to_.device.type:
-        if from_.device.type == "remote":
-            if from_.device.index == to_.device.index:
-                # Same remote device - use direct copy
-                op = torch.ops.aten.copy_.default
-                result = _remote_kernel_fallback(op, to_, from_)
-            else:
-                # Different remote devices: NOT ALLOWED
-                from torch_remote.device import get_device_registry
-
-                device_registry = get_device_registry()
-                from_device = device_registry.get_device_by_index(from_.device.index)
-                to_device = device_registry.get_device_by_index(to_.device.index)
-
-                raise RuntimeError(
-                    f"Cannot transfer tensor between different remote devices. "
-                    f'Source device: "{from_device.machine_id}" (index {from_.device.index}), '
-                    f'Target device: "{to_device.machine_id}" (index {to_.device.index}). '
-                    f"Transfer tensors to CPU first: tensor.cpu().to(target_device)"
-                )
-        else:
-            # Both tensors on same non-remote device
-            result = to_.copy_(from_)
-    elif from_.device.type == "remote":
-        # Remote to non-remote
+    # Only support CPU ↔ remote transfers
+    
+    if from_.device.type == "remote" and to_.device.type == "cpu":
+        # Remote to CPU - supported
         host_mem = copy_from_device(from_)
         result = to_.copy_(host_mem)
-    elif to_.device.type == "remote":
-        # Non-remote to remote
+    elif from_.device.type == "cpu" and to_.device.type == "remote":
+        # CPU to remote - supported
         result = copy_from_host_to_device(from_, to_)
+    elif from_.device.type == "remote" and to_.device.type == "remote":
+        # Remote to remote transfers
+        if from_.device.index == to_.device.index:
+            # Same remote device - allowed (needed for gradients and internal operations)
+            op = torch.ops.aten.copy_.default
+            result = _remote_kernel_fallback(op, to_, from_)
+        else:
+            # Different remote devices - blocked (TODO: support in future)
+            from torch_remote.device import get_device_registry
+
+            device_registry = get_device_registry()
+            from_device = device_registry.get_device_by_index(from_.device.index)
+            to_device = device_registry.get_device_by_index(to_.device.index)
+
+            raise RuntimeError(
+                f"Cross-device remote transfers are not supported. "
+                f'Source device: "{from_device.machine_id}" (index {from_.device.index}), '
+                f'Target device: "{to_device.machine_id}" (index {to_.device.index}). '
+                f"Only CPU↔remote and same-device transfers are allowed. Use CPU as intermediate."
+            )
     else:
-        # Both non-remote but different devices
-        result = to_.copy_(from_)
+        # All other cases (non-remote device copies) - blocked
+        raise RuntimeError(
+            f"Copy operation from {from_.device.type} to {to_.device.type} is not supported. "
+            f"Only CPU↔remote transfers are allowed."
+        )
 
     return result
 
