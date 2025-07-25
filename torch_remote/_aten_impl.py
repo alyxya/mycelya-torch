@@ -786,18 +786,14 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
                 f"No RemoteMachine found for remote device index {from_.device.index}"
             )
 
-        # Get the client for this device
-        client = device._client
-        if client is None or not client.is_running():
-            raise RuntimeError(f"Client not available for device {device.machine_id}")
-
-        # Get storage data using storage ID
+        # Get storage data using orchestrator for centralized client management
         storage_id = from_.untyped_storage().data_ptr()
         log.info(f"Copying storage ID {storage_id} from remote to CPU")
 
-        # Use client to get tensor data by storage ID with view information
-        # Pass tensor metadata so remote side can serialize just the view's data
-        tensor_data = client.get_storage_data(
+        # Use orchestrator to get tensor data with automatic client routing
+        from ._remote_orchestrator import remote_orchestrator
+        
+        tensor_data = remote_orchestrator.get_storage_data(
             storage_id,
             shape=list(from_.shape),
             stride=list(from_.stride()),
@@ -846,22 +842,17 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
                 f"No RemoteMachine found for remote device index {to_.device.index}"
             )
 
-        # Get the client for this device
-        client = device._client
-        if client is None or not client.is_running():
-            raise RuntimeError(f"Client not available for device {device.machine_id}")
-
-        # Send tensor data using storage ID
+        # Send tensor data using orchestrator for centralized client management
         storage_id = to_.untyped_storage().data_ptr()
         log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
 
         # Serialize the CPU tensor
         from ._tensor_utils import cpu_tensor_to_bytes
+        from ._remote_orchestrator import remote_orchestrator
 
         tensor_data = cpu_tensor_to_bytes(from_)
-        # Use client to update tensor with specific ID
-        # This will overwrite any existing empty tensor with the actual data
-        client.update_storage(storage_id, tensor_data)
+        # Use orchestrator to update tensor with automatic client routing
+        remote_orchestrator.update_storage(storage_id, tensor_data)
         log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
         return to_
     else:
@@ -954,13 +945,10 @@ def _local_scalar_dense(self: torch.Tensor):
             f"No RemoteMachine found for remote device index {self.device.index}"
         )
 
-    # Get the client for this device
-    client = machine.get_client()
-    if client is None or not client.is_running():
-        raise RuntimeError(f"Client not available for device {machine.machine_id}")
-
-    # Get serialized tensor data for this scalar
-    tensor_data = client.get_storage_data(
+    # Get serialized tensor data for this scalar using orchestrator
+    from ._remote_orchestrator import remote_orchestrator
+    
+    tensor_data = remote_orchestrator.get_storage_data(
         storage_id,
         shape=list(self.shape),
         stride=list(self.stride()),

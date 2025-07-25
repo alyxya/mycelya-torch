@@ -104,30 +104,18 @@ class StorageRegistry:
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
 
-        # Register the storage with the client immediately for all allocations
+        # Register the storage with the orchestrator for centralized client management
         try:
-            device_registry = get_device_registry()
-            device = device_registry.get_device_by_index(device_index)
-            if device is not None:
-                client = device._client
-                if client:
-                    try:
-                        # Create storage with exact byte size
-                        client.create_storage(storage_id, nbytes, lazy)
-                        log.info(
-                            f"Registered storage {storage_id} with client "
-                            f"({nbytes} bytes, lazy={lazy})"
-                        )
-                    except Exception as e:
-                        log.warning(
-                            f"Failed to register storage {storage_id} with client: {e}"
-                        )
-                        # Clean up the failed storage ID
-                        self.storage_id_to_device.pop(storage_id, None)
-                        self.generated_storage_ids.discard(storage_id)
-                        return 0
+            from ._remote_orchestrator import remote_orchestrator
+            
+            # Use orchestrator to create storage with device routing
+            remote_orchestrator.create_storage(storage_id, nbytes, device_index, lazy)
+            log.info(
+                f"Registered storage {storage_id} via orchestrator "
+                f"({nbytes} bytes, lazy={lazy})"
+            )
         except Exception as e:
-            log.warning(f"Failed to register storage {storage_id} with client: {e}")
+            log.warning(f"Failed to register storage {storage_id} via orchestrator: {e}")
             # Clean up the failed storage ID
             self.storage_id_to_device.pop(storage_id, None)
             self.generated_storage_ids.discard(storage_id)
@@ -226,36 +214,14 @@ class StorageRegistry:
                 log.warning(f"No device found for storage {storage_id}")
                 return False
 
-            # Import here to avoid circular imports
+            # Use orchestrator for centralized client management
             from ._remote_orchestrator import remote_orchestrator
 
-            # Get the device registry to find the machine
-            orchestrator = remote_orchestrator
-            if orchestrator is None:
-                log.warning(
-                    f"No remote orchestrator available for storage {storage_id} resize"
-                )
-                return False
-
-            device_registry = get_device_registry()
-            device = device_registry.get_device_by_index(device_idx)
-            if device is None:
-                log.warning(
-                    f"No device found for index {device_idx} during storage {storage_id} resize"
-                )
-                return False
-
-            # Get client and call resize_storage
-            client = device._client
-            if client and client.is_running():
-                client.resize_storage(storage_id, nbytes)
-                log.info(
-                    f"✅ Successfully initiated resize of remote storage {storage_id} to {nbytes} bytes"
-                )
-                return True
-            else:
-                log.warning(f"Client not available for storage {storage_id} resize")
-                return False
+            remote_orchestrator.resize_storage(storage_id, nbytes)
+            log.info(
+                f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes via orchestrator"
+            )
+            return True
 
         except Exception as e:
             log.warning(f"Failed to resize remote storage {storage_id}: {e}")
