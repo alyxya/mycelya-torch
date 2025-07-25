@@ -58,14 +58,14 @@ def create_modal_app_for_gpu(
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
             if not hasattr(self, "_storages"):
-                import threading
-                from typing import Any, Dict
+                from typing import Dict, Union
 
-                # storage_id -> torch.Storage
-                self._storages: Dict[int, Any] = {}
-                self._storage_lock = threading.RLock()
+                import torch
 
-            return self._storages, self._storage_lock
+                # storage_id -> torch.Storage or int (for lazy allocation)
+                self._storages: Dict[int, Union[torch.Storage, int]] = {}
+
+            return self._storages
 
         @modal.method()
         def create_storage(
@@ -85,24 +85,21 @@ def create_modal_app_for_gpu(
             import torch
 
             # Store storage and original tensor data
-            storages, lock = self._get_storages()
-            with lock:
-                storage_id = int(storage_id)
+            storages = self._get_storages()
+            storage_id = int(storage_id)
 
-                if lazy:
-                    # Store only the byte count for lazy allocation
-                    storages[storage_id] = nbytes
-                    log.info(
-                        f"📝 LAZY Storage ID {storage_id} registered ({nbytes} bytes)"
-                    )
-                else:
-                    # Create tensor directly on GPU with exact byte size
-                    device = torch.device("cuda")
-                    tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
-                    storages[storage_id] = tensor.untyped_storage()
-                    log.info(
-                        f"📥 CREATED Storage ID {storage_id} on Modal ({nbytes} bytes)"
-                    )
+            if lazy:
+                # Store only the byte count for lazy allocation
+                storages[storage_id] = nbytes
+                log.info(f"📝 LAZY Storage ID {storage_id} registered ({nbytes} bytes)")
+            else:
+                # Create tensor directly on GPU with exact byte size
+                device = torch.device("cuda")
+                tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
+                storages[storage_id] = tensor.untyped_storage()
+                log.info(
+                    f"📥 CREATED Storage ID {storage_id} on Modal ({nbytes} bytes)"
+                )
 
         @modal.method()
         def update_storage(self, tensor_data: bytes, storage_id: int) -> None:
@@ -129,21 +126,20 @@ def create_modal_app_for_gpu(
             tensor = tensor.to(device)
 
             # Update existing storage
-            storages, lock = self._get_storages()
-            with lock:
-                storage_id = int(storage_id)
+            storages = self._get_storages()
+            storage_id = int(storage_id)
 
-                # Check if storage was lazy-allocated and warn about direct update
-                if storage_id in storages and isinstance(storages[storage_id], int):
-                    lazy_bytes = storages[storage_id]
-                    log.warning(
-                        f"⚠️ Updating lazy storage ID {storage_id} ({lazy_bytes} bytes) with direct data"
-                    )
-
-                storages[storage_id] = tensor.untyped_storage()
-                log.info(
-                    f"📥 UPDATED Storage ID {storage_id} on Modal (shape: {tensor.shape})"
+            # Check if storage was lazy-allocated and warn about direct update
+            if storage_id in storages and isinstance(storages[storage_id], int):
+                lazy_bytes = storages[storage_id]
+                log.warning(
+                    f"⚠️ Updating lazy storage ID {storage_id} ({lazy_bytes} bytes) with direct data"
                 )
+
+            storages[storage_id] = tensor.untyped_storage()
+            log.info(
+                f"📥 UPDATED Storage ID {storage_id} on Modal (shape: {tensor.shape})"
+            )
 
         @modal.method()
         def get_storage_data(
@@ -170,22 +166,20 @@ def create_modal_app_for_gpu(
             """
             import io
 
-            storages, lock = self._get_storages()
+            storages = self._get_storages()
+            storage_id = int(storage_id)
+            if storage_id not in storages:
+                raise KeyError(f"Storage ID {storage_id} not found")
 
-            with lock:
-                storage_id = int(storage_id)
-                if storage_id not in storages:
-                    raise KeyError(f"Storage ID {storage_id} not found")
+            storage = storages[storage_id]
 
-                storage = storages[storage_id]
-
-                # Validate that storage is not a lazy allocation (int)
-                if isinstance(storage, int):
-                    raise RuntimeError(
-                        f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
-                        f"This indicates a bug: lazy storages should be converted to real storage "
-                        f"during operation execution before data retrieval."
-                    )
+            # Validate that storage is not a lazy allocation (int)
+            if isinstance(storage, int):
+                raise RuntimeError(
+                    f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
+                    f"This indicates a bug: lazy storages should be converted to real storage "
+                    f"during operation execution before data retrieval."
+                )
 
                 # If view parameters are provided, create the view and make it contiguous
                 if shape is not None:
@@ -230,55 +224,53 @@ def create_modal_app_for_gpu(
             """
             import torch
 
-            storages, lock = self._get_storages()
+            storages = self._get_storages()
+            storage_id = int(storage_id)
+            if storage_id not in storages:
+                log.warning(f"Storage ID {storage_id} not found for resize")
+                return False
 
-            with lock:
-                storage_id = int(storage_id)
-                if storage_id not in storages:
-                    log.warning(f"Storage ID {storage_id} not found for resize")
-                    return False
+            old_storage = storages[storage_id]
+            current_bytes = old_storage.nbytes()
 
-                old_storage = storages[storage_id]
-                current_bytes = old_storage.nbytes()
-
-                # Check if resize is actually needed (should be bigger)
-                if nbytes <= current_bytes:
-                    log.debug(
-                        f"Storage {storage_id} resize skipped: "
-                        f"nbytes ({nbytes}) <= current_bytes ({current_bytes})"
-                    )
-                    return  # No-op
-
-                device = old_storage.device
-
-                # Create a tensor that uses the existing storage to leverage tensor.resize_()
-                # Use uint8 dtype for byte-level operations
-                uint8_dtype = torch.uint8
-                current_element_count = (
-                    current_bytes // torch.tensor([], dtype=uint8_dtype).element_size()
+            # Check if resize is actually needed (should be bigger)
+            if nbytes <= current_bytes:
+                log.debug(
+                    f"Storage {storage_id} resize skipped: "
+                    f"nbytes ({nbytes}) <= current_bytes ({current_bytes})"
                 )
-                temp_tensor = torch.tensor([], dtype=uint8_dtype, device=device)
-                temp_tensor.set_(
-                    old_storage, storage_offset=0, size=(current_element_count,)
-                )
+                return  # No-op
 
-                # Calculate new element count for the resized tensor
-                new_element_count = (
-                    nbytes // torch.tensor([], dtype=uint8_dtype).element_size()
-                )
+            device = old_storage.device
 
-                # Use tensor.resize_() to handle the storage resize properly
-                temp_tensor.resize_([new_element_count])
+            # Create a tensor that uses the existing storage to leverage tensor.resize_()
+            # Use uint8 dtype for byte-level operations
+            uint8_dtype = torch.uint8
+            current_element_count = (
+                current_bytes // torch.tensor([], dtype=uint8_dtype).element_size()
+            )
+            temp_tensor = torch.tensor([], dtype=uint8_dtype, device=device)
+            temp_tensor.set_(
+                old_storage, storage_offset=0, size=(current_element_count,)
+            )
 
-                # Get the new storage after resize
-                new_storage = temp_tensor.untyped_storage()
+            # Calculate new element count for the resized tensor
+            new_element_count = (
+                nbytes // torch.tensor([], dtype=uint8_dtype).element_size()
+            )
 
-                # Update the storage mapping
-                storages[storage_id] = new_storage
-                log.info(
-                    f"🔄 Resized storage {storage_id} from {current_bytes} "
-                    f"to {nbytes} bytes using tensor.resize_()"
-                )
+            # Use tensor.resize_() to handle the storage resize properly
+            temp_tensor.resize_([new_element_count])
+
+            # Get the new storage after resize
+            new_storage = temp_tensor.untyped_storage()
+
+            # Update the storage mapping
+            storages[storage_id] = new_storage
+            log.info(
+                f"🔄 Resized storage {storage_id} from {current_bytes} "
+                f"to {nbytes} bytes using tensor.resize_()"
+            )
 
         @modal.method()
         def remove_storage(self, storage_id: int) -> None:
@@ -291,15 +283,13 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
-            storages, lock = self._get_storages()
-
-            with lock:
-                storage_id = int(storage_id)
-                if storage_id in storages:
-                    del storages[storage_id]
-                    log.info(f"🗑️ Removed storage {storage_id}")
-                else:
-                    log.debug(f"Storage {storage_id} not found for removal")
+            storages = self._get_storages()
+            storage_id = int(storage_id)
+            if storage_id in storages:
+                del storages[storage_id]
+                log.info(f"🗑️ Removed storage {storage_id}")
+            else:
+                log.debug(f"Storage {storage_id} not found for removal")
 
         @modal.method()
         def execute_aten_operation(
@@ -338,7 +328,7 @@ def create_modal_app_for_gpu(
 
             try:
                 # Get storage mapping
-                storages, lock = self._get_storages()
+                storages = self._get_storages()
 
                 # Reconstruct only input tensors from storage and metadata
                 # Output tensors don't need reconstruction - we'll update their storage mapping after the operation
@@ -360,16 +350,13 @@ def create_modal_app_for_gpu(
                     is_output = metadata.get("is_output", False)
 
                     # Always reconstruct tensor from storage + metadata (needed for operation execution)
-                    with lock:
-                        storage_id = int(storage_id)
-                        if storage_id not in storages:
-                            available_ids = list(storages.keys())
-                            log.error(f"❌ MISSING Storage ID {storage_id}")
-                            log.error(
-                                f"📋 Available Storage IDs on Modal: {available_ids}"
-                            )
-                            raise KeyError(f"Storage ID {storage_id} not found")
-                        storage = storages[storage_id]
+                    storage_id = int(storage_id)
+                    if storage_id not in storages:
+                        available_ids = list(storages.keys())
+                        log.error(f"❌ MISSING Storage ID {storage_id}")
+                        log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
+                        raise KeyError(f"Storage ID {storage_id} not found")
+                    storage = storages[storage_id]
 
                     # Validate that storage is not a lazy allocation (int)
                     if isinstance(storage, int):
@@ -451,48 +438,43 @@ def create_modal_app_for_gpu(
                         result_tensors = []
 
                     # Update storage mapping for each output tensor
-                    with lock:
-                        for i, (storage_id, _metadata) in enumerate(
-                            zip(output_storage_ids, output_metadata_list)
-                        ):
-                            if i < len(result_tensors):
-                                result_tensor = result_tensors[i]
-                                storage_id = int(storage_id)
+                    for i, (storage_id, _metadata) in enumerate(
+                        zip(output_storage_ids, output_metadata_list)
+                    ):
+                        if i < len(result_tensors):
+                            result_tensor = result_tensors[i]
+                            storage_id = int(storage_id)
 
-                                # Check if the storage has changed
-                                if storage_id in storages:
-                                    current_storage = storages[storage_id]
-                                    result_storage = result_tensor.untyped_storage()
+                            # Check if the storage has changed
+                            if storage_id in storages:
+                                current_storage = storages[storage_id]
+                                result_storage = result_tensor.untyped_storage()
 
-                                    # Handle lazy storage conversion
-                                    if isinstance(current_storage, int):
-                                        # Lazy storage being realized by operation execution
-                                        log.debug(
-                                            f"📦 Converting lazy storage ID {storage_id} ({current_storage} bytes) to real storage"
-                                        )
-                                        storages[storage_id] = result_storage
-                                    elif current_storage is not result_storage:
-                                        # Storage changed - update the mapping
-                                        log.debug(
-                                            f"📦 Updating storage mapping for ID {storage_id}"
-                                        )
-                                        storages[storage_id] = result_storage
-                                    else:
-                                        log.debug(
-                                            f"📦 Storage ID {storage_id} unchanged"
-                                        )
-                                else:
-                                    # New storage ID - add to mapping
+                                # Handle lazy storage conversion
+                                if isinstance(current_storage, int):
+                                    # Lazy storage being realized by operation execution
                                     log.debug(
-                                        f"📦 Adding new storage mapping for ID {storage_id}"
+                                        f"📦 Converting lazy storage ID {storage_id} ({current_storage} bytes) to real storage"
                                     )
-                                    storages[storage_id] = (
-                                        result_tensor.untyped_storage()
+                                    storages[storage_id] = result_storage
+                                elif current_storage is not result_storage:
+                                    # Storage changed - update the mapping
+                                    log.debug(
+                                        f"📦 Updating storage mapping for ID {storage_id}"
                                     )
+                                    storages[storage_id] = result_storage
+                                else:
+                                    log.debug(f"📦 Storage ID {storage_id} unchanged")
                             else:
-                                log.warning(
-                                    f"No result tensor for output storage ID {storage_id}"
+                                # New storage ID - add to mapping
+                                log.debug(
+                                    f"📦 Adding new storage mapping for ID {storage_id}"
                                 )
+                                storages[storage_id] = result_tensor.untyped_storage()
+                        else:
+                            log.warning(
+                                f"No result tensor for output storage ID {storage_id}"
+                            )
 
                 log.info(f"✅ Completed: {op_name} with IO separation")
                 return
