@@ -1,3 +1,48 @@
+[build-system]
+requires = [
+    "setuptools>=61.0",
+    "wheel",
+    "torch>=2.1.0",
+    "numpy",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torch_remote"
+version = "0.1.0"
+description = "Remote GPU cloud execution extension for PyTorch supporting multiple providers"
+authors = [{name = "PyTorch Remote Extension"}]
+license = {text = "AGPL-3.0-or-later"}
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.1.0",
+    "modal>=1.0.0",
+    "numpy",
+]
+
+[project.optional-dependencies]
+runpod = ["runpod>=1.0.0"]
+all = ["runpod>=1.0.0"]
+
+[tool.setuptools.packages.find]
+exclude = ["test*"]
+
+[tool.setuptools.package-data]
+torch_remote = ["*.dll", "*.dylib", "*.so"]
+
 [tool.ruff]
 # Exclude build directories and generated files
 exclude = [

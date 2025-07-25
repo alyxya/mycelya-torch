@@ -101,8 +101,8 @@ if __name__ == "__main__":
             ]
         },
         install_requires=[
-            "torch>=2.0.0",
-            "modal>=0.60.0",
+            "torch>=2.1.0",
+            "modal>=1.0.0",
             "numpy",
         ],
         extras_require={
