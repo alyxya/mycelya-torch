@@ -64,6 +64,88 @@ def create_modal_app_for_gpu(
 
             return self._storages
 
+        def _construct_tensor_from_storage(
+            self,
+            storage_id: int,
+            shape: List[int],
+            stride: List[int],
+            storage_offset: int,
+            dtype: str
+        ) -> Any:
+            """
+            Construct a tensor from storage ID and tensor parameters.
+
+            Args:
+                storage_id: The storage ID to look up
+                shape: Tensor shape
+                stride: Tensor stride
+                storage_offset: Storage offset
+                dtype: Data type as string
+
+            Returns:
+                Reconstructed tensor on CUDA device
+
+            Raises:
+                KeyError: If storage_id is not found
+                RuntimeError: If storage is lazy-allocated
+            """
+            import torch
+
+            storages = self._get_storages()
+
+            # Validate storage exists
+            if storage_id not in storages:
+                available_ids = list(storages.keys())
+                log.error(f"❌ MISSING Storage ID {storage_id}")
+                log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
+                raise KeyError(f"Storage ID {storage_id} not found")
+
+            storage = storages[storage_id]
+
+            # Validate that storage is not a lazy allocation (int)
+            if isinstance(storage, int):
+                raise RuntimeError(
+                    f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
+                    f"This indicates a bug: lazy storages should be converted to real storage "
+                    f"during operation execution before tensor reconstruction."
+                )
+
+            # Parse dtype string back to torch.dtype
+            dtype_str = dtype.replace("torch.", "")
+            torch_dtype = getattr(torch, dtype_str)
+
+            # Determine device to use (prefer storage device if available)
+            target_device = storage.device if hasattr(storage, 'device') else "cuda"
+
+            # Reconstruct tensor using storage + parameters
+            tensor = torch.empty(0, dtype=torch_dtype, device=target_device).set_(
+                storage, storage_offset, shape, stride
+            )
+
+            return tensor
+
+        def _construct_tensor_from_metadata(self, storage_id: int, metadata: Dict[str, Any]) -> Any:
+            """
+            Construct a tensor from storage ID and metadata dictionary.
+
+            This is a convenience wrapper around _construct_tensor_from_storage
+            that extracts parameters from a metadata dictionary.
+
+            Args:
+                storage_id: The storage ID to look up
+                metadata: Tensor metadata containing shape, stride, storage_offset, dtype
+
+            Returns:
+                Reconstructed tensor on CUDA device
+            """
+            return self._construct_tensor_from_storage(
+                storage_id=storage_id,
+                shape=metadata["shape"],
+                stride=metadata["stride"],
+                storage_offset=metadata["storage_offset"],
+                dtype=metadata["dtype"]
+            )
+
         @modal.method()
         def create_storage(
             self, nbytes: int, storage_id: int, lazy: bool = False
@@ -140,18 +222,18 @@ def create_modal_app_for_gpu(
         def get_storage_data(
             self,
             storage_id: int,
-            shape=None,
-            stride=None,
-            storage_offset=0,
-            dtype=None,
+            shape: List[int],
+            stride: List[int],
+            storage_offset: int,
+            dtype: str,
         ) -> bytes:
             """
             Retrieve current storage data by storage ID for transfer to client.
-            If view parameters are provided, returns only the view's data as contiguous.
+            Returns the view's data as contiguous.
 
             Args:
                 storage_id: The storage ID
-                shape: Tensor shape for view (if None, returns full storage)
+                shape: Tensor shape for view
                 stride: Tensor stride for view
                 storage_offset: Storage offset for view
                 dtype: Tensor data type
@@ -161,41 +243,22 @@ def create_modal_app_for_gpu(
             """
             import torch
 
-            storages = self._get_storages()
             storage_id = int(storage_id)
-            if storage_id not in storages:
-                raise KeyError(f"Storage ID {storage_id} not found")
 
-            storage = storages[storage_id]
-
-            # Validate that storage is not a lazy allocation (int)
-            if isinstance(storage, int):
-                raise RuntimeError(
-                    f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
-                    f"This indicates a bug: lazy storages should be converted to real storage "
-                    f"during operation execution before data retrieval."
-                )
-
-            # If view parameters are provided, create the view and make it contiguous
-            if shape is not None:
-                # Parse dtype string back to torch.dtype
-                dtype_str = dtype.replace("torch.", "") if dtype else "float32"
-                torch_dtype = getattr(torch, dtype_str)
-
-                # Create tensor from storage with view parameters (with correct dtype!)
-                tensor = torch.empty(
-                    0, dtype=torch_dtype, device=storage.device
-                ).set_(storage, storage_offset, shape, stride or [])
-                # Make contiguous to get only the view's data
-                tensor = tensor.contiguous()
-                log.info(
-                    f"📦 Serializing view of storage {storage_id}: "
-                    f"shape={shape}, stride={stride}, offset={storage_offset}"
-                )
-            else:
-                # Return full storage as before (backward compatibility)
-                tensor = torch.empty(0, device=storage.device).set_(storage)
-                log.info(f"📦 Serializing full storage {storage_id}")
+            # Use helper method to construct tensor with specified view parameters
+            tensor = self._construct_tensor_from_storage(
+                storage_id=storage_id,
+                shape=shape,
+                stride=stride,
+                storage_offset=storage_offset,
+                dtype=dtype
+            )
+            # Make contiguous to get only the view's data
+            tensor = tensor.contiguous()
+            log.info(
+                f"📦 Serializing view of storage {storage_id}: "
+                f"shape={shape}, stride={stride}, offset={storage_offset}"
+            )
 
             buffer = io.BytesIO()
             torch.save(tensor, buffer)
@@ -336,33 +399,8 @@ def create_modal_app_for_gpu(
                     f"Modal app processing input storage_id={storage_id} (type={type(storage_id)})"
                 )
 
-                # Reconstruct tensor from storage + metadata (needed for operation execution)
-                if storage_id not in storages:
-                    available_ids = list(storages.keys())
-                    log.error(f"❌ MISSING Storage ID {storage_id}")
-                    log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
-                    raise KeyError(f"Storage ID {storage_id} not found")
-                storage = storages[storage_id]
-
-                # Validate that storage is not a lazy allocation (int)
-                if isinstance(storage, int):
-                    raise RuntimeError(
-                        f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
-                        f"This indicates a bug: lazy storages should be converted to real storage "
-                        f"during operation execution before tensor reconstruction."
-                    )
-
-                # Parse dtype string back to torch.dtype
-                dtype_str = metadata["dtype"].replace("torch.", "")
-                dtype = getattr(torch, dtype_str)
-
-                # Reconstruct tensor using storage + metadata (on CUDA device)
-                tensor = torch.empty(0, dtype=dtype, device="cuda").set_(
-                    storage,
-                    metadata["storage_offset"],
-                    metadata["shape"],
-                    metadata["stride"],
-                )
+                # Reconstruct tensor using helper method
+                tensor = self._construct_tensor_from_metadata(storage_id, metadata)
 
                 log.debug(
                     f"📥 MODAL input tensor[{i}]: ID={storage_id}, shape={tensor.shape}"

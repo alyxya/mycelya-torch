@@ -119,17 +119,17 @@ class ModalClient(ClientInterface):
     def get_storage_data(
         self,
         storage_id: int,
-        shape: List[int] = None,
-        stride: List[int] = None,
-        storage_offset: int = 0,
-        dtype: str = None,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str,
     ) -> bytes:
         """
-        Get storage data by ID for device transfer, optionally as a specific view.
+        Get storage data by ID for device transfer as a specific view.
 
         Args:
             storage_id: The storage ID
-            shape: Tensor shape for view (if None, returns full storage)
+            shape: Tensor shape for view
             stride: Tensor stride for view
             storage_offset: Storage offset for view
             dtype: Tensor data type
