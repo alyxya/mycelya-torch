@@ -390,22 +390,13 @@ def create_modal_app_for_gpu(
             # Get storage mapping
             storages = self._get_storages()
 
-            # Reconstruct only input tensors from storage and metadata
-            input_tensors = []
+            # Reconstruct input tensors from storage and metadata
+            input_tensors = [
+                self._construct_tensor_from_metadata(metadata["storage_id"], metadata)
+                for metadata in input_tensor_metadata
+            ]
 
-            for i, metadata in enumerate(input_tensor_metadata):
-                storage_id = metadata["storage_id"]
-                log.debug(
-                    f"Modal app processing input storage_id={storage_id} (type={type(storage_id)})"
-                )
-
-                # Reconstruct tensor using helper method
-                tensor = self._construct_tensor_from_metadata(storage_id, metadata)
-
-                log.debug(
-                    f"📥 MODAL input tensor[{i}]: ID={storage_id}, shape={tensor.shape}"
-                )
-                input_tensors.append(tensor)
+            log.debug(f"📥 Reconstructed {len(input_tensors)} input tensors")
 
             # Replace tensor placeholders with actual reconstructed input tensors using tree_map
             def replace_placeholder_with_tensor(obj):
