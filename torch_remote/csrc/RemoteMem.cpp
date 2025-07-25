@@ -30,13 +30,38 @@ struct RemoteAllocator final : at::Allocator {
     storage_id_t storage_id =
         get_method("create_storage")(nbytes, curr_device_idx).cast<storage_id_t>();
 
-    TORCH_CHECK(storage_id != 0, "Failed to allocate storage (", nbytes, 
+    TORCH_CHECK(storage_id != 0, "Failed to allocate storage (", nbytes,
                 " bytes) on remote device ", curr_device_idx);
 
     // Store the storage ID as the data pointer (always non-zero)
     data = reinterpret_cast<void *>(storage_id);
 
     return {data, data, &ReportAndDelete, curr_device};
+  }
+
+  static void ReportAndDelete(void *ptr) {
+    if (!ptr || !Py_IsInitialized()) {
+      return;
+    }
+
+    py::gil_scoped_acquire acquire;
+
+    PyObject *type = nullptr, *value = nullptr, *traceback = nullptr;
+    // Always stash, this will be a no-op if there is no error
+    PyErr_Fetch(&type, &value, &traceback);
+
+    // Convert pointer back to storage ID for deletion
+    storage_id_t storage_id = reinterpret_cast<storage_id_t>(ptr);
+    TORCH_CHECK(get_method("free_storage_with_id")(storage_id).cast<bool>(),
+                "Failed to free storage with ID ", storage_id);
+
+    // If that user code raised an error, just print it without raising it
+    if (PyErr_Occurred()) {
+      PyErr_Print();
+    }
+
+    // Restore the original error
+    PyErr_Restore(type, value, traceback);
   }
 
   at::DeleterFnPtr raw_deleter() const override {
@@ -63,31 +88,6 @@ bool validate_device_index(c10::DeviceIndex device_index) {
   } catch (...) {
     return false;
   }
-}
-
-// Storage cleanup function for allocator
-void ReportAndDelete(void *ptr) {
-  if (!ptr || !Py_IsInitialized()) {
-    return;
-  }
-
-  py::gil_scoped_acquire acquire;
-
-  PyObject *type = nullptr, *value = nullptr, *traceback = nullptr;
-  // Always stash, this will be a no-op if there is no error
-  PyErr_Fetch(&type, &value, &traceback);
-
-  // Convert pointer back to storage ID for deletion
-  storage_id_t storage_id = reinterpret_cast<storage_id_t>(ptr);
-  get_method("free_storage_with_id")(storage_id);
-
-  // If that user code raised an error, just print it without raising it
-  if (PyErr_Occurred()) {
-    PyErr_Print();
-  }
-
-  // Restore the original error
-  PyErr_Restore(type, value, traceback);
 }
 
 // C++ implementation of empty_remote using direct allocator integration

@@ -35,6 +35,4 @@ at::Tensor empty_strided_remote(at::IntArrayRef size, at::IntArrayRef stride,
 // Utility functions for storage ID management
 bool validate_device_index(c10::DeviceIndex device_index);
 
-void ReportAndDelete(void *ptr);
-
 } // namespace remote
