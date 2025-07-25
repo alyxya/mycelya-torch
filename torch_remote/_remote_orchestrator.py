@@ -15,7 +15,7 @@ import torch
 
 from ._logging import get_logger
 from ._storage import get_machine_for_storage
-from ._tensor_utils import TensorMetadata
+from ._tensor_utils import RemoteTensorMetadata, TensorMetadata
 from .device import RemoteMachine
 
 log = get_logger(__name__)
@@ -44,8 +44,8 @@ class RemoteOrchestrator:
     def execute_remote_aten_operation(
         self,
         op_name: str,
-        input_metadata: List[TensorMetadata],
-        output_metadata: List[TensorMetadata],
+        input_metadata: List[RemoteTensorMetadata],
+        output_metadata: List[RemoteTensorMetadata],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
     ) -> None:
@@ -57,8 +57,8 @@ class RemoteOrchestrator:
 
         Args:
             op_name: Name of the operation to execute
-            input_metadata: Metadata for input tensors
-            output_metadata: Metadata for output tensors
+            input_metadata: Metadata for remote input tensors (always have storage_id)
+            output_metadata: Metadata for remote output tensors (always have storage_id)
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
         """

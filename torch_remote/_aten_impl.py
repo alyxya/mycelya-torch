@@ -9,7 +9,7 @@ import torch
 # Simple operation dispatch - no complex patterns needed
 from ._device_daemon import driver
 from ._logging import get_logger
-from ._tensor_utils import TensorMetadata
+from ._tensor_utils import RemoteTensorMetadata
 
 log = get_logger(__name__)
 
@@ -20,16 +20,16 @@ def args_to_metadata_with_placeholders(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
     operation_context: Optional[str] = None,
-) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[TensorMetadata]]:
+) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMetadata]]:
     """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
-    metadata_list: List[TensorMetadata] = []
+    metadata_list: List[RemoteTensorMetadata] = []
     processed_args: List[Any] = []
     processed_kwargs: Dict[str, Any] = {}
 
     # Process args
     for arg in args:
         if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            metadata = TensorMetadata.from_remote_tensor(arg)
+            metadata = RemoteTensorMetadata.from_remote_tensor(arg)
             tensor_index = len(metadata_list)
             metadata_list.append(metadata)
             processed_args.append(f"__TENSOR_{tensor_index}")
@@ -39,7 +39,7 @@ def args_to_metadata_with_placeholders(
     # Process kwargs
     for key, value in kwargs.items():
         if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            metadata = TensorMetadata.from_remote_tensor(value)
+            metadata = RemoteTensorMetadata.from_remote_tensor(value)
             tensor_index = len(metadata_list)
             metadata_list.append(metadata)
             processed_kwargs[key] = f"__TENSOR_{tensor_index}"
@@ -751,7 +751,7 @@ def _execute_on_remote_device(
 
     # Convert output tensors to metadata as well
     output_metadata = [
-        TensorMetadata.from_remote_tensor(tensor) for tensor in output_tensors
+        RemoteTensorMetadata.from_remote_tensor(tensor) for tensor in output_tensors
     ]
 
     log.debug(
