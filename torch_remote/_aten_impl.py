@@ -133,85 +133,18 @@ def _handle_view_operation(
 def _remote_kernel_fallback(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> Any:
-    import threading
-    import traceback
-
+    """Execute PyTorch operations on remote devices using simple dispatch logic."""
     op_name = op.overloadpacket._qualified_op_name
-    thread_id = threading.get_ident()
+    
+    # Validate cross-device operations upfront for all execution paths
+    _validate_cross_device_operation(op_name, args, kwargs)
 
-    # Debug: Log tensor devices to understand why we're being called
-    tensor_devices = []
-    for i, arg in enumerate(args):
-        if isinstance(arg, torch.Tensor):
-            tensor_devices.append(f"args[{i}]: {arg.device.type}")
-        elif (
-            isinstance(arg, (list, tuple)) and arg and isinstance(arg[0], torch.Tensor)
-        ):
-            tensor_devices.append(
-                f"args[{i}]: [{', '.join(t.device.type for t in arg if isinstance(t, torch.Tensor))}]"
-            )
-
-    for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor):
-            tensor_devices.append(f"{key}: {value.device.type}")
-        elif (
-            isinstance(value, (list, tuple))
-            and value
-            and isinstance(value[0], torch.Tensor)
-        ):
-            tensor_devices.append(
-                f"{key}: [{', '.join(t.device.type for t in value if isinstance(t, torch.Tensor))}]"
-            )
-
-    log.info(f"📱 FALLBACK CALLED: {op_name} with tensors on devices: {tensor_devices}")
-    log.info(f"📋 OP DETAILS: {op}")
-    log.info(
-        f"📋 ARGS: {[type(arg).__name__ + (f'[{len(arg)}]' if isinstance(arg, (list, tuple)) else '') for arg in args]}"
-    )
-    log.info(f"📋 KWARGS: {list(kwargs.keys())}")
-
-    # Debug: Track call depth to detect recursion
-    if not hasattr(_remote_kernel_fallback, "_call_stack"):
-        _remote_kernel_fallback._call_stack = {}
-
-    if thread_id not in _remote_kernel_fallback._call_stack:
-        _remote_kernel_fallback._call_stack[thread_id] = []
-
-    call_stack = _remote_kernel_fallback._call_stack[thread_id]
-    call_depth = len(call_stack)
-
-    log.info(f"🔄 ENTER [{call_depth}] {op_name} (thread {thread_id})")
-
-    # Detect potential recursion
-    if call_depth > 10:  # Arbitrary threshold
-        log.error(f"🚨 RECURSION DETECTED! Call depth: {call_depth}")
-        log.error(f"Call stack: {' -> '.join(call_stack)}")
-        log.error("Current stack trace:")
-        traceback.print_stack()
-        raise RuntimeError(
-            f"Recursion detected in remote kernel fallback: {call_stack}"
-        )
-
-    # Add current operation to call stack
-    call_stack.append(op_name)
-
-    try:
-        log.info(
-            f"📍 Processing {op_name}, Args: {len(args)}, Kwargs: {list(kwargs.keys())}"
-        )
-
-        result = _remote_kernel_fallback_impl(op, *args, **kwargs)
-
-        log.info(f"🔄 EXIT [{call_depth}] {op_name} -> SUCCESS")
-        return result
-
-    except Exception as e:
-        log.error(f"🔄 EXIT [{call_depth}] {op_name} -> ERROR: {e}")
-        raise
-    finally:
-        # Remove current operation from call stack
-        if call_stack and call_stack[-1] == op_name:
-            call_stack.pop()
+    # Simple operation classification
+    if _is_view_operation(op):
+        return _handle_view_operation(op, *args, **kwargs)
+    else:
+        # All other operations execute remotely
+        return _execute_remote_operation(op, args, kwargs)
 
 
 def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> None:
@@ -243,23 +176,6 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
     tree_map(check_tensor_device, (args, kwargs))
 
 
-def _remote_kernel_fallback_impl(
-    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
-) -> Any:
-    """Execute PyTorch operations on remote devices using simple dispatch logic."""
-    op_name = op.overloadpacket._qualified_op_name
-
-    # Validate cross-device operations upfront for all execution paths
-    _validate_cross_device_operation(op_name, args, kwargs)
-
-    # Simple operation classification
-    if _is_view_operation(op):
-        log.info(f"🔍 View operation: {op_name}")
-        return _handle_view_operation(op, *args, **kwargs)
-    else:
-        # All other operations execute remotely
-        log.info(f"🚀 Remote operation: {op_name}")
-        return _execute_remote_operation(op, args, kwargs)
 
 
 def _is_view_operation(op: torch._ops.OpOverload) -> bool:
