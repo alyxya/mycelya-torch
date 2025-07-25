@@ -1,7 +1,7 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import torch
 from torch.utils._pytree import tree_map
@@ -17,7 +17,6 @@ log = get_logger(__name__)
 def args_to_metadata_with_placeholders(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-    operation_context: Optional[str] = None,
 ) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMetadata]]:
     """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
     metadata_list: List[RemoteTensorMetadata] = []
@@ -95,25 +94,10 @@ def _check_and_fix_empty_output_tensors(
                     return
 
 
-# Lazy import to avoid import errors if remote execution is not available
-def _get_remote_orchestrator() -> Optional[Any]:
-    """Get the global remote orchestrator instance.
-
-    The remote orchestrator handles communication with remote clients
-    and coordinates tensor operations across devices. This function
-    imports the orchestrator and gracefully handles cases where remote
-    execution is not available.
-
-    Returns:
-        RemoteOrchestrator instance if available, None otherwise
-    """
-    try:
-        from ._remote_orchestrator import remote_orchestrator
-
-        return remote_orchestrator
-    except ImportError as e:
-        log.warning(f"Remote execution not available: {e}")
-        return None
+def _get_remote_orchestrator():
+    """Get the global remote orchestrator instance."""
+    from ._remote_orchestrator import remote_orchestrator
+    return remote_orchestrator
 
 
 def _handle_view_operation(
@@ -609,7 +593,7 @@ def _execute_non_tensor_result(
 
     # Use the clean abstraction - convert tensors to metadata first
     processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(args, kwargs, operation_context=op_name)
+        args_to_metadata_with_placeholders(args, kwargs)
     )
 
     # No output tensors for non-tensor results
@@ -729,7 +713,7 @@ def _execute_on_remote_device(
 
     # Convert tensors to metadata at PyTorch boundary (early conversion)
     processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(args, kwargs, operation_context=op_name)
+        args_to_metadata_with_placeholders(args, kwargs)
     )
 
     # Convert output tensors to metadata as well
@@ -756,46 +740,40 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         raise ValueError("copy_from_device requires a remote tensor")
 
     # Use remote execution to get the tensor data
-    orchestrator = _get_remote_orchestrator()
-    if orchestrator is not None:
-        from .device import get_device_registry
+    from .device import get_device_registry
 
-        # Get the device backend
-        registry = get_device_registry()
-        device = registry.get_device_by_index(from_.device.index)
+    # Get the device backend
+    registry = get_device_registry()
+    device = registry.get_device_by_index(from_.device.index)
 
-        if device is None:
-            raise RuntimeError(
-                f"No RemoteMachine found for remote device index {from_.device.index}"
-            )
-
-        # Get storage data using orchestrator for centralized client management
-        storage_id = from_.untyped_storage().data_ptr()
-        log.info(f"Copying storage ID {storage_id} from remote to CPU")
-
-        # Use orchestrator to get tensor data with automatic client routing
-        from ._remote_orchestrator import remote_orchestrator
-
-        tensor_data = remote_orchestrator.get_storage_data(
-            storage_id,
-            shape=list(from_.shape),
-            stride=list(from_.stride()),
-            storage_offset=from_.storage_offset(),
-            dtype=str(from_.dtype),
-        )
-
-        # Deserialize to CPU tensor (always contiguous and packed)
-        from ._tensor_utils import bytes_to_cpu_tensor
-        result = bytes_to_cpu_tensor(tensor_data)
-
-        log.info(
-            f"Successfully copied contiguous tensor data for storage ID {storage_id} to CPU"
-        )
-        return result
-    else:
+    if device is None:
         raise RuntimeError(
-            "Cannot copy from remote device: remote execution not available"
+            f"No RemoteMachine found for remote device index {from_.device.index}"
         )
+
+    # Get storage data using orchestrator for centralized client management
+    storage_id = from_.untyped_storage().data_ptr()
+    log.info(f"Copying storage ID {storage_id} from remote to CPU")
+
+    # Use orchestrator to get tensor data with automatic client routing
+    from ._remote_orchestrator import remote_orchestrator
+
+    tensor_data = remote_orchestrator.get_storage_data(
+        storage_id,
+        shape=list(from_.shape),
+        stride=list(from_.stride()),
+        storage_offset=from_.storage_offset(),
+        dtype=str(from_.dtype),
+    )
+
+    # Deserialize to CPU tensor (always contiguous and packed)
+    from ._tensor_utils import bytes_to_cpu_tensor
+    result = bytes_to_cpu_tensor(tensor_data)
+
+    log.info(
+        f"Successfully copied contiguous tensor data for storage ID {storage_id} to CPU"
+    )
+    return result
 
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
@@ -806,44 +784,38 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
     # Use remote execution to send the tensor data
-    orchestrator = _get_remote_orchestrator()
-    if orchestrator is not None:
-        from .device import get_device_registry
+    from .device import get_device_registry
 
-        # Get the device backend
-        registry = get_device_registry()
-        device = registry.get_device_by_index(to_.device.index)
+    # Get the device backend
+    registry = get_device_registry()
+    device = registry.get_device_by_index(to_.device.index)
 
-        if device is None:
-            raise RuntimeError(
-                f"No RemoteMachine found for remote device index {to_.device.index}"
-            )
-
-        # Send tensor data using orchestrator for centralized client management
-        storage_id = to_.untyped_storage().data_ptr()
-        log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
-
-        # Serialize the CPU tensor
-        from ._remote_orchestrator import remote_orchestrator
-        from ._tensor_utils import cpu_tensor_to_bytes
-
-        tensor_data = cpu_tensor_to_bytes(from_)
-        # Use orchestrator to update tensor with automatic client routing
-        # Pass view parameters for proper handling of tensor views/slices
-        remote_orchestrator.update_storage(
-            storage_id,
-            tensor_data,
-            shape=list(to_.shape),
-            stride=list(to_.stride()),
-            storage_offset=to_.storage_offset(),
-            dtype=str(to_.dtype)
-        )
-        log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
-        return to_
-    else:
+    if device is None:
         raise RuntimeError(
-            "Cannot copy to remote device: remote execution not available"
+            f"No RemoteMachine found for remote device index {to_.device.index}"
         )
+
+    # Send tensor data using orchestrator for centralized client management
+    storage_id = to_.untyped_storage().data_ptr()
+    log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
+
+    # Serialize the CPU tensor
+    from ._remote_orchestrator import remote_orchestrator
+    from ._tensor_utils import cpu_tensor_to_bytes
+
+    tensor_data = cpu_tensor_to_bytes(from_)
+    # Use orchestrator to update tensor with automatic client routing
+    # Pass view parameters for proper handling of tensor views/slices
+    remote_orchestrator.update_storage(
+        storage_id,
+        tensor_data,
+        shape=list(to_.shape),
+        stride=list(to_.stride()),
+        storage_offset=to_.storage_offset(),
+        dtype=str(to_.dtype)
+    )
+    log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
+    return to_
 
 
 def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
@@ -940,13 +912,6 @@ def _local_scalar_dense(self: torch.Tensor):
         storage_offset=self.storage_offset(),
         dtype=str(self.dtype),
     )
-
-    # Deserialize to CPU tensor and extract scalar value
-    orchestrator = _get_remote_orchestrator()
-    if orchestrator is None:
-        raise RuntimeError(
-            "Cannot retrieve scalar value: remote execution not available"
-        )
 
     # Deserialize to CPU tensor
     from ._tensor_utils import bytes_to_cpu_tensor
