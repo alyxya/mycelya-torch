@@ -169,21 +169,6 @@ class RemoteTensorMetadata(BaseTensorMetadata):
 TensorMetadata = Union[LocalTensorMetadata, RemoteTensorMetadata]
 
 
-def tensor_metadata_from_dict(data: Dict[str, Any]) -> TensorMetadata:
-    """Create appropriate metadata type from dictionary."""
-    base_args = {
-        "shape": tuple(data["shape"]),
-        "stride": tuple(data["stride"]),
-        "storage_offset": data["storage_offset"],
-        "dtype": getattr(torch, data["dtype"]),
-    }
-
-    if "storage_id" in data:
-        return RemoteTensorMetadata(**base_args, storage_id=data["storage_id"])
-    else:
-        return LocalTensorMetadata(**base_args)
-
-
 def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     """
     Convert a CPU tensor to bytes for data transfer.
