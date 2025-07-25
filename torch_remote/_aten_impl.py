@@ -252,15 +252,12 @@ def _remote_kernel_fallback_impl(
     # Validate cross-device operations upfront for all execution paths
     _validate_cross_device_operation(op_name, args, kwargs)
 
-    # Simple operation classification - no complex pattern needed
+    # Simple operation classification
     if _is_view_operation(op):
         log.info(f"🔍 View operation: {op_name}")
         return _handle_view_operation(op, *args, **kwargs)
-    elif _is_scalar_operation(op):
-        log.info(f"📊 Scalar operation: {op_name}")
-        return _handle_scalar_operation(op, *args, **kwargs)
     else:
-        # All other operations (compute, memory, creation) execute remotely
+        # All other operations execute remotely
         log.info(f"🚀 Remote operation: {op_name}")
         return _execute_remote_operation(op, args, kwargs)
 
@@ -291,70 +288,6 @@ def _is_view_operation(op: torch._ops.OpOverload) -> bool:
     }
     return op._schema.name in view_ops
 
-
-def _is_scalar_operation(op: torch._ops.OpOverload) -> bool:
-    """Check if operation returns a scalar that can be computed locally from metadata."""
-    scalar_ops = {
-        "aten::item",
-        "aten::numel",
-        "aten::size",
-        "aten::stride",
-        "aten::storage_offset",
-        "aten::dim",
-        "aten::ndimension",
-        "aten::element_size",
-        "aten::is_contiguous",
-    }
-    return op._schema.name in scalar_ops
-
-
-def _handle_scalar_operation(
-    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
-) -> Any:
-    """Handle scalar operations that can be computed locally from tensor metadata."""
-    op_name = op._schema.name
-
-    if op_name == "aten::item":
-        tensor = args[0]
-        if tensor.device.type == "remote":
-            # Transfer to CPU and extract item
-            cpu_tensor = tensor.cpu()
-            return cpu_tensor.item()
-        else:
-            return tensor.item()
-
-    elif op_name in {
-        "aten::numel",
-        "aten::size",
-        "aten::stride",
-        "aten::storage_offset",
-        "aten::dim",
-        "aten::ndimension",
-    }:
-        # These can be computed locally from tensor metadata
-        tensor = args[0]
-        if op_name == "aten::numel":
-            return tensor.numel()
-        elif op_name == "aten::size":
-            dim = args[1] if len(args) > 1 else None
-            return tensor.size(dim) if dim is not None else tensor.shape
-        elif op_name == "aten::stride":
-            dim = args[1] if len(args) > 1 else None
-            return tensor.stride(dim) if dim is not None else tensor.stride()
-        elif op_name == "aten::storage_offset":
-            return tensor.storage_offset()
-        elif op_name in {"aten::dim", "aten::ndimension"}:
-            return tensor.dim()
-        elif op_name == "aten::element_size":
-            return tensor.element_size()
-        elif op_name == "aten::is_contiguous":
-            return tensor.is_contiguous()
-
-    # For other scalar operations, fall back to remote execution
-    log.warning(
-        f"Unhandled scalar operation {op_name}, falling back to remote execution"
-    )
-    return _execute_remote_operation(op, args, kwargs)
 
 
 def _execute_remote_operation(
