@@ -204,53 +204,25 @@ def _execute_aten_operation(
         meta_outputs = list(meta_result)
         return_single = False
     else:
-        # Non-tensor result, execute remotely and return as-is
-        return _execute_non_tensor_result(op, args, kwargs, meta_result)
+        # Non-tensor result, no output tensors to create
+        meta_outputs = []
+        return_single = None  # Flag for non-tensor result
 
-    # Step 3: Create output tensors
+    # Step 3: Create output tensors (empty list for non-tensor results)
     output_tensors = _create_output_tensors(
         op, args, kwargs, meta_outputs, original_tensors, remote_device
-    )
+    ) if meta_outputs else []
 
     # Step 4: Execute remotely with orchestrator
     _execute_on_remote_device(op, args, kwargs, output_tensors)
 
     # Step 5: Return results
-    if return_single:
+    if return_single is True:
         return output_tensors[0]
-    else:
+    elif return_single is False:
         return tuple(output_tensors)
 
 
-def _execute_non_tensor_result(
-    op: torch._ops.OpOverload,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
-    meta_result: Any,
-) -> Any:
-    """Handle operations that return non-tensor results."""
-
-    op_name = op.overloadpacket._qualified_op_name
-    log.debug(f"Non-tensor result from {op_name}, executing remotely")
-
-    # Use the clean abstraction - convert tensors to metadata first
-    processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(args, kwargs)
-    )
-
-    # No output tensors for non-tensor results
-    output_metadata = []
-
-    # Execute with clean interface - only metadata crosses boundary
-    orchestrator = _get_remote_orchestrator()
-    orchestrator.execute_aten_operation(
-        op_name,
-        input_metadata,
-        output_metadata,
-        processed_args,
-        processed_kwargs,
-    )
-    return meta_result
 
 
 def _create_output_tensors(
