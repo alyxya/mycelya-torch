@@ -62,7 +62,9 @@ class RemoteOrchestrator:
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
         """
-        log.info(f"🎯 ORCHESTRATOR: Executing {op_name} with separated input/output interface")
+        log.info(
+            f"🎯 ORCHESTRATOR: Executing {op_name} with separated input/output interface"
+        )
 
         # Convert input metadata to serializable dictionaries
         input_tensor_metadata_dicts = []
@@ -85,7 +87,9 @@ class RemoteOrchestrator:
 
         # Execute with separated input/output interface
         client = self._get_device_client(machine)
-        client.execute_aten_operation(op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs)
+        client.execute_aten_operation(
+            op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs
+        )
 
         log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
 

@@ -861,7 +861,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         tensor_data = cpu_tensor_to_bytes(from_)
         # Use client to update tensor with specific ID
         # This will overwrite any existing empty tensor with the actual data
-        client.update_storage(tensor_data, storage_id)
+        client.update_storage(storage_id, tensor_data)
         log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
         return to_
     else:

@@ -184,8 +184,6 @@ def tensor_metadata_from_dict(data: Dict[str, Any]) -> TensorMetadata:
         return LocalTensorMetadata(**base_args)
 
 
-
-
 def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     """
     Convert a CPU tensor to bytes for data transfer.

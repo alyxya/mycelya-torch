@@ -70,7 +70,7 @@ def create_modal_app_for_gpu(
             shape: List[int],
             stride: List[int],
             storage_offset: int,
-            dtype: str
+            dtype: str,
         ) -> Any:
             """
             Construct a tensor from storage ID and tensor parameters.
@@ -115,7 +115,7 @@ def create_modal_app_for_gpu(
             torch_dtype = getattr(torch, dtype_str)
 
             # Determine device to use (prefer storage device if available)
-            target_device = storage.device if hasattr(storage, 'device') else "cuda"
+            target_device = storage.device if hasattr(storage, "device") else "cuda"
 
             # Reconstruct tensor using storage + parameters
             tensor = torch.empty(0, dtype=torch_dtype, device=target_device).set_(
@@ -124,7 +124,9 @@ def create_modal_app_for_gpu(
 
             return tensor
 
-        def _construct_tensor_from_metadata(self, storage_id: int, metadata: Dict[str, Any]) -> Any:
+        def _construct_tensor_from_metadata(
+            self, storage_id: int, metadata: Dict[str, Any]
+        ) -> Any:
             """
             Construct a tensor from storage ID and metadata dictionary.
 
@@ -143,19 +145,19 @@ def create_modal_app_for_gpu(
                 shape=metadata["shape"],
                 stride=metadata["stride"],
                 storage_offset=metadata["storage_offset"],
-                dtype=metadata["dtype"]
+                dtype=metadata["dtype"],
             )
 
         @modal.method()
         def create_storage(
-            self, nbytes: int, storage_id: int, lazy: bool = False
+            self, storage_id: int, nbytes: int, lazy: bool = False
         ) -> None:
             """
             Create a new storage on the remote machine.
 
             Args:
-                nbytes: Number of bytes to allocate for the storage
                 storage_id: Specific ID to use for the storage (required)
+                nbytes: Number of bytes to allocate for the storage
                 lazy: If True, defer actual GPU allocation until first use
 
             Returns:
@@ -181,13 +183,13 @@ def create_modal_app_for_gpu(
                 )
 
         @modal.method()
-        def update_storage(self, tensor_data: bytes, storage_id: int) -> None:
+        def update_storage(self, storage_id: int, tensor_data: bytes) -> None:
             """
             Update an existing storage with tensor data.
 
             Args:
-                tensor_data: Serialized tensor data
                 storage_id: Storage ID to update
+                tensor_data: Serialized tensor data
 
             Returns:
                 None
@@ -251,7 +253,7 @@ def create_modal_app_for_gpu(
                 shape=shape,
                 stride=stride,
                 storage_offset=storage_offset,
-                dtype=dtype
+                dtype=dtype,
             )
             # Make contiguous to get only the view's data
             tensor = tensor.contiguous()
@@ -379,11 +381,11 @@ def create_modal_app_for_gpu(
             from torch.utils._pytree import tree_map
 
             # Extract storage IDs from input metadata
-            input_storage_ids = [metadata["storage_id"] for metadata in input_tensor_metadata]
+            input_storage_ids = [
+                metadata["storage_id"] for metadata in input_tensor_metadata
+            ]
 
-            log.info(
-                f"🚀 Modal {gpu_type} executing: {op_name}"
-            )
+            log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
             log.debug(f"Input storage IDs: {input_storage_ids}")
             log.debug(f"Output storage IDs: {output_storage_ids}")
 
@@ -431,13 +433,21 @@ def create_modal_app_for_gpu(
             result = op(*processed_args, **processed_kwargs)
 
             # Update storage mapping for output tensors
-            result_tensors = [result] if isinstance(result, torch.Tensor) else list(result) if isinstance(result, (list, tuple)) else []
+            result_tensors = (
+                [result]
+                if isinstance(result, torch.Tensor)
+                else list(result)
+                if isinstance(result, (list, tuple))
+                else []
+            )
 
             for i, storage_id in enumerate(output_storage_ids):
                 if storage_id is not None and i < len(result_tensors):
                     storages[int(storage_id)] = result_tensors[i].untyped_storage()
 
-            log.debug(f"📦 Updated {len([s for s in output_storage_ids if s is not None])} output storage mappings")
+            log.debug(
+                f"📦 Updated {len([s for s in output_storage_ids if s is not None])} output storage mappings"
+            )
 
             log.info(f"✅ Completed: {op_name}")
             return

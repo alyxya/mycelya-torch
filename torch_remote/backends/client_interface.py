@@ -90,14 +90,15 @@ class ClientInterface(ABC):
         except Exception:
             return False
 
+    # Storage management methods
     @abstractmethod
-    def create_storage(self, nbytes: int, storage_id: int, lazy: bool = False) -> None:
+    def create_storage(self, storage_id: int, nbytes: int, lazy: bool = False) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
-            nbytes: Number of bytes to allocate for the storage
             storage_id: Specific ID to use for the storage (required)
+            nbytes: Number of bytes to allocate for the storage
             lazy: Whether to defer GPU memory allocation until first use
 
         Returns:
@@ -106,13 +107,13 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def update_storage(self, tensor_data: bytes, storage_id: int) -> None:
+    def update_storage(self, storage_id: int, tensor_data: bytes) -> None:
         """
         Update an existing storage with tensor data.
 
         Args:
-            tensor_data: Serialized tensor data to store
             storage_id: Storage ID to update
+            tensor_data: Serialized tensor data to store
 
         Returns:
             None
@@ -144,30 +145,6 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def execute_aten_operation(
-        self,
-        op_name: str,
-        input_tensor_metadata: List[Dict[str, Any]],
-        output_storage_ids: List[Union[int, None]],
-        args: List[Any],
-        kwargs: Dict[str, Any],
-    ) -> None:
-        """
-        Execute an aten operation on the remote machine with separated input/output specification.
-
-        Args:
-            op_name: The aten operation name to execute
-            input_tensor_metadata: Metadata for reconstructing input tensors only
-            output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
-            args: Operation arguments (may contain tensor placeholders)
-            kwargs: Operation keyword arguments (may contain tensor placeholders)
-
-        Returns:
-            None (operation is executed in-place on pre-allocated tensors)
-        """
-        pass
-
-    @abstractmethod
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """
         Resize a storage to accommodate new byte size.
@@ -194,6 +171,31 @@ class ClientInterface(ABC):
 
         Returns:
             None
+        """
+        pass
+
+    # Operation execution methods
+    @abstractmethod
+    def execute_aten_operation(
+        self,
+        op_name: str,
+        input_tensor_metadata: List[Dict[str, Any]],
+        output_storage_ids: List[Union[int, None]],
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> None:
+        """
+        Execute an aten operation on the remote machine with separated input/output specification.
+
+        Args:
+            op_name: The aten operation name to execute
+            input_tensor_metadata: Metadata for reconstructing input tensors only
+            output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
+            args: Operation arguments (may contain tensor placeholders)
+            kwargs: Operation keyword arguments (may contain tensor placeholders)
+
+        Returns:
+            None (operation is executed in-place on pre-allocated tensors)
         """
         pass
 

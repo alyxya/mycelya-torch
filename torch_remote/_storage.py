@@ -112,7 +112,7 @@ class StorageRegistry:
                 if client:
                     try:
                         # Create storage with exact byte size
-                        client.create_storage(nbytes, storage_id, lazy)
+                        client.create_storage(storage_id, nbytes, lazy)
                         log.info(
                             f"Registered storage {storage_id} with client "
                             f"({nbytes} bytes, lazy={lazy})"
