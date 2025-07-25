@@ -99,6 +99,47 @@ def _check_and_fix_empty_output_tensors(
                     return
 
 
+def _execute_meta_operation(
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    track_originals: bool = False
+) -> tuple[Any, Dict]:
+    """Execute operation on meta tensors for shape inference.
+
+    Args:
+        op: Operation to execute
+        args: Operation arguments
+        kwargs: Operation keyword arguments
+        track_originals: If True, return mapping of meta tensors to original tensors
+
+    Returns:
+        tuple: (meta_result, original_tensors_map)
+    """
+    original_tensors = {}
+
+    def to_meta_tensor(obj):
+        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+            if track_originals:
+                # Use .to("meta") for tracking originals (remote operations)
+                meta_tensor = obj.to("meta")
+                original_tensors[meta_tensor] = obj
+            else:
+                # Use torch.empty + as_strided for view operations
+                meta_tensor = torch.empty(obj.shape, dtype=obj.dtype, device="meta")
+                if obj.stride() != meta_tensor.stride():
+                    meta_tensor = torch.as_strided(
+                        meta_tensor, obj.shape, obj.stride(), obj.storage_offset()
+                    )
+            return meta_tensor
+        return obj
+
+    meta_args, meta_kwargs = tree_map(to_meta_tensor, (args, kwargs))
+    meta_result = op(*meta_args, **meta_kwargs)
+
+    return meta_result, original_tensors
+
+
 def _execute_view_operation(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> torch.Tensor:
@@ -106,19 +147,8 @@ def _execute_view_operation(
     # Get the base tensor (first argument for most view operations)
     base_tensor = args[0]
 
-    # Convert remote tensors to meta tensors for shape inference
-    def to_meta_tensor(obj):
-        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-            meta_tensor = torch.empty(obj.shape, dtype=obj.dtype, device="meta")
-            if obj.stride() != meta_tensor.stride():
-                meta_tensor = torch.as_strided(
-                    meta_tensor, obj.shape, obj.stride(), obj.storage_offset()
-                )
-            return meta_tensor
-        return obj
-
-    meta_args, meta_kwargs = tree_map(to_meta_tensor, (args, kwargs))
-    meta_result = op(*meta_args, **meta_kwargs)
+    # Execute on meta tensors for shape inference
+    meta_result, _ = _execute_meta_operation(op, args, kwargs, track_originals=False)
 
     # Create the result view using PyTorch's native as_strided
     return torch.as_strided(
@@ -170,24 +200,11 @@ def _execute_aten_operation(
 
     op_name = op.overloadpacket._qualified_op_name
 
-    # Convert remote tensors to meta tensors for shape inference
-    original_tensors = {}  # Maps meta tensor id to original tensor
-
-    def convert_to_meta_tensor(obj):
-        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-            # Convert to meta tensor while preserving properties
-            meta_tensor = obj.to("meta")
-            original_tensors[meta_tensor] = obj
-            return meta_tensor
-        return obj
-
-    meta_args, meta_kwargs = tree_map(convert_to_meta_tensor, (args, kwargs))
-
     # Step 2: Execute the operation on meta tensors to determine outputs
     log.debug(f"🔧 Executing {op_name} on meta tensors for shape inference")
 
     try:
-        meta_result = op(*meta_args, **meta_kwargs)
+        meta_result, original_tensors = _execute_meta_operation(op, args, kwargs, track_originals=True)
         log.debug(f"✅ Meta execution completed successfully for {op_name}")
     except Exception as e:
         log.error(f"Meta execution failed for {op_name}: {e}")
