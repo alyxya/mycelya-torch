@@ -4,8 +4,9 @@
 """
 Tensor utilities for metadata handling, serialization, and device transfers.
 
-This module provides a clean, minimal API for tensor conversions:
-- TensorMetadata class for unified tensor metadata representation
+This module provides a clean, type-safe API for tensor conversions:
+- LocalTensorMetadata for CPU/meta tensors (no storage_id)
+- RemoteTensorMetadata for remote tensors (always has storage_id)
 - Methods for converting between CPU, remote, and meta tensors
 - Serialization utilities for data transfer
 """
@@ -13,7 +14,7 @@ This module provides a clean, minimal API for tensor conversions:
 import io
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
 import torch
 
@@ -183,115 +184,6 @@ def tensor_metadata_from_dict(data: Dict[str, Any]) -> TensorMetadata:
         return LocalTensorMetadata(**base_args)
 
 
-# Legacy class for backward compatibility - DEPRECATED
-# Use LocalTensorMetadata or RemoteTensorMetadata instead
-class TensorMetadata:
-    """
-    DEPRECATED: Use LocalTensorMetadata or RemoteTensorMetadata instead.
-
-    Legacy metadata representation with optional storage_id.
-    This class is maintained for backward compatibility during migration.
-    """
-
-    def __init__(
-        self,
-        shape: Tuple[int, ...],
-        stride: Tuple[int, ...],
-        storage_offset: int,
-        dtype: torch.dtype,
-        storage_id: Optional[int] = None,
-    ):
-        self.shape = shape
-        self.stride = stride
-        self.storage_offset = storage_offset
-        self.dtype = dtype
-        self.storage_id = storage_id
-
-    @classmethod
-    def from_remote_tensor(cls, tensor: torch.Tensor) -> "TensorMetadata":
-        """DEPRECATED: Use RemoteTensorMetadata.from_remote_tensor() instead."""
-        metadata = RemoteTensorMetadata.from_remote_tensor(tensor)
-        return cls(
-            shape=metadata.shape,
-            stride=metadata.stride,
-            storage_offset=metadata.storage_offset,
-            dtype=metadata.dtype,
-            storage_id=metadata.storage_id,
-        )
-
-    @classmethod
-    def from_cpu_tensor(cls, tensor: torch.Tensor) -> "TensorMetadata":
-        """DEPRECATED: Use LocalTensorMetadata.from_cpu_tensor() instead."""
-        metadata = LocalTensorMetadata.from_cpu_tensor(tensor)
-        return cls(
-            shape=metadata.shape,
-            stride=metadata.stride,
-            storage_offset=metadata.storage_offset,
-            dtype=metadata.dtype,
-            storage_id=None,
-        )
-
-    @classmethod
-    def from_meta_tensor(cls, tensor: torch.Tensor) -> "TensorMetadata":
-        """DEPRECATED: Use LocalTensorMetadata.from_meta_tensor() instead."""
-        metadata = LocalTensorMetadata.from_meta_tensor(tensor)
-        return cls(
-            shape=metadata.shape,
-            stride=metadata.stride,
-            storage_offset=metadata.storage_offset,
-            dtype=metadata.dtype,
-            storage_id=None,
-        )
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TensorMetadata":
-        """DEPRECATED: Use tensor_metadata_from_dict() instead."""
-        metadata = tensor_metadata_from_dict(data)
-        return cls(
-            shape=metadata.shape,
-            stride=metadata.stride,
-            storage_offset=metadata.storage_offset,
-            dtype=metadata.dtype,
-            storage_id=metadata.storage_id if metadata.is_remote() else None,
-        )
-
-    def to_meta_tensor(self) -> torch.Tensor:
-        return torch.empty(self.shape, dtype=self.dtype, device="meta").as_strided(
-            self.shape, self.stride, self.storage_offset
-        )
-
-    def to_dict(self) -> Dict[str, Any]:
-        result = {
-            "shape": list(self.shape),
-            "stride": list(self.stride),
-            "storage_offset": self.storage_offset,
-            "dtype": str(self.dtype).split(".")[-1],
-        }
-        if self.storage_id is not None:
-            result["storage_id"] = self.storage_id
-        return result
-
-    def to_cpu_tensor_from_bytes(self, data: bytes) -> torch.Tensor:
-        buffer = io.BytesIO(data)
-        tensor = torch.load(buffer, map_location="cpu", weights_only=False)
-        if tensor.dtype != self.dtype:
-            raise ValueError(
-                f"Dtype mismatch: expected {self.dtype}, got {tensor.dtype}"
-            )
-        if (
-            tuple(tensor.shape) != self.shape
-            or tuple(tensor.stride()) != self.stride
-            or tensor.storage_offset() != self.storage_offset
-        ):
-            tensor = tensor.as_strided(self.shape, self.stride, self.storage_offset)
-        return tensor
-
-    def __repr__(self) -> str:
-        storage_info = f", storage_id={self.storage_id}" if self.storage_id else ""
-        return (
-            f"TensorMetadata(shape={self.shape}, stride={self.stride}, "
-            f"storage_offset={self.storage_offset}, dtype={self.dtype}{storage_info})"
-        )
 
 
 def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:

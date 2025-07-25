@@ -15,7 +15,7 @@ import torch
 
 from ._logging import get_logger
 from ._storage import get_machine_for_storage
-from ._tensor_utils import RemoteTensorMetadata, TensorMetadata
+from ._tensor_utils import RemoteTensorMetadata
 from .device import RemoteMachine
 
 log = get_logger(__name__)
@@ -119,7 +119,7 @@ class RemoteOrchestrator:
         storage_id = remote_tensor.untyped_storage().data_ptr()
 
         # Create metadata for the remote tensor
-        metadata = TensorMetadata.from_remote_tensor(remote_tensor)
+        metadata = RemoteTensorMetadata.from_remote_tensor(remote_tensor)
 
         # Get serialized data from remote storage
         tensor_data = client.get_storage_data(
