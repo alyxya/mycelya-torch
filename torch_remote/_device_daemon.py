@@ -159,23 +159,15 @@ class Driver:
 
     # Storage operations - delegate to _storage module
     @register(registry)
-    def generate_storage_id(self) -> int:
-        from ._storage import generate_storage_id
+    def create_storage(self, nbytes: int, device_index: int) -> int:
+        from ._storage import create_storage
 
-        return generate_storage_id()
-
-    @register(registry)
-    def create_storage_with_id(
-        self, storage_id: int, nbytes: int, device_index: int
-    ) -> bool:
-        from ._storage import create_storage_with_id
-
-        result = create_storage_with_id(storage_id, nbytes, device_index)
-        if not result:
+        storage_id = create_storage(nbytes, device_index)
+        if storage_id == 0:
             raise RuntimeError(
-                f"Failed to create storage with ID {storage_id} ({nbytes} bytes) on device {device_index}"
+                f"Failed to create storage ({nbytes} bytes) on device {device_index}"
             )
-        return result
+        return storage_id
 
     @register(registry)
     def free_storage_with_id(self, storage_id: int) -> None:

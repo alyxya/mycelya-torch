@@ -63,42 +63,43 @@ class StorageRegistry:
 
         log.info("🚀 Storage registry initialized")
 
-    def generate_storage_id(self) -> int:
+    def create_storage(self, nbytes: int, device_index: int, lazy: bool = False) -> int:
         """
-        Generate a unique storage ID with duplicate validation.
-
+        Create remote storage with a generated unique ID.
+        
+        Args:
+            nbytes: Number of bytes to allocate
+            device_index: Device index to create storage on
+            lazy: Whether to use lazy allocation
+            
         Returns:
-            int: A unique 64-bit storage ID
+            int: The generated storage ID on success, or 0 on failure
         """
-        global MAX_ID_GENERATION_ATTEMPTS
-
-        for attempt in range(1, MAX_ID_GENERATION_ATTEMPTS + 1):
-            # Generate a random 64-bit integer within the valid range
-            storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
-
-            # Check if this ID is already in use
-            if storage_id not in self.generated_storage_ids:
-                self.generated_storage_ids.add(storage_id)
-                log.info(f"🆔 GENERATED Storage ID: {storage_id}")
-                return storage_id
-            else:
-                log.debug(
-                    f"Generated duplicate storage ID {storage_id}, retrying (attempt {attempt})"
-                )
-
-        raise RuntimeError(
-            f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts"
-        )
-
-    def create_storage_with_id(
-        self, storage_id: int, nbytes: int, device_index: int, lazy: bool = False
-    ) -> bool:
-        """Create remote storage with the given ID and return success status"""
-        storage_id = int(storage_id)
-
-        global _lazy_allocation_enabled
+        global MAX_ID_GENERATION_ATTEMPTS, _lazy_allocation_enabled
+        
         if _lazy_allocation_enabled:
             lazy = True
+
+        # Generate a unique storage ID
+        storage_id = 0
+        for attempt in range(1, MAX_ID_GENERATION_ATTEMPTS + 1):
+            # Generate a random 64-bit integer within the valid range
+            candidate_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
+
+            # Check if this ID is already in use
+            if candidate_id not in self.generated_storage_ids:
+                storage_id = candidate_id
+                self.generated_storage_ids.add(storage_id)
+                log.info(f"🆔 GENERATED Storage ID: {storage_id}")
+                break
+            else:
+                log.debug(
+                    f"Generated duplicate storage ID {candidate_id}, retrying (attempt {attempt})"
+                )
+
+        if storage_id == 0:
+            log.error(f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts")
+            return 0
 
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
@@ -121,13 +122,19 @@ class StorageRegistry:
                         log.warning(
                             f"Failed to register storage {storage_id} with client: {e}"
                         )
-                        return False
+                        # Clean up the failed storage ID
+                        self.storage_id_to_device.pop(storage_id, None)
+                        self.generated_storage_ids.discard(storage_id)
+                        return 0
         except Exception as e:
             log.warning(f"Failed to register storage {storage_id} with client: {e}")
-            return False
+            # Clean up the failed storage ID
+            self.storage_id_to_device.pop(storage_id, None)
+            self.generated_storage_ids.discard(storage_id)
+            return 0
 
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
-        return True
+        return storage_id
 
     def get_storage_device(self, storage_id: int) -> Optional[int]:
         """Get device index for a storage ID"""
@@ -282,18 +289,9 @@ _storage_registry = StorageRegistry()
 
 
 # Storage registry access functions
-def generate_storage_id() -> int:
-    """Generate a unique storage ID."""
-    return _storage_registry.generate_storage_id()
-
-
-def create_storage_with_id(
-    storage_id: int, nbytes: int, device_index: int, lazy: bool = False
-) -> bool:
-    """Create remote storage with the given ID."""
-    return _storage_registry.create_storage_with_id(
-        storage_id, nbytes, device_index, lazy
-    )
+def create_storage(nbytes: int, device_index: int, lazy: bool = False) -> int:
+    """Create remote storage with a generated unique ID."""
+    return _storage_registry.create_storage(nbytes, device_index, lazy)
 
 
 def free_storage_with_id(storage_id: int) -> None:

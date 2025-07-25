@@ -25,19 +25,13 @@ struct RemoteAllocator final : at::Allocator {
         c10::Device(c10::DeviceType::PrivateUse1, curr_device_idx);
     void *data = nullptr;
 
-    // Always generate a unique storage ID for all tensors
-    // This ensures every tensor gets a unique ID
+    // Create storage and get the generated storage ID
+    // Returns the storage ID on success, or 0 on failure
     storage_id_t storage_id =
-        get_method("generate_storage_id")().cast<storage_id_t>();
+        get_method("create_storage")(nbytes, curr_device_idx).cast<storage_id_t>();
 
-    // Call Python method to create storage with ID and register it
-    // This should create the storage remotely and return success/failure
-    bool success =
-        get_method("create_storage_with_id")(storage_id, nbytes, curr_device_idx)
-            .cast<bool>();
-
-    TORCH_CHECK(success, "Failed to allocate storage with ID ", storage_id,
-                " (", nbytes, " bytes) on remote device ", curr_device_idx);
+    TORCH_CHECK(storage_id != 0, "Failed to allocate storage (", nbytes, 
+                " bytes) on remote device ", curr_device_idx);
 
     // Store the storage ID as the data pointer (always non-zero)
     data = reinterpret_cast<void *>(storage_id);
