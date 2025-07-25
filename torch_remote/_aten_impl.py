@@ -129,12 +129,12 @@ def _execute_view_operation(
     )
 
 
-def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> None:
-    """Validate that all tensors are remote and on the same device."""
-    remote_device_index = None
+def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> torch.device:
+    """Validate that all tensors are remote and on the same device. Returns the remote device."""
+    remote_device = None
 
     def check_tensor_device(obj):
-        nonlocal remote_device_index
+        nonlocal remote_device
         if isinstance(obj, torch.Tensor):
             if obj.device.type != "remote":
                 raise RuntimeError(
@@ -142,42 +142,39 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
                     f'on device "{obj.device}".'
                 )
 
-            # Get device index (0 if None)
-            device_index = obj.device.index if obj.device.index is not None else 0
-
-            if remote_device_index is None:
-                remote_device_index = device_index
-            elif remote_device_index != device_index:
+            if remote_device is None:
+                remote_device = obj.device
+            elif remote_device != obj.device:
                 raise RuntimeError(
                     f'Cannot perform operation "{op_name}" between tensors on different remote devices '
-                    f'(indices {remote_device_index} and {device_index}). '
+                    f'({remote_device} and {obj.device}). '
                     f"Transfer tensors to the same device first."
                 )
         return obj
 
     tree_map(check_tensor_device, (args, kwargs))
 
+    if remote_device is None:
+        raise RuntimeError(f'No remote tensors found for operation "{op_name}"')
+
+    return remote_device
+
 
 
 
 
 def _execute_aten_operation(
-    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device
 ) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
 
     op_name = op.overloadpacket._qualified_op_name
 
     # Convert remote tensors to meta tensors for shape inference
-    remote_device = None
     original_tensors = {}  # Maps meta tensor id to original tensor
 
     def convert_to_meta_tensor(obj):
-        nonlocal remote_device
         if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-            if remote_device is None:
-                remote_device = obj.device
-
             # Convert to meta tensor while preserving properties
             meta_tensor = obj.to("meta")
             original_tensors[id(meta_tensor)] = obj
@@ -377,8 +374,8 @@ def _remote_kernel_fallback(
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
     op_name = op.overloadpacket._qualified_op_name
 
-    # Validate cross-device operations upfront for all execution paths
-    _validate_cross_device_operation(op_name, args, kwargs)
+    # Validate cross-device operations upfront and get the remote device
+    remote_device = _validate_cross_device_operation(op_name, args, kwargs)
 
     # Check if operation is a view operation using schema alias information
     # View operations alias their input for reading (is_write=False)
@@ -392,7 +389,7 @@ def _remote_kernel_fallback(
     if is_view_op:
         return _execute_view_operation(op, *args, **kwargs)
     else:
-        return _execute_aten_operation(op, args, kwargs)
+        return _execute_aten_operation(op, args, kwargs, remote_device)
 
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
