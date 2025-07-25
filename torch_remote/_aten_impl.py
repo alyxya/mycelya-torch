@@ -115,6 +115,47 @@ def _execute_meta_operation(
     return meta_result, original_tensors
 
 
+def _create_output_tensors(
+    meta_outputs: List, original_tensors: Dict, remote_device: torch.device
+) -> tuple[List, List]:
+    """Create output tensors based on meta execution results.
+
+    Returns:
+        tuple: (output_tensors, output_storage_ids)
+            - output_tensors: List of created/reused tensors
+            - output_storage_ids: List of storage IDs (int for new tensors, None for reused tensors)
+    """
+    output_tensors = []
+    output_storage_ids = []
+
+    for meta_output in meta_outputs:
+        if meta_output in original_tensors:
+            # Reuse original tensor (in-place operation)
+            tensor = original_tensors[meta_output]
+            output_tensors.append(tensor)
+            output_storage_ids.append(None)  # No new storage created
+        else:
+            # Create new tensor
+            new_tensor = torch.empty(
+                meta_output.shape, dtype=meta_output.dtype, device=remote_device
+            )
+
+            # Apply stride if different from default
+            if meta_output.stride() != new_tensor.stride():
+                new_tensor = torch.as_strided(
+                    new_tensor,
+                    meta_output.shape,
+                    meta_output.stride(),
+                    meta_output.storage_offset(),
+                )
+
+            output_tensors.append(new_tensor)
+            # Get storage ID from the newly created tensor
+            output_storage_ids.append(new_tensor.untyped_storage().data_ptr())
+
+    return output_tensors, output_storage_ids
+
+
 def _execute_view_operation(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> torch.Tensor:
@@ -181,52 +222,17 @@ def _execute_aten_operation(
         op_name, input_metadata, output_storage_ids, processed_args, processed_kwargs
     )
 
-    # Step 5: Return results
+    # Step 5: Correct output tensor shapes to match meta tensor shapes
+    for output_tensor, meta_output in zip(output_tensors, meta_outputs):
+        if output_tensor.shape != meta_output.shape:
+            # Resize tensor to match meta result shape
+            output_tensor.resize_(meta_output.shape)
+
+    # Step 6: Return results
     if len(output_tensors) > 1:
         return tuple(output_tensors)
     elif len(output_tensors) == 1:
         return output_tensors[0]
-
-
-def _create_output_tensors(
-    meta_outputs: List, original_tensors: Dict, remote_device: torch.device
-) -> tuple[List, List]:
-    """Create output tensors based on meta execution results.
-
-    Returns:
-        tuple: (output_tensors, output_storage_ids)
-            - output_tensors: List of created/reused tensors
-            - output_storage_ids: List of storage IDs (int for new tensors, None for reused tensors)
-    """
-    output_tensors = []
-    output_storage_ids = []
-
-    for meta_output in meta_outputs:
-        if meta_output in original_tensors:
-            # Reuse original tensor (in-place operation)
-            tensor = original_tensors[meta_output]
-            output_tensors.append(tensor)
-            output_storage_ids.append(None)  # No new storage created
-        else:
-            # Create new tensor
-            new_tensor = torch.empty(
-                meta_output.shape, dtype=meta_output.dtype, device=remote_device
-            )
-
-            # Apply stride if different from default
-            if meta_output.stride() != new_tensor.stride():
-                new_tensor = torch.as_strided(
-                    new_tensor,
-                    meta_output.shape,
-                    meta_output.stride(),
-                    meta_output.storage_offset(),
-                )
-
-            output_tensors.append(new_tensor)
-            # Get storage ID from the newly created tensor
-            output_storage_ids.append(new_tensor.untyped_storage().data_ptr())
-
-    return output_tensors, output_storage_ids
 
 
 def _remote_kernel_fallback(
