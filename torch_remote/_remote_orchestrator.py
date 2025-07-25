@@ -222,7 +222,7 @@ class RemoteOrchestrator:
         self,
         op_name: str,
         input_metadata: List[RemoteTensorMetadata],
-        output_metadata: List[RemoteTensorMetadata],
+        output_storage_ids: List,
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
     ) -> None:
@@ -249,11 +249,8 @@ class RemoteOrchestrator:
             meta_dict = metadata.to_dict()
             input_tensor_metadata_dicts.append(meta_dict)
 
-        # Extract output storage IDs (None for outputs that should be ignored)
-        output_storage_ids = []
-        for metadata in output_metadata:
-            # All output metadata should have storage_id since they're pre-allocated
-            output_storage_ids.append(metadata.storage_id)
+        # output_storage_ids is now passed directly from _create_output_tensors
+        # Contains storage_id for new tensors, None for reused tensors
 
         # Validate that we have input metadata
         if not input_metadata:
@@ -264,9 +261,9 @@ class RemoteOrchestrator:
         for metadata in input_metadata:
             if metadata.storage_id is not None:
                 all_storage_ids.append(metadata.storage_id)
-        for metadata in output_metadata:
-            if metadata.storage_id is not None:
-                all_storage_ids.append(metadata.storage_id)
+        for storage_id in output_storage_ids:
+            if storage_id is not None:
+                all_storage_ids.append(storage_id)
 
         # Validate all storage IDs are on the same device
         if all_storage_ids:
