@@ -178,13 +178,10 @@ class Driver:
         return result
 
     @register(registry)
-    def free_storage_with_id(self, storage_id: int) -> bool:
+    def free_storage_with_id(self, storage_id: int) -> None:
         from ._storage import free_storage_with_id
 
-        result = free_storage_with_id(storage_id)
-        if not result:
-            raise RuntimeError(f"Failed to free storage with ID {storage_id}")
-        return result
+        free_storage_with_id(storage_id)
 
     @register(registry)
     def get_storage_device(self, storage_id: int) -> Optional[int]:

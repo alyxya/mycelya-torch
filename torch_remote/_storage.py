@@ -134,11 +134,11 @@ class StorageRegistry:
         storage_id = int(storage_id)
         return self.storage_id_to_device.get(storage_id)
 
-    def free_storage_with_id(self, storage_id: int) -> bool:
+    def free_storage_with_id(self, storage_id: int) -> None:
         """Free storage by storage ID and perform remote cleanup"""
         storage_id = int(storage_id)
         if storage_id == 0:  # Empty storage
-            return True
+            return
 
         # Get device information before cleanup
         device_idx = self.storage_id_to_device.get(storage_id)
@@ -159,10 +159,8 @@ class StorageRegistry:
                 )
 
             log.info(f"Freed storage ID {storage_id}")
-            return True
         else:
             log.warning(f"Attempted to free unknown storage {storage_id}")
-            return False
 
     def _cleanup_remote_storage(self, storage_id: int, device_idx: int) -> None:
         """Clean up storage on remote GPU device"""
@@ -298,9 +296,9 @@ def create_storage_with_id(
     )
 
 
-def free_storage_with_id(storage_id: int) -> bool:
+def free_storage_with_id(storage_id: int) -> None:
     """Free storage by storage ID."""
-    return _storage_registry.free_storage_with_id(storage_id)
+    _storage_registry.free_storage_with_id(storage_id)
 
 
 def get_storage_device(storage_id: int) -> Optional[int]:
