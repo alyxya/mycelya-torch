@@ -199,107 +199,55 @@ def _execute_aten_operation(
     # Handle both single tensor and tuple results
     if isinstance(meta_result, torch.Tensor):
         meta_outputs = [meta_result]
-        return_single = True
     elif isinstance(meta_result, tuple):
         meta_outputs = list(meta_result)
-        return_single = False
     else:
         # Non-tensor result, no output tensors to create
         meta_outputs = []
-        return_single = None  # Flag for non-tensor result
 
     # Step 3: Create output tensors (empty list for non-tensor results)
     output_tensors = _create_output_tensors(
-        op, args, kwargs, meta_outputs, original_tensors, remote_device
+        meta_outputs, original_tensors, remote_device
     ) if meta_outputs else []
 
     # Step 4: Execute remotely with orchestrator
     _execute_on_remote_device(op, args, kwargs, output_tensors)
 
     # Step 5: Return results
-    if return_single is True:
-        return output_tensors[0]
-    elif return_single is False:
+    if len(output_tensors) > 1:
         return tuple(output_tensors)
+    elif len(output_tensors) == 1:
+        return output_tensors[0]
 
 
 
 
 def _create_output_tensors(
-    op: torch._ops.OpOverload,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
-    meta_outputs: List,
-    original_tensors: Dict,
-    remote_device: torch.device,
+    meta_outputs: List, original_tensors: Dict, remote_device: torch.device
 ) -> List:
     """Create output tensors based on meta execution results."""
-
-    # Check if any output meta tensors are the same object as input meta tensors
-    input_meta_tensor_ids = {
-        id(tensor) for tensor in args if isinstance(tensor, torch.Tensor)
-    }
-    input_meta_tensor_ids.update(
-        {id(tensor) for tensor in kwargs.values() if isinstance(tensor, torch.Tensor)}
-    )
-
     output_tensors = []
 
-    # Special handling for "out" parameter
-    out_tensor = None
-    if (
-        "out" in kwargs
-        and isinstance(kwargs["out"], torch.Tensor)
-        and kwargs["out"].device.type == "remote"
-    ):
-        out_tensor = kwargs["out"]
-        log.debug(f"Found 'out' parameter tensor with shape {out_tensor.shape}")
-
-    # Process each output tensor
-    for i, meta_output in enumerate(meta_outputs):
-        log.debug(
-            f"🔧 Processing output tensor {i}: meta_output.shape={meta_output.shape}"
-        )
-
-        if id(meta_output) in input_meta_tensor_ids:
-            # Output shares storage with input - reuse the original input tensor
-            original_tensor = original_tensors[id(meta_output)]
-            output_tensors.append(original_tensor)
-            log.debug(
-                f"✅ Output tensor {i} reuses input tensor storage (in-place operation)"
-            )
+    for meta_output in meta_outputs:
+        if id(meta_output) in original_tensors:
+            # Reuse original tensor (in-place operation)
+            output_tensors.append(original_tensors[id(meta_output)])
         else:
-            # Check if this meta output corresponds to the "out" parameter
-            if out_tensor is not None and len(output_tensors) == i:
-                # Use the existing "out" tensor as the output tensor
-                output_tensors.append(out_tensor)
-                log.debug(f"✅ Using existing 'out' tensor as output {i}")
-            else:
-                log.debug(
-                    f"🔧 Creating new output tensor {i} with shape {meta_output.shape}"
-                )
+            # Create new tensor
+            new_tensor = torch.empty(
+                meta_output.shape, dtype=meta_output.dtype, device=remote_device
+            )
 
-                # Create new output tensor with lazy allocation
-                # Create empty remote tensor (lazy allocation will be handled by device daemon)
-                new_tensor = torch.empty(
+            # Apply stride if different from default
+            if meta_output.stride() != new_tensor.stride():
+                new_tensor = torch.as_strided(
+                    new_tensor,
                     meta_output.shape,
-                    dtype=meta_output.dtype,
-                    device=remote_device,
+                    meta_output.stride(),
+                    meta_output.storage_offset(),
                 )
 
-                # Apply stride if different from default
-                if meta_output.stride() != new_tensor.stride():
-                    new_tensor = torch.as_strided(
-                        new_tensor,
-                        meta_output.shape,
-                        meta_output.stride(),
-                        meta_output.storage_offset(),
-                    )
-
-                output_tensors.append(new_tensor)
-                log.debug(
-                    f"✅ Created new output tensor {i} with shape {meta_output.shape}"
-                )
+            output_tensors.append(new_tensor)
 
     return output_tensors
 
