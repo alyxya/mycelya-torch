@@ -213,78 +213,23 @@ def _execute_remote_operation(
 
     op_name = op.overloadpacket._qualified_op_name
 
-    # Step 1: Validate all remote tensors are on the same device and convert to meta tensors
+    # Convert remote tensors to meta tensors for shape inference
     remote_device = None
     original_tensors = {}  # Maps meta tensor id to original tensor
 
-    def validate_and_convert_to_meta_tensor(tensor: torch.Tensor) -> torch.Tensor:
-        """Validate device consistency and convert a remote tensor to a meta tensor."""
-        nonlocal remote_device
-
-        # Check device consistency for remote tensors
-        if tensor.device.type == "remote":
-            if remote_device is None:
-                remote_device = tensor.device
-                log.debug(f"Using remote device: {remote_device}")
-            elif tensor.device != remote_device:
-                from .device import get_device_registry
-
-                device_registry = get_device_registry()
-                first_device = device_registry.get_device_by_index(remote_device.index)
-                current_device = device_registry.get_device_by_index(
-                    tensor.device.index
-                )
-
-                first_device_name = (
-                    first_device.machine_id
-                    if first_device
-                    else f"remote:{remote_device.index}"
-                )
-                current_device_name = (
-                    current_device.machine_id
-                    if current_device
-                    else f"remote:{tensor.device.index}"
-                )
-
-                raise RuntimeError(
-                    f"Cannot perform operations between tensors on different remote devices. "
-                    f'Operation "{op_name}" has tensors on: '
-                    f'"{first_device_name}" (index {remote_device.index}) and '
-                    f'"{current_device_name}" (index {tensor.device.index}). '
-                    f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"
-                )
-
-        # Convert to meta tensor while preserving properties
-        meta_tensor = torch.empty(
-            tensor.shape,
-            dtype=tensor.dtype,
-            device="meta",
-            requires_grad=tensor.requires_grad,
-        )
-        if tensor.stride() != meta_tensor.stride():
-            meta_tensor = torch.as_strided(
-                meta_tensor, tensor.shape, tensor.stride(), tensor.storage_offset()
-            )
-
-        original_tensors[id(meta_tensor)] = tensor
-        return meta_tensor
-
-    # Convert args and kwargs with device validation using tree_map
-    from torch.utils._pytree import tree_map
-
     def convert_to_meta_tensor(obj):
+        nonlocal remote_device
         if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
-            return validate_and_convert_to_meta_tensor(obj)
+            if remote_device is None:
+                remote_device = obj.device
+            
+            # Convert to meta tensor while preserving properties
+            meta_tensor = obj.to("meta")
+            original_tensors[id(meta_tensor)] = obj
+            return meta_tensor
         return obj
 
     meta_args, meta_kwargs = tree_map(convert_to_meta_tensor, (args, kwargs))
-
-    # If no remote tensors found, this indicates a dispatch logic error
-    if remote_device is None:
-        raise RuntimeError(
-            f"Remote kernel fallback called for operation {op_name} with no remote tensors. "
-            "This indicates a dispatch logic error."
-        )
 
     # Step 2: Execute the operation on meta tensors to determine outputs
     log.debug(f"🔧 Executing {op_name} on meta tensors for shape inference")
