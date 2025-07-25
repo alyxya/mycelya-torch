@@ -28,12 +28,12 @@ struct RemoteAllocator final : at::Allocator {
     // Always generate a unique storage ID for all tensors
     // This ensures every tensor gets a unique ID
     storage_id_t storage_id =
-        get_method(kGenerateStorageIdMethod)().cast<storage_id_t>();
+        get_method("generate_storage_id")().cast<storage_id_t>();
 
     // Call Python method to create storage with ID and register it
     // This should create the storage remotely and return success/failure
     bool success =
-        get_method(kCreateStorageMethod)(storage_id, nbytes, curr_device_idx)
+        get_method("create_storage_with_id")(storage_id, nbytes, curr_device_idx)
             .cast<bool>();
 
     TORCH_CHECK(success, "Failed to allocate storage with ID ", storage_id,
