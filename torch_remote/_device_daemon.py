@@ -181,11 +181,6 @@ class Driver:
 
         return get_storage_device(storage_id)
 
-    @register(registry)
-    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> None:
-        from ._storage import copy_data_by_id
-
-        return copy_data_by_id(dest_id, src_id, count)
 
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:

@@ -212,30 +212,6 @@ class StorageRegistry:
                 f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}"
             )
 
-    def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> None:
-        """Copy data between storages identified by their storage IDs"""
-        # Get device indices
-        dest_device = self.storage_id_to_device.get(int(dest_id))
-        src_device = self.storage_id_to_device.get(int(src_id))
-
-        if dest_device is None or src_device is None:
-            raise RuntimeError(
-                f"Copy failed: storage IDs {dest_id} or {src_id} not found"
-            )
-
-        # For storage ID system, copy operations should go through remote
-        # orchestrator for proper device coordination
-        log.debug(f"Copy requested: {src_id} -> {dest_id} ({count} bytes)")
-
-        if dest_device != src_device:
-            raise RuntimeError(
-                f"Cross-device copy not supported: "
-                f"dest device {dest_device}, src device {src_device}"
-            )
-
-        # Same device copy - this could be handled by the remote client
-        # For now, we'll let the remote side handle it through proper tensor operations
-        log.debug(f"Same-device copy: {src_id} -> {dest_id} on device {dest_device}")
 
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         """Resize remote storage by storage ID"""
@@ -304,9 +280,6 @@ def get_storage_device(storage_id: int) -> Optional[int]:
     return _storage_registry.get_storage_device(storage_id)
 
 
-def copy_data_by_id(dest_id: int, src_id: int, count: int) -> None:
-    """Copy data between storages identified by their storage IDs."""
-    return _storage_registry.copy_data_by_id(dest_id, src_id, count)
 
 
 def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:

@@ -44,11 +44,8 @@ struct RemoteAllocator final : at::Allocator {
   }
 
   void copy_data(void *dest, const void *src, std::size_t count) const final {
-    py::gil_scoped_acquire acquire;
-    // Convert data pointers back to storage IDs for the copy operation
-    storage_id_t dest_id = reinterpret_cast<storage_id_t>(dest);
-    storage_id_t src_id = reinterpret_cast<storage_id_t>(src);
-    get_method("copy_data_by_id")(dest_id, src_id, count);
+    // No-op: Remote tensors handle data copying through PyTorch operations
+    // rather than raw memory copying
   }
 };
 
