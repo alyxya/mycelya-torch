@@ -10,6 +10,8 @@ along with related functionality for creating and managing Modal applications.
 
 from typing import Any, Dict, List, Union
 
+from _torch_remote_modal.modal_app import create_modal_app_for_gpu
+
 from ..._logging import get_logger
 from ..client_interface import ClientInterface
 
@@ -45,9 +47,6 @@ class ModalClient(ClientInterface):
 
     def _initialize(self):
         """Initialize the Modal app and server class."""
-        # Import here to avoid circular imports
-        from _torch_remote_modal.modal_app import create_modal_app_for_gpu
-
         self._app, self._server_class = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id, self.timeout, self.retries
         )
