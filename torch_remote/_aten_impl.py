@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import io
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from torch.utils._pytree import tree_map
@@ -835,8 +835,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
 
         # Serialize the CPU tensor
-        from ._tensor_utils import cpu_tensor_to_bytes
         from ._remote_orchestrator import remote_orchestrator
+        from ._tensor_utils import cpu_tensor_to_bytes
 
         tensor_data = cpu_tensor_to_bytes(from_)
         # Use orchestrator to update tensor with automatic client routing

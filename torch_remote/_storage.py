@@ -13,7 +13,6 @@ This module manages storage IDs and their lifecycle:
 """
 
 import random
-from contextlib import contextmanager
 from typing import Dict, List, Optional, Set
 
 from ._logging import get_logger
@@ -27,20 +26,6 @@ MIN_STORAGE_ID = 1
 MAX_STORAGE_ID = 2**63 - 1  # 64-bit signed integer max
 
 
-@contextmanager
-def lazy_allocation_mode():
-    """Context manager to enable lazy allocation for storage creation within the context"""
-    global _lazy_allocation_enabled
-    old_value = _lazy_allocation_enabled
-    _lazy_allocation_enabled = True
-    try:
-        yield
-    finally:
-        _lazy_allocation_enabled = old_value
-
-
-# Global flag for lazy allocation mode
-_lazy_allocation_enabled = False
 
 
 class StorageRegistry:
@@ -63,22 +48,18 @@ class StorageRegistry:
 
         log.info("🚀 Storage registry initialized")
 
-    def create_storage(self, nbytes: int, device_index: int, lazy: bool = False) -> int:
+    def create_storage(self, nbytes: int, device_index: int) -> int:
         """
         Create remote storage with a generated unique ID.
-        
+
         Args:
             nbytes: Number of bytes to allocate
             device_index: Device index to create storage on
-            lazy: Whether to use lazy allocation
-            
+
         Returns:
             int: The generated storage ID on success, or 0 on failure
         """
-        global MAX_ID_GENERATION_ATTEMPTS, _lazy_allocation_enabled
-        
-        if _lazy_allocation_enabled:
-            lazy = True
+        global MAX_ID_GENERATION_ATTEMPTS
 
         # Generate a unique storage ID
         storage_id = 0
@@ -107,12 +88,12 @@ class StorageRegistry:
         # Register the storage with the orchestrator for centralized client management
         try:
             from ._remote_orchestrator import remote_orchestrator
-            
+
             # Use orchestrator to create storage with device routing
-            remote_orchestrator.create_storage(storage_id, nbytes, device_index, lazy)
+            remote_orchestrator.create_storage(storage_id, nbytes, device_index)
             log.info(
                 f"Registered storage {storage_id} via orchestrator "
-                f"({nbytes} bytes, lazy={lazy})"
+                f"({nbytes} bytes)"
             )
         except Exception as e:
             log.warning(f"Failed to register storage {storage_id} via orchestrator: {e}")
@@ -233,9 +214,9 @@ _storage_registry = StorageRegistry()
 
 
 # Storage registry access functions
-def create_storage(nbytes: int, device_index: int, lazy: bool = False) -> int:
+def create_storage(nbytes: int, device_index: int) -> int:
     """Create remote storage with a generated unique ID."""
-    return _storage_registry.create_storage(nbytes, device_index, lazy)
+    return _storage_registry.create_storage(nbytes, device_index)
 
 
 def free_storage_with_id(storage_id: int) -> bool:

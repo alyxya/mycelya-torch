@@ -76,14 +76,13 @@ class ModalClient(ClientInterface):
         return self._app_context is not None
 
     # Storage management methods
-    def create_storage(self, storage_id: int, nbytes: int, lazy: bool = False) -> None:
+    def create_storage(self, storage_id: int, nbytes: int) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             storage_id: Specific ID to use for the storage (required)
             nbytes: Number of bytes to allocate for the storage
-            lazy: Whether to defer GPU memory allocation until first use
 
         Returns:
             None
@@ -94,7 +93,7 @@ class ModalClient(ClientInterface):
             )
 
         try:
-            self._server_instance.create_storage.spawn(storage_id, nbytes, lazy)
+            self._server_instance.create_storage.spawn(storage_id, nbytes)
         except Exception as e:
             raise RuntimeError(f"Failed to create storage {storage_id}: {e}") from e
 

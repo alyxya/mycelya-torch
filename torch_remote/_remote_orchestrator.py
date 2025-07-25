@@ -9,7 +9,7 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 import torch
 
@@ -44,13 +44,13 @@ class RemoteOrchestrator:
 
     def _get_client_for_storage(self, storage_id: int) -> ClientInterface:
         """Get the client for a specific storage ID with validation.
-        
+
         Args:
             storage_id: Storage ID to resolve to client
-            
+
         Returns:
             ClientInterface: The client managing this storage
-            
+
         Raises:
             RuntimeError: If storage, machine, or client not found/available
         """
@@ -62,13 +62,13 @@ class RemoteOrchestrator:
 
     def _get_client_for_machine(self, machine: RemoteMachine) -> ClientInterface:
         """Get the client for a specific machine with validation.
-        
+
         Args:
             machine: RemoteMachine to get client for
-            
+
         Returns:
             ClientInterface: The validated client for this machine
-            
+
         Raises:
             RuntimeError: If client not available or not running
         """
@@ -76,31 +76,31 @@ class RemoteOrchestrator:
 
     def _get_validated_client(self, machine: RemoteMachine) -> ClientInterface:
         """Get a validated client for a machine, ensuring it's running.
-        
+
         Args:
             machine: RemoteMachine to get client for
-            
+
         Returns:
             ClientInterface: The validated, running client
-            
+
         Raises:
             RuntimeError: If client is None or not running
         """
         client = machine._client
         if client is None:
             raise RuntimeError(f"No client available for machine {machine.machine_id}")
-        
+
         if not client.is_running():
             raise RuntimeError(f"Client for machine {machine.machine_id} is not running")
-            
+
         return client
 
     def _ensure_client_running(self, client: ClientInterface) -> None:
         """Ensure a client is running, with basic retry logic.
-        
+
         Args:
             client: Client to validate
-            
+
         Raises:
             RuntimeError: If client cannot be started or validated
         """
@@ -115,36 +115,35 @@ class RemoteOrchestrator:
                 raise RuntimeError(f"Failed to start client {client}: {e}") from e
 
     # Storage management methods - mirroring ClientInterface
-    def create_storage(self, storage_id: int, nbytes: int, device_index: int, lazy: bool = False) -> None:
+    def create_storage(self, storage_id: int, nbytes: int, device_index: int) -> None:
         """Create storage on remote machine using device index routing.
-        
+
         Args:
             storage_id: Specific ID to use for the storage
-            nbytes: Number of bytes to allocate 
+            nbytes: Number of bytes to allocate
             device_index: Device index to create storage on
-            lazy: Whether to defer GPU memory allocation until first use
-            
+
         Raises:
             RuntimeError: If device or client not available
         """
         from .device import get_device_registry
-        
+
         registry = get_device_registry()
         machine = registry.get_device_by_index(device_index)
         if machine is None:
             raise RuntimeError(f"No machine found for device index {device_index}")
-            
+
         client = self._get_validated_client(machine)
-        client.create_storage(storage_id, nbytes, lazy)
+        client.create_storage(storage_id, nbytes)
         log.info(f"✅ ORCHESTRATOR: Created storage {storage_id} on device {device_index}")
 
     def update_storage(self, storage_id: int, tensor_data: bytes) -> None:
         """Update existing storage with tensor data.
-        
+
         Args:
             storage_id: Storage ID to update
             tensor_data: Serialized tensor data to store
-            
+
         Raises:
             RuntimeError: If storage or client not available
         """
@@ -153,25 +152,25 @@ class RemoteOrchestrator:
         log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id}")
 
     def get_storage_data(
-        self, 
-        storage_id: int, 
-        shape: List[int], 
-        stride: List[int], 
-        storage_offset: int, 
+        self,
+        storage_id: int,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
         dtype: str
     ) -> bytes:
         """Get storage data by ID as a specific view.
-        
+
         Args:
             storage_id: The storage ID to retrieve
             shape: Tensor shape for view
-            stride: Tensor stride for view  
+            stride: Tensor stride for view
             storage_offset: Storage offset for view
             dtype: Tensor data type
-            
+
         Returns:
             Serialized tensor data (contiguous representation of the view)
-            
+
         Raises:
             RuntimeError: If storage or client not available
         """
@@ -182,11 +181,11 @@ class RemoteOrchestrator:
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage to accommodate new byte size.
-        
+
         Args:
             storage_id: The storage ID to resize
             nbytes: The number of bytes needed for the new storage size
-            
+
         Raises:
             RuntimeError: If storage or client not available
         """
@@ -196,10 +195,10 @@ class RemoteOrchestrator:
 
     def remove_storage(self, storage_id: int) -> None:
         """Remove storage from remote machine.
-        
+
         Args:
             storage_id: The storage ID to remove
-            
+
         Raises:
             RuntimeError: If storage or client not available
         """
@@ -265,7 +264,7 @@ class RemoteOrchestrator:
         # Get the client using the first input tensor's storage ID
         storage_id = input_metadata[0].storage_id
         client = self._get_client_for_storage(storage_id)
-        
+
         # Execute with separated input/output interface
         client.execute_aten_operation(
             op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs

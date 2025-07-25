@@ -92,14 +92,13 @@ class ClientInterface(ABC):
 
     # Storage management methods
     @abstractmethod
-    def create_storage(self, storage_id: int, nbytes: int, lazy: bool = False) -> None:
+    def create_storage(self, storage_id: int, nbytes: int) -> None:
         """
         Create a storage on the remote machine.
 
         Args:
             storage_id: Specific ID to use for the storage (required)
             nbytes: Number of bytes to allocate for the storage
-            lazy: Whether to defer GPU memory allocation until first use
 
         Returns:
             None
