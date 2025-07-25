@@ -19,6 +19,37 @@ def _get_remote_orchestrator():
     return remote_orchestrator
 
 
+def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> torch.device:
+    """Validate that all tensors are remote and on the same device. Returns the remote device."""
+    remote_device = None
+
+    def check_tensor_device(obj):
+        nonlocal remote_device
+        if isinstance(obj, torch.Tensor):
+            if obj.device.type != "remote":
+                raise RuntimeError(
+                    f'Remote kernel fallback called for operation "{op_name}" with non-remote tensor '
+                    f'on device "{obj.device}".'
+                )
+
+            if remote_device is None:
+                remote_device = obj.device
+            elif remote_device != obj.device:
+                raise RuntimeError(
+                    f'Cannot perform operation "{op_name}" between tensors on different remote devices '
+                    f'({remote_device} and {obj.device}). '
+                    f"Transfer tensors to the same device first."
+                )
+        return obj
+
+    tree_map(check_tensor_device, (args, kwargs))
+
+    if remote_device is None:
+        raise RuntimeError(f'No remote tensors found for operation "{op_name}"')
+
+    return remote_device
+
+
 def args_to_metadata_with_placeholders(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
@@ -41,62 +72,6 @@ def args_to_metadata_with_placeholders(
     )
 
     return processed_args, processed_kwargs, metadata_list
-
-
-
-
-def _check_and_fix_empty_output_tensors(
-    args: Tuple[Any, ...], kwargs: Dict[str, Any]
-) -> None:
-    """
-    Simple check to resize empty output tensors based on input tensor shapes.
-    Only handles the basic case where output tensor is empty and needs to match input shape.
-    """
-    if "out" not in kwargs:
-        return
-
-    output_tensor = kwargs["out"]
-    if (
-        not isinstance(output_tensor, torch.Tensor)
-        or output_tensor.device.type != "remote"
-    ):
-        return
-
-    # Only fix empty tensors
-    if output_tensor.numel() != 0:
-        return
-
-    # For simple operations like abs, the output shape should match the first tensor input
-    # Find the first tensor argument to use as a shape reference
-    # This handles the common case without complex meta execution
-
-    # Check args first (positional arguments)
-    for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            # Use storage ID to check if it's the same tensor
-            storage_ptr = arg.untyped_storage().data_ptr()
-            output_ptr = output_tensor.untyped_storage().data_ptr()
-            if storage_ptr != output_ptr:
-                if arg.numel() > 0:  # Use non-empty tensor as reference
-                    output_tensor.resize_(arg.shape)
-                    log.debug(
-                        f"Resized empty output tensor to match input shape: {arg.shape}"
-                    )
-                    return
-
-    # Check kwargs if no suitable arg found
-    for value in kwargs.values():
-        if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            # Use storage ID to check if it's the same tensor
-            value_ptr = value.untyped_storage().data_ptr()
-            output_ptr = output_tensor.untyped_storage().data_ptr()
-            if value_ptr != output_ptr:
-                if value.numel() > 0:  # Use non-empty tensor as reference
-                    output_tensor.resize_(value.shape)
-                    log.debug(
-                        f"Resized empty output tensor to match input shape: {value.shape}"
-                    )
-                    return
 
 
 def _execute_meta_operation(
@@ -159,40 +134,6 @@ def _execute_view_operation(
     )
 
 
-def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> torch.device:
-    """Validate that all tensors are remote and on the same device. Returns the remote device."""
-    remote_device = None
-
-    def check_tensor_device(obj):
-        nonlocal remote_device
-        if isinstance(obj, torch.Tensor):
-            if obj.device.type != "remote":
-                raise RuntimeError(
-                    f'Remote kernel fallback called for operation "{op_name}" with non-remote tensor '
-                    f'on device "{obj.device}".'
-                )
-
-            if remote_device is None:
-                remote_device = obj.device
-            elif remote_device != obj.device:
-                raise RuntimeError(
-                    f'Cannot perform operation "{op_name}" between tensors on different remote devices '
-                    f'({remote_device} and {obj.device}). '
-                    f"Transfer tensors to the same device first."
-                )
-        return obj
-
-    tree_map(check_tensor_device, (args, kwargs))
-
-    if remote_device is None:
-        raise RuntimeError(f'No remote tensors found for operation "{op_name}"')
-
-    return remote_device
-
-
-
-
-
 def _execute_aten_operation(
     op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device
 ) -> Any:
@@ -230,16 +171,21 @@ def _execute_aten_operation(
     else:
         output_tensors, output_storage_ids = [], []
 
-    # Step 4: Execute remotely with orchestrator
-    _execute_on_remote_device(op, args, kwargs, output_storage_ids)
+    # Step 4: Execute remotely
+    processed_args, processed_kwargs, input_metadata = (
+        args_to_metadata_with_placeholders(args, kwargs)
+    )
+
+    orchestrator = _get_remote_orchestrator()
+    orchestrator.execute_aten_operation(
+        op_name, input_metadata, output_storage_ids, processed_args, processed_kwargs
+    )
 
     # Step 5: Return results
     if len(output_tensors) > 1:
         return tuple(output_tensors)
     elif len(output_tensors) == 1:
         return output_tensors[0]
-
-
 
 
 def _create_output_tensors(
@@ -281,39 +227,6 @@ def _create_output_tensors(
             output_storage_ids.append(new_tensor.untyped_storage().data_ptr())
 
     return output_tensors, output_storage_ids
-
-
-
-def _execute_on_remote_device(
-    op: torch._ops.OpOverload,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
-    output_storage_ids: List,
-) -> None:
-    """Execute the operation remotely using the orchestrator."""
-
-    op_name = op.overloadpacket._qualified_op_name
-
-    log.debug(f"🔧 Executing {op_name} remotely with meta-based output handling")
-
-    # Convert tensors to metadata at PyTorch boundary (early conversion)
-    processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(args, kwargs)
-    )
-
-    # We now use output_storage_ids directly instead of output_metadata
-
-    log.debug(
-        f"🔧 About to call orchestrator with {len(input_metadata)} input tensors, {len(output_storage_ids)} output storage IDs"
-    )
-
-    # Use the new interface with pure metadata (no raw tensors cross this boundary)
-    orchestrator = _get_remote_orchestrator()
-    orchestrator.execute_aten_operation(
-        op_name, input_metadata, output_storage_ids, processed_args, processed_kwargs
-    )
-
-    log.debug(f"✅ Remote orchestrator execution completed for {op_name}")
 
 
 def _remote_kernel_fallback(
