@@ -230,21 +230,16 @@ def create_modal_app_for_gpu(
             # Slow path: in-place view update
             log.info(f"📥 SLOW Updating view of Storage ID {storage_id} (offset: {storage_offset}, contiguous: {is_contiguous})")
 
-            # 1. Materialize the existing storage if lazy using our existing method
-            full_storage_tensor = self._construct_tensor_from_storage(
+            # 1. Construct the target view tensor directly using existing method
+            view_tensor = self._construct_tensor_from_storage(
                 storage_id=storage_id,
-                shape=[storages[storage_id] if isinstance(storages[storage_id], int) else storages[storage_id].nbytes()],
-                stride=[1],
-                storage_offset=0,
-                dtype="torch.uint8"  # Use bytes for full storage access
+                shape=shape,
+                stride=stride,
+                storage_offset=storage_offset,
+                dtype=dtype
             )
 
-            # 2. Create the target view tensor
-            view_tensor = torch.empty(0, dtype=torch_dtype, device="cuda").set_(
-                full_storage_tensor.untyped_storage(), storage_offset, shape, stride
-            )
-
-            # 3. Deserialize the incoming tensor and copy it in-place
+            # 2. Deserialize the incoming tensor and copy it in-place
             buffer = io.BytesIO(tensor_data)
             source_tensor = torch.load(buffer, map_location="cuda", weights_only=True)
             view_tensor.copy_(source_tensor)
