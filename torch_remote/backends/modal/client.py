@@ -194,7 +194,7 @@ class ModalClient(ClientInterface):
         storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
         log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")
         self._server_instance.execute_aten_operation.spawn(
-            op_name, tensor_metadata, args, kwargs, self.machine_id
+            op_name, tensor_metadata, args, kwargs
         )
 
     def remove_storage(self, storage_id: int) -> None:

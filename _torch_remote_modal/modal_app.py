@@ -57,7 +57,7 @@ def create_modal_app_for_gpu(
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
             import torch
-            
+
             if not hasattr(self, "_storages"):
                 # storage_id -> torch.Storage or int (for lazy allocation)
                 self._storages: Dict[int, Union[torch.Storage, int]] = {}
@@ -80,7 +80,7 @@ def create_modal_app_for_gpu(
                 None
             """
             import torch
-            
+
             # Store storage and original tensor data
             storages = self._get_storages()
             storage_id = int(storage_id)
@@ -111,7 +111,7 @@ def create_modal_app_for_gpu(
                 None
             """
             import torch
-            
+
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
             tensor = torch.load(buffer, map_location="cpu", weights_only=True)
@@ -160,7 +160,7 @@ def create_modal_app_for_gpu(
                 Serialized tensor data (contiguous representation of the view)
             """
             import torch
-            
+
             storages = self._get_storages()
             storage_id = int(storage_id)
             if storage_id not in storages:
@@ -218,7 +218,7 @@ def create_modal_app_for_gpu(
                 None
             """
             import torch
-            
+
             storages = self._get_storages()
             storage_id = int(storage_id)
             if storage_id not in storages:
@@ -293,7 +293,6 @@ def create_modal_app_for_gpu(
             tensor_metadata: List[Dict[str, Any]],
             args: List[Any],
             kwargs: Dict[str, Any],
-            machine_id: str,
         ) -> None:
             """
             Execute an operation with explicit input/output tensor separation.
@@ -306,7 +305,6 @@ def create_modal_app_for_gpu(
                 tensor_metadata: List of tensor metadata with is_input/is_output flags and storage_id
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
-                machine_id: Machine ID for logging
 
             Returns:
                 None (operation results are written to output tensors)
@@ -314,12 +312,12 @@ def create_modal_app_for_gpu(
             # Import torch and tree_map locally to avoid serialization issues
             import torch
             from torch.utils._pytree import tree_map
-            
+
             # Extract storage IDs from metadata
             storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
 
             log.info(
-                f"🚀 Modal {gpu_type} (machine {machine_id}) executing with IO separation: {op_name}"
+                f"🚀 Modal {gpu_type} executing with IO separation: {op_name}"
             )
             log.debug(f"Using storage IDs: {storage_ids}")
 
