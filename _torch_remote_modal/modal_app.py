@@ -430,59 +430,14 @@ def create_modal_app_for_gpu(
             # Execute the operation on input tensors - this will create result tensors
             result = op(*processed_args, **processed_kwargs)
 
-            # Handle storage mapping updates for output tensors
-            if any(storage_id is not None for storage_id in output_storage_ids):
-                log.debug(
-                    "Processing output tensors for storage updates"
-                )
+            # Update storage mapping for output tensors
+            result_tensors = [result] if isinstance(result, torch.Tensor) else list(result) if isinstance(result, (list, tuple)) else []
 
-                # Convert result to list if it's a single tensor
-                if isinstance(result, torch.Tensor):
-                    result_tensors = [result]
-                elif isinstance(result, tuple):
-                    result_tensors = list(result)
-                else:
-                    log.warning(f"Unexpected result type: {type(result)}")
-                    result_tensors = []
+            for i, storage_id in enumerate(output_storage_ids):
+                if storage_id is not None and i < len(result_tensors):
+                    storages[int(storage_id)] = result_tensors[i].untyped_storage()
 
-                # Update storage mapping for each output tensor
-                for i, storage_id in enumerate(output_storage_ids):
-                    if storage_id is not None and i < len(result_tensors):
-                        result_tensor = result_tensors[i]
-                        storage_id = int(storage_id)
-
-                        # Check if the storage has changed
-                        if storage_id in storages:
-                            current_storage = storages[storage_id]
-                            result_storage = result_tensor.untyped_storage()
-
-                            # Handle lazy storage conversion
-                            if isinstance(current_storage, int):
-                                # Lazy storage being realized by operation execution
-                                log.debug(
-                                    f"📦 Converting lazy storage ID {storage_id} ({current_storage} bytes) to real storage"
-                                )
-                                storages[storage_id] = result_storage
-                            elif current_storage is not result_storage:
-                                # Storage changed - update the mapping
-                                log.debug(
-                                    f"📦 Updating storage mapping for ID {storage_id}"
-                                )
-                                storages[storage_id] = result_storage
-                            else:
-                                log.debug(f"📦 Storage ID {storage_id} unchanged")
-                        else:
-                            # New storage ID - add to mapping
-                            log.debug(
-                                f"📦 Adding new storage mapping for ID {storage_id}"
-                            )
-                            storages[storage_id] = result_tensor.untyped_storage()
-                    elif storage_id is None:
-                        log.debug(f"📦 Skipping output tensor {i} (storage_id is None)")
-                    else:
-                        log.warning(
-                            f"No result tensor for output storage ID {storage_id} at index {i}"
-                        )
+            log.debug(f"📦 Updated {len([s for s in output_storage_ids if s is not None])} output storage mappings")
 
             log.info(f"✅ Completed: {op_name}")
             return
