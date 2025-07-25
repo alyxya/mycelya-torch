@@ -13,8 +13,9 @@ This module handles all Modal-specific functionality including:
 Part of: torch_remote PyTorch extension
 """
 
+import io
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 
 import modal
 import torch
@@ -58,10 +59,6 @@ def create_modal_app_for_gpu(
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
             if not hasattr(self, "_storages"):
-                from typing import Dict, Union
-
-                import torch
-
                 # storage_id -> torch.Storage or int (for lazy allocation)
                 self._storages: Dict[int, Union[torch.Storage, int]] = {}
 
@@ -82,8 +79,6 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
-            import torch
-
             # Store storage and original tensor data
             storages = self._get_storages()
             storage_id = int(storage_id)
@@ -113,10 +108,6 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
-            import io
-
-            import torch
-
             # Deserialize tensor
             buffer = io.BytesIO(tensor_data)
             tensor = torch.load(buffer, map_location="cpu", weights_only=True)
@@ -164,8 +155,6 @@ def create_modal_app_for_gpu(
             Returns:
                 Serialized tensor data (contiguous representation of the view)
             """
-            import io
-
             storages = self._get_storages()
             storage_id = int(storage_id)
             if storage_id not in storages:
@@ -222,8 +211,6 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
-            import torch
-
             storages = self._get_storages()
             storage_id = int(storage_id)
             if storage_id not in storages:
@@ -316,8 +303,6 @@ def create_modal_app_for_gpu(
             Returns:
                 None (operation results are written to output tensors)
             """
-            import torch
-
             # Extract storage IDs from metadata
             storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
 
@@ -326,164 +311,156 @@ def create_modal_app_for_gpu(
             )
             log.debug(f"Using storage IDs: {storage_ids}")
 
-            try:
-                # Get storage mapping
-                storages = self._get_storages()
+            # Get storage mapping
+            storages = self._get_storages()
 
-                # Reconstruct only input tensors from storage and metadata
-                # Output tensors don't need reconstruction - we'll update their storage mapping after the operation
-                tensors = []
-                input_tensors = []
-                output_storage_ids = []
-                output_metadata_list = []
+            # Reconstruct only input tensors from storage and metadata
+            # Output tensors don't need reconstruction - we'll update their storage mapping after the operation
+            tensors = []
+            input_tensors = []
+            output_storage_ids = []
+            output_metadata_list = []
 
-                for i, metadata in enumerate(tensor_metadata):
-                    storage_id = metadata["storage_id"]
-                    log.debug(
-                        f"Modal app processing storage_id={storage_id} (type={type(storage_id)})"
-                    )
-
-                    # Classify tensor as input or output
-                    is_input = metadata.get(
-                        "is_input", True
-                    )  # Default to input for backward compatibility
-                    is_output = metadata.get("is_output", False)
-
-                    # Always reconstruct tensor from storage + metadata (needed for operation execution)
-                    storage_id = int(storage_id)
-                    if storage_id not in storages:
-                        available_ids = list(storages.keys())
-                        log.error(f"❌ MISSING Storage ID {storage_id}")
-                        log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
-                        raise KeyError(f"Storage ID {storage_id} not found")
-                    storage = storages[storage_id]
-
-                    # Validate that storage is not a lazy allocation (int)
-                    if isinstance(storage, int):
-                        raise RuntimeError(
-                            f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
-                            f"This indicates a bug: lazy storages should be converted to real storage "
-                            f"during operation execution before tensor reconstruction."
-                        )
-
-                    # Parse dtype string back to torch.dtype
-                    dtype_str = metadata["dtype"].replace("torch.", "")
-                    dtype = getattr(torch, dtype_str)
-
-                    # Reconstruct tensor using storage + metadata (on CUDA device)
-                    tensor = torch.empty(0, dtype=dtype, device="cuda").set_(
-                        storage,
-                        metadata["storage_offset"],
-                        metadata["shape"],
-                        metadata["stride"],
-                    )
-
-                    log.debug(
-                        f"📥 MODAL tensor[{i}] ({'input' if is_input else ''}{'output' if is_output else ''}): ID={storage_id}, shape={tensor.shape}"
-                    )
-                    tensors.append(tensor)
-
-                    # Keep track of which tensors are inputs vs outputs for post-operation processing
-                    if is_input:
-                        input_tensors.append(tensor)
-                    if is_output:
-                        output_storage_ids.append(storage_id)
-                        output_metadata_list.append(metadata)
-
-                # Replace tensor placeholders with actual reconstructed tensors using tree_map
-                def replace_placeholder_with_tensor(obj):
-                    if isinstance(obj, str) and obj.startswith("__TENSOR_"):
-                        idx = int(obj.split("_")[-1])
-                        if idx < len(tensors):
-                            return tensors[idx]
-                        else:
-                            raise IndexError(
-                                f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)"
-                            )
-                    return obj
-
-                # Use tree_map to handle nested structure traversal automatically
-                processed_args, processed_kwargs = tree_map(
-                    replace_placeholder_with_tensor, (args, kwargs)
+            for i, metadata in enumerate(tensor_metadata):
+                storage_id = metadata["storage_id"]
+                log.debug(
+                    f"Modal app processing storage_id={storage_id} (type={type(storage_id)})"
                 )
 
-                # Get the operation
-                op_name_fixed = op_name.replace("::", ".")
-                op_parts = op_name_fixed.split(".")
-                op = torch.ops
-                for part in op_parts:
-                    op = getattr(op, part)
+                # Classify tensor as input or output
+                is_input = metadata.get(
+                    "is_input", True
+                )  # Default to input for backward compatibility
+                is_output = metadata.get("is_output", False)
+
+                # Always reconstruct tensor from storage + metadata (needed for operation execution)
+                storage_id = int(storage_id)
+                if storage_id not in storages:
+                    available_ids = list(storages.keys())
+                    log.error(f"❌ MISSING Storage ID {storage_id}")
+                    log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
+                    raise KeyError(f"Storage ID {storage_id} not found")
+                storage = storages[storage_id]
+
+                # Validate that storage is not a lazy allocation (int)
+                if isinstance(storage, int):
+                    raise RuntimeError(
+                        f"Storage ID {storage_id} is lazy-allocated (not yet realized). "
+                        f"This indicates a bug: lazy storages should be converted to real storage "
+                        f"during operation execution before tensor reconstruction."
+                    )
+
+                # Parse dtype string back to torch.dtype
+                dtype_str = metadata["dtype"].replace("torch.", "")
+                dtype = getattr(torch, dtype_str)
+
+                # Reconstruct tensor using storage + metadata (on CUDA device)
+                tensor = torch.empty(0, dtype=dtype, device="cuda").set_(
+                    storage,
+                    metadata["storage_offset"],
+                    metadata["shape"],
+                    metadata["stride"],
+                )
 
                 log.debug(
-                    f"Executing operation with {len(processed_args)} args, "
-                    f"{len(input_tensors)} inputs, {len(output_storage_ids)} outputs"
+                    f"📥 MODAL tensor[{i}] ({'input' if is_input else ''}{'output' if is_output else ''}): ID={storage_id}, shape={tensor.shape}"
+                )
+                tensors.append(tensor)
+
+                # Keep track of which tensors are inputs vs outputs for post-operation processing
+                if is_input:
+                    input_tensors.append(tensor)
+                if is_output:
+                    output_storage_ids.append(storage_id)
+                    output_metadata_list.append(metadata)
+
+            # Replace tensor placeholders with actual reconstructed tensors using tree_map
+            def replace_placeholder_with_tensor(obj):
+                if isinstance(obj, str) and obj.startswith("__TENSOR_"):
+                    idx = int(obj.split("_")[-1])
+                    if idx < len(tensors):
+                        return tensors[idx]
+                    else:
+                        raise IndexError(
+                            f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)"
+                        )
+                return obj
+
+            # Use tree_map to handle nested structure traversal automatically
+            processed_args, processed_kwargs = tree_map(
+                replace_placeholder_with_tensor, (args, kwargs)
+            )
+
+            # Get the operation
+            op_name_fixed = op_name.replace("::", ".")
+            op_parts = op_name_fixed.split(".")
+            op = torch.ops
+            for part in op_parts:
+                op = getattr(op, part)
+
+            log.debug(
+                f"Executing operation with {len(processed_args)} args, "
+                f"{len(input_tensors)} inputs, {len(output_storage_ids)} outputs"
+            )
+
+            # Execute the operation on input tensors - this will create result tensors
+            result = op(*processed_args, **processed_kwargs)
+
+            # Handle storage mapping updates for output tensors
+            if output_storage_ids:
+                log.debug(
+                    f"Processing {len(output_storage_ids)} output tensors for storage updates"
                 )
 
-                # Execute the operation on input tensors - this will create result tensors
-                result = op(*processed_args, **processed_kwargs)
+                # Convert result to list if it's a single tensor
+                if isinstance(result, torch.Tensor):
+                    result_tensors = [result]
+                elif isinstance(result, tuple):
+                    result_tensors = list(result)
+                else:
+                    log.warning(f"Unexpected result type: {type(result)}")
+                    result_tensors = []
 
-                # Handle storage mapping updates for output tensors
-                if output_storage_ids:
-                    log.debug(
-                        f"Processing {len(output_storage_ids)} output tensors for storage updates"
-                    )
+                # Update storage mapping for each output tensor
+                for i, (storage_id, _metadata) in enumerate(
+                    zip(output_storage_ids, output_metadata_list)
+                ):
+                    if i < len(result_tensors):
+                        result_tensor = result_tensors[i]
+                        storage_id = int(storage_id)
 
-                    # Convert result to list if it's a single tensor
-                    if isinstance(result, torch.Tensor):
-                        result_tensors = [result]
-                    elif isinstance(result, tuple):
-                        result_tensors = list(result)
-                    else:
-                        log.warning(f"Unexpected result type: {type(result)}")
-                        result_tensors = []
+                        # Check if the storage has changed
+                        if storage_id in storages:
+                            current_storage = storages[storage_id]
+                            result_storage = result_tensor.untyped_storage()
 
-                    # Update storage mapping for each output tensor
-                    for i, (storage_id, _metadata) in enumerate(
-                        zip(output_storage_ids, output_metadata_list)
-                    ):
-                        if i < len(result_tensors):
-                            result_tensor = result_tensors[i]
-                            storage_id = int(storage_id)
-
-                            # Check if the storage has changed
-                            if storage_id in storages:
-                                current_storage = storages[storage_id]
-                                result_storage = result_tensor.untyped_storage()
-
-                                # Handle lazy storage conversion
-                                if isinstance(current_storage, int):
-                                    # Lazy storage being realized by operation execution
-                                    log.debug(
-                                        f"📦 Converting lazy storage ID {storage_id} ({current_storage} bytes) to real storage"
-                                    )
-                                    storages[storage_id] = result_storage
-                                elif current_storage is not result_storage:
-                                    # Storage changed - update the mapping
-                                    log.debug(
-                                        f"📦 Updating storage mapping for ID {storage_id}"
-                                    )
-                                    storages[storage_id] = result_storage
-                                else:
-                                    log.debug(f"📦 Storage ID {storage_id} unchanged")
-                            else:
-                                # New storage ID - add to mapping
+                            # Handle lazy storage conversion
+                            if isinstance(current_storage, int):
+                                # Lazy storage being realized by operation execution
                                 log.debug(
-                                    f"📦 Adding new storage mapping for ID {storage_id}"
+                                    f"📦 Converting lazy storage ID {storage_id} ({current_storage} bytes) to real storage"
                                 )
-                                storages[storage_id] = result_tensor.untyped_storage()
+                                storages[storage_id] = result_storage
+                            elif current_storage is not result_storage:
+                                # Storage changed - update the mapping
+                                log.debug(
+                                    f"📦 Updating storage mapping for ID {storage_id}"
+                                )
+                                storages[storage_id] = result_storage
+                            else:
+                                log.debug(f"📦 Storage ID {storage_id} unchanged")
                         else:
-                            log.warning(
-                                f"No result tensor for output storage ID {storage_id}"
+                            # New storage ID - add to mapping
+                            log.debug(
+                                f"📦 Adding new storage mapping for ID {storage_id}"
                             )
+                            storages[storage_id] = result_tensor.untyped_storage()
+                    else:
+                        log.warning(
+                            f"No result tensor for output storage ID {storage_id}"
+                        )
 
-                log.info(f"✅ Completed: {op_name} with IO separation")
-                return
-
-            except Exception as e:
-                log.error(f"❌ Error executing {op_name} with IO separation: {str(e)}")
-                import traceback
-
-                traceback.print_exc()
-                raise
+            log.info(f"✅ Completed: {op_name} with IO separation")
+            return
 
     return app, PytorchServer
