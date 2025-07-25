@@ -7,11 +7,16 @@ import torch
 from torch.utils._pytree import tree_map
 
 # Simple operation dispatch - no complex patterns needed
-from ._device_daemon import driver
 from ._logging import get_logger
 from ._tensor_utils import RemoteTensorMetadata
 
 log = get_logger(__name__)
+
+
+def _get_remote_orchestrator():
+    """Get the global remote orchestrator instance."""
+    from ._remote_orchestrator import remote_orchestrator
+    return remote_orchestrator
 
 
 def args_to_metadata_with_placeholders(
@@ -94,13 +99,7 @@ def _check_and_fix_empty_output_tensors(
                     return
 
 
-def _get_remote_orchestrator():
-    """Get the global remote orchestrator instance."""
-    from ._remote_orchestrator import remote_orchestrator
-    return remote_orchestrator
-
-
-def _handle_view_operation(
+def _execute_view_operation(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> torch.Tensor:
     """Handle view operations locally with shared storage IDs."""
@@ -128,23 +127,6 @@ def _handle_view_operation(
         meta_result.stride(),
         meta_result.storage_offset()
     )
-
-
-def _remote_kernel_fallback(
-    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
-) -> Any:
-    """Execute PyTorch operations on remote devices using simple dispatch logic."""
-    op_name = op.overloadpacket._qualified_op_name
-    
-    # Validate cross-device operations upfront for all execution paths
-    _validate_cross_device_operation(op_name, args, kwargs)
-
-    # Simple operation classification
-    if _is_view_operation(op):
-        return _handle_view_operation(op, *args, **kwargs)
-    else:
-        # All other operations execute remotely
-        return _execute_remote_operation(op, args, kwargs)
 
 
 def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> None:
@@ -178,35 +160,8 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
 
 
 
-def _is_view_operation(op: torch._ops.OpOverload) -> bool:
-    """Check if operation is a view operation that should execute locally."""
-    # View operations create new tensor views sharing the same storage
-    view_ops = {
-        "aten::view",
-        "aten::reshape",
-        "aten::transpose",
-        "aten::permute",
-        "aten::squeeze",
-        "aten::unsqueeze",
-        "aten::select",
-        "aten::slice",
-        "aten::narrow",
-        "aten::expand",
-        "aten::repeat",
-        "aten::as_strided",
-        "aten::unflatten",
-        "aten::flatten",
-        "aten::swapaxes",
-        "aten::swapdims",
-        "aten::movedim",
-        "aten::moveaxis",
-        "aten::contiguous",
-    }
-    return op._schema.name in view_ops
 
-
-
-def _execute_remote_operation(
+def _execute_aten_operation(
     op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any]
 ) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
@@ -222,7 +177,7 @@ def _execute_remote_operation(
         if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
             if remote_device is None:
                 remote_device = obj.device
-            
+
             # Convert to meta tensor while preserving properties
             meta_tensor = obj.to("meta")
             original_tensors[id(meta_tensor)] = obj
@@ -374,7 +329,6 @@ def _create_new_output_tensor(
         meta_output.shape,
         dtype=meta_output.dtype,
         device=remote_device,
-        requires_grad=meta_output.requires_grad,
     )
 
     # Apply stride if different from default
@@ -422,6 +376,30 @@ def _execute_on_remote_device(
     )
 
     log.debug(f"✅ Remote orchestrator execution completed for {op_name}")
+
+
+def _remote_kernel_fallback(
+    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
+) -> Any:
+    """Execute PyTorch operations on remote devices using simple dispatch logic."""
+    op_name = op.overloadpacket._qualified_op_name
+
+    # Validate cross-device operations upfront for all execution paths
+    _validate_cross_device_operation(op_name, args, kwargs)
+
+    # Check if operation is a view operation using schema alias information
+    # View operations alias their input for reading (is_write=False)
+    # In-place/out operations also have alias_info but with is_write=True
+    schema = op._schema
+    is_view_op = (schema.returns and len(schema.returns) > 0 and
+                  hasattr(schema.returns[0], 'alias_info') and
+                  schema.returns[0].alias_info is not None and
+                  not schema.returns[0].alias_info.is_write)
+
+    if is_view_op:
+        return _execute_view_operation(op, *args, **kwargs)
+    else:
+        return _execute_aten_operation(op, args, kwargs)
 
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
