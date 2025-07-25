@@ -47,8 +47,12 @@ class DeviceRegistry:
         self._current_device: int = 0
 
         # Stream management - no torch.Stream objects, only stream IDs
-        self._current_streams: Dict[int, int] = defaultdict(lambda: 0)  # device_idx -> current stream_id
-        self._stream_registry: Dict[int, List[int]] = defaultdict(lambda: [0])  # device_idx -> list of stream_ids
+        self._current_streams: Dict[int, int] = defaultdict(
+            lambda: 0
+        )  # device_idx -> current stream_id
+        self._stream_registry: Dict[int, List[int]] = defaultdict(
+            lambda: [0]
+        )  # device_idx -> list of stream_ids
 
     def get_device_count(self) -> int:
         """Return number of devices"""
@@ -90,14 +94,20 @@ class DeviceRegistry:
     # Stream management methods
     def get_stream(self, device_idx: int) -> int:
         """Get current stream ID for device"""
-        current_stream_id = self._current_streams[device_idx]  # defaultdict returns 0 if not set
+        current_stream_id = self._current_streams[
+            device_idx
+        ]  # defaultdict returns 0 if not set
         return current_stream_id
 
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
         """Create new stream ID for device and add to registry"""
         # Get next stream ID (start from 1, since 0 is default)
-        registry = self._stream_registry[device_idx]  # defaultdict returns [0] if not set
-        new_stream_id = len(registry)  # This will be 1 for first new stream (since [0] exists)
+        registry = self._stream_registry[
+            device_idx
+        ]  # defaultdict returns [0] if not set
+        new_stream_id = len(
+            registry
+        )  # This will be 1 for first new stream (since [0] exists)
 
         # Add to registry
         registry.append(new_stream_id)
@@ -110,13 +120,17 @@ class DeviceRegistry:
     def exchange_stream(self, stream_id: int, device_idx: int) -> int:
         """Exchange current stream ID and return previous stream ID"""
         # Get the previous current stream ID
-        previous_stream_id = self._current_streams[device_idx]  # defaultdict returns 0 if not set
+        previous_stream_id = self._current_streams[
+            device_idx
+        ]  # defaultdict returns 0 if not set
 
         # Set the new stream as current
         self._current_streams[device_idx] = stream_id
 
         # Make sure this stream ID is in our registry
-        registry = self._stream_registry[device_idx]  # defaultdict returns [0] if not set
+        registry = self._stream_registry[
+            device_idx
+        ]  # defaultdict returns [0] if not set
         if stream_id not in registry:
             registry.append(stream_id)
 
@@ -147,6 +161,7 @@ class Driver:
     @register(registry)
     def generate_storage_id(self) -> int:
         from ._storage import generate_storage_id
+
         return generate_storage_id()
 
     @register(registry)
@@ -154,6 +169,7 @@ class Driver:
         self, storage_id: int, nbytes: int, device_index: int
     ) -> bool:
         from ._storage import create_storage_with_id
+
         result = create_storage_with_id(storage_id, nbytes, device_index)
         if not result:
             raise RuntimeError(
@@ -164,6 +180,7 @@ class Driver:
     @register(registry)
     def free_storage_with_id(self, storage_id: int) -> bool:
         from ._storage import free_storage_with_id
+
         result = free_storage_with_id(storage_id)
         if not result:
             raise RuntimeError(f"Failed to free storage with ID {storage_id}")
@@ -172,16 +189,19 @@ class Driver:
     @register(registry)
     def get_storage_device(self, storage_id: int) -> Optional[int]:
         from ._storage import get_storage_device
+
         return get_storage_device(storage_id)
 
     @register(registry)
     def copy_data_by_id(self, dest_id: int, src_id: int, count: int) -> None:
         from ._storage import copy_data_by_id
+
         return copy_data_by_id(dest_id, src_id, count)
 
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         from ._storage import resize_storage_by_id
+
         return resize_storage_by_id(storage_id, nbytes)
 
     # Device operations
@@ -235,7 +255,9 @@ class Driver:
         pass
 
     @register(registry)
-    def record(self, event: int, stream: torch.Stream, device_idx: int, flag: int) -> None:
+    def record(
+        self, event: int, stream: torch.Stream, device_idx: int, flag: int
+    ) -> None:
         """Record event - placeholder implementation"""
         pass
 

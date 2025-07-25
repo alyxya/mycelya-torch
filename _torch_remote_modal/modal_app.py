@@ -25,9 +25,6 @@ log = logging.getLogger(__name__)
 # Create simplified image with just PyTorch and CUDA support
 image = modal.Image.debian_slim().pip_install("numpy", "torch")
 
-# Cache for GPU-specific apps and their functions
-_gpu_apps: Dict[str, Tuple[modal.App, Any]] = {}
-
 
 def create_modal_app_for_gpu(
     gpu_type: str,
@@ -47,9 +44,6 @@ def create_modal_app_for_gpu(
     Returns:
         Tuple of (modal_app, server_class) for the specified device
     """
-    if machine_id in _gpu_apps:
-        return _gpu_apps[machine_id]
-
     app = modal.App(f"torch-remote-{machine_id}")
 
     @app.cls(
@@ -510,5 +504,4 @@ def create_modal_app_for_gpu(
                 traceback.print_exc()
                 raise
 
-    _gpu_apps[machine_id] = (app, PytorchServer)
     return app, PytorchServer

@@ -17,7 +17,9 @@ log = get_logger(__name__)
 
 
 def args_to_metadata_with_placeholders(
-    args: Tuple[Any, ...], kwargs: Dict[str, Any], operation_context: Optional[str] = None
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    operation_context: Optional[str] = None,
 ) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[TensorMetadata]]:
     """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
     metadata_list: List[TensorMetadata] = []

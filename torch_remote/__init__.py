@@ -50,7 +50,6 @@ def _create_module() -> types.ModuleType:
     """
     module = types.ModuleType("_RemoteMod")
 
-
     def device_count() -> int:
         """Get the number of available remote devices.
 
@@ -66,7 +65,6 @@ def _create_module() -> types.ModuleType:
             True if remote devices are available, False otherwise
         """
         return True
-
 
     def get_rng_state(device: Union[int, torch.device]) -> torch.Tensor:
         """Get the random number generator state for a remote device.
@@ -167,7 +165,6 @@ def _create_module() -> types.ModuleType:
 
     def is_initialized() -> bool:
         return module._initialized
-
 
     def _lazy_init() -> None:
         if is_initialized():

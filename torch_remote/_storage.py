@@ -118,7 +118,9 @@ class StorageRegistry:
                             f"({nbytes} bytes, lazy={lazy})"
                         )
                     except Exception as e:
-                        log.warning(f"Failed to register storage {storage_id} with client: {e}")
+                        log.warning(
+                            f"Failed to register storage {storage_id} with client: {e}"
+                        )
                         return False
         except Exception as e:
             log.warning(f"Failed to register storage {storage_id} with client: {e}")
@@ -228,9 +230,7 @@ class StorageRegistry:
 
         # Same device copy - this could be handled by the remote client
         # For now, we'll let the remote side handle it through proper tensor operations
-        log.debug(
-            f"Same-device copy: {src_id} -> {dest_id} on device {dest_device}"
-        )
+        log.debug(f"Same-device copy: {src_id} -> {dest_id} on device {dest_device}")
 
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         """Resize remote storage by storage ID"""
@@ -289,9 +289,13 @@ def generate_storage_id() -> int:
     return _storage_registry.generate_storage_id()
 
 
-def create_storage_with_id(storage_id: int, nbytes: int, device_index: int, lazy: bool = False) -> bool:
+def create_storage_with_id(
+    storage_id: int, nbytes: int, device_index: int, lazy: bool = False
+) -> bool:
     """Create remote storage with the given ID."""
-    return _storage_registry.create_storage_with_id(storage_id, nbytes, device_index, lazy)
+    return _storage_registry.create_storage_with_id(
+        storage_id, nbytes, device_index, lazy
+    )
 
 
 def free_storage_with_id(storage_id: int) -> bool:
