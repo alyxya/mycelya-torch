@@ -8,7 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from ..._logging import get_logger
 from ..client_interface import ClientInterface
@@ -167,19 +167,18 @@ class ModalClient(ClientInterface):
     def execute_aten_operation(
         self,
         op_name: str,
-        tensor_metadata: List[Dict[str, Any]],
+        input_tensor_metadata: List[Dict[str, Any]],
+        output_storage_ids: List[Union[int, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
     ) -> None:
         """
-        Execute an aten operation with explicit input/output tensor separation.
-
-        This method handles operations where input and output tensors are explicitly
-        separated, enabling better handling of complex output patterns and storage updates.
+        Execute an aten operation with separated input metadata and output storage IDs.
 
         Args:
             op_name: The aten operation name
-            tensor_metadata: Metadata for reconstructing tensors with is_input/is_output flags and storage_id
+            input_tensor_metadata: Metadata for reconstructing input tensors only
+            output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
             args: Operation arguments
             kwargs: Operation keyword arguments
 
@@ -191,10 +190,11 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
-        log.info(f"📡 Modal Client sending Storage IDs: {storage_ids}")
+        input_storage_ids = [metadata["storage_id"] for metadata in input_tensor_metadata]
+        log.info(f"📡 Modal Client sending Input Storage IDs: {input_storage_ids}")
+        log.info(f"📡 Modal Client sending Output Storage IDs: {output_storage_ids}")
         self._server_instance.execute_aten_operation.spawn(
-            op_name, tensor_metadata, args, kwargs
+            op_name, input_tensor_metadata, output_storage_ids, args, kwargs
         )
 
     def remove_storage(self, storage_id: int) -> None:

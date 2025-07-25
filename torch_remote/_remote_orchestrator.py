@@ -62,22 +62,19 @@ class RemoteOrchestrator:
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
         """
-        log.info(f"🎯 ORCHESTRATOR: Executing {op_name} with pure metadata boundary")
+        log.info(f"🎯 ORCHESTRATOR: Executing {op_name} with separated input/output interface")
 
-        # Determine input/output indices for metadata list
-        total_metadata = input_metadata + output_metadata
-        input_indices = set(range(len(input_metadata)))
-        output_indices = set(range(len(input_metadata), len(total_metadata)))
-
-        # Convert metadata to serializable dictionaries with operation flags
-        tensor_metadata_dicts = []
-        for i, metadata in enumerate(total_metadata):
+        # Convert input metadata to serializable dictionaries
+        input_tensor_metadata_dicts = []
+        for metadata in input_metadata:
             meta_dict = metadata.to_dict()
-            if i in input_indices:
-                meta_dict["is_input"] = True
-            if i in output_indices:
-                meta_dict["is_output"] = True
-            tensor_metadata_dicts.append(meta_dict)
+            input_tensor_metadata_dicts.append(meta_dict)
+
+        # Extract output storage IDs (None for outputs that should be ignored)
+        output_storage_ids = []
+        for metadata in output_metadata:
+            # All output metadata should have storage_id since they're pre-allocated
+            output_storage_ids.append(metadata.storage_id)
 
         # Get the machine from first input tensor's storage ID
         if not input_metadata:
@@ -86,11 +83,11 @@ class RemoteOrchestrator:
         storage_id = input_metadata[0].storage_id
         machine = get_machine_for_storage(storage_id)
 
-        # Execute with pure metadata interface
+        # Execute with separated input/output interface
         client = self._get_device_client(machine)
-        client.execute_aten_operation(op_name, tensor_metadata_dicts, args, kwargs)
+        client.execute_aten_operation(op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs)
 
-        log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata boundary")
+        log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
 
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""

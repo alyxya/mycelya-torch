@@ -9,7 +9,7 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 
 class ClientInterface(ABC):
@@ -147,17 +147,18 @@ class ClientInterface(ABC):
     def execute_aten_operation(
         self,
         op_name: str,
-        tensor_metadata: List[Dict[str, Any]],
+        input_tensor_metadata: List[Dict[str, Any]],
+        output_storage_ids: List[Union[int, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
     ) -> None:
         """
-        Execute an aten operation on the remote machine.
-        All tensors (input and output) are pre-allocated and passed as arguments.
+        Execute an aten operation on the remote machine with separated input/output specification.
 
         Args:
             op_name: The aten operation name to execute
-            tensor_metadata: Metadata for reconstructing all tensors (shape, stride, offset, storage_id)
+            input_tensor_metadata: Metadata for reconstructing input tensors only
+            output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
 

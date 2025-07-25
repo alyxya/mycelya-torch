@@ -290,19 +290,21 @@ def create_modal_app_for_gpu(
         def execute_aten_operation(
             self,
             op_name: str,
-            tensor_metadata: List[Dict[str, Any]],
+            input_tensor_metadata: List[Dict[str, Any]],
+            output_storage_ids: List[Union[int, None]],
             args: List[Any],
             kwargs: Dict[str, Any],
         ) -> None:
             """
-            Execute an operation with explicit input/output tensor separation.
+            Execute an operation with separated input metadata and output storage IDs.
 
-            This method handles operations where input and output tensors are explicitly
-            separated based on the is_input/is_output flags in tensor metadata.
+            This method handles operations where input tensor metadata and output storage IDs
+            are explicitly separated, making the interface cleaner and more explicit.
 
             Args:
                 op_name: The operation name to execute
-                tensor_metadata: List of tensor metadata with is_input/is_output flags and storage_id
+                input_tensor_metadata: List of metadata for input tensors only
+                output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
 
@@ -313,38 +315,28 @@ def create_modal_app_for_gpu(
             import torch
             from torch.utils._pytree import tree_map
 
-            # Extract storage IDs from metadata
-            storage_ids = [metadata["storage_id"] for metadata in tensor_metadata]
+            # Extract storage IDs from input metadata
+            input_storage_ids = [metadata["storage_id"] for metadata in input_tensor_metadata]
 
             log.info(
-                f"🚀 Modal {gpu_type} executing with IO separation: {op_name}"
+                f"🚀 Modal {gpu_type} executing: {op_name}"
             )
-            log.debug(f"Using storage IDs: {storage_ids}")
+            log.debug(f"Input storage IDs: {input_storage_ids}")
+            log.debug(f"Output storage IDs: {output_storage_ids}")
 
             # Get storage mapping
             storages = self._get_storages()
 
             # Reconstruct only input tensors from storage and metadata
-            # Output tensors don't need reconstruction - we'll update their storage mapping after the operation
-            tensors = []
             input_tensors = []
-            output_storage_ids = []
-            output_metadata_list = []
 
-            for i, metadata in enumerate(tensor_metadata):
+            for i, metadata in enumerate(input_tensor_metadata):
                 storage_id = metadata["storage_id"]
                 log.debug(
-                    f"Modal app processing storage_id={storage_id} (type={type(storage_id)})"
+                    f"Modal app processing input storage_id={storage_id} (type={type(storage_id)})"
                 )
 
-                # Classify tensor as input or output
-                is_input = metadata.get(
-                    "is_input", True
-                )  # Default to input for backward compatibility
-                is_output = metadata.get("is_output", False)
-
-                # Always reconstruct tensor from storage + metadata (needed for operation execution)
-                storage_id = int(storage_id)
+                # Reconstruct tensor from storage + metadata (needed for operation execution)
                 if storage_id not in storages:
                     available_ids = list(storages.keys())
                     log.error(f"❌ MISSING Storage ID {storage_id}")
@@ -373,26 +365,19 @@ def create_modal_app_for_gpu(
                 )
 
                 log.debug(
-                    f"📥 MODAL tensor[{i}] ({'input' if is_input else ''}{'output' if is_output else ''}): ID={storage_id}, shape={tensor.shape}"
+                    f"📥 MODAL input tensor[{i}]: ID={storage_id}, shape={tensor.shape}"
                 )
-                tensors.append(tensor)
+                input_tensors.append(tensor)
 
-                # Keep track of which tensors are inputs vs outputs for post-operation processing
-                if is_input:
-                    input_tensors.append(tensor)
-                if is_output:
-                    output_storage_ids.append(storage_id)
-                    output_metadata_list.append(metadata)
-
-            # Replace tensor placeholders with actual reconstructed tensors using tree_map
+            # Replace tensor placeholders with actual reconstructed input tensors using tree_map
             def replace_placeholder_with_tensor(obj):
                 if isinstance(obj, str) and obj.startswith("__TENSOR_"):
                     idx = int(obj.split("_")[-1])
-                    if idx < len(tensors):
-                        return tensors[idx]
+                    if idx < len(input_tensors):
+                        return input_tensors[idx]
                     else:
                         raise IndexError(
-                            f"Tensor placeholder index {idx} out of range (have {len(tensors)} tensors)"
+                            f"Tensor placeholder index {idx} out of range (have {len(input_tensors)} input tensors)"
                         )
                 return obj
 
@@ -410,16 +395,16 @@ def create_modal_app_for_gpu(
 
             log.debug(
                 f"Executing operation with {len(processed_args)} args, "
-                f"{len(input_tensors)} inputs, {len(output_storage_ids)} outputs"
+                f"{len(input_tensors)} inputs, {len([s for s in output_storage_ids if s is not None])} outputs to update"
             )
 
             # Execute the operation on input tensors - this will create result tensors
             result = op(*processed_args, **processed_kwargs)
 
             # Handle storage mapping updates for output tensors
-            if output_storage_ids:
+            if any(storage_id is not None for storage_id in output_storage_ids):
                 log.debug(
-                    f"Processing {len(output_storage_ids)} output tensors for storage updates"
+                    "Processing output tensors for storage updates"
                 )
 
                 # Convert result to list if it's a single tensor
@@ -432,10 +417,8 @@ def create_modal_app_for_gpu(
                     result_tensors = []
 
                 # Update storage mapping for each output tensor
-                for i, (storage_id, _metadata) in enumerate(
-                    zip(output_storage_ids, output_metadata_list)
-                ):
-                    if i < len(result_tensors):
+                for i, storage_id in enumerate(output_storage_ids):
+                    if storage_id is not None and i < len(result_tensors):
                         result_tensor = result_tensors[i]
                         storage_id = int(storage_id)
 
@@ -465,12 +448,14 @@ def create_modal_app_for_gpu(
                                 f"📦 Adding new storage mapping for ID {storage_id}"
                             )
                             storages[storage_id] = result_tensor.untyped_storage()
+                    elif storage_id is None:
+                        log.debug(f"📦 Skipping output tensor {i} (storage_id is None)")
                     else:
                         log.warning(
-                            f"No result tensor for output storage ID {storage_id}"
+                            f"No result tensor for output storage ID {storage_id} at index {i}"
                         )
 
-            log.info(f"✅ Completed: {op_name} with IO separation")
+            log.info(f"✅ Completed: {op_name}")
             return
 
     return app, PytorchServer
