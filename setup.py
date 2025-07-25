@@ -67,9 +67,9 @@ if __name__ == "__main__":
             CXX_FLAGS = ["/sdl", "/permissive-"]
     elif platform.machine() == "s390x":
         # no -Werror on s390x due to newer compiler
-        CXX_FLAGS = {"cxx": ["-g", "-Wall"]}
+        CXX_FLAGS = ["-g", "-Wall"]
     else:
-        CXX_FLAGS = {"cxx": ["-g", "-Wall", "-Werror"]}
+        CXX_FLAGS = ["-g", "-Wall", "-Werror"]
 
     sources = list(CSRC_DIR.glob("*.cpp"))
 
@@ -78,39 +78,15 @@ if __name__ == "__main__":
     ext_modules = [
         ExtensionClass(
             name="torch_remote._C",
-            sources=sorted(str(s) for s in sources),
-            include_dirs=[str(CSRC_DIR)],
+            sources=sorted(str(s.relative_to(ROOT_DIR)) for s in sources),
+            include_dirs=[str(CSRC_DIR.relative_to(ROOT_DIR))],
             extra_compile_args=CXX_FLAGS,
         )
     ]
 
     setup(
-        name=PACKAGE_NAME,
-        version=version,
-        author="PyTorch Remote Extension",
-        description=(
-            "Remote GPU cloud execution extension for PyTorch "
-            "supporting multiple providers"
-        ),
         packages=(find_packages(exclude=("test",)) + ["_torch_remote_modal"]),
-        package_data={
-            PACKAGE_NAME: [
-                "*.dll",
-                "*.dylib",
-                "*.so",  # Binary extensions
-            ]
-        },
-        install_requires=[
-            "torch>=2.1.0",
-            "modal>=1.0.0",
-            "numpy",
-        ],
-        extras_require={
-            "runpod": ["runpod>=1.0.0"],  # Future provider support
-            "all": ["runpod>=1.0.0"],
-        },
         ext_modules=ext_modules,
-        python_requires=">=3.8",
         cmdclass={
             "build_ext": get_build_ext_class(),
             "clean": clean,
