@@ -634,7 +634,7 @@ def _execute_non_tensor_result(
 
     # Execute with clean interface - only metadata crosses boundary
     orchestrator = _get_remote_orchestrator()
-    orchestrator.execute_remote_aten_operation(
+    orchestrator.execute_aten_operation(
         op_name,
         input_metadata,
         output_metadata,
@@ -760,7 +760,7 @@ def _execute_on_remote_device(
 
     # Use the new interface with pure metadata (no raw tensors cross this boundary)
     orchestrator = _get_remote_orchestrator()
-    orchestrator.execute_remote_aten_operation(
+    orchestrator.execute_aten_operation(
         op_name, input_metadata, output_metadata, processed_args, processed_kwargs
     )
 

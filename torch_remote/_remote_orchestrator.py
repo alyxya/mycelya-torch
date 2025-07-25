@@ -41,7 +41,7 @@ class RemoteOrchestrator:
         """Get the active client for a specific machine."""
         return machine._client
 
-    def execute_remote_aten_operation(
+    def execute_aten_operation(
         self,
         op_name: str,
         input_metadata: List[RemoteTensorMetadata],
