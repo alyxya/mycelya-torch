@@ -5,6 +5,7 @@ import io
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
+from torch.utils._pytree import tree_map
 
 # Simple operation dispatch - no complex patterns needed
 from ._device_daemon import driver
@@ -21,30 +22,22 @@ def args_to_metadata_with_placeholders(
 ) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMetadata]]:
     """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
     metadata_list: List[RemoteTensorMetadata] = []
-    processed_args: List[Any] = []
-    processed_kwargs: Dict[str, Any] = {}
 
-    # Process args
-    for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            metadata = RemoteTensorMetadata.from_remote_tensor(arg)
+    def replace_remote_tensor_with_placeholder(obj):
+        """Replace remote tensors with placeholders and collect metadata."""
+        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+            metadata = RemoteTensorMetadata.from_remote_tensor(obj)
             tensor_index = len(metadata_list)
             metadata_list.append(metadata)
-            processed_args.append(f"__TENSOR_{tensor_index}")
-        else:
-            processed_args.append(arg)
+            return f"__TENSOR_{tensor_index}"
+        return obj
 
-    # Process kwargs
-    for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            metadata = RemoteTensorMetadata.from_remote_tensor(value)
-            tensor_index = len(metadata_list)
-            metadata_list.append(metadata)
-            processed_kwargs[key] = f"__TENSOR_{tensor_index}"
-        else:
-            processed_kwargs[key] = value
+    # Use tree_map to handle nested structures automatically
+    processed_args, processed_kwargs = tree_map(
+        replace_remote_tensor_with_placeholder, (args, kwargs)
+    )
 
-    return tuple(processed_args), processed_kwargs, metadata_list
+    return processed_args, processed_kwargs, metadata_list
 
 
 def deserialize_tensor(data: bytes) -> torch.Tensor:
