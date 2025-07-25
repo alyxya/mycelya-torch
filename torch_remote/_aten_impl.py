@@ -311,7 +311,22 @@ def _create_output_tensors(
                 )
 
                 # Create new output tensor with lazy allocation
-                new_tensor = _create_new_output_tensor(meta_output, remote_device)
+                # Create empty remote tensor (lazy allocation will be handled by device daemon)
+                new_tensor = torch.empty(
+                    meta_output.shape,
+                    dtype=meta_output.dtype,
+                    device=remote_device,
+                )
+
+                # Apply stride if different from default
+                if meta_output.stride() != new_tensor.stride():
+                    new_tensor = torch.as_strided(
+                        new_tensor,
+                        meta_output.shape,
+                        meta_output.stride(),
+                        meta_output.storage_offset(),
+                    )
+
                 output_tensors.append(new_tensor)
                 log.debug(
                     f"✅ Created new output tensor {i} with shape {meta_output.shape}"
@@ -319,28 +334,6 @@ def _create_output_tensors(
 
     return output_tensors
 
-
-def _create_new_output_tensor(
-    meta_output: torch.Tensor, remote_device: torch.device
-) -> torch.Tensor:
-    """Create a new output tensor on the remote device."""
-    # Create empty remote tensor (lazy allocation will be handled by device daemon)
-    new_tensor = torch.empty(
-        meta_output.shape,
-        dtype=meta_output.dtype,
-        device=remote_device,
-    )
-
-    # Apply stride if different from default
-    if meta_output.stride() != new_tensor.stride():
-        new_tensor = torch.as_strided(
-            new_tensor,
-            meta_output.shape,
-            meta_output.stride(),
-            meta_output.storage_offset(),
-        )
-
-    return new_tensor
 
 
 def _execute_on_remote_device(
