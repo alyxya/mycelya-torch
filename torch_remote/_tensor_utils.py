@@ -153,10 +153,6 @@ def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     if tensor.device.type != "cpu":
         raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
 
-    # Make tensor contiguous for efficient serialization
-    if not tensor.is_contiguous():
-        tensor = tensor.contiguous()
-
     # Serialize to bytes
     buffer = io.BytesIO()
     torch.save(tensor, buffer)
