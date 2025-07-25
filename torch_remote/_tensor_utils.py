@@ -48,35 +48,6 @@ class BaseTensorMetadata(ABC):
             self.shape, self.stride, self.storage_offset
         )
 
-    def to_cpu_tensor_from_bytes(self, data: bytes) -> torch.Tensor:
-        """
-        Create a CPU tensor from bytes using this metadata.
-
-        Args:
-            data: Serialized tensor data
-
-        Returns:
-            CPU tensor reconstructed from bytes
-        """
-        # Deserialize the tensor data
-        buffer = io.BytesIO(data)
-        tensor = torch.load(buffer, map_location="cpu", weights_only=False)
-
-        # Verify the tensor matches our metadata
-        if tensor.dtype != self.dtype:
-            raise ValueError(
-                f"Dtype mismatch: expected {self.dtype}, got {tensor.dtype}"
-            )
-
-        # Apply the correct view if needed
-        if (
-            tuple(tensor.shape) != self.shape
-            or tuple(tensor.stride()) != self.stride
-            or tensor.storage_offset() != self.storage_offset
-        ):
-            tensor = tensor.as_strided(self.shape, self.stride, self.storage_offset)
-
-        return tensor
 
 
 @dataclass
@@ -190,3 +161,17 @@ def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     buffer = io.BytesIO()
     torch.save(tensor, buffer)
     return buffer.getvalue()
+
+
+def bytes_to_cpu_tensor(data: bytes) -> torch.Tensor:
+    """
+    Convert bytes to a CPU tensor.
+
+    Args:
+        data: Serialized tensor data
+
+    Returns:
+        CPU tensor reconstructed from bytes (always contiguous and packed)
+    """
+    buffer = io.BytesIO(data)
+    return torch.load(buffer, map_location="cpu", weights_only=False)

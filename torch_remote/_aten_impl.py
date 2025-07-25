@@ -1,7 +1,6 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import io
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -40,10 +39,6 @@ def args_to_metadata_with_placeholders(
     return processed_args, processed_kwargs, metadata_list
 
 
-def deserialize_tensor(data: bytes) -> torch.Tensor:
-    """Deserialize tensor from bytes."""
-    buffer = io.BytesIO(data)
-    return torch.load(buffer, map_location="cpu", weights_only=False)
 
 
 def _check_and_fix_empty_output_tensors(
@@ -789,15 +784,9 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
             dtype=str(from_.dtype),
         )
 
-        # Deserialize the tensor data as contiguous representation
-        # Since we now serialize with .contiguous(), the deserialized tensor contains exactly
-        # the data that should be in the result tensor - no view reconstruction needed
-        result = deserialize_tensor(tensor_data)
-        # Verify the result has the expected shape (it should match the remote tensor's shape)
-        if result.shape != from_.shape:
-            log.warning(
-                f"Deserialized tensor shape {result.shape} doesn't match remote tensor shape {from_.shape}"
-            )
+        # Deserialize to CPU tensor (always contiguous and packed)
+        from ._tensor_utils import bytes_to_cpu_tensor
+        result = bytes_to_cpu_tensor(tensor_data)
 
         log.info(
             f"Successfully copied contiguous tensor data for storage ID {storage_id} to CPU"
@@ -959,7 +948,9 @@ def _local_scalar_dense(self: torch.Tensor):
             "Cannot retrieve scalar value: remote execution not available"
         )
 
-    cpu_tensor = deserialize_tensor(tensor_data)
+    # Deserialize to CPU tensor
+    from ._tensor_utils import bytes_to_cpu_tensor
+    cpu_tensor = bytes_to_cpu_tensor(tensor_data)
 
     # Call item() on the CPU tensor to get the Python scalar
     return cpu_tensor.item()
