@@ -13,8 +13,6 @@ from ._tensor_utils import RemoteTensorMetadata
 
 log = get_logger(__name__)
 
-# Thread-local storage removed - meta execution tracking simplified
-
 
 def args_to_metadata_with_placeholders(
     args: Tuple[Any, ...],
@@ -107,9 +105,6 @@ def _check_and_fix_empty_output_tensors(
                         f"Resized empty output tensor to match input shape: {value.shape}"
                     )
                     return
-
-
-# _check_and_apply_post_operation_resize function removed - no longer needed with simplified approach
 
 
 # Lazy import to avoid import errors if remote execution is not available
@@ -792,7 +787,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 
         # Use orchestrator to get tensor data with automatic client routing
         from ._remote_orchestrator import remote_orchestrator
-        
+
         tensor_data = remote_orchestrator.get_storage_data(
             storage_id,
             shape=list(from_.shape),
@@ -947,7 +942,7 @@ def _local_scalar_dense(self: torch.Tensor):
 
     # Get serialized tensor data for this scalar using orchestrator
     from ._remote_orchestrator import remote_orchestrator
-    
+
     tensor_data = remote_orchestrator.get_storage_data(
         storage_id,
         shape=list(self.shape),
@@ -967,90 +962,6 @@ def _local_scalar_dense(self: torch.Tensor):
 
     # Call item() on the CPU tensor to get the Python scalar
     return cpu_tensor.item()
-
-
-def _to_copy(
-    input: torch.Tensor,
-    *,
-    dtype: Optional[torch.dtype] = None,
-    layout: Optional[torch.layout] = None,
-    device: Optional[Union[torch.device, str, int]] = None,
-    pin_memory: Optional[bool] = None,
-    non_blocking: bool = False,
-    memory_format: Optional[torch.memory_format] = None,
-) -> torch.Tensor:
-    """Implementation of tensor.to() for remote tensors with cross-device transfer restriction."""
-
-    # Handle device-specific transfers first
-    if device is not None:
-        target_device = (
-            torch.device(device) if not isinstance(device, torch.device) else device
-        )
-
-        # Different device transfer - check if both are remote
-        if (
-            input.device.type == "remote"
-            and target_device.type == "remote"
-            and input.device != target_device
-        ):
-            # Cross-device remote transfer - NOT ALLOWED
-            from torch_remote.device import get_device_registry
-
-            device_registry = get_device_registry()
-            from_device = device_registry.get_device_by_index(input.device.index)
-            to_device = device_registry.get_device_by_index(target_device.index)
-
-            raise RuntimeError(
-                f"Cannot transfer tensor between different remote devices. "
-                f'Source device: "{from_device.machine_id}" (index {input.device.index}), '
-                f'Target device: "{to_device.machine_id}" (index {target_device.index}). '
-                f"Transfer tensors to CPU first: tensor.cpu().to(target_device)"
-            )
-
-    # For all other cases, create a new tensor and use _copy_from if needed
-    # This avoids infinite recursion by not calling back to the kernel fallback
-
-    # Determine output parameters
-    output_dtype = dtype if dtype is not None else input.dtype
-    output_layout = layout if layout is not None else input.layout
-    output_device = torch.device(device) if device is not None else input.device
-    output_memory_format = (
-        memory_format if memory_format is not None else torch.contiguous_format
-    )
-
-    # Create output tensor
-    if output_device.type == "remote":
-        # Create empty remote tensor - use contiguous format for remote tensors
-        result = torch.empty(
-            input.shape,
-            dtype=output_dtype,
-            layout=output_layout,
-            device=output_device,
-            memory_format=torch.contiguous_format,
-        )
-    else:
-        # Create empty tensor on target device
-        result = torch.empty(
-            input.shape,
-            dtype=output_dtype,
-            layout=output_layout,
-            device=output_device,
-            memory_format=output_memory_format,
-        )
-
-    # Copy data if needed (different device or same device but different dtype)
-    if input.device != output_device or input.dtype != output_dtype:
-        # Use _copy_from to handle the actual data transfer
-        result = _copy_from(input, result)
-    else:
-        # Same device and dtype - just return input (no copy needed)
-        return input
-
-    return result
-
-
-# resize_ implementation has been moved to C++ (RemoteMem.cpp) following OpenReg pattern
-# The C++ implementation calls PyTorch's default resize_ with resizePrivateUse1Bytes hook
 
 
 def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
@@ -1075,42 +986,14 @@ def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
     )
 
 
-# Note: set_.source_Storage_storage_offset is implemented in C++ (RemoteMem.cpp)
-# The C++ implementation calls at::cpu::set_ which is exactly what we need
-
-
-# Remote tensors are now handled directly by the C++ allocator with ID-based allocation
-
-
 _remote_lib = torch.library.Library("_", "IMPL")
 _remote_lib.fallback(_remote_kernel_fallback, dispatch_key="PrivateUse1")
 
 _remote_lib_aten = torch.library.Library("aten", "IMPL")
 _remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
-_remote_lib_aten.impl("_to_copy", _to_copy, dispatch_key="PrivateUse1")
 _remote_lib_aten.impl(
     "set_.source_Tensor", _set_source_tensor, dispatch_key="PrivateUse1"
 )
 _remote_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
 )
-
-# AUTOGRAD_"PrivateUse1" registrations removed for copy operations:
-# _copy_from and _to_copy were causing autograd issues because:
-# 1. _copy_from breaks autograd chain via copy_from_device() -> _deserialize_tensor() -> .detach()
-# 2. In-place operations on leaf variables with requires_grad=True are not allowed
-# 3. No proper grad_fn creation for autograd graph connectivity
-# 4. This remote tensor system doesn't need device-specific autograd behavior for data movement
-# 5. PyTorch's default autograd handles remote tensors correctly when only "PrivateUse1" is registered
-
-
-# Note: set_.source_Storage_storage_offset is already implemented in C++ (RemoteMem.cpp)
-# so we don't register a Python version to avoid conflicts
-# resize_ is now implemented in C++ (RemoteMem.cpp) following OpenReg pattern
-
-# via TORCH_LIBRARY_IMPL in RemoteMem.cpp, so we don't register Python implementations
-
-# These factory functions are now handled by C++ implementations
-# via the registered TORCH_LIBRARY_IMPL dispatch system
-
-# when we add them to TORCH_LIBRARY_IMPL in RemoteMem.cpp
