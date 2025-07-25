@@ -9,7 +9,7 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
@@ -222,7 +222,7 @@ class RemoteOrchestrator:
         self,
         op_name: str,
         input_metadata: List[RemoteTensorMetadata],
-        output_storage_ids: List,
+        output_storage_ids: List[Optional[int]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
     ) -> None:

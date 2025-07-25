@@ -177,7 +177,7 @@ def _execute_aten_operation(
         if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
             # Convert to meta tensor while preserving properties
             meta_tensor = obj.to("meta")
-            original_tensors[id(meta_tensor)] = obj
+            original_tensors[meta_tensor] = obj
             return meta_tensor
         return obj
 
@@ -207,14 +207,14 @@ def _execute_aten_operation(
 
     # Step 3: Create output tensors (empty list for non-tensor results)
     if meta_outputs:
-        output_tensors, new_storage_ids = _create_output_tensors(
+        output_tensors, output_storage_ids = _create_output_tensors(
             meta_outputs, original_tensors, remote_device
         )
     else:
-        output_tensors, new_storage_ids = [], []
+        output_tensors, output_storage_ids = [], []
 
     # Step 4: Execute remotely with orchestrator
-    _execute_on_remote_device(op, args, kwargs, output_tensors, new_storage_ids)
+    _execute_on_remote_device(op, args, kwargs, output_storage_ids)
 
     # Step 5: Return results
     if len(output_tensors) > 1:
@@ -231,19 +231,19 @@ def _create_output_tensors(
     """Create output tensors based on meta execution results.
 
     Returns:
-        tuple: (output_tensors, storage_ids)
+        tuple: (output_tensors, output_storage_ids)
             - output_tensors: List of created/reused tensors
-            - storage_ids: List of storage IDs (int for new tensors, None for reused tensors)
+            - output_storage_ids: List of storage IDs (int for new tensors, None for reused tensors)
     """
     output_tensors = []
-    storage_ids = []
+    output_storage_ids = []
 
     for meta_output in meta_outputs:
-        if id(meta_output) in original_tensors:
+        if meta_output in original_tensors:
             # Reuse original tensor (in-place operation)
-            tensor = original_tensors[id(meta_output)]
+            tensor = original_tensors[meta_output]
             output_tensors.append(tensor)
-            storage_ids.append(None)  # No new storage created
+            output_storage_ids.append(None)  # No new storage created
         else:
             # Create new tensor
             new_tensor = torch.empty(
@@ -261,9 +261,9 @@ def _create_output_tensors(
 
             output_tensors.append(new_tensor)
             # Get storage ID from the newly created tensor
-            storage_ids.append(new_tensor.untyped_storage().data_ptr())
+            output_storage_ids.append(new_tensor.untyped_storage().data_ptr())
 
-    return output_tensors, storage_ids
+    return output_tensors, output_storage_ids
 
 
 
@@ -271,8 +271,7 @@ def _execute_on_remote_device(
     op: torch._ops.OpOverload,
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-    output_tensors: List,
-    new_storage_ids: List,
+    output_storage_ids: List,
 ) -> None:
     """Execute the operation remotely using the orchestrator."""
 
@@ -285,16 +284,16 @@ def _execute_on_remote_device(
         args_to_metadata_with_placeholders(args, kwargs)
     )
 
-    # We now use new_storage_ids directly instead of output_metadata
+    # We now use output_storage_ids directly instead of output_metadata
 
     log.debug(
-        f"🔧 About to call orchestrator with {len(input_metadata)} input tensors, {len(new_storage_ids)} output storage IDs"
+        f"🔧 About to call orchestrator with {len(input_metadata)} input tensors, {len(output_storage_ids)} output storage IDs"
     )
 
     # Use the new interface with pure metadata (no raw tensors cross this boundary)
     orchestrator = _get_remote_orchestrator()
     orchestrator.execute_aten_operation(
-        op_name, input_metadata, new_storage_ids, processed_args, processed_kwargs
+        op_name, input_metadata, output_storage_ids, processed_args, processed_kwargs
     )
 
     log.debug(f"✅ Remote orchestrator execution completed for {op_name}")
