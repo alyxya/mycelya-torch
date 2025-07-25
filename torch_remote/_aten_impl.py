@@ -840,7 +840,15 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
 
         tensor_data = cpu_tensor_to_bytes(from_)
         # Use orchestrator to update tensor with automatic client routing
-        remote_orchestrator.update_storage(storage_id, tensor_data)
+        # Pass view parameters for proper handling of tensor views/slices
+        remote_orchestrator.update_storage(
+            storage_id,
+            tensor_data,
+            shape=list(to_.shape),
+            stride=list(to_.stride()),
+            storage_offset=to_.storage_offset(),
+            dtype=str(to_.dtype)
+        )
         log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
         return to_
     else:

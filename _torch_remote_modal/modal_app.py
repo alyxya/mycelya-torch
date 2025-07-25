@@ -157,29 +157,100 @@ def create_modal_app_for_gpu(
             log.info(f"📝 LAZY Storage ID {storage_id} registered ({nbytes} bytes)")
 
         @modal.method()
-        def update_storage(self, storage_id: int, tensor_data: bytes) -> None:
+        def update_storage(
+            self,
+            storage_id: int,
+            tensor_data: bytes,
+            shape: List[int],
+            stride: List[int],
+            storage_offset: int,
+            dtype: str
+        ) -> None:
             """
             Update an existing storage with tensor data.
+
+            Optimized to use fast path when updating entire storage, slow path for views.
 
             Args:
                 storage_id: Storage ID to update
                 tensor_data: Serialized tensor data
+                shape: Shape of the target view
+                stride: Stride of the target view
+                storage_offset: Storage offset of the target view
+                dtype: Data type of the target view
 
             Returns:
                 None
             """
+            import math
+
             import torch
 
-            # Deserialize tensor directly onto CUDA
-            buffer = io.BytesIO(tensor_data)
-            tensor = torch.load(buffer, map_location="cuda", weights_only=True)
+            # Parse dtype to get element size
+            torch_dtype = getattr(torch, dtype.replace("torch.", ""))
+            element_size = torch.empty(0, dtype=torch_dtype).element_size()
 
-            # Update existing storage
+            # Calculate tensor properties
+            tensor_numel = math.prod(shape)
+            tensor_bytes = tensor_numel * element_size
+
+            # Check if tensor is contiguous by comparing with expected contiguous stride
+            expected_stride = []
+            running_size = 1
+            for dim_size in reversed(shape):
+                expected_stride.insert(0, running_size)
+                running_size *= dim_size
+            is_contiguous = stride == expected_stride
+
+            # Get storages
             storages = self._get_storages()
 
-            storages[storage_id] = tensor.untyped_storage()
+            # Fast path: view uses entire storage contiguously from offset 0
+            if storage_offset == 0 and is_contiguous and storage_id in storages:
+                storage = storages[storage_id]
+                storage_matches = False
+
+                if isinstance(storage, int):
+                    # Lazy storage - check if size matches
+                    storage_matches = (storage == tensor_bytes)
+                elif isinstance(storage, torch.Storage):
+                    # Realized storage - check if size matches
+                    storage_matches = (storage.nbytes() == tensor_bytes)
+
+                if storage_matches:
+                    # Direct replacement (fast path)
+                    buffer = io.BytesIO(tensor_data)
+                    tensor = torch.load(buffer, map_location="cuda", weights_only=True)
+                    storages[storage_id] = tensor.untyped_storage()
+                    log.info(
+                        f"📥 FAST Updated Storage ID {storage_id} on Modal (shape: {tensor.shape})"
+                    )
+                    return
+
+            # Slow path: in-place view update
+            log.info(f"📥 SLOW Updating view of Storage ID {storage_id} (offset: {storage_offset}, contiguous: {is_contiguous})")
+
+            # 1. Materialize the existing storage if lazy using our existing method
+            full_storage_tensor = self._construct_tensor_from_storage(
+                storage_id=storage_id,
+                shape=[storages[storage_id] if isinstance(storages[storage_id], int) else storages[storage_id].nbytes()],
+                stride=[1],
+                storage_offset=0,
+                dtype="torch.uint8"  # Use bytes for full storage access
+            )
+
+            # 2. Create the target view tensor
+            view_tensor = torch.empty(0, dtype=torch_dtype, device="cuda").set_(
+                full_storage_tensor.untyped_storage(), storage_offset, shape, stride
+            )
+
+            # 3. Deserialize the incoming tensor and copy it in-place
+            buffer = io.BytesIO(tensor_data)
+            source_tensor = torch.load(buffer, map_location="cuda", weights_only=True)
+            view_tensor.copy_(source_tensor)
+
             log.info(
-                f"📥 UPDATED Storage ID {storage_id} on Modal (shape: {tensor.shape})"
+                f"📥 SLOW Updated view of Storage ID {storage_id} on Modal (shape: {shape})"
             )
 
         @modal.method()

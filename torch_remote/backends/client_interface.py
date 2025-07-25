@@ -106,13 +106,27 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def update_storage(self, storage_id: int, tensor_data: bytes) -> None:
+    def update_storage(
+        self,
+        storage_id: int,
+        tensor_data: bytes,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str
+    ) -> None:
         """
         Update an existing storage with tensor data.
+
+        Supports both full storage replacement and view-specific updates.
 
         Args:
             storage_id: Storage ID to update
             tensor_data: Serialized tensor data to store
+            shape: Shape of the target view
+            stride: Stride of the target view
+            storage_offset: Storage offset of the target view
+            dtype: Data type of the target view
 
         Returns:
             None

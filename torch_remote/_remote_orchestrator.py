@@ -137,18 +137,30 @@ class RemoteOrchestrator:
         client.create_storage(storage_id, nbytes)
         log.info(f"✅ ORCHESTRATOR: Created storage {storage_id} on device {device_index}")
 
-    def update_storage(self, storage_id: int, tensor_data: bytes) -> None:
+    def update_storage(
+        self,
+        storage_id: int,
+        tensor_data: bytes,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str
+    ) -> None:
         """Update existing storage with tensor data.
 
         Args:
             storage_id: Storage ID to update
             tensor_data: Serialized tensor data to store
+            shape: Shape of the target view
+            stride: Stride of the target view
+            storage_offset: Storage offset of the target view
+            dtype: Data type of the target view
 
         Raises:
             RuntimeError: If storage or client not available
         """
         client = self._get_client_for_storage(storage_id)
-        client.update_storage(storage_id, tensor_data)
+        client.update_storage(storage_id, tensor_data, shape, stride, storage_offset, dtype)
         log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id}")
 
     def get_storage_data(
