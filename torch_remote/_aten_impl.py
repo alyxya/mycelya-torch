@@ -103,167 +103,31 @@ def _get_remote_orchestrator():
 def _handle_view_operation(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> torch.Tensor:
-    """
-    Handle view operations locally with shared storage IDs.
-
-    View operations create new tensor views that share the same remote storage,
-    updating only local metadata (shape, stride, storage_offset).
-    """
-    op_name = op.overloadpacket._qualified_op_name
-    log.info(f"🔍 Handling view operation: {op_name}")
-
-    # Debug: Log details about this view operation
-    log.info(f"   - arg count: {len(args)}, kwarg keys: {list(kwargs.keys())}")
-    log.info(f"   - schema: {op._schema}")
-
-    # Log tensor argument details
-    tensor_args = []
-    for i, arg in enumerate(args):
-        if isinstance(arg, torch.Tensor):
-            device_index = arg.device.index if hasattr(arg.device, "index") else "N/A"
-            tensor_args.append(
-                f"arg[{i}]: {arg.device.type}:{device_index}, shape={arg.shape}"
-            )
-    if tensor_args:
-        log.info(f"   - tensor args: {'; '.join(tensor_args)}")
-
+    """Handle view operations locally with shared storage IDs."""
     # Get the base tensor (first argument for most view operations)
     base_tensor = args[0]
 
-    if base_tensor.device.type != "remote":
-        # Not a remote tensor - execute normally
-        return op(*args, **kwargs)
-
-    # Validate that any other remote tensors in args/kwargs are on the same device
-    base_device = base_tensor.device
-    for i, arg in enumerate(args[1:], 1):  # Skip first arg (base tensor)
-        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            if arg.device != base_device:
-                from torch_remote.device import get_device_registry
-
-                device_registry = get_device_registry()
-                base_device_info = device_registry.get_device_by_index(
-                    base_device.index
+    # Convert remote tensors to meta tensors for shape inference
+    def to_meta_tensor(obj):
+        if isinstance(obj, torch.Tensor) and obj.device.type == "remote":
+            meta_tensor = torch.empty(obj.shape, dtype=obj.dtype, device="meta")
+            if obj.stride() != meta_tensor.stride():
+                meta_tensor = torch.as_strided(
+                    meta_tensor, obj.shape, obj.stride(), obj.storage_offset()
                 )
-                arg_device_info = device_registry.get_device_by_index(arg.device.index)
+            return meta_tensor
+        return obj
 
-                base_name = (
-                    base_device_info.machine_id
-                    if base_device_info
-                    else f"remote:{base_device.index}"
-                )
-                arg_name = (
-                    arg_device_info.machine_id
-                    if arg_device_info
-                    else f"remote:{arg.device.index}"
-                )
-
-                raise RuntimeError(
-                    f'Cannot perform view operation "{op_name}" between tensors '
-                    f'on different remote devices. Base tensor on "{base_name}" '
-                    f'(index {base_device.index}), argument {i} on "{arg_name}" '
-                    f"(index {arg.device.index}). "
-                    "Transfer tensors to the same device first."
-                )
-
-    for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            if value.device != base_device:
-                from torch_remote.device import get_device_registry
-
-                device_registry = get_device_registry()
-                base_device_info = device_registry.get_device_by_index(
-                    base_device.index
-                )
-                value_device_info = device_registry.get_device_by_index(
-                    value.device.index
-                )
-
-                base_name = (
-                    base_device_info.machine_id
-                    if base_device_info
-                    else f"remote:{base_device.index}"
-                )
-                value_name = (
-                    value_device_info.machine_id
-                    if value_device_info
-                    else f"remote:{value.device.index}"
-                )
-
-                raise RuntimeError(
-                    f'Cannot perform view operation "{op_name}" between tensors on different remote devices. '
-                    f'Base tensor on "{base_name}" (index {base_device.index}), '
-                    f"kwarg '{key}' on \"{value_name}\" (index {value.device.index}). "
-                    f"Transfer tensors to the same device first."
-                )
-
-    # Get base tensor's storage ID (this is what data_ptr() returns)
-    storage_id = base_tensor.untyped_storage().data_ptr()
-
-    # Verify storage exists on a remote device
-    device_idx = driver.exec("get_storage_device", storage_id)
-    if device_idx is None:
-        log.warning(
-            f"No device found for storage {storage_id}, falling back to normal execution"
-        )
-        return op(*args, **kwargs)
-
-    # Execute the view operation on meta tensors to get the new shape/stride
-    # Convert ALL tensor arguments to meta tensors to avoid device mixing
-    meta_args = []
-    for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.device.type == "remote":
-            # Convert remote tensor to meta tensor
-            meta_arg = torch.empty(arg.shape, dtype=arg.dtype, device="meta")
-            if arg.stride() != meta_arg.stride():
-                meta_arg = torch.as_strided(
-                    meta_arg, arg.shape, arg.stride(), arg.storage_offset()
-                )
-            meta_args.append(meta_arg)
-        else:
-            meta_args.append(arg)
-
-    meta_kwargs = {}
-    for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor) and value.device.type == "remote":
-            # Convert remote tensor to meta tensor
-            meta_value = torch.empty(value.shape, dtype=value.dtype, device="meta")
-            if value.stride() != meta_value.stride():
-                meta_value = torch.as_strided(
-                    meta_value, value.shape, value.stride(), value.storage_offset()
-                )
-            meta_kwargs[key] = meta_value
-        else:
-            meta_kwargs[key] = value
-
+    meta_args, meta_kwargs = tree_map(to_meta_tensor, (args, kwargs))
     meta_result = op(*meta_args, **meta_kwargs)
 
-    # Extract new tensor metadata
-    new_shape = meta_result.shape
-    new_stride = meta_result.stride()
-    new_storage_offset = meta_result.storage_offset()
-
-    # Now that we have C++ implementations for view operations,
-    # we can use PyTorch's native as_strided which will call our C++ implementation
-    result = torch.as_strided(base_tensor, new_shape, new_stride, new_storage_offset)
-
-    # Verify the view was created correctly
-    assert result.shape == new_shape, (
-        f"View shape mismatch: expected {new_shape}, got {result.shape}"
+    # Create the result view using PyTorch's native as_strided
+    return torch.as_strided(
+        base_tensor,
+        meta_result.shape,
+        meta_result.stride(),
+        meta_result.storage_offset()
     )
-    assert result.stride() == new_stride, (
-        f"View stride mismatch: expected {new_stride}, got {result.stride()}"
-    )
-    assert result.storage_offset() == new_storage_offset, (
-        f"View offset mismatch: expected {new_storage_offset}, got {result.storage_offset()}"
-    )
-    assert (
-        result.untyped_storage().data_ptr() == base_tensor.untyped_storage().data_ptr()
-    ), "View should share storage"
-
-    # PyTorch automatically manages storage reference counting
-    log.info(f"✅ Created view tensor sharing storage {storage_id} for {op_name}")
-    return result
 
 
 def _remote_kernel_fallback(
@@ -350,11 +214,43 @@ def _remote_kernel_fallback(
             call_stack.pop()
 
 
+def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> None:
+    """Validate that all tensors are remote and on the same device."""
+    remote_device_index = None
+
+    def check_tensor_device(obj):
+        nonlocal remote_device_index
+        if isinstance(obj, torch.Tensor):
+            if obj.device.type != "remote":
+                raise RuntimeError(
+                    f'Remote kernel fallback called for operation "{op_name}" with non-remote tensor '
+                    f'on device "{obj.device}".'
+                )
+
+            # Get device index (0 if None)
+            device_index = obj.device.index if obj.device.index is not None else 0
+
+            if remote_device_index is None:
+                remote_device_index = device_index
+            elif remote_device_index != device_index:
+                raise RuntimeError(
+                    f'Cannot perform operation "{op_name}" between tensors on different remote devices '
+                    f'(indices {remote_device_index} and {device_index}). '
+                    f"Transfer tensors to the same device first."
+                )
+        return obj
+
+    tree_map(check_tensor_device, (args, kwargs))
+
+
 def _remote_kernel_fallback_impl(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> Any:
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
     op_name = op.overloadpacket._qualified_op_name
+
+    # Validate cross-device operations upfront for all execution paths
+    _validate_cross_device_operation(op_name, args, kwargs)
 
     # Simple operation classification - no complex pattern needed
     if _is_view_operation(op):
