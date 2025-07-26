@@ -5,7 +5,7 @@
 """
 Example script demonstrating the new device backend functionality.
 
-This script shows how to use different GPU types with torch_remote.
+This script shows how to use different GPU types with mycelya_torch.
 """
 
 import torch

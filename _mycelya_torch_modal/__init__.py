@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Private package for torch_remote execution.
+Private package for mycelya_torch execution.
 
 This package contains remote execution apps for multiple cloud providers
-and should not be imported directly. It's used internally by torch_remote.
+and should not be imported directly. It's used internally by mycelya_torch.
 """
 
 __version__ = "0.1.0"

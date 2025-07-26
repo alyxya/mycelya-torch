@@ -182,10 +182,10 @@ try:
     x = torch.randn(100, 100, device=machine.device())
     y = torch.randn(100, 100, device=machine.device())
     result = x @ y
-except mycelya_torch.RemoteTensorError as e:
+except RuntimeError as e:
     print(f"Remote operation failed: {e}")
-except torch_remote.StaleReferenceError as e:
-    print(f"Tensor reference expired: {e}")
+except ValueError as e:
+    print(f"Invalid operation: {e}")
 ```
 
 ## Limitations

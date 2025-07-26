@@ -3,14 +3,14 @@
 
 #!/usr/bin/env python3
 """
-Modal remote execution app for torch_remote extension.
+Modal remote execution app for mycelya_torch extension.
 
 This module handles all Modal-specific functionality including:
 - Dynamic device-specific app creation for different GPU types
 - Remote execution of PyTorch operations
 - Dynamic GPU selection and configuration
 
-Part of: torch_remote PyTorch extension
+Part of: mycelya_torch PyTorch extension
 """
 
 import io

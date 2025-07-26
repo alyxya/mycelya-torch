@@ -129,7 +129,7 @@ for data, target in dataloader:
 - **Cross-device operation prevention**: Clear errors when mixing different machines
 - **Stale reference detection**: Validation of tensor references
 - **Connection management**: Automatic reconnection on failures
-- **Comprehensive exception hierarchy**: RemoteTensorError, StaleReferenceError, etc.
+- **Comprehensive error handling**: Clear RuntimeError and ValueError messages for different failure modes
 
 ### Provider Interface
 - **Standardized client interface** for multiple providers
