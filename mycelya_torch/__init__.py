@@ -79,7 +79,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -100,7 +100,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -122,7 +122,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -143,7 +143,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")

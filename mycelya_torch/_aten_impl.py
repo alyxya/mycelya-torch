@@ -28,7 +28,7 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
         if isinstance(obj, torch.Tensor):
             if obj.device.type != "mycelya":
                 raise RuntimeError(
-                    f'Remote kernel fallback called for operation "{op_name}" with non-remote tensor '
+                    f'Mycelya kernel fallback called for operation "{op_name}" with non-mycelya tensor '
                     f'on device "{obj.device}".'
                 )
 
@@ -36,7 +36,7 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
                 remote_device = obj.device
             elif remote_device != obj.device:
                 raise RuntimeError(
-                    f'Cannot perform operation "{op_name}" between tensors on different remote devices '
+                    f'Cannot perform operation "{op_name}" between tensors on different mycelya devices '
                     f'({remote_device} and {obj.device}). '
                     f"Transfer tensors to the same device first."
                 )
@@ -45,7 +45,7 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
     tree_map(check_tensor_device, (args, kwargs))
 
     if remote_device is None:
-        raise RuntimeError(f'No remote tensors found for operation "{op_name}"')
+        raise RuntimeError(f'No mycelya tensors found for operation "{op_name}"')
 
     return remote_device
 
@@ -196,7 +196,7 @@ def _execute_aten_operation(
     # Check for unsupported operations before meta execution
     if op_name == "aten::repeat_interleave":
         raise RuntimeError(
-            "repeat_interleave is not supported on remote devices due to a PyTorch bug where tensor repeats "
+            "repeat_interleave is not supported on mycelya devices due to a PyTorch bug where tensor repeats "
             "are incorrectly dispatched to single-argument overload. "
             "Use tensor.repeat() or other alternatives instead."
         )
@@ -281,7 +281,7 @@ def _remote_kernel_fallback(
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     """Copy data from remote tensor to CPU tensor using remote execution"""
     if from_.device.type != "mycelya":
-        raise ValueError("copy_from_device requires a remote tensor")
+        raise ValueError("copy_from_device requires a mycelya tensor")
 
     # Use remote execution to get the tensor data
     from .device import get_device_registry
@@ -292,7 +292,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 
     if device is None:
         raise RuntimeError(
-            f"No RemoteMachine found for remote device index {from_.device.index}"
+            f"No RemoteMachine found for mycelya device index {from_.device.index}"
         )
 
     # Get storage data using orchestrator for centralized client management
@@ -323,7 +323,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     """Copy data from CPU tensor to remote tensor using remote execution"""
     if to_.device.type != "mycelya":
-        raise ValueError("copy_from_host_to_device requires a remote target tensor")
+        raise ValueError("copy_from_host_to_device requires a mycelya target tensor")
     if from_.device.type != "cpu":
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
@@ -336,7 +336,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
 
     if device is None:
         raise RuntimeError(
-            f"No RemoteMachine found for remote device index {to_.device.index}"
+            f"No RemoteMachine found for mycelya device index {to_.device.index}"
         )
 
     # Send tensor data using orchestrator for centralized client management
@@ -391,11 +391,11 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     elif from_.device.type == "mycelya" and to_.device.type == "mycelya":
         # Remote to remote transfers
         if from_.device.index == to_.device.index:
-            # Same remote device - allowed (needed for gradients and internal operations)
+            # Same mycelya device - allowed (needed for gradients and internal operations)
             op = torch.ops.aten.copy_.default
             result = _remote_kernel_fallback(op, to_, from_)
         else:
-            # Different remote devices - blocked (TODO: support in future)
+            # Different mycelya devices - blocked (TODO: support in future)
             from mycelya_torch.device import get_device_registry
 
             device_registry = get_device_registry()
@@ -406,7 +406,7 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
                 f"Cross-device remote transfers are not supported. "
                 f'Source device: "{from_device.machine_id}" (index {from_.device.index}), '
                 f'Target device: "{to_device.machine_id}" (index {to_.device.index}). '
-                f"Only CPU↔remote and same-device transfers are allowed. Use CPU as intermediate."
+                f"Only CPU↔mycelya and same-device transfers are allowed. Use CPU as intermediate."
             )
     else:
         # All other cases (non-remote device copies) - blocked
@@ -442,7 +442,7 @@ def _local_scalar_dense(self: torch.Tensor):
 
     if machine is None:
         raise RuntimeError(
-            f"No RemoteMachine found for remote device index {self.device.index}"
+            f"No RemoteMachine found for mycelya device index {self.device.index}"
         )
 
     # Get serialized tensor data for this scalar using orchestrator

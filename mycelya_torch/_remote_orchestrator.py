@@ -296,7 +296,7 @@ class RemoteOrchestrator:
 
         if machine is None:
             raise RuntimeError(
-                f"No RemoteMachine found for remote device index {remote_tensor.device.index}"
+                f"No RemoteMachine found for mycelya device index {remote_tensor.device.index}"
             )
 
         # Get tensor data using storage ID with internal client resolution
