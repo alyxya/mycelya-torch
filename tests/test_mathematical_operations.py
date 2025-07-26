@@ -275,14 +275,14 @@ class TestMathOperationsWithGradients:
 
         # Create tensors requiring gradients
         if operation == "log":
-            cpu_tensor = torch.rand(3, 3, requires_grad=True) + 0.1
+            cpu_tensor = torch.rand(3, 3) + 0.1
         elif operation == "sqrt":
-            cpu_tensor = torch.rand(3, 3, requires_grad=True) + 0.01
+            cpu_tensor = torch.rand(3, 3) + 0.01
         else:
-            cpu_tensor = torch.randn(3, 3, requires_grad=True)
+            cpu_tensor = torch.randn(3, 3)
 
-        remote_tensor = cpu_tensor.to(device.device())
-        remote_tensor.requires_grad_(True)
+        cpu_tensor = cpu_tensor.detach().requires_grad_()
+        remote_tensor = cpu_tensor.to(device.device()).detach().requires_grad_()
 
         # Forward pass
         cpu_result = getattr(torch, operation)(cpu_tensor)
@@ -305,8 +305,7 @@ class TestMathOperationsWithGradients:
         device = shared_devices["t4"]
 
         cpu_x = torch.randn(4, 4, requires_grad=True)
-        remote_x = cpu_x.to(device.device())
-        remote_x.requires_grad_(True)
+        remote_x = cpu_x.to(device.device()).detach().requires_grad_()
 
         # Complex expression: sin(x^2) + exp(-abs(x))
         cpu_result = torch.sin(cpu_x.pow(2)) + torch.exp(-torch.abs(cpu_x))
