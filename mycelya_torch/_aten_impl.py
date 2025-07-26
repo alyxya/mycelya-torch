@@ -193,6 +193,14 @@ def _execute_aten_operation(
 
     op_name = op.overloadpacket._qualified_op_name
 
+    # Check for unsupported operations before meta execution
+    if op_name == "aten::repeat_interleave":
+        raise RuntimeError(
+            "repeat_interleave is not supported on remote devices due to a PyTorch bug where tensor repeats "
+            "are incorrectly dispatched to single-argument overload. "
+            "Use tensor.repeat() or other alternatives instead."
+        )
+
     # Step 2: Execute the operation on meta tensors to determine outputs
     log.debug(f"🔧 Executing {op_name} on meta tensors for shape inference")
 
