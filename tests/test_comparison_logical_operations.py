@@ -386,12 +386,12 @@ class TestComparisonLogicalEdgeCases:
         # all() on empty tensor should return True
         cpu_all = torch.all(cpu_empty)
         remote_all = torch.all(remote_empty)
-        assert cpu_all == remote_all and cpu_all is True
+        assert cpu_all.item() == remote_all.item() and cpu_all.item() is True
 
         # any() on empty tensor should return False
         cpu_any = torch.any(cpu_empty)
         remote_any = torch.any(remote_empty)
-        assert cpu_any == remote_any and cpu_any is False
+        assert cpu_any.item() == remote_any.item() and cpu_any.item() is False
 
     @pytest.mark.fast
     def test_comparison_dtype_consistency(self, shared_devices):

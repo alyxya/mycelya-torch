@@ -464,6 +464,31 @@ def _local_scalar_dense(self: torch.Tensor):
     return cpu_tensor.item()
 
 
+def _equal(self: torch.Tensor, other: torch.Tensor) -> bool:
+    """Custom implementation of torch.equal for remote tensors."""
+    log.info("⚖️ torch.equal operation: comparing tensors on remote device")
+    
+    # Both tensors should be remote (validated by caller)
+    # Check basic compatibility first
+    if self.shape != other.shape:
+        return False
+    if self.dtype != other.dtype:
+        return False
+    
+    # For torch.equal, we'll copy both tensors to CPU and compare locally
+    # This is simpler than modifying the entire remote execution pipeline
+    log.info("📥 Copying tensors to CPU for comparison")
+    
+    cpu_self = copy_from_device(self)
+    cpu_other = copy_from_device(other)
+    
+    # Use PyTorch's native equal on CPU tensors
+    result = torch.equal(cpu_self, cpu_other)
+    
+    log.info(f"✅ torch.equal completed: {result}")
+    return result
+
+
 def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
     """Set one tensor to point to another tensor's storage.
 
@@ -497,3 +522,4 @@ _remote_lib_aten.impl(
 _remote_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
 )
+_remote_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
