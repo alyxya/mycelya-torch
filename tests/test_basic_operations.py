@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for basic tensor operations in torch-remote.
+Tests for basic tensor operations in mycelya-torch.
 
 This module tests arithmetic operations, tensor creation, conversions,
 and fundamental tensor manipulations on remote devices.
@@ -243,7 +243,7 @@ class TestTensorProperties:
         """Test accessing tensor device information."""
         remote_tensor = DeviceTestUtils.create_remote_tensor((2, 2), shared_devices)
 
-        assert remote_tensor.device.type == "remote"
+        assert remote_tensor.device.type == "mycelya"
         assert isinstance(remote_tensor.device.index, int)
         assert remote_tensor.device.index >= 0
 

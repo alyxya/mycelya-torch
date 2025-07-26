@@ -12,7 +12,7 @@ CPU and a remote Modal device, and compares the results.
 import torch
 import torch.nn.functional as F
 
-import torch_remote
+import mycelya_torch
 
 
 def main():
@@ -47,7 +47,7 @@ def main():
     # Create remote device (using T4 for this demo)
     print("Creating remote Modal device (T4)...")
     try:
-        remote_device = torch_remote.create_modal_machine("T4")
+        remote_device = mycelya_torch.create_modal_machine("T4")
         torch_device = remote_device.device()
         print(f"Remote device created: {torch_device}")
         print()

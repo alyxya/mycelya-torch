@@ -8,10 +8,10 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "torch_remote"
+name = "mycelya_torch"
 version = "0.1.0"
 description = "Remote GPU cloud execution extension for PyTorch supporting multiple providers"
-authors = [{name = "PyTorch Remote Extension"}]
+authors = [{name = "Mycelya Torch Extension"}]
 license = "AGPL-3.0-or-later"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -40,7 +40,7 @@ all = ["runpod>=1.0.0"]
 exclude = ["test*"]
 
 [tool.setuptools.package-data]
-torch_remote = ["*.dll", "*.dylib", "*.so"]
+mycelya_torch = ["*.dll", "*.dylib", "*.so"]
 
 [tool.ruff]
 # Exclude build directories and generated files
@@ -81,7 +81,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 # Keep imports organized and compatible with existing style
-known-first-party = ["torch_remote", "_torch_remote_modal"]
+known-first-party = ["mycelya_torch", "_mycelya_torch_modal"]
 
 [tool.ruff.format]
 # Use double quotes and standard formatting

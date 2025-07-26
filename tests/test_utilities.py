@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Test utilities for torch-remote package.
+Test utilities for mycelya-torch package.
 
 This module provides common utility functions for test setup, verification,
 and data generation to reduce code duplication across test files.
@@ -65,7 +65,7 @@ class DeviceTestUtils:
     @staticmethod
     def verify_device_properties(tensor: torch.Tensor, expected_device: Any) -> None:
         """Verify that a tensor has expected device properties."""
-        assert tensor.device.type == "remote"
+        assert tensor.device.type == "mycelya"
         assert tensor.device.index == expected_device.remote_index
 
     @staticmethod

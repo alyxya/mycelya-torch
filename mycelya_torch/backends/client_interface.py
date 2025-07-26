@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Abstract client interface for torch_remote cloud providers.
+Abstract client interface for mycelya_torch cloud providers.
 
 This module defines the base interface that all cloud provider clients must implement,
 ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.).

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for complex autograd functionality in torch-remote.
+Tests for complex autograd functionality in mycelya-torch.
 
 This module tests advanced gradient scenarios, cross-device gradient flow,
 complex computational graphs, and integration with PyTorch optimizers.

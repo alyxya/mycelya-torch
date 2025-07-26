@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Backend device management for torch_remote.
+Backend device management for mycelya_torch.
 
 This module provides device abstraction for different GPU cloud providers and GPU types.
 """
@@ -226,7 +226,7 @@ class RemoteMachine:
         remote_index = self.remote_index
         if remote_index is None:
             raise RuntimeError("Device not registered in device registry")
-        return torch.device("remote", remote_index)
+        return torch.device("mycelya", remote_index)
 
 
 class DeviceRegistry:

@@ -1,4 +1,4 @@
-# PyTorch Remote
+# Mycelya Torch
 
 A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. Execute PyTorch code on remote GPUs without changing your existing code.
 
@@ -29,10 +29,10 @@ pip install -e .
 
 ```python
 import torch
-import torch_remote
+import mycelya_torch
 
 # Create a remote machine with an A100 GPU
-machine = torch_remote.create_modal_machine("A100-40GB")
+machine = mycelya_torch.create_modal_machine("A100-40GB")
 
 # Operations automatically execute on the remote A100
 x = torch.randn(1000, 1000, device=machine.device())
@@ -47,7 +47,7 @@ print(f"Result shape: {result_cpu.shape}")
 ## Supported GPU Types
 
 ```python
-import torch_remote
+import mycelya_torch
 
 # Available GPU types
 gpu_types = [
@@ -56,7 +56,7 @@ gpu_types = [
     "L40S", "H100", "H200", "B200"
 ]
 
-machine = torch_remote.create_modal_machine("H100")
+machine = mycelya_torch.create_modal_machine("H100")
 ```
 
 ## Advanced Usage
@@ -66,10 +66,10 @@ machine = torch_remote.create_modal_machine("H100")
 ```python
 import torch
 import torch.nn as nn
-import torch_remote
+import mycelya_torch
 
 # Create remote machine
-machine = torch_remote.create_modal_machine("A100-40GB")
+machine = mycelya_torch.create_modal_machine("A100-40GB")
 device = machine.device()
 
 # Define model and move to remote device
@@ -91,9 +91,9 @@ for batch_idx, (data, target) in enumerate(dataloader):
 
 ```python
 import torch
-import torch_remote
+import mycelya_torch
 
-machine = torch_remote.create_modal_machine("T4")
+machine = mycelya_torch.create_modal_machine("T4")
 device = machine.device()
 
 # Create tensors on different devices
@@ -155,7 +155,7 @@ ruff format .
 ### Project Structure
 
 ```
-torch_remote/
+mycelya_torch/
 ├── __init__.py          # Public API and PyTorch backend registration
 ├── device.py           # RemoteMachine and device management
 ├── _aten_impl.py        # ATen operation dispatch system
@@ -165,7 +165,7 @@ torch_remote/
     ├── RemoteMem.cpp   # Custom allocator
     └── RemoteHooks.cpp # PyTorch PrivateUse1 hooks
 
-_torch_remote_modal/
+_mycelya_torch_modal/
 ├── modal_app.py        # Modal cloud GPU integration
 └── client.py          # Modal client implementation
 ```
@@ -175,14 +175,14 @@ _torch_remote_modal/
 PyTorch Remote provides comprehensive error handling:
 
 ```python
-import torch_remote
+import mycelya_torch
 
 try:
-    machine = torch_remote.create_modal_machine("A100-40GB")
+    machine = mycelya_torch.create_modal_machine("A100-40GB")
     x = torch.randn(100, 100, device=machine.device())
     y = torch.randn(100, 100, device=machine.device())
     result = x @ y
-except torch_remote.RemoteTensorError as e:
+except mycelya_torch.RemoteTensorError as e:
     print(f"Remote operation failed: {e}")
 except torch_remote.StaleReferenceError as e:
     print(f"Tensor reference expired: {e}")

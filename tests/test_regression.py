@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Minimal regression test suite for pytorch-remote.
+Minimal regression test suite for mycelya-torch.
 
 This module contains the essential tests that should be run on every commit
 to catch critical regressions. These tests focus on core functionality and
@@ -14,7 +14,7 @@ Run with: pytest tests/test_regression.py -v
 import pytest
 import torch
 
-import torch_remote
+import mycelya_torch
 
 
 @pytest.mark.critical
@@ -23,14 +23,14 @@ class TestCriticalRegression:
 
     def test_basic_imports(self):
         """Test that core modules import successfully."""
-        # Test that torch_remote imports
-        assert hasattr(torch_remote, "create_modal_machine")
-        assert hasattr(torch_remote, "GPUType")
-        assert hasattr(torch_remote, "RemoteMachine")
+        # Test that mycelya_torch imports
+        assert hasattr(mycelya_torch, "create_modal_machine")
+        assert hasattr(mycelya_torch, "GPUType")
+        assert hasattr(mycelya_torch, "RemoteMachine")
 
         # Test that remote device is registered
-        device = torch.device("remote", 0)
-        assert device.type == "remote"
+        device = torch.device("mycelya", 0)
+        assert device.type == "mycelya"
         assert device.index == 0
 
     def test_device_creation(self, shared_devices):
@@ -41,7 +41,7 @@ class TestCriticalRegression:
         assert hasattr(device, "machine_id")
 
         torch_device = device.device()
-        assert torch_device.type == "remote"
+        assert torch_device.type == "mycelya"
 
     def test_tensor_creation_on_device(self, shared_devices):
         """Test basic tensor creation on remote device."""
@@ -49,11 +49,11 @@ class TestCriticalRegression:
 
         # Test various tensor creation methods
         x = torch.randn(2, 3, device=device.device())
-        assert x.device.type == "remote"
+        assert x.device.type == "mycelya"
         assert x.shape == (2, 3)
 
         y = torch.zeros(3, 3, device=device.device())
-        assert y.device.type == "remote"
+        assert y.device.type == "mycelya"
         assert y.shape == (3, 3)
 
     def test_tensor_addition(self, shared_devices):
@@ -64,7 +64,7 @@ class TestCriticalRegression:
         y = torch.ones(2, 2, device=device.device())
         result = x + y
 
-        assert result.device.type == "remote"
+        assert result.device.type == "mycelya"
         assert result.shape == (2, 2)
 
         # Verify result by transferring to CPU
@@ -80,7 +80,7 @@ class TestCriticalRegression:
         y = torch.randn(4, 5, device=device.device())
         result = x @ y
 
-        assert result.device.type == "remote"
+        assert result.device.type == "mycelya"
         assert result.shape == (3, 5)
 
     def test_cpu_to_remote_transfer(self, shared_devices):
@@ -91,7 +91,7 @@ class TestCriticalRegression:
         remote_tensor = cpu_tensor.to(device.device())
 
         assert cpu_tensor.device.type == "cpu"
-        assert remote_tensor.device.type == "remote"
+        assert remote_tensor.device.type == "mycelya"
         assert remote_tensor.shape == cpu_tensor.shape
         assert remote_tensor.dtype == cpu_tensor.dtype
 
@@ -102,7 +102,7 @@ class TestCriticalRegression:
         remote_tensor = torch.randn(2, 3, device=device.device())
         cpu_tensor = remote_tensor.cpu()
 
-        assert remote_tensor.device.type == "remote"
+        assert remote_tensor.device.type == "mycelya"
         assert cpu_tensor.device.type == "cpu"
         assert cpu_tensor.shape == remote_tensor.shape
         assert cpu_tensor.dtype == remote_tensor.dtype
@@ -127,7 +127,7 @@ class TestCriticalRegression:
         x = torch.randn(4, 6, device=device.device())
         y = x.view(2, 12)
 
-        assert y.device.type == "remote"
+        assert y.device.type == "mycelya"
         assert y.shape == (2, 12)
 
         # Test transpose
@@ -138,11 +138,11 @@ class TestCriticalRegression:
         """Test that invalid operations fail gracefully."""
         # Test invalid GPU type
         with pytest.raises((ValueError, KeyError, RuntimeError)):
-            torch_remote.create_modal_machine("INVALID_GPU")
+            mycelya_torch.create_modal_machine("INVALID_GPU")
 
         # Test invalid device operations don't crash the system
         try:
-            device = torch.device("remote", 999)  # Invalid index
+            device = torch.device("mycelya", 999)  # Invalid index
             torch.randn(2, 2, device=device)
         except Exception:
             # Should fail gracefully, not crash
@@ -155,7 +155,7 @@ class TestCriticalRegression:
         x = torch.ones(2, 2, device=device.device())
         result = x * 2.0
 
-        assert result.device.type == "remote"
+        assert result.device.type == "mycelya"
         assert result.shape == (2, 2)
 
     def test_tensor_properties_access(self, shared_devices):
@@ -167,7 +167,7 @@ class TestCriticalRegression:
         # These should not raise exceptions
         assert x.shape == (3, 4)
         assert x.dtype == torch.float32
-        assert x.device.type == "remote"
+        assert x.device.type == "mycelya"
         assert x.numel() == 12
         assert x.dim() == 2
 
@@ -184,7 +184,7 @@ class TestFastFunctional:
         y = torch.ones(2, 2, device=device.device())
 
         result = (x + y) * 2 - 1
-        assert result.device.type == "remote"
+        assert result.device.type == "mycelya"
         assert result.shape == (2, 2)
 
     def test_tensor_creation_various_dtypes(self, shared_devices):
@@ -207,7 +207,7 @@ class TestFastFunctional:
         remote_tensor = cpu_tensor.to(device.device(), dtype=torch.float32)
 
         assert remote_tensor.dtype == torch.float32
-        assert remote_tensor.device.type == "remote"
+        assert remote_tensor.device.type == "mycelya"
 
     def test_basic_loss_computation(self, shared_devices):
         """Test basic loss function computation."""
@@ -218,7 +218,7 @@ class TestFastFunctional:
 
         # MSE loss
         loss = torch.nn.functional.mse_loss(pred, target)
-        assert loss.device.type == "remote"
+        assert loss.device.type == "mycelya"
         assert loss.dim() == 0  # Scalar loss
 
     def test_gradient_with_operations(self, shared_devices):

@@ -372,15 +372,15 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
         RuntimeError: If attempting unsupported copy operations
     """
     # Only support CPU ↔ remote transfers
-    
-    if from_.device.type == "remote" and to_.device.type == "cpu":
+
+    if from_.device.type == "mycelya" and to_.device.type == "cpu":
         # Remote to CPU - supported
         host_mem = copy_from_device(from_)
         result = to_.copy_(host_mem)
-    elif from_.device.type == "cpu" and to_.device.type == "remote":
+    elif from_.device.type == "cpu" and to_.device.type == "mycelya":
         # CPU to remote - supported
         result = copy_from_host_to_device(from_, to_)
-    elif from_.device.type == "remote" and to_.device.type == "remote":
+    elif from_.device.type == "mycelya" and to_.device.type == "mycelya":
         # Remote to remote transfers
         if from_.device.index == to_.device.index:
             # Same remote device - allowed (needed for gradients and internal operations)
@@ -388,7 +388,7 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
             result = _remote_kernel_fallback(op, to_, from_)
         else:
             # Different remote devices - blocked (TODO: support in future)
-            from torch_remote.device import get_device_registry
+            from mycelya_torch.device import get_device_registry
 
             device_registry = get_device_registry()
             from_device = device_registry.get_device_by_index(from_.device.index)

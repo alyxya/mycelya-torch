@@ -1,4 +1,4 @@
-# torch-remote: PyTorch Remote Tensor Execution System
+# mycelya-torch: Mycelya Torch Remote Tensor Execution System
 
 A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. The system uses a pure tensor ID-based architecture for memory-efficient distributed computing.
 
@@ -42,29 +42,29 @@ To run type checking:
 ## Key Components
 
 ### Core Modules
-- `torch_remote/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
-- `torch_remote/_aten_impl.py` - ATen operation dispatch system with simple conditionals
-- `torch_remote/_remote_orchestrator.py` - Remote execution orchestration with direct service instances
-- `torch_remote/_device_daemon.py` - Local tensor ID registry and device daemon interface  
-- `torch_remote/device.py` - RemoteMachine abstraction and device management
+- `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
+- `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with simple conditionals
+- `mycelya_torch/_remote_orchestrator.py` - Remote execution orchestration with direct service instances
+- `mycelya_torch/_device_daemon.py` - Local tensor ID registry and device daemon interface  
+- `mycelya_torch/device.py` - RemoteMachine abstraction and device management
 
 ### Utility Modules
-- `torch_remote/_tensor_utils.py` - Tensor metadata, serialization, and transfer utilities
-- `torch_remote/_storage.py` - Storage ID mapping and cross-device validation
+- `mycelya_torch/_tensor_utils.py` - Tensor metadata, serialization, and transfer utilities
+- `mycelya_torch/_storage.py` - Storage ID mapping and cross-device validation
 
 ### Simple Operation Dispatch
 - Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns
 
 ### Provider Interface
-- `torch_remote/backends/client_interface.py` - Standardized provider interface with agnostic parameters
-- `torch_remote/backends/modal/client.py` - Modal provider implementation
+- `mycelya_torch/backends/client_interface.py` - Standardized provider interface with agnostic parameters
+- `mycelya_torch/backends/modal/client.py` - Modal provider implementation
 
 ### Remote Execution Provider
-- `_torch_remote_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
+- `_mycelya_torch_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
 
 ### C++ Backend Integration
-- `torch_remote/csrc/RemoteMem.cpp` - Custom allocator storing tensor IDs as data pointers
-- `torch_remote/csrc/RemoteHooks.cpp` - PyTorch PrivateUse1 backend implementation
+- `mycelya_torch/csrc/RemoteMem.cpp` - Custom allocator storing tensor IDs as data pointers
+- `mycelya_torch/csrc/RemoteHooks.cpp` - PyTorch PrivateUse1 backend implementation
 
 ## Current Architecture (Post-Cleanup)
 
@@ -91,10 +91,10 @@ To run type checking:
 ### Basic Usage
 ```python
 import torch
-import torch_remote
+import mycelya_torch
 
 # Create remote machine
-machine = torch_remote.create_modal_machine("T4")
+machine = mycelya_torch.create_modal_machine("T4")
 
 # Operations automatically execute on remote GPU
 x = torch.randn(1000, 1000, device=machine.device())
@@ -160,7 +160,7 @@ for data, target in dataloader:
 - **Clean separation** between local metadata and remote storage
 
 #### Provider Implementation Patterns  
-- Follow Modal implementation pattern in `_torch_remote_modal/`
+- Follow Modal implementation pattern in `_mycelya_torch_modal/`
 - Implement standardized client interface
 - Support multi-GPU configuration
 - Handle connection lifecycle properly

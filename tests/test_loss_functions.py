@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for loss function integration in torch-remote.
+Tests for loss function integration in mycelya-torch.
 
 This module tests various PyTorch loss functions working with remote tensors,
 including MSE loss, cross-entropy loss, and custom loss computations.

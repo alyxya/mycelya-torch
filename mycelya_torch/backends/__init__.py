@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Remote execution backends for torch_remote.
+Remote execution backends for mycelya_torch.
 
 This module contains backend implementations for different cloud GPU providers.
 Currently supports:
-- Modal (torch_remote.backends.modal)
+- Modal (mycelya_torch.backends.modal)
 
 Future backends may include:
-- RunPod (torch_remote.backends.runpod)
-- Lambda Labs (torch_remote.backends.lambda_labs)
+- RunPod (mycelya_torch.backends.runpod)
+- Lambda Labs (mycelya_torch.backends.lambda_labs)
 """
 
 # Import standardized interface components

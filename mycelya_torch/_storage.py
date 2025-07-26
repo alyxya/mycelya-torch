@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Storage management for torch-remote.
+Storage management for mycelya-torch.
 
 This module manages storage IDs and their lifecycle:
 - Storage ID generation and tracking

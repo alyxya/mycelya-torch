@@ -38,12 +38,12 @@ static PyMethodDef methods[] = {
     {nullptr, nullptr, 0, nullptr}};
 
 static struct PyModuleDef remote_C_module = {
-    PyModuleDef_HEAD_INIT, "torch_remote._C", nullptr, -1, methods};
+    PyModuleDef_HEAD_INIT, "mycelya_torch._C", nullptr, -1, methods};
 
 PyMODINIT_FUNC PyInit__C(void) {
   PyObject *mod = PyModule_Create(&remote_C_module);
 
-  py::object remote_mod = py::module_::import("torch_remote");
+  py::object remote_mod = py::module_::import("mycelya_torch");
   // Only borrowed from the python side!
   remote::set_impl_factory(remote_mod.attr("impl_factory").ptr());
 

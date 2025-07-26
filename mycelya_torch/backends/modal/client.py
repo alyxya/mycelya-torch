@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Modal client implementation for torch_remote.
+Modal client implementation for mycelya_torch.
 
 This module provides the ModalClient class for interfacing with Modal cloud GPUs,
 along with related functionality for creating and managing Modal applications.
@@ -10,7 +10,7 @@ along with related functionality for creating and managing Modal applications.
 
 from typing import Any, Dict, List, Union
 
-from _torch_remote_modal.modal_app import create_modal_app_for_gpu
+from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
 from ..client_interface import ClientInterface
@@ -247,4 +247,4 @@ class ModalClient(ClientInterface):
         )
 
 
-# PytorchServer and app creation logic is in _torch_remote_modal.modal_app
+# PytorchServer and app creation logic is in _mycelya_torch_modal.modal_app

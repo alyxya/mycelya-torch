@@ -43,7 +43,7 @@ def create_modal_app_for_gpu(
     Returns:
         Tuple of (modal_app, server_class) for the specified device
     """
-    app = modal.App(f"torch-remote-{machine_id}")
+    app = modal.App(f"mycelya-torch-{machine_id}")
 
     @app.cls(
         image=image,

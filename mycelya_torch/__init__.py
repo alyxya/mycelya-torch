@@ -35,7 +35,7 @@ def impl_factory(name: str) -> Callable:
 
 
 # Load the C++ Module (must come after impl_factory definition)
-import torch_remote._C  # noqa: E402
+import mycelya_torch._C  # noqa: E402
 
 
 def _create_module() -> types.ModuleType:
@@ -84,7 +84,7 @@ def _create_module() -> types.ModuleType:
         else:
             raise TypeError("Device must be int index or torch.device with index")
 
-        default_generator = torch_remote._C._get_default_generator(idx)
+        default_generator = mycelya_torch._C._get_default_generator(idx)
         return default_generator.get_state()
 
     def set_rng_state(
@@ -105,7 +105,7 @@ def _create_module() -> types.ModuleType:
         else:
             raise TypeError("Device must be int index or torch.device with index")
 
-        default_generator = torch_remote._C._get_default_generator(idx)
+        default_generator = mycelya_torch._C._get_default_generator(idx)
         default_generator.set_state(new_state)
 
     def initial_seed(device: Union[int, torch.device]) -> int:
@@ -127,7 +127,7 @@ def _create_module() -> types.ModuleType:
         else:
             raise TypeError("Device must be int index or torch.device with index")
 
-        default_generator = torch_remote._C._get_default_generator(idx)
+        default_generator = mycelya_torch._C._get_default_generator(idx)
         return default_generator.initial_seed()
 
     def manual_seed(seed: int, device: Union[int, torch.device]) -> None:
@@ -148,7 +148,7 @@ def _create_module() -> types.ModuleType:
         else:
             raise TypeError("Device must be int index or torch.device with index")
 
-        default_generator = torch_remote._C._get_default_generator(idx)
+        default_generator = mycelya_torch._C._get_default_generator(idx)
         default_generator.manual_seed(seed)
 
     def manual_seed_all(seed: int) -> None:
@@ -160,7 +160,7 @@ def _create_module() -> types.ModuleType:
         seed = int(seed)
 
         for idx in range(device_count()):
-            default_generator = torch_remote._C._get_default_generator(idx)
+            default_generator = mycelya_torch._C._get_default_generator(idx)
             default_generator.manual_seed(seed)
 
     def is_initialized() -> bool:
@@ -169,7 +169,7 @@ def _create_module() -> types.ModuleType:
     def _lazy_init() -> None:
         if is_initialized():
             return
-        torch_remote._C._init()
+        mycelya_torch._C._init()
         module._initialized = True
 
     module.is_available = is_available  # type: ignore[assignment]
@@ -189,11 +189,11 @@ def _create_module() -> types.ModuleType:
 
 
 # Set all the appropriate state on PyTorch
-torch.utils.rename_privateuse1_backend("remote")
-torch._register_device_module("remote", _create_module())
+torch.utils.rename_privateuse1_backend("mycelya")
+torch._register_device_module("mycelya", _create_module())
 
 # Import ATen implementations to ensure PyTorch registrations are executed
-import torch_remote._aten_impl  # noqa: E402
+import mycelya_torch._aten_impl  # noqa: E402
 
 # Import public API components
 from ._logging import (  # noqa: E402

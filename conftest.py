@@ -3,7 +3,7 @@
 
 #!/usr/bin/env python3
 """
-Pytest configuration and shared fixtures for torch-remote tests.
+Pytest configuration and shared fixtures for mycelya-torch tests.
 
 This module provides shared device fixtures to avoid recreating devices
 for each test, improving test efficiency and reducing GPU resource usage.
@@ -13,7 +13,7 @@ import logging
 
 import pytest
 
-import torch_remote
+import mycelya_torch
 
 log = logging.getLogger(__name__)
 
@@ -27,9 +27,9 @@ def shared_devices():
     Add more device types here as needed.
     """
     devices = {
-        "t4": torch_remote.create_modal_machine("T4"),
-        "l4": torch_remote.create_modal_machine("L4"),
-        "a100": torch_remote.create_modal_machine("A100"),
+        "t4": mycelya_torch.create_modal_machine("T4"),
+        "l4": mycelya_torch.create_modal_machine("L4"),
+        "a100": mycelya_torch.create_modal_machine("A100"),
     }
     yield devices
     # Cleanup if needed
@@ -52,6 +52,6 @@ def pytest_collection_modifyitems(config, items):
         if "large" in item.name.lower() or "memory" in item.name.lower():
             item.add_marker(pytest.mark.slow)
 
-        # Mark all torch_remote tests as requiring GPU
-        if "torch_remote" in str(item.fspath) or "backend" in item.name.lower():
+        # Mark all mycelya_torch tests as requiring GPU
+        if "mycelya_torch" in str(item.fspath) or "backend" in item.name.lower():
             item.add_marker(pytest.mark.gpu)

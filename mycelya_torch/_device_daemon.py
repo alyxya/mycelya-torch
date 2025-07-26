@@ -34,7 +34,7 @@ def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
 
 class DeviceRegistry:
     """
-    Registry for device and stream management in torch-remote.
+    Registry for device and stream management in mycelya-torch.
 
     Handles:
     - Current device tracking
@@ -57,7 +57,7 @@ class DeviceRegistry:
     def get_device_count(self) -> int:
         """Return number of devices"""
         # Get actual device count from the device registry
-        from torch_remote.device import get_device_registry
+        from mycelya_torch.device import get_device_registry
 
         registry = get_device_registry()
         return len(registry._devices)

@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import torch_remote
+import mycelya_torch
 
 
 class SimpleTransformer(nn.Module):
@@ -40,7 +40,7 @@ class SimpleTransformer(nn.Module):
 
 @pytest.fixture(scope="session")
 def t4_device():
-    return torch_remote.create_modal_machine("T4")
+    return mycelya_torch.create_modal_machine("T4")
 
 
 def test_simple_transformer_forward_backward(t4_device):

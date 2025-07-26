@@ -11,11 +11,11 @@ from pathlib import Path
 from setuptools import find_packages, setup
 from setuptools.command.build_ext import build_ext
 
-PACKAGE_NAME = "torch_remote"
+PACKAGE_NAME = "mycelya_torch"
 version = "0.1.0"
 
 ROOT_DIR = Path(__file__).absolute().parent
-CSRC_DIR = ROOT_DIR / "torch_remote/csrc"
+CSRC_DIR = ROOT_DIR / "mycelya_torch/csrc"
 
 
 def get_build_ext_class():
@@ -46,8 +46,8 @@ class clean(distutils.command.clean.clean):
         # Run default behavior first
         distutils.command.clean.clean.run(self)
 
-        # Remove torch_remote extension
-        for path in (ROOT_DIR / "torch_remote").glob("**/*.so"):
+        # Remove mycelya_torch extension
+        for path in (ROOT_DIR / "mycelya_torch").glob("**/*.so"):
             path.unlink()
         # Remove build directory
         build_dirs = [
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     ExtensionClass = get_extension_class()
     ext_modules = [
         ExtensionClass(
-            name="torch_remote._C",
+            name="mycelya_torch._C",
             sources=sorted(str(s.relative_to(ROOT_DIR)) for s in sources),
             include_dirs=[str(CSRC_DIR.relative_to(ROOT_DIR))],
             extra_compile_args=CXX_FLAGS,
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     ]
 
     setup(
-        packages=(find_packages(exclude=("test",)) + ["_torch_remote_modal"]),
+        packages=(find_packages(exclude=("test",)) + ["_mycelya_torch_modal"]),
         ext_modules=ext_modules,
         cmdclass={
             "build_ext": get_build_ext_class(),

@@ -8,7 +8,7 @@ Demonstration of memory efficiency improvements compared to previous implementat
 
 import torch
 
-import torch_remote
+import mycelya_torch
 
 
 def demonstrate_memory_efficiency():
@@ -16,7 +16,7 @@ def demonstrate_memory_efficiency():
     print("🎯 MEMORY EFFICIENCY DEMONSTRATION")
     print("=" * 60)
 
-    machine = torch_remote.create_modal_machine("T4")
+    machine = mycelya_torch.create_modal_machine("T4")
 
     print("📊 Comparing memory usage patterns:\n")
 
@@ -45,7 +45,7 @@ def demonstrate_memory_efficiency():
         print(f"   Has storage ID: {bool(remote_tensor.untyped_storage().data_ptr())}")
 
         # Check remote tensor implementation
-        if remote_tensor.device.type == "remote":
+        if remote_tensor.device.type == "mycelya":
             print(
                 "   ✅ MEMORY EFFICIENT: Using remote tensors (minimal local overhead)"
             )
@@ -68,7 +68,7 @@ def demonstrate_operations():
     print("🧮 OPERATIONS DEMONSTRATION")
     print("=" * 60)
 
-    machine = torch_remote.create_modal_machine("T4")
+    machine = mycelya_torch.create_modal_machine("T4")
 
     print("Testing various operations with remote tensor backend:\n")
 
@@ -90,7 +90,7 @@ def demonstrate_operations():
     for op_name, op_func in operations:
         try:
             result = op_func()
-            result_is_remote = result.device.type == "remote"
+            result_is_remote = result.device.type == "mycelya"
 
             # Test CPU retrieval
             cpu_result = result.cpu()
@@ -109,7 +109,7 @@ def demonstrate_comparison_with_original():
     print("📈 COMPARISON WITH PREVIOUS APPROACH")
     print("=" * 60)
 
-    machine = torch_remote.create_modal_machine("T4")
+    machine = mycelya_torch.create_modal_machine("T4")
 
     # Current approach (remote tensors)
     print("Current implementation (remote tensors):")

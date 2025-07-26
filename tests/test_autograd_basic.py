@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for basic autograd functionality in torch-remote.
+Tests for basic autograd functionality in mycelya-torch.
 
 This module tests fundamental gradient computation, backward passes,
 and basic autograd operations on remote tensors.

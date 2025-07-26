@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for tensor view operations in torch-remote.
+Tests for tensor view operations in mycelya-torch.
 
 This module tests various tensor view operations including view, reshape,
 transpose, permute, squeeze, unsqueeze, and flatten operations.

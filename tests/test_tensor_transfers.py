@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for tensor transfer operations in torch-remote.
+Tests for tensor transfer operations in mycelya-torch.
 
 This module tests CPU<->remote transfers, cross-device restrictions,
 device conversions, and transfer error handling.

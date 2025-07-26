@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for device management functionality in torch-remote.
+Tests for device management functionality in mycelya-torch.
 
 This module tests device creation, validation, registry management,
 and device property verification.
@@ -14,15 +14,15 @@ from test_utilities import DeviceTestUtils, TestConstants
 
 
 def test_basic_imports() -> None:
-    """Test basic torch and torch_remote imports."""
+    """Test basic torch and mycelya_torch imports."""
     assert True
 
 
 def test_device_functions() -> None:
     """Test remote device functions."""
-    assert torch.remote.is_available()
+    assert torch.mycelya.is_available()
     # device_count should be >= 0 (could be 0 if no devices registered)
-    assert torch.remote.device_count() >= 0
+    assert torch.mycelya.device_count() >= 0
 
 
 def test_tensor_to_method() -> None:
@@ -119,20 +119,20 @@ def test_device_type_consistency(shared_devices):
             tensor = DeviceTestUtils.create_remote_tensor(
                 (2, 2), shared_devices, device_key
             )
-            assert tensor.device.type == "remote"
+            assert tensor.device.type == "mycelya"
 
 
 def test_device_registry_state(shared_devices):
     """Test that device registry maintains proper state."""
-    initial_count = torch.remote.device_count()
+    initial_count = torch.mycelya.device_count()
 
     # Creating tensors shouldn't change device count
     DeviceTestUtils.create_remote_tensor((2, 2), shared_devices)
-    assert torch.remote.device_count() == initial_count
+    assert torch.mycelya.device_count() == initial_count
 
     # Multiple tensors on same device shouldn't change count
     DeviceTestUtils.create_remote_tensor((3, 3), shared_devices)
-    assert torch.remote.device_count() == initial_count
+    assert torch.mycelya.device_count() == initial_count
 
 
 def test_device_cleanup_behavior(shared_devices):

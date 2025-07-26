@@ -10,7 +10,7 @@ This script shows how to use different GPU types with torch_remote.
 
 import torch
 
-import torch_remote
+import mycelya_torch
 
 
 def main():
@@ -23,11 +23,11 @@ def main():
     print("\n1. Creating different GPU devices:")
 
     # Create T4 and L4 devices (cheaper options)
-    t4_device = torch_remote.create_modal_machine("T4")
-    l4_device = torch_remote.create_modal_machine("L4")
+    t4_device = mycelya_torch.create_modal_machine("T4")
+    l4_device = mycelya_torch.create_modal_machine("L4")
 
     # Create A10G device (mid-range option)
-    a10g_device = torch_remote.create_modal_machine("A10G")
+    a10g_device = mycelya_torch.create_modal_machine("A10G")
 
     print(f"   T4:   {t4_device}")
     print(f"   L4:   {l4_device}")
@@ -55,7 +55,7 @@ def main():
     )
 
     # Check device indices and get device IDs from registry
-    registry = torch_remote.get_device_registry()
+    registry = mycelya_torch.get_device_registry()
     t4_device_from_registry = registry.get_device_by_index(x_t4.device.index)
     l4_device_from_registry = registry.get_device_by_index(x_l4.device.index)
     t4_device_id = (
@@ -117,14 +117,14 @@ def main():
 
     # Show device registry
     print("\n5. Device registry:")
-    registry = torch_remote.get_device_registry()
+    registry = mycelya_torch.get_device_registry()
     print(f"   Registered devices: {len(registry._devices)}")
     for device_id, device in registry._devices.items():
         print(f"     {device_id}: {device}")
 
     # Show available GPU types
     print("\n6. Available GPU types:")
-    for gpu_type in torch_remote.GPUType:
+    for gpu_type in mycelya_torch.GPUType:
         print(f"   - {gpu_type.value}")
 
     print("\n✅ Example completed successfully!")

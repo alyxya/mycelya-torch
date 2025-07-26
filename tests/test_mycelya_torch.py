@@ -3,7 +3,7 @@
 
 #!/usr/bin/env python3
 """
-Integration tests and debugging utilities for torch-remote package.
+Integration tests and debugging utilities for mycelya-torch package.
 
 This file contains integration tests that span multiple functional areas
 and debugging utilities for troubleshooting remote tensor operations.

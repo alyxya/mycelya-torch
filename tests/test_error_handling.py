@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Tests for error handling in torch-remote.
+Tests for error handling in mycelya-torch.
 
 This module tests various error conditions, exception handling,
 and graceful failure scenarios for remote tensor operations.
@@ -21,7 +21,7 @@ class TestDeviceErrorHandling:
         # Test various invalid device specifications
         invalid_devices = [
             "nonexistent_device",
-            "remote:999",
+            "mycelya:999",
             "cuda:999",
             "invalid_type",
         ]
@@ -34,10 +34,10 @@ class TestDeviceErrorHandling:
         """Test graceful handling when remote devices are unavailable."""
         # This should not crash, even if no remote devices are available
         try:
-            device_count = torch.remote.device_count()
+            device_count = torch.mycelya.device_count()
             assert device_count >= 0  # Should be non-negative
 
-            is_available = torch.remote.is_available()
+            is_available = torch.mycelya.is_available()
             assert isinstance(is_available, bool)
         except Exception as e:
             pytest.fail(f"Device availability check should not raise exceptions: {e}")
@@ -46,7 +46,7 @@ class TestDeviceErrorHandling:
         """Test handling of out-of-bounds device indices."""
         # Try to access device with invalid index
         with pytest.raises((RuntimeError, IndexError, ValueError)):
-            torch.randn(2, 2, device="remote:999")
+            torch.randn(2, 2, device="mycelya:999")
 
 
 class TestCrossDeviceErrorHandling:

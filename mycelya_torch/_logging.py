@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Centralized logging configuration for torch_remote.
+Centralized logging configuration for mycelya_torch.
 
-This module provides utilities to configure logging behavior across all torch_remote modules.
+This module provides utilities to configure logging behavior across all mycelya_torch modules.
 """
 
 import logging
 from typing import Union
 
-# Root logger name for all torch_remote modules
-TORCH_REMOTE_LOGGER = "torch_remote"
+# Root logger name for all mycelya_torch modules
+MYCELYA_TORCH_LOGGER = "mycelya_torch"
 
 # Default logging level
 DEFAULT_LEVEL = logging.WARNING
@@ -19,28 +19,28 @@ DEFAULT_LEVEL = logging.WARNING
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Get a logger for a torch_remote module.
+    Get a logger for a mycelya_torch module.
 
-    This ensures all torch_remote loggers are children of the main torch_remote logger,
+    This ensures all mycelya_torch loggers are children of the main mycelya_torch logger,
     allowing for centralized configuration.
 
     Args:
         name: Module name (typically __name__)
 
     Returns:
-        Logger instance configured for torch_remote
+        Logger instance configured for mycelya_torch
     """
-    # Ensure the name starts with torch_remote
-    if not name.startswith("torch_remote"):
+    # Ensure the name starts with mycelya_torch
+    if not name.startswith("mycelya_torch"):
         if name == "__main__":
-            name = "torch_remote"
+            name = "mycelya_torch"
         else:
-            name = f"torch_remote.{name}"
+            name = f"mycelya_torch.{name}"
 
     logger = logging.getLogger(name)
 
-    # Set up the root torch_remote logger if this is the first time
-    root_logger = logging.getLogger(TORCH_REMOTE_LOGGER)
+    # Set up the root mycelya_torch logger if this is the first time
+    root_logger = logging.getLogger(MYCELYA_TORCH_LOGGER)
     if not root_logger.handlers:
         _setup_default_logging()
 
@@ -48,8 +48,8 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def _setup_default_logging():
-    """Set up default logging configuration for torch_remote."""
-    root_logger = logging.getLogger(TORCH_REMOTE_LOGGER)
+    """Set up default logging configuration for mycelya_torch."""
+    root_logger = logging.getLogger(MYCELYA_TORCH_LOGGER)
     root_logger.setLevel(DEFAULT_LEVEL)
 
     # Only add handler if none exists to avoid duplicates
@@ -65,9 +65,9 @@ def _setup_default_logging():
 
 def set_logging_level(level: Union[int, str]) -> None:
     """
-    Set the logging level for all torch_remote modules.
+    Set the logging level for all mycelya_torch modules.
 
-    This function provides a simple way to control the verbosity of torch_remote
+    This function provides a simple way to control the verbosity of mycelya_torch
     logging output, making it easier to debug issues without modifying code.
 
     Args:
@@ -76,11 +76,11 @@ def set_logging_level(level: Union[int, str]) -> None:
             - Integer: logging.DEBUG (10), logging.INFO (20), etc.
 
     Examples:
-        >>> import torch_remote
-        >>> torch_remote.set_logging_level('DEBUG')  # Show all debug messages
-        >>> torch_remote.set_logging_level('INFO')   # Show info and above
-        >>> torch_remote.set_logging_level('WARNING') # Show warnings and above (default)
-        >>> torch_remote.set_logging_level(logging.DEBUG) # Using logging constants
+        >>> import mycelya_torch
+        >>> mycelya_torch.set_logging_level('DEBUG')  # Show all debug messages
+        >>> mycelya_torch.set_logging_level('INFO')   # Show info and above
+        >>> mycelya_torch.set_logging_level('WARNING') # Show warnings and above (default)
+        >>> mycelya_torch.set_logging_level(logging.DEBUG) # Using logging constants
     """
     if isinstance(level, str):
         level = level.upper()
@@ -97,8 +97,8 @@ def set_logging_level(level: Union[int, str]) -> None:
             )
         level = level_map[level]
 
-    # Set the level on the root torch_remote logger
-    root_logger = logging.getLogger(TORCH_REMOTE_LOGGER)
+    # Set the level on the root mycelya_torch logger
+    root_logger = logging.getLogger(MYCELYA_TORCH_LOGGER)
     root_logger.setLevel(level)
 
     # Ensure logging is set up
@@ -109,27 +109,27 @@ def set_logging_level(level: Union[int, str]) -> None:
 
 def get_logging_level() -> int:
     """
-    Get the current logging level for torch_remote.
+    Get the current logging level for mycelya_torch.
 
     Returns:
         Current logging level as an integer
     """
-    root_logger = logging.getLogger(TORCH_REMOTE_LOGGER)
+    root_logger = logging.getLogger(MYCELYA_TORCH_LOGGER)
     return root_logger.level
 
 
 def disable_logging() -> None:
-    """Disable all torch_remote logging output."""
+    """Disable all mycelya_torch logging output."""
     set_logging_level(logging.CRITICAL + 1)
 
 
 def enable_debug_logging() -> None:
-    """Enable debug logging for torch_remote (shows all messages)."""
+    """Enable debug logging for mycelya_torch (shows all messages)."""
     set_logging_level(logging.DEBUG)
 
 
 def enable_info_logging() -> None:
-    """Enable info logging for torch_remote (shows info, warning, error)."""
+    """Enable info logging for mycelya_torch (shows info, warning, error)."""
     set_logging_level(logging.INFO)
 
 
