@@ -156,7 +156,7 @@ def test_device_error_handling_graceful():
     """Test that device-related errors are handled gracefully."""
     # These operations might fail, but shouldn't crash
     try:
-        torch.randn(3, 3, device="remote")  # Should fail gracefully
+        torch.randn(3, 3, device="mycelya")  # Should fail gracefully
     except Exception:
         pass  # Expected to fail
 

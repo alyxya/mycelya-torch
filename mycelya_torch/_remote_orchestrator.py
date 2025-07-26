@@ -283,7 +283,7 @@ class RemoteOrchestrator:
 
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
-        if remote_tensor.device.type != "remote":
+        if remote_tensor.device.type != "mycelya":
             raise ValueError(
                 f"Expected remote tensor, got device: {remote_tensor.device}"
             )

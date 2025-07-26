@@ -216,7 +216,7 @@ class RemoteMachine:
         Get a PyTorch device object for this RemoteMachine.
 
         Returns:
-            torch.device: A PyTorch device object with type "remote" and the device's index
+            torch.device: A PyTorch device object with type "mycelya" and the device's index
 
         Example:
             >>> backend_device = create_modal_machine("A100-40GB")

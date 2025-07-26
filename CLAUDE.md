@@ -1,4 +1,4 @@
-# mycelya-torch: Mycelya Torch Remote Tensor Execution System
+# Mycelya Torch: Remote Tensor Execution System
 
 A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. The system uses a pure tensor ID-based architecture for memory-efficient distributed computing.
 

@@ -26,7 +26,7 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
     def check_tensor_device(obj):
         nonlocal remote_device
         if isinstance(obj, torch.Tensor):
-            if obj.device.type != "remote":
+            if obj.device.type != "mycelya":
                 raise RuntimeError(
                     f'Remote kernel fallback called for operation "{op_name}" with non-remote tensor '
                     f'on device "{obj.device}".'
@@ -272,7 +272,7 @@ def _remote_kernel_fallback(
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     """Copy data from remote tensor to CPU tensor using remote execution"""
-    if from_.device.type != "remote":
+    if from_.device.type != "mycelya":
         raise ValueError("copy_from_device requires a remote tensor")
 
     # Use remote execution to get the tensor data
@@ -314,7 +314,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     """Copy data from CPU tensor to remote tensor using remote execution"""
-    if to_.device.type != "remote":
+    if to_.device.type != "mycelya":
         raise ValueError("copy_from_host_to_device requires a remote target tensor")
     if from_.device.type != "cpu":
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")

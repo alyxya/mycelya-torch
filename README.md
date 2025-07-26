@@ -4,7 +4,7 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 
 ## Overview
 
-PyTorch Remote uses a pure tensor ID-based architecture to run PyTorch operations on remote cloud GPUs while keeping only metadata (shape, dtype) stored locally. This provides memory-efficient distributed computing with zero local memory overhead for remote tensor data.
+Mycelya Torch uses a pure tensor ID-based architecture to run PyTorch operations on remote cloud GPUs while keeping only metadata (shape, dtype) stored locally. This provides memory-efficient distributed computing with zero local memory overhead for remote tensor data.
 
 **Key Features:**
 - **Transparent remote execution** - Your PyTorch code runs unchanged on remote GPUs
@@ -110,7 +110,7 @@ result = local_on_remote @ remote_tensor  # Both on remote GPU
 
 ## Architecture
 
-PyTorch Remote uses a three-layer architecture:
+Mycelya Torch uses a three-layer architecture:
 
 1. **C++ Layer** - Custom PyTorch PrivateUse1 backend with tensor ID allocation
 2. **Python Coordination** - Local tensor metadata management and operation dispatch  
@@ -172,7 +172,7 @@ _mycelya_torch_modal/
 
 ## Error Handling
 
-PyTorch Remote provides comprehensive error handling:
+Mycelya Torch provides comprehensive error handling:
 
 ```python
 import mycelya_torch
