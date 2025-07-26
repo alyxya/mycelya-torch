@@ -94,6 +94,20 @@ class NumericalTestUtils:
         msg: Optional[str] = None,
     ) -> None:
         """Assert that two tensors are numerically close."""
+        # Handle NaN cases: if both tensors have NaN in the same positions, they're equal
+        if torch.isnan(actual).any() or torch.isnan(expected).any():
+            nan_match = torch.isnan(actual) == torch.isnan(expected)
+            if not nan_match.all():
+                raise AssertionError("NaN patterns don't match between tensors")
+            # Check non-NaN values
+            non_nan_mask = ~torch.isnan(actual)
+            if non_nan_mask.any():
+                actual_clean = actual[non_nan_mask]
+                expected_clean = expected[non_nan_mask]
+                assert torch.allclose(actual_clean, expected_clean, rtol=rtol, atol=atol), \
+                    f"Non-NaN values not close: max diff = {torch.max(torch.abs(actual_clean - expected_clean)).item()}"
+            return
+
         if msg is None:
             msg = f"Tensors not close: max diff = {torch.max(torch.abs(actual - expected)).item()}"
         assert torch.allclose(actual, expected, rtol=rtol, atol=atol), msg

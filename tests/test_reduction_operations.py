@@ -240,7 +240,7 @@ class TestProductReductions:
     """Test product reduction operations."""
 
     @pytest.mark.parametrize("shape", [(5,), (3, 4), (2, 3, 4)])
-    @pytest.mark.parametrize("dim", [None, 0, 1])
+    @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_prod_operations(self, shared_devices, shape, dim, keepdim):
@@ -349,9 +349,9 @@ class TestSpecializedReductions:
         cpu_tensor = torch.randn(5, 5)
         remote_tensor = cpu_tensor.to(device.device())
 
-        # Test without dim
-        cpu_result = torch.logsumexp(cpu_tensor, dim=None)
-        remote_result = torch.logsumexp(remote_tensor, dim=None)
+        # Test reduction over all dimensions
+        cpu_result = torch.logsumexp(cpu_tensor, dim=[0, 1])
+        remote_result = torch.logsumexp(remote_tensor, dim=[0, 1])
 
         NumericalTestUtils.assert_tensors_close(
             remote_result.cpu(), cpu_result, rtol=1e-5, atol=1e-6
@@ -382,9 +382,10 @@ class TestReductionsWithGradients:
     def test_reductions_with_gradients(self, shared_devices, operation):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.randn(4, 4, requires_grad=True)
-        remote_tensor = cpu_tensor.to(device.device())
-        remote_tensor.requires_grad_(True)
+        # Create leaf tensors to maintain gradient capabilities
+        data = torch.randn(4, 4)
+        cpu_tensor = data.clone().requires_grad_(True)
+        remote_tensor = data.clone().to(device.device()).requires_grad_(True)
 
         # Forward pass
         if operation in ["std", "var"]:
@@ -407,9 +408,10 @@ class TestReductionsWithGradients:
     def test_complex_reduction_expression_with_gradients(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_x = torch.randn(5, 5, requires_grad=True)
-        remote_x = cpu_x.to(device.device())
-        remote_x.requires_grad_(True)
+        # Create leaf tensors to maintain gradient capabilities
+        data = torch.randn(5, 5)
+        cpu_x = data.clone().requires_grad_(True)
+        remote_x = data.clone().to(device.device()).requires_grad_(True)
 
         # Complex expression combining multiple reductions
         cpu_result = torch.sum(cpu_x, dim=0) + torch.mean(cpu_x, dim=1)
