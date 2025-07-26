@@ -10,8 +10,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mycelya_torch"
 version = "0.1.0"
-description = "Remote GPU cloud execution extension for PyTorch supporting multiple providers"
-authors = [{name = "Mycelya Torch Extension"}]
+description = "Mycelya: PyTorch extension for transparent remote GPU execution on cloud infrastructure"
+authors = [{name = "Mycelya Extension"}]
 license = "AGPL-3.0-or-later"
 readme = "README.md"
 requires-python = ">=3.8"

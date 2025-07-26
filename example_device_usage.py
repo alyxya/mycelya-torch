@@ -14,7 +14,7 @@ import mycelya_torch
 
 
 def main():
-    print("🚀 Mycelya Torch Device Backend Example")
+    print("🚀 Mycelya PyTorch Device Backend Example")
     print("=" * 50)
 
     # Remote execution is now always enabled for remote tensors

@@ -1,10 +1,10 @@
-# Mycelya Torch
+# Mycelya - PyTorch Remote Execution
 
 A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. Execute PyTorch code on remote GPUs without changing your existing code.
 
 ## Overview
 
-Mycelya Torch uses a pure tensor ID-based architecture to run PyTorch operations on remote cloud GPUs while keeping only metadata (shape, dtype) stored locally. This provides memory-efficient distributed computing with zero local memory overhead for remote tensor data.
+Mycelya is a PyTorch extension that uses a pure tensor ID-based architecture to run PyTorch operations on remote cloud GPUs while keeping only metadata (shape, dtype) stored locally. This provides memory-efficient distributed computing with zero local memory overhead for remote tensor data.
 
 **Key Features:**
 - **Transparent remote execution** - Your PyTorch code runs unchanged on remote GPUs
@@ -51,8 +51,8 @@ import mycelya_torch
 
 # Available GPU types
 gpu_types = [
-    "T4", "L4", "A10G", 
-    "A100-40GB", "A100-80GB", 
+    "T4", "L4", "A10G",
+    "A100-40GB", "A100-80GB",
     "L40S", "H100", "H200", "B200"
 ]
 
@@ -79,7 +79,7 @@ optimizer = torch.optim.Adam(model.parameters())
 # Training loop - all operations happen remotely
 for batch_idx, (data, target) in enumerate(dataloader):
     data, target = data.to(device), target.to(device)
-    
+
     optimizer.zero_grad()
     output = model(data)
     loss = nn.functional.cross_entropy(output, target)
@@ -110,15 +110,14 @@ result = local_on_remote @ remote_tensor  # Both on remote GPU
 
 ## Architecture
 
-Mycelya Torch uses a three-layer architecture:
+Mycelya uses a three-layer architecture:
 
 1. **C++ Layer** - Custom PyTorch PrivateUse1 backend with tensor ID allocation
-2. **Python Coordination** - Local tensor metadata management and operation dispatch  
+2. **Python Coordination** - Local tensor metadata management and operation dispatch
 3. **Remote Execution** - Cloud provider implementations (currently Modal)
 
 ### Memory Efficiency
 
-- **50% memory reduction** compared to traditional remote execution
 - **Zero local storage** for remote tensor data
 - **64-bit tensor IDs** stored as data pointers for efficient lookup
 - **Meta tensor integration** for shape inference without data transfer
@@ -148,7 +147,7 @@ pytest tests/test_autograd_basic.py -v
 # Linting
 ruff check .
 
-# Formatting  
+# Formatting
 ruff format .
 ```
 
@@ -170,24 +169,6 @@ _mycelya_torch_modal/
 └── client.py          # Modal client implementation
 ```
 
-## Error Handling
-
-Mycelya Torch provides comprehensive error handling:
-
-```python
-import mycelya_torch
-
-try:
-    machine = mycelya_torch.create_modal_machine("A100-40GB")
-    x = torch.randn(100, 100, device=machine.device())
-    y = torch.randn(100, 100, device=machine.device())
-    result = x @ y
-except RuntimeError as e:
-    print(f"Remote operation failed: {e}")
-except ValueError as e:
-    print(f"Invalid operation: {e}")
-```
-
 ## Limitations
 
 - **Cross-device operations**: Cannot operate between different remote machines directly
@@ -207,7 +188,7 @@ This project is licensed under AGPL-3.0. All contributions must maintain the AGP
 
 ## License
 
-Copyright (C) 2025 alyxya  
+Copyright (C) 2025 alyxya
 SPDX-License-Identifier: AGPL-3.0-or-later
 
 This project is licensed under the GNU Affero General Public License v3.0 or later.
