@@ -118,7 +118,7 @@ class RemoteTensorMetadata(BaseTensorMetadata):
     def from_remote_tensor(cls, tensor: torch.Tensor) -> "RemoteTensorMetadata":
         """Create metadata from a remote tensor."""
         if tensor.device.type != "mycelya":
-            raise ValueError(f"Expected remote tensor, got device: {tensor.device}")
+            raise ValueError(f"Expected mycelya tensor, got device: {tensor.device}")
         storage_id = tensor.untyped_storage().data_ptr()
         return cls(
             shape=tuple(tensor.shape),

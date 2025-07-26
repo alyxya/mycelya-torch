@@ -285,7 +285,7 @@ class RemoteOrchestrator:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         if remote_tensor.device.type != "mycelya":
             raise ValueError(
-                f"Expected remote tensor, got device: {remote_tensor.device}"
+                f"Expected mycelya tensor, got device: {remote_tensor.device}"
             )
 
         # Get device registry to find the machine
