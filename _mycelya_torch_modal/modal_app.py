@@ -210,6 +210,7 @@ def create_modal_app_for_gpu(
 
             # Check if storage is lazy
             if isinstance(storage_item, int):
+                source_tensor = source_tensor.to("cuda")
                 expected_bytes = storage_item
                 actual_bytes = source_tensor.untyped_storage().nbytes()
 
@@ -221,7 +222,7 @@ def create_modal_app_for_gpu(
 
                 log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
                 # Force storage realization by using the source tensor's storage
-                storages[storage_id] = source_tensor.to("cuda").untyped_storage()
+                storages[storage_id] = source_tensor.untyped_storage()
                 log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_shape})")
                 return
 
