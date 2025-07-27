@@ -441,9 +441,18 @@ class TestReductionEdgeCases:
         cpu_tensor = torch.tensor([[2.5]])
         remote_tensor = cpu_tensor.to(device.device())
 
-        for operation in ["sum", "mean", "min", "max", "std", "var"]:
+        for operation in ["sum", "mean", "min", "max"]:
             cpu_result = getattr(torch, operation)(cpu_tensor)
             remote_result = getattr(torch, operation)(remote_tensor)
+
+            NumericalTestUtils.assert_tensors_close(
+                remote_result.cpu(), cpu_result, rtol=1e-8, atol=1e-8
+            )
+        
+        # Test std/var with unbiased=False to avoid invalid statistical operations
+        for operation in ["std", "var"]:
+            cpu_result = getattr(torch, operation)(cpu_tensor, unbiased=False)
+            remote_result = getattr(torch, operation)(remote_tensor, unbiased=False)
 
             NumericalTestUtils.assert_tensors_close(
                 remote_result.cpu(), cpu_result, rtol=1e-8, atol=1e-8
