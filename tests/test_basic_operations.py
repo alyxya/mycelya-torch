@@ -345,8 +345,8 @@ class TestTensorConcatenation:
         x = torch.randn(2, 2, requires_grad=True)
         y = torch.randn(3, 2, requires_grad=True)
 
-        x_remote = x.to(shared_devices["t4"].device())
-        y_remote = y.to(shared_devices["t4"].device())
+        x_remote = x.to(shared_devices["t4"].device()).detach().requires_grad_()
+        y_remote = y.to(shared_devices["t4"].device()).detach().requires_grad_()
 
         # Concatenate and compute loss
         cat_remote = torch.cat([x_remote, y_remote], dim=0)
