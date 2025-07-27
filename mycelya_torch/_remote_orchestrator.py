@@ -285,7 +285,7 @@ class RemoteOrchestrator:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
         if remote_tensor.device.type != "mycelya":
             raise ValueError(
-                f"Expected mycelya tensor, got device: {remote_tensor.device}"
+                f"Expected remote tensor, got device: {remote_tensor.device}"
             )
 
         # Get device registry to find the machine
@@ -296,7 +296,7 @@ class RemoteOrchestrator:
 
         if machine is None:
             raise RuntimeError(
-                f"No RemoteMachine found for mycelya device index {remote_tensor.device.index}"
+                f"No RemoteMachine found for remote device index {remote_tensor.device.index}"
             )
 
         # Get tensor data using storage ID with internal client resolution

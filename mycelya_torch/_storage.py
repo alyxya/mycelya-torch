@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Storage management for mycelya-torch.
+Storage management for remote tensors.
 
 This module manages storage IDs and their lifecycle:
 - Storage ID generation and tracking
@@ -302,7 +302,7 @@ def validate_cross_device_operation(storage_ids: List[int]) -> None:
 
         if machine.machine_id != first_machine.machine_id:
             raise RuntimeError(
-                f"Cannot perform operations between tensors on different mycelya devices. "
+                f"Cannot perform operations between tensors on different remote devices. "
                 f"Tensors are on different devices: "
                 f'"{first_device_name}" and "{current_device_name}". '
                 f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"

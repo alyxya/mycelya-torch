@@ -48,7 +48,7 @@ def _create_module() -> types.ModuleType:
     Returns:
         Module implementing the remote device backend interface
     """
-    module = types.ModuleType("_MycelyaMod")
+    module = types.ModuleType("_RemoteMod")
 
     def device_count() -> int:
         """Get the number of available remote devices.
@@ -79,7 +79,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for mycelya devices")
+                raise ValueError("Device index must be specified for remote devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -100,7 +100,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for mycelya devices")
+                raise ValueError("Device index must be specified for remote devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -122,7 +122,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for mycelya devices")
+                raise ValueError("Device index must be specified for remote devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -143,7 +143,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for mycelya devices")
+                raise ValueError("Device index must be specified for remote devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
