@@ -74,26 +74,6 @@ def args_to_metadata_with_placeholders(
     return processed_args, processed_kwargs, metadata_list
 
 
-def _get_output_dtype_for_dynamic_operation(op_name: str, args: Tuple[Any, ...]) -> torch.dtype:
-    """Determine the correct output dtype for dynamic output operations.
-
-    Some operations have output dtypes that differ from their input dtypes.
-    For example, nonzero always returns int64 indices regardless of input dtype.
-    """
-    if op_name == "aten::nonzero":
-        # nonzero always returns int64 indices regardless of input dtype
-        return torch.int64
-    elif op_name == "aten::masked_select":
-        # masked_select returns same dtype as the input tensor being selected from
-        return args[0].dtype
-    elif op_name == "aten::index":
-        # index (boolean indexing) returns same dtype as the input tensor being indexed
-        return args[0].dtype
-    else:
-        # Default: use input tensor dtype
-        return args[0].dtype
-
-
 def _execute_meta_operation(
     op: torch._ops.OpOverload,
     args: Tuple[Any, ...],
@@ -288,7 +268,7 @@ def _execute_with_dynamic_outputs(
         output_storage_ids = [output_tensor.untyped_storage().data_ptr()]
     else:
         # Step 1: Infer output dtype based on operation type
-        output_dtype = _get_output_dtype_for_dynamic_operation(op_name, args)
+        output_dtype = torch.int64 if op_name == "aten::nonzero" else args[0].dtype
         log.debug(f"Inferred output dtype: {output_dtype}")
 
         # Step 2: Create minimal placeholder tensor with 0 bytes
