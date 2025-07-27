@@ -456,7 +456,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
     return to_
 
 
-def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
+def _copy_from(from_: torch.Tensor, to_: torch.Tensor, non_blocking: bool = False) -> torch.Tensor:
     """Copy data from one tensor to another, handling remote device transfers.
 
     This function implements the core copy operation for remote tensors,
@@ -466,6 +466,7 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     Args:
         from_: Source tensor to copy from
         to_: Target tensor to copy to
+        non_blocking: Whether to perform the copy asynchronously (currently ignored)
 
     Returns:
         Target tensor with copied data

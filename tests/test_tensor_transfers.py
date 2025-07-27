@@ -119,6 +119,9 @@ class TestRemoteToCPUTransfers:
         """Test that remote to CPU transfer preserves gradient information."""
         original_cpu = torch.randn(2, 2, requires_grad=True)
         remote_tensor = original_cpu.to(shared_devices["t4"].device())
+        
+        # Retain gradients for non-leaf tensor
+        remote_tensor.retain_grad()
 
         # Perform operation and backward pass
         loss = remote_tensor.sum()
@@ -338,6 +341,10 @@ class TestTransferMemoryEfficiency:
 
         # Transfer and perform operations
         remote_tensor = base_tensor.to(shared_devices["t4"].device())
+        
+        # Retain gradients for non-leaf tensor
+        remote_tensor.retain_grad()
+        
         result = remote_tensor.sum()
         result.backward()
 
