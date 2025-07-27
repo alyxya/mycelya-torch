@@ -195,9 +195,6 @@ class TestSelectionOperations:
     def test_scatter_operations(self, shared_devices, dim):
         device = shared_devices["t4"]
 
-        # Set deterministic seed for reproducible results
-        torch.manual_seed(42 + dim)
-
         # Create separate base tensors for CPU and remote operations
         # This avoids in-place modification affecting both tests
         cpu_tensor = torch.zeros(3, 4)
