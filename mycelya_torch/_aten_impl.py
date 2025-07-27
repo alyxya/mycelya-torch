@@ -330,8 +330,8 @@ def _execute_aten_operation(
     # These operations have data-dependent output shapes that meta tensors cannot handle
     DYNAMIC_OUTPUT_OPERATIONS = {
         "aten::masked_select",
+        "aten::nonzero",
         # Add more operations here as needed:
-        # "aten::nonzero",
         # "aten::unique",
     }
 
