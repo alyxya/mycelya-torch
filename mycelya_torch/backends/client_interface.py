@@ -11,6 +11,8 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
+import torch
+
 
 class ClientInterface(ABC):
     """
@@ -109,24 +111,33 @@ class ClientInterface(ABC):
     def update_storage(
         self,
         storage_id: int,
-        tensor_data: bytes,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str
+        raw_data: bytes,
+        source_shape: List[int],
+        source_stride: List[int],
+        source_storage_offset: int,
+        source_dtype: str,
+        target_shape: List[int],
+        target_stride: List[int],
+        target_storage_offset: int,
+        target_dtype: str
     ) -> None:
         """
-        Update an existing storage with tensor data.
+        Update an existing storage with raw tensor data.
 
-        Supports both full storage replacement and view-specific updates.
+        Supports both full storage replacement and partial in-place updates using
+        dual tensor metadata to specify source data layout and target storage view.
 
         Args:
             storage_id: Storage ID to update
-            tensor_data: Serialized tensor data to store
-            shape: Shape of the target view
-            stride: Stride of the target view
-            storage_offset: Storage offset of the target view
-            dtype: Data type of the target view
+            raw_data: Raw untyped storage bytes to store
+            source_shape: Shape of the source data
+            source_stride: Stride of the source data
+            source_storage_offset: Storage offset of the source data
+            source_dtype: Data type of the source data
+            target_shape: Shape of the target view in storage
+            target_stride: Stride of the target view in storage
+            target_storage_offset: Storage offset of the target view in storage
+            target_dtype: Data type of the target view in storage
 
         Returns:
             None
@@ -134,16 +145,40 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def get_storage_data(
+    def _get_storage_data(
+        self,
+        storage_id: int,
+    ) -> bytes:
+        """
+        Retrieve raw storage data by ID.
+
+        Returns the complete raw untyped storage bytes. The client interface layer
+        will handle tensor reconstruction from metadata and these raw bytes.
+
+        This is a private method used internally by get_storage_tensor().
+
+        Args:
+            storage_id: The storage ID to retrieve
+
+        Returns:
+            Raw untyped storage bytes
+        """
+        pass
+
+    def get_storage_tensor(
         self,
         storage_id: int,
         shape: List[int],
         stride: List[int],
         storage_offset: int,
         dtype: str,
-    ) -> bytes:
+    ) -> torch.Tensor:
         """
-        Retrieve storage data by ID as a specific view.
+        Retrieve storage data as a tensor with specified view parameters.
+
+        This is a convenience method that combines _get_storage_data() with tensor
+        reconstruction. The default implementation can be overridden by providers
+        for optimization.
 
         Args:
             storage_id: The storage ID to retrieve
@@ -153,9 +188,14 @@ class ClientInterface(ABC):
             dtype: Tensor data type
 
         Returns:
-            Serialized tensor data (contiguous representation of the view)
+            CPU tensor reconstructed from storage with specified view
         """
-        pass
+        from .._tensor_utils import storage_bytes_to_cpu_tensor
+
+        raw_bytes = self._get_storage_data(storage_id)
+        return storage_bytes_to_cpu_tensor(
+            raw_bytes, shape, stride, storage_offset, dtype
+        )
 
     @abstractmethod
     def resize_storage(self, storage_id: int, nbytes: int) -> None:

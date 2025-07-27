@@ -8,9 +8,10 @@ This module tests various error conditions, exception handling,
 and graceful failure scenarios for remote tensor operations.
 """
 
+import warnings
+
 import pytest
 import torch
-import warnings
 from test_utilities import DeviceTestUtils, ErrorTestUtils, TestConstants
 
 
@@ -133,18 +134,18 @@ class TestTensorOperationErrors:
 
     def test_squeeze_operation_errors(self, shared_devices):
         """Test error handling for invalid squeeze operations."""
-        # Create tensor with a dimension of size 1 for valid squeeze, then test invalid squeeze  
+        # Create tensor with a dimension of size 1 for valid squeeze, then test invalid squeeze
         tensor = DeviceTestUtils.create_remote_tensor((2, 1, 4), shared_devices)
-        
+
         # Valid squeeze should work
         squeezed = tensor.squeeze(1)  # Dimension 1 has size 1
         assert squeezed.shape == (2, 4)
-        
+
         # Try to squeeze a dimension that's not size 1 - this is actually allowed in PyTorch
         # and returns the original tensor unchanged
         result = tensor.squeeze(0)  # Dimension 0 has size 2, not 1
         assert result.shape == tensor.shape  # Should be unchanged
-        
+
         # Test an actual error case: squeeze with invalid dimension index
         with pytest.raises((RuntimeError, IndexError)):
             tensor.squeeze(10)  # Dimension 10 doesn't exist
@@ -199,7 +200,7 @@ class TestGradientErrorHandling:
 
         # First backward
         y.backward()
-        
+
         # Verify gradients exist after first backward
         assert x.grad is not None, "Gradients should exist after first backward"
 
@@ -223,14 +224,14 @@ class TestMemoryErrorHandling:
         # The system uses lazy/meta tensor allocation, so extremely large tensors
         # can be created without immediate memory allocation. This is actually
         # a feature of the remote execution system.
-        
+
         # Test that we can create a large tensor (this should succeed with lazy allocation)
         huge_size = 10**10
         large_tensor = torch.randn(huge_size, device=shared_devices["t4"].device())
-        
+
         # Verify the tensor has the expected shape
         assert large_tensor.shape == (huge_size,)
-        
+
         # The actual memory allocation happens on the remote device when operations
         # are performed, so this is expected behavior for the remote execution system
 

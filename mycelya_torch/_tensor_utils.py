@@ -140,9 +140,63 @@ class RemoteTensorMetadata(BaseTensorMetadata):
 TensorMetadata = Union[LocalTensorMetadata, RemoteTensorMetadata]
 
 
+def cpu_tensor_to_storage_bytes(tensor: torch.Tensor) -> bytes:
+    """
+    Convert a CPU tensor to raw untyped storage bytes.
+
+    Args:
+        tensor: CPU tensor to extract storage bytes from
+
+    Returns:
+        Raw untyped storage bytes
+    """
+    if tensor.device.type != "cpu":
+        raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
+
+    # Get raw untyped storage bytes
+    untyped_storage = tensor.untyped_storage()
+    return bytes(untyped_storage)
+
+
+def storage_bytes_to_cpu_tensor(
+    raw_bytes: bytes,
+    shape: list,
+    stride: list,
+    storage_offset: int,
+    dtype: str
+) -> torch.Tensor:
+    """
+    Convert raw storage bytes to a CPU tensor with specified view parameters.
+
+    Args:
+        raw_bytes: Raw untyped storage bytes
+        shape: Tensor shape for view
+        stride: Tensor stride for view
+        storage_offset: Storage offset for view
+        dtype: Tensor data type string (e.g., "float32")
+
+    Returns:
+        CPU tensor reconstructed from raw bytes with specified view
+    """
+    # Convert dtype string to torch.dtype
+    dtype_name = dtype.replace("torch.", "")
+    torch_dtype = getattr(torch, dtype_name)
+
+    # Create untyped storage from raw bytes
+    untyped_storage = torch.UntypedStorage.from_buffer(raw_bytes, dtype=torch.uint8)
+
+    # Create tensor from storage with specified view parameters
+    tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
+    tensor.set_(untyped_storage, storage_offset, shape, stride)
+
+    return tensor
+
+
 def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     """
     Convert a CPU tensor to bytes for data transfer.
+
+    DEPRECATED: Use cpu_tensor_to_storage_bytes() instead.
 
     Args:
         tensor: CPU tensor to serialize
@@ -162,6 +216,8 @@ def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
 def bytes_to_cpu_tensor(data: bytes) -> torch.Tensor:
     """
     Convert bytes to a CPU tensor.
+
+    DEPRECATED: Use storage_bytes_to_cpu_tensor() instead.
 
     Args:
         data: Serialized tensor data

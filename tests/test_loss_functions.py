@@ -352,7 +352,7 @@ class TestLossWithNeuralNetworks:
         # Create models
         model_cpu = torch.nn.Linear(input_size, output_size)
         model_remote = torch.nn.Linear(input_size, output_size)
-        
+
         # Copy weights to remote model and move to device
         model_remote.load_state_dict(model_cpu.state_dict())
         model_remote = model_remote.to(shared_devices["t4"].device())
@@ -403,7 +403,7 @@ class TestLossWithNeuralNetworks:
             torch.nn.ReLU(),
             torch.nn.Linear(10, num_classes),
         )
-        
+
         # Copy weights to remote model and move to device
         model_remote.load_state_dict(model_cpu.state_dict())
         model_remote = model_remote.to(shared_devices["t4"].device())

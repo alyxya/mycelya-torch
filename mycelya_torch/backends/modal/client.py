@@ -100,22 +100,30 @@ class ModalClient(ClientInterface):
     def update_storage(
         self,
         storage_id: int,
-        tensor_data: bytes,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str
+        raw_data: bytes,
+        source_shape: List[int],
+        source_stride: List[int],
+        source_storage_offset: int,
+        source_dtype: str,
+        target_shape: List[int],
+        target_stride: List[int],
+        target_storage_offset: int,
+        target_dtype: str
     ) -> None:
         """
-        Update an existing storage with tensor data.
+        Update an existing storage with raw tensor data.
 
         Args:
             storage_id: Storage ID to update
-            tensor_data: Serialized tensor data to store
-            shape: Shape of the target view
-            stride: Stride of the target view
-            storage_offset: Storage offset of the target view
-            dtype: Data type of the target view
+            raw_data: Raw untyped storage bytes to store
+            source_shape: Shape of the source data
+            source_stride: Stride of the source data
+            source_storage_offset: Storage offset of the source data
+            source_dtype: Data type of the source data
+            target_shape: Shape of the target view in storage
+            target_stride: Stride of the target view in storage
+            target_storage_offset: Storage offset of the target view in storage
+            target_dtype: Data type of the target view in storage
 
         Returns:
             None
@@ -126,38 +134,30 @@ class ModalClient(ClientInterface):
             )
 
         self._server_instance.update_storage.spawn(
-            storage_id, tensor_data, shape, stride, storage_offset, dtype
+            storage_id, raw_data,
+            source_shape, source_stride, source_storage_offset, source_dtype,
+            target_shape, target_stride, target_storage_offset, target_dtype
         )
 
-    def get_storage_data(
+    def _get_storage_data(
         self,
         storage_id: int,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str,
     ) -> bytes:
         """
-        Get storage data by ID for device transfer as a specific view.
+        Get raw storage data by ID.
 
         Args:
             storage_id: The storage ID
-            shape: Tensor shape for view
-            stride: Tensor stride for view
-            storage_offset: Storage offset for view
-            dtype: Tensor data type
 
         Returns:
-            Serialized tensor data (contiguous representation of the view)
+            Raw untyped storage bytes
         """
         if not self.is_running():
             raise RuntimeError(
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        return self._server_instance.get_storage_data.remote(
-            storage_id, shape, stride, storage_offset, dtype
-        )
+        return self._server_instance.get_storage_data.remote(storage_id)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """

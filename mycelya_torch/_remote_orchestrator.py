@@ -140,38 +140,53 @@ class RemoteOrchestrator:
     def update_storage(
         self,
         storage_id: int,
-        tensor_data: bytes,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str
+        raw_data: bytes,
+        source_shape: List[int],
+        source_stride: List[int],
+        source_storage_offset: int,
+        source_dtype: str,
+        target_shape: List[int],
+        target_stride: List[int],
+        target_storage_offset: int,
+        target_dtype: str
     ) -> None:
-        """Update existing storage with tensor data.
+        """Update existing storage with raw tensor data.
 
         Args:
             storage_id: Storage ID to update
-            tensor_data: Serialized tensor data to store
-            shape: Shape of the target view
-            stride: Stride of the target view
-            storage_offset: Storage offset of the target view
-            dtype: Data type of the target view
+            raw_data: Raw untyped storage bytes to store
+            source_shape: Shape of the source data
+            source_stride: Stride of the source data
+            source_storage_offset: Storage offset of the source data
+            source_dtype: Data type of the source data
+            target_shape: Shape of the target view in storage
+            target_stride: Stride of the target view in storage
+            target_storage_offset: Storage offset of the target view in storage
+            target_dtype: Data type of the target view in storage
 
         Raises:
             RuntimeError: If storage or client not available
         """
         client = self._get_client_for_storage(storage_id)
-        client.update_storage(storage_id, tensor_data, shape, stride, storage_offset, dtype)
+        client.update_storage(
+            storage_id, raw_data,
+            source_shape, source_stride, source_storage_offset, source_dtype,
+            target_shape, target_stride, target_storage_offset, target_dtype
+        )
         log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id}")
 
-    def get_storage_data(
+    def get_storage_tensor(
         self,
         storage_id: int,
         shape: List[int],
         stride: List[int],
         storage_offset: int,
         dtype: str
-    ) -> bytes:
-        """Get storage data by ID as a specific view.
+    ) -> "torch.Tensor":
+        """Get storage data as a tensor with specified view parameters.
+
+        This is a convenience method that combines _get_storage_data() with tensor
+        reconstruction.
 
         Args:
             storage_id: The storage ID to retrieve
@@ -181,14 +196,14 @@ class RemoteOrchestrator:
             dtype: Tensor data type
 
         Returns:
-            Serialized tensor data (contiguous representation of the view)
+            CPU tensor reconstructed from storage with specified view
 
         Raises:
             RuntimeError: If storage or client not available
         """
         client = self._get_client_for_storage(storage_id)
-        result = client.get_storage_data(storage_id, shape, stride, storage_offset, dtype)
-        log.info(f"✅ ORCHESTRATOR: Retrieved data for storage {storage_id}")
+        result = client.get_storage_tensor(storage_id, shape, stride, storage_offset, dtype)
+        log.info(f"✅ ORCHESTRATOR: Retrieved tensor for storage {storage_id}")
         return result
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
@@ -315,17 +330,14 @@ class RemoteOrchestrator:
         # Create metadata for the remote tensor
         metadata = RemoteTensorMetadata.from_remote_tensor(remote_tensor)
 
-        # Get serialized data from remote storage using internal method
-        tensor_data = self.get_storage_data(
+        # Get tensor data from remote storage using new interface
+        return self.get_storage_tensor(
             storage_id,
             shape=list(metadata.shape),
             stride=list(metadata.stride),
             storage_offset=metadata.storage_offset,
             dtype=str(metadata.dtype),
         )
-
-        # Convert bytes back to CPU tensor using metadata
-        return metadata.to_cpu_tensor_from_bytes(tensor_data)
 
     def remove_tensor_from_remote(
         self, storage_id: int, machine: "RemoteMachine"

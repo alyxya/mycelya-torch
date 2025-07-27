@@ -314,27 +314,27 @@ def _execute_with_dynamic_outputs(
 
 def _has_static_output_shape(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> bool:
     """Determine if operation has predictable output shape for meta tensor inference."""
-    
+
     # Always dynamic operations
     ALWAYS_DYNAMIC = {"aten::masked_select", "aten::nonzero"}
     if op_name in ALWAYS_DYNAMIC:
         return False
-    
+
     # Special case: aten::index can be static (tensor indexing) or dynamic (boolean indexing)
     if op_name == "aten::index":
         if len(args) >= 2 and isinstance(args[1], (tuple, list)):
             # Boolean indexing is dynamic, tensor indexing is static
             return not any(
-                isinstance(idx, torch.Tensor) and idx.dtype == torch.bool 
+                isinstance(idx, torch.Tensor) and idx.dtype == torch.bool
                 for idx in args[1] if idx is not None
             )
-    
+
     # TODO: Add more conditional operations here as needed:
     # if op_name == "aten::unique":
     #     return not (kwargs.get("return_inverse", False) or kwargs.get("return_counts", False))
     # if op_name == "aten::where":
     #     return len(args) != 1  # 1-arg form is dynamic, 3-arg form is static
-    
+
     return True
 
 
@@ -413,17 +413,13 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     # Use orchestrator to get tensor data with automatic client routing
     from ._remote_orchestrator import remote_orchestrator
 
-    tensor_data = remote_orchestrator.get_storage_data(
+    result = remote_orchestrator.get_storage_tensor(
         storage_id,
         shape=list(from_.shape),
         stride=list(from_.stride()),
         storage_offset=from_.storage_offset(),
         dtype=str(from_.dtype),
     )
-
-    # Deserialize to CPU tensor (always contiguous and packed)
-    from ._tensor_utils import bytes_to_cpu_tensor
-    result = bytes_to_cpu_tensor(tensor_data)
 
     log.info(
         f"Successfully copied contiguous tensor data for storage ID {storage_id} to CPU"
@@ -454,20 +450,24 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
     storage_id = to_.untyped_storage().data_ptr()
     log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
 
-    # Serialize the CPU tensor
+    # Get raw untyped storage bytes from CPU tensor
     from ._remote_orchestrator import remote_orchestrator
-    from ._tensor_utils import cpu_tensor_to_bytes
+    from ._tensor_utils import cpu_tensor_to_storage_bytes
 
-    tensor_data = cpu_tensor_to_bytes(from_)
+    raw_data = cpu_tensor_to_storage_bytes(from_)
     # Use orchestrator to update tensor with automatic client routing
-    # Pass view parameters for proper handling of tensor views/slices
+    # Pass source and target metadata for proper handling of partial updates
     remote_orchestrator.update_storage(
         storage_id,
-        tensor_data,
-        shape=list(to_.shape),
-        stride=list(to_.stride()),
-        storage_offset=to_.storage_offset(),
-        dtype=str(to_.dtype)
+        raw_data,
+        source_shape=list(from_.shape),
+        source_stride=list(from_.stride()),
+        source_storage_offset=from_.storage_offset(),
+        source_dtype=str(from_.dtype),
+        target_shape=list(to_.shape),
+        target_stride=list(to_.stride()),
+        target_storage_offset=to_.storage_offset(),
+        target_dtype=str(to_.dtype)
     )
     log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
     return to_
@@ -579,20 +579,16 @@ def _local_scalar_dense(self: torch.Tensor):
             f"No RemoteMachine found for remote device index {self.device.index}"
         )
 
-    # Get serialized tensor data for this scalar using orchestrator
+    # Get tensor data for this scalar using orchestrator
     from ._remote_orchestrator import remote_orchestrator
 
-    tensor_data = remote_orchestrator.get_storage_data(
+    cpu_tensor = remote_orchestrator.get_storage_tensor(
         storage_id,
         shape=list(self.shape),
         stride=list(self.stride()),
         storage_offset=self.storage_offset(),
         dtype=str(self.dtype),
     )
-
-    # Deserialize to CPU tensor
-    from ._tensor_utils import bytes_to_cpu_tensor
-    cpu_tensor = bytes_to_cpu_tensor(tensor_data)
 
     # Call item() on the CPU tensor to get the Python scalar
     return cpu_tensor.item()

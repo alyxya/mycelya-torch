@@ -56,8 +56,8 @@ To run type checking:
 - Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns
 
 ### Provider Interface
-- `mycelya_torch/backends/client_interface.py` - Standardized provider interface with agnostic parameters
-- `mycelya_torch/backends/modal/client.py` - Modal provider implementation
+- `mycelya_torch/backends/client_interface.py` - Standardized provider interface with raw bytes storage API
+- `mycelya_torch/backends/modal/client.py` - Modal provider implementation with dual tensor metadata support
 
 ### Remote Execution Provider
 - `_mycelya_torch_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
@@ -79,12 +79,13 @@ To run type checking:
 - Remote tensors use meta tensors locally (no data storage)
 - C++ allocator stores tensor ID as data pointer for efficient lookup
 - Automatic cleanup via PyTorch's memory management system
+- **Raw bytes storage architecture** eliminates torch.save/load overhead for improved performance
 
 ### Operation Dispatch Flow
 1. **Local Operations**: View operations executed locally with shared storage IDs
 2. **Remote Operations**: All compute operations dispatched to remote GPUs
 3. **Meta Execution**: Shape inference using PyTorch meta tensors
-4. **Data Transfer**: Only when crossing device boundaries (CPU ↔ Remote)
+4. **Data Transfer**: Raw untyped storage bytes only when crossing device boundaries (CPU ↔ Remote)
 
 ## Usage Patterns
 
@@ -180,6 +181,13 @@ for data, target in dataloader:
 
 ### Recent Development Notes
 
+#### Raw Bytes Storage Refactoring (2025-07-27)
+- **Eliminated torch.save/load overhead**: Replaced with direct raw untyped storage byte operations
+- **Dual tensor metadata support**: Storage operations now support source + target metadata for partial updates
+- **Client interface redesign**: get_storage_data() returns raw bytes, update_storage() uses dual metadata
+- **Performance improvements**: Reduced serialization overhead in data transfer operations
+- **Maintained backward compatibility**: Deprecated methods preserved with warnings
+
 #### Linting Cleanup (2025-07-22)
 - Fixed 22 out of 26 ruff linting errors
 - Remaining 4 E402 errors are intentional for PyTorch backend registration order
@@ -213,4 +221,4 @@ for data, target in dataloader:
 - Strategy pattern for extensible operation dispatch
 - Ready for additional provider implementations
 
-Last updated: 2025-07-22
+Last updated: 2025-07-27

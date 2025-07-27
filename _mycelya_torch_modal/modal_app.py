@@ -13,7 +13,6 @@ This module handles all Modal-specific functionality including:
 Part of: mycelya_torch PyTorch extension
 """
 
-import io
 import logging
 from typing import Any, Dict, List, Tuple, Union
 
@@ -150,7 +149,7 @@ def create_modal_app_for_gpu(
 
             # Check if storage already exists
             if storage_id in storages:
-                log.warning(f"⚠️ Storage ID {storage_id} already exists, overwriting")
+                raise RuntimeError(f"Storage ID {storage_id} already exists")
 
             # Always store as int for lazy allocation
             storages[storage_id] = nbytes
@@ -160,24 +159,33 @@ def create_modal_app_for_gpu(
         def update_storage(
             self,
             storage_id: int,
-            tensor_data: bytes,
-            shape: List[int],
-            stride: List[int],
-            storage_offset: int,
-            dtype: str
+            raw_data: bytes,
+            source_shape: List[int],
+            source_stride: List[int],
+            source_storage_offset: int,
+            source_dtype: str,
+            target_shape: List[int],
+            target_stride: List[int],
+            target_storage_offset: int,
+            target_dtype: str,
         ) -> None:
             """
-            Update an existing storage with tensor data.
+            Update an existing storage with raw tensor data.
 
-            Optimized to use fast path when updating entire storage, slow path for views.
+            Supports both full storage replacement and partial in-place updates using
+            dual tensor metadata to specify source data layout and target storage view.
 
             Args:
                 storage_id: Storage ID to update
-                tensor_data: Serialized tensor data
-                shape: Shape of the target view
-                stride: Stride of the target view
-                storage_offset: Storage offset of the target view
-                dtype: Data type of the target view
+                raw_data: Raw untyped storage bytes to store
+                source_shape: Shape of the source data
+                source_stride: Stride of the source data
+                source_storage_offset: Storage offset of the source data
+                source_dtype: Data type of the source data
+                target_shape: Shape of the target view in storage
+                target_stride: Stride of the target view in storage
+                target_storage_offset: Storage offset of the target view in storage
+                target_dtype: Data type of the target view in storage
 
             Returns:
                 None
@@ -186,109 +194,92 @@ def create_modal_app_for_gpu(
 
             import torch
 
-            # Parse dtype to get element size
-            torch_dtype = getattr(torch, dtype.replace("torch.", ""))
-            element_size = torch.empty(0, dtype=torch_dtype).element_size()
-
-            # Calculate tensor properties
-            tensor_numel = math.prod(shape)
-            tensor_bytes = tensor_numel * element_size
-
-            # Check if tensor is contiguous by comparing with expected contiguous stride
-            expected_stride = []
-            running_size = 1
-            for dim_size in reversed(shape):
-                expected_stride.insert(0, running_size)
-                running_size *= dim_size
-            is_contiguous = stride == expected_stride
-
             # Get storages
             storages = self._get_storages()
 
-            # Fast path: view uses entire storage contiguously from offset 0
-            if storage_offset == 0 and is_contiguous and storage_id in storages:
-                storage = storages[storage_id]
-                storage_matches = False
+            if storage_id not in storages:
+                raise RuntimeError(f"Storage ID {storage_id} not found")
 
-                if isinstance(storage, int):
-                    # Lazy storage - check if size matches
-                    storage_matches = (storage == tensor_bytes)
-                elif isinstance(storage, torch.Storage):
-                    # Realized storage - check if size matches
-                    storage_matches = (storage.nbytes() == tensor_bytes)
+            # Create source tensor from raw data
+            source_torch_dtype = getattr(torch, source_dtype.replace("torch.", ""))
+            source_storage = torch.UntypedStorage.from_buffer(raw_data, dtype=torch.uint8)
+            source_tensor = torch.empty(0, dtype=source_torch_dtype, device="cuda")
+            source_tensor.set_(source_storage, source_storage_offset, source_shape, source_stride)
 
-                if storage_matches:
-                    # Direct replacement (fast path)
-                    buffer = io.BytesIO(tensor_data)
-                    tensor = torch.load(buffer, map_location="cuda", weights_only=True)
-                    storages[storage_id] = tensor.untyped_storage()
-                    log.info(
-                        f"📥 FAST Updated Storage ID {storage_id} on Modal (shape: {tensor.shape})"
+            storage_item = storages[storage_id]
+
+            # Check if storage is lazy
+            if isinstance(storage_item, int):
+                expected_bytes = storage_item
+                actual_bytes = source_tensor.untyped_storage().nbytes()
+                
+                if expected_bytes != actual_bytes:
+                    raise RuntimeError(
+                        f"Storage size mismatch for storage {storage_id}: "
+                        f"expected {expected_bytes} bytes, got {actual_bytes} bytes"
                     )
-                    return
+                
+                log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
+                # Force storage realization by using the source tensor's storage
+                storages[storage_id] = source_tensor.untyped_storage()
+                log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_shape})")
+                return
 
-            # Slow path: in-place view update
-            log.info(f"📥 SLOW Updating view of Storage ID {storage_id} (offset: {storage_offset}, contiguous: {is_contiguous})")
+            # Storage is realized (torch.Storage) - always use in-place view update
+            log.info(f"📥 IN-PLACE Updating view of Storage ID {storage_id} (offset: {target_storage_offset})")
 
-            # 1. Construct the target view tensor directly using existing method
-            view_tensor = self._construct_tensor_from_storage(
+            # Construct the target view tensor directly using existing method
+            target_tensor = self._construct_tensor_from_storage(
                 storage_id=storage_id,
-                shape=shape,
-                stride=stride,
-                storage_offset=storage_offset,
-                dtype=dtype
+                shape=target_shape,
+                stride=target_stride,
+                storage_offset=target_storage_offset,
+                dtype=target_dtype
             )
 
-            # 2. Deserialize the incoming tensor and copy it in-place
-            buffer = io.BytesIO(tensor_data)
-            source_tensor = torch.load(buffer, map_location="cuda", weights_only=True)
-            view_tensor.copy_(source_tensor)
+            # 2. Copy source tensor data to target view in-place
+            target_tensor.copy_(source_tensor)
 
             log.info(
-                f"📥 SLOW Updated view of Storage ID {storage_id} on Modal (shape: {shape})"
+                f"📥 IN-PLACE Updated view of Storage ID {storage_id} on Modal (target_shape: {target_shape})"
             )
 
         @modal.method()
         def get_storage_data(
             self,
             storage_id: int,
-            shape: List[int],
-            stride: List[int],
-            storage_offset: int,
-            dtype: str,
         ) -> bytes:
             """
-            Retrieve current storage data by storage ID for transfer to client.
-            Returns the view's data as contiguous.
+            Retrieve raw storage data by storage ID.
+
+            Returns the complete raw untyped storage bytes. The client interface layer
+            will handle tensor reconstruction from metadata and these raw bytes.
 
             Args:
                 storage_id: The storage ID
-                shape: Tensor shape for view
-                stride: Tensor stride for view
-                storage_offset: Storage offset for view
-                dtype: Tensor data type
 
             Returns:
-                Serialized tensor data (contiguous representation of the view)
+                Raw untyped storage bytes
             """
-            import torch
 
-            # Use helper method to construct tensor with specified view parameters
-            tensor = self._construct_tensor_from_storage(
-                storage_id=storage_id,
-                shape=shape,
-                stride=stride,
-                storage_offset=storage_offset,
-                dtype=dtype,
-            )
-            log.info(
-                f"📦 Serializing view of storage {storage_id}: "
-                f"shape={shape}, stride={stride}, offset={storage_offset}"
-            )
+            # Get storages
+            storages = self._get_storages()
 
-            buffer = io.BytesIO()
-            torch.save(tensor, buffer)
-            return buffer.getvalue()
+            if storage_id not in storages:
+                raise RuntimeError(f"Storage ID {storage_id} not found")
+
+            storage_item = storages[storage_id]
+
+            # Handle lazy storage
+            if isinstance(storage_item, int):
+                raise RuntimeError(f"Storage ID {storage_id} is lazy (not realized). Cannot retrieve data.")
+
+            # Storage is realized (torch.Storage)
+            storage = storage_item
+            log.info(f"📦 Retrieving raw storage data for storage {storage_id} ({storage.nbytes()} bytes)")
+
+            # Return raw untyped storage bytes
+            return bytes(storage)
 
         @modal.method()
         def resize_storage(self, storage_id: int, nbytes: int) -> None:

@@ -448,7 +448,7 @@ class TestReductionEdgeCases:
             NumericalTestUtils.assert_tensors_close(
                 remote_result.cpu(), cpu_result, rtol=1e-8, atol=1e-8
             )
-        
+
         # Test std/var with unbiased=False to avoid invalid statistical operations
         for operation in ["std", "var"]:
             cpu_result = getattr(torch, operation)(cpu_tensor, unbiased=False)

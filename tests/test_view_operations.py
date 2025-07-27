@@ -396,7 +396,7 @@ class TestViewOperationsErrorHandling:
         # It should return the tensor unchanged (this is PyTorch's behavior)
         result = remote_tensor.squeeze(0)  # Dimension 0 has size 2, not 1
         assert result.shape == remote_tensor.shape  # Should be unchanged
-        
+
         # Verify behavior matches CPU tensor
         cpu_result = cpu_tensor.squeeze(0)
         assert result.shape == cpu_result.shape
