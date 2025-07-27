@@ -203,8 +203,9 @@ def create_modal_app_for_gpu(
             # Create source tensor from raw data
             source_torch_dtype = getattr(torch, source_dtype.replace("torch.", ""))
             source_storage = torch.UntypedStorage.from_buffer(raw_data, dtype=torch.uint8)
-            source_tensor = torch.empty(0, dtype=source_torch_dtype, device="cuda")
+            source_tensor = torch.empty(0, dtype=source_torch_dtype, device="cpu")
             source_tensor.set_(source_storage, source_storage_offset, source_shape, source_stride)
+            source_tensor = source_tensor.to("cuda")
 
             storage_item = storages[storage_id]
 
@@ -212,13 +213,13 @@ def create_modal_app_for_gpu(
             if isinstance(storage_item, int):
                 expected_bytes = storage_item
                 actual_bytes = source_tensor.untyped_storage().nbytes()
-                
+
                 if expected_bytes != actual_bytes:
                     raise RuntimeError(
                         f"Storage size mismatch for storage {storage_id}: "
                         f"expected {expected_bytes} bytes, got {actual_bytes} bytes"
                     )
-                
+
                 log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
                 # Force storage realization by using the source tensor's storage
                 storages[storage_id] = source_tensor.untyped_storage()
