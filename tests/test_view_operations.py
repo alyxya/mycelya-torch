@@ -380,12 +380,26 @@ class TestViewOperationsErrorHandling:
 
     def test_invalid_squeeze_dimension(self, shared_devices):
         """Test that invalid squeeze dimensions are handled properly."""
-        cpu_tensor = torch.randn(2, 3, 4)  # No dimension of size 1
+        cpu_tensor = torch.randn(2, 3, 4)  # 3D tensor (dimensions 0, 1, 2)
         remote_tensor = cpu_tensor.to(shared_devices["t4"].device())
 
-        # Try to squeeze a dimension that's not size 1
-        with pytest.raises((RuntimeError, ValueError)):
-            remote_tensor.squeeze(0)  # Dimension 0 has size 2, not 1
+        # Try to squeeze an out-of-bounds dimension
+        with pytest.raises((RuntimeError, IndexError)):
+            remote_tensor.squeeze(3)  # Dimension 3 doesn't exist (valid range: -3 to 2)
+
+    def test_squeeze_non_unit_dimension_no_error(self, shared_devices):
+        """Test that squeezing a non-unit dimension doesn't raise an error (matches PyTorch behavior)."""
+        cpu_tensor = torch.randn(2, 3, 4)  # No dimensions of size 1
+        remote_tensor = cpu_tensor.to(shared_devices["t4"].device())
+
+        # Squeezing a dimension that's not size 1 should NOT raise an error
+        # It should return the tensor unchanged (this is PyTorch's behavior)
+        result = remote_tensor.squeeze(0)  # Dimension 0 has size 2, not 1
+        assert result.shape == remote_tensor.shape  # Should be unchanged
+        
+        # Verify behavior matches CPU tensor
+        cpu_result = cpu_tensor.squeeze(0)
+        assert result.shape == cpu_result.shape
 
     def test_invalid_transpose_dimensions(self, shared_devices):
         """Test that invalid transpose dimensions are handled properly."""
