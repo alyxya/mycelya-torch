@@ -48,7 +48,7 @@ def _create_module() -> types.ModuleType:
     Returns:
         Module implementing the remote device backend interface
     """
-    module = types.ModuleType("_RemoteMod")
+    module = types.ModuleType("_MycelyaMod")
 
     def device_count() -> int:
         """Get the number of available remote devices.
