@@ -312,6 +312,32 @@ def _execute_with_dynamic_outputs(
     return output_tensor
 
 
+def _has_static_output_shape(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> bool:
+    """Determine if operation has predictable output shape for meta tensor inference."""
+    
+    # Always dynamic operations
+    ALWAYS_DYNAMIC = {"aten::masked_select", "aten::nonzero"}
+    if op_name in ALWAYS_DYNAMIC:
+        return False
+    
+    # Special case: aten::index can be static (tensor indexing) or dynamic (boolean indexing)
+    if op_name == "aten::index":
+        if len(args) >= 2 and isinstance(args[1], (tuple, list)):
+            # Boolean indexing is dynamic, tensor indexing is static
+            return not any(
+                isinstance(idx, torch.Tensor) and idx.dtype == torch.bool 
+                for idx in args[1] if idx is not None
+            )
+    
+    # TODO: Add more conditional operations here as needed:
+    # if op_name == "aten::unique":
+    #     return not (kwargs.get("return_inverse", False) or kwargs.get("return_counts", False))
+    # if op_name == "aten::where":
+    #     return len(args) != 1  # 1-arg form is dynamic, 3-arg form is static
+    
+    return True
+
+
 def _execute_aten_operation(
     op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device
 ) -> Any:
@@ -327,20 +353,11 @@ def _execute_aten_operation(
             "Use tensor.repeat() or other alternatives instead."
         )
 
-    # Step 1: Check if operation requires dynamic output handling (hardcoded list)
-    # These operations have data-dependent output shapes that meta tensors cannot handle
-    DYNAMIC_OUTPUT_OPERATIONS = {
-        "aten::masked_select",
-        "aten::nonzero",
-        "aten::index",  # Boolean indexing (tensor[mask]) uses nonzero internally
-        # Add more operations here as needed:
-        # "aten::unique",
-    }
+    # Step 1: Check if operation requires dynamic output handling
+    has_static_output = _has_static_output_shape(op_name, args, kwargs)
+    log.debug(f"🔍 Operation {op_name} has static output shape: {has_static_output}")
 
-    has_meta_kernel = op_name not in DYNAMIC_OUTPUT_OPERATIONS
-    log.debug(f"🔍 Operation {op_name} has meta kernel support: {has_meta_kernel}")
-
-    if has_meta_kernel:
+    if has_static_output:
         # Standard path: Use meta tensors for shape inference
         return _execute_with_static_outputs(op, args, kwargs, remote_device, op_name)
     else:
