@@ -205,7 +205,6 @@ def create_modal_app_for_gpu(
             source_storage = torch.UntypedStorage.from_buffer(raw_data, dtype=torch.uint8)
             source_tensor = torch.empty(0, dtype=source_torch_dtype, device="cpu")
             source_tensor.set_(source_storage, source_storage_offset, source_shape, source_stride)
-            source_tensor = source_tensor.to("cuda")
 
             storage_item = storages[storage_id]
 
@@ -222,7 +221,7 @@ def create_modal_app_for_gpu(
 
                 log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
                 # Force storage realization by using the source tensor's storage
-                storages[storage_id] = source_tensor.untyped_storage()
+                storages[storage_id] = source_tensor.to("cuda").untyped_storage()
                 log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_shape})")
                 return
 
