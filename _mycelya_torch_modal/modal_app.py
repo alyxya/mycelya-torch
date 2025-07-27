@@ -58,8 +58,8 @@ def create_modal_app_for_gpu(
             import torch
 
             if not hasattr(self, "_storages"):
-                # storage_id -> torch.Storage or int (for lazy allocation)
-                self._storages: Dict[int, Union[torch.Storage, int]] = {}
+                # storage_id -> torch.UntypedStorage or int (for lazy allocation)
+                self._storages: Dict[int, Union[torch.UntypedStorage, int]] = {}
 
             return self._storages
 
@@ -226,7 +226,7 @@ def create_modal_app_for_gpu(
                 log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_shape})")
                 return
 
-            # Storage is realized (torch.Storage) - always use in-place view update
+            # Storage is realized (torch.UntypedStorage) - always use in-place view update
             log.info(f"📥 IN-PLACE Updating view of Storage ID {storage_id} (offset: {target_storage_offset})")
 
             # Construct the target view tensor directly using existing method
@@ -275,7 +275,7 @@ def create_modal_app_for_gpu(
             if isinstance(storage_item, int):
                 raise RuntimeError(f"Storage ID {storage_id} is lazy (not realized). Cannot retrieve data.")
 
-            # Storage is realized (torch.Storage)
+            # Storage is realized (torch.UntypedStorage)
             storage = storage_item
             log.info(f"📦 Retrieving raw storage data for storage {storage_id} ({storage.nbytes()} bytes)")
 
@@ -327,8 +327,8 @@ def create_modal_app_for_gpu(
                 )
                 return
 
-            # Handle realized storage (torch.Storage)
-            elif isinstance(old_storage, torch.Storage):
+            # Handle realized storage (torch.UntypedStorage)
+            elif isinstance(old_storage, torch.UntypedStorage):
                 current_bytes = old_storage.nbytes()
 
                 # Check if resize is actually needed (should be bigger)
