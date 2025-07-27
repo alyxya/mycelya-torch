@@ -371,7 +371,7 @@ class TestMultipleBackwardPasses:
         y2_remote.backward()
 
         # Verify total accumulated gradient
-        expected_grad = first_grad + torch.ones_like(x_cpu)
+        expected_grad = first_grad + torch.ones_like(x_remote)
         NumericalTestUtils.assert_tensors_close(
             x_remote.grad.cpu(),
             expected_grad.cpu(),
