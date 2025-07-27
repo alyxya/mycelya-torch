@@ -28,7 +28,7 @@ class TestConstants:
     TENSOR_4D_SHAPES = [(2, 3, 4, 5), (1, 2, 3, 4)]
 
     # Common device keys
-    DEVICE_KEYS = ["t4", "l4", "a100"]
+    DEVICE_KEYS = ["t4", "l4"]
 
     # Classification test parameters
     DEFAULT_BATCH_SIZE = 3

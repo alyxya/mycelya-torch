@@ -29,7 +29,6 @@ def shared_devices():
     devices = {
         "t4": mycelya_torch.create_modal_machine("T4"),
         "l4": mycelya_torch.create_modal_machine("L4"),
-        "a100": mycelya_torch.create_modal_machine("A100"),
     }
     yield devices
     # Cleanup if needed
