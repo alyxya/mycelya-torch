@@ -9,7 +9,7 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class ClientInterface(ABC):
@@ -196,7 +196,8 @@ class ClientInterface(ABC):
         output_storage_ids: List[Union[int, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
-    ) -> None:
+        return_metadata: bool = False,
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Execute an aten operation on the remote machine with separated input/output specification.
 
@@ -206,9 +207,10 @@ class ClientInterface(ABC):
             output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
+            return_metadata: If True, return output tensor metadata instead of None
 
         Returns:
-            None (operation is executed in-place on pre-allocated tensors)
+            None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
         """
         pass
 

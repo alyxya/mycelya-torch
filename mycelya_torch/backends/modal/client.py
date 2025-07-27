@@ -8,7 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
@@ -202,7 +202,8 @@ class ModalClient(ClientInterface):
         output_storage_ids: List[Union[int, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
-    ) -> None:
+        return_metadata: bool = False,
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Execute an aten operation with separated input metadata and output storage IDs.
 
@@ -212,9 +213,10 @@ class ModalClient(ClientInterface):
             output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
             args: Operation arguments
             kwargs: Operation keyword arguments
+            return_metadata: If True, return output tensor metadata instead of None
 
         Returns:
-            None (operation results are written to output tensors)
+            None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
         """
         if not self.is_running():
             raise RuntimeError(
@@ -226,9 +228,20 @@ class ModalClient(ClientInterface):
         ]
         log.info(f"📡 Modal Client sending Input Storage IDs: {input_storage_ids}")
         log.info(f"📡 Modal Client sending Output Storage IDs: {output_storage_ids}")
-        self._server_instance.execute_aten_operation.spawn(
-            op_name, input_tensor_metadata, output_storage_ids, args, kwargs
-        )
+        
+        if return_metadata:
+            # Use .remote() to get return value when metadata is needed
+            log.info(f"📡 Modal Client requesting metadata for {op_name}")
+            result = self._server_instance.execute_aten_operation.remote(
+                op_name, input_tensor_metadata, output_storage_ids, args, kwargs, return_metadata=True
+            )
+            return result
+        else:
+            # Use .spawn() for fire-and-forget execution (original behavior)
+            self._server_instance.execute_aten_operation.spawn(
+                op_name, input_tensor_metadata, output_storage_ids, args, kwargs
+            )
+            return None
 
     def __enter__(self):
         """Context manager entry - starts the machine."""

@@ -186,20 +186,11 @@ def _execute_view_operation(
     )
 
 
-def _execute_aten_operation(
-    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device
+def _execute_with_static_outputs(
+    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any],
+    remote_device: torch.device, op_name: str
 ) -> Any:
-    """Execute operation on remote device - simplified from complex strategy pattern."""
-
-    op_name = op.overloadpacket._qualified_op_name
-
-    # Check for unsupported operations before meta execution
-    if op_name == "aten::repeat_interleave":
-        raise RuntimeError(
-            "repeat_interleave is not supported on remote devices due to a PyTorch bug where tensor repeats "
-            "are incorrectly dispatched to single-argument overload. "
-            "Use tensor.repeat() or other alternatives instead."
-        )
+    """Execute operation using meta tensors for shape inference (original path)."""
 
     # Step 2: Execute the operation on meta tensors to determine outputs
     log.debug(f"🔧 Executing {op_name} on meta tensors for shape inference")
@@ -252,6 +243,107 @@ def _execute_aten_operation(
         return tuple(output_tensors)
     elif len(output_tensors) == 1:
         return output_tensors[0]
+
+
+def _execute_with_dynamic_outputs(
+    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any],
+    remote_device: torch.device, op_name: str
+) -> torch.Tensor:
+    """Execute operation with dynamic output shapes - no meta tensor support.
+
+    Assumes single tensor output for simplicity. Multi-output dynamic operations
+    can be added later as needed.
+    """
+
+    log.info(f"🔄 Executing {op_name} with dynamic output shapes (no meta kernel)")
+
+    # Check for "out" kwarg - special handling needed
+    out_tensor = kwargs.get("out", None)
+    has_out_kwarg = out_tensor is not None
+
+    if has_out_kwarg:
+        log.debug(f"Operation {op_name} has 'out' kwarg, using existing tensor")
+        output_tensor = out_tensor
+        output_storage_ids = [None]  # Existing tensor, no new storage
+    else:
+        # Step 1: Infer output dtype from first tensor argument
+        output_dtype = args[0].dtype
+        log.debug(f"Inferred output dtype: {output_dtype}")
+
+        # Step 2: Create minimal placeholder tensor with 0 bytes
+        output_tensor = torch.empty(0, dtype=output_dtype, device=remote_device)
+        output_storage_ids = [output_tensor.untyped_storage().data_ptr()]
+
+    # Step 3: Execute remotely and request metadata return
+    processed_args, processed_kwargs, input_metadata = (
+        args_to_metadata_with_placeholders(args, kwargs)
+    )
+
+    orchestrator = _get_remote_orchestrator()
+    result_metadata = orchestrator.execute_aten_operation(
+        op_name, input_metadata, output_storage_ids, processed_args, processed_kwargs,
+        return_metadata=True
+    )
+
+    # Step 4: Update output tensor metadata from remote execution results
+    if not result_metadata or len(result_metadata) != 1:
+        raise RuntimeError(f"Expected exactly 1 output metadata for {op_name}, got {len(result_metadata) if result_metadata else 0}")
+
+    metadata = result_metadata[0]
+
+    # Validate dtype matches expectation
+    actual_dtype = metadata["dtype"]
+    if str(output_tensor.dtype) != actual_dtype:
+        raise RuntimeError(f"Dtype mismatch for {op_name}: expected {output_tensor.dtype}, got {actual_dtype}")
+
+    # Resize storage to match remote result
+    output_tensor.resize_([metadata["storage_nelements"]])
+
+    # Update all tensor metadata at once using as_strided()
+    output_tensor = torch.as_strided(
+        output_tensor,
+        metadata["shape"],
+        metadata["stride"],
+        metadata["storage_offset"]
+    )
+
+    # Step 5: Return single tensor result
+    return output_tensor
+
+
+def _execute_aten_operation(
+    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device
+) -> Any:
+    """Execute operation on remote device - simplified from complex strategy pattern."""
+
+    op_name = op.overloadpacket._qualified_op_name
+
+    # Check for unsupported operations before meta execution
+    if op_name == "aten::repeat_interleave":
+        raise RuntimeError(
+            "repeat_interleave is not supported on remote devices due to a PyTorch bug where tensor repeats "
+            "are incorrectly dispatched to single-argument overload. "
+            "Use tensor.repeat() or other alternatives instead."
+        )
+
+    # Step 1: Check if operation requires dynamic output handling (hardcoded list)
+    # These operations have data-dependent output shapes that meta tensors cannot handle
+    DYNAMIC_OUTPUT_OPERATIONS = {
+        "aten::masked_select",
+        # Add more operations here as needed:
+        # "aten::nonzero",
+        # "aten::unique",
+    }
+
+    has_meta_kernel = op_name not in DYNAMIC_OUTPUT_OPERATIONS
+    log.debug(f"🔍 Operation {op_name} has meta kernel support: {has_meta_kernel}")
+
+    if has_meta_kernel:
+        # Standard path: Use meta tensors for shape inference
+        return _execute_with_static_outputs(op, args, kwargs, remote_device, op_name)
+    else:
+        # Dynamic path: Create placeholder outputs and get metadata from remote execution
+        return _execute_with_dynamic_outputs(op, args, kwargs, remote_device, op_name)
 
 
 def _remote_kernel_fallback(

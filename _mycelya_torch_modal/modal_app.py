@@ -395,7 +395,8 @@ def create_modal_app_for_gpu(
             output_storage_ids: List[Union[int, None]],
             args: List[Any],
             kwargs: Dict[str, Any],
-        ) -> None:
+            return_metadata: bool = False,
+        ) -> Union[None, List[Dict[str, Any]]]:
             """
             Execute an operation with separated input metadata and output storage IDs.
 
@@ -408,9 +409,10 @@ def create_modal_app_for_gpu(
                 output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
+                return_metadata: If True, return output tensor metadata instead of None
 
             Returns:
-                None (operation results are written to output tensors)
+                None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
             """
             # Import torch and tree_map locally to avoid serialization issues
             import torch
@@ -498,7 +500,24 @@ def create_modal_app_for_gpu(
                 f"📦 Updated {len([s for s in output_storage_ids if s is not None])} output storage mappings"
             )
 
+            # Return metadata if requested
+            if return_metadata:
+                output_metadata = []
+                for i, result_tensor in enumerate(result_tensors):
+                    if i < len(output_storage_ids) and output_storage_ids[i] is not None:
+                        metadata = {
+                            "shape": list(result_tensor.shape),
+                            "dtype": str(result_tensor.dtype),
+                            "stride": list(result_tensor.stride()),
+                            "storage_offset": result_tensor.storage_offset(),
+                            "storage_nelements": result_tensor.untyped_storage().nbytes() // result_tensor.element_size(),
+                        }
+                        output_metadata.append(metadata)
+                
+                log.info(f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)")
+                return output_metadata
+
             log.info(f"✅ Completed: {op_name}")
-            return
+            return None
 
     return app, PytorchServer

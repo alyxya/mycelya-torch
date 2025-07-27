@@ -225,7 +225,8 @@ class RemoteOrchestrator:
         output_storage_ids: List[Optional[int]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-    ) -> None:
+        return_metadata: bool = False,
+    ) -> Optional[List[Dict[str, Any]]]:
         """Execute remote operation with pure metadata (early conversion boundary).
 
         This method represents the new clean boundary where all tensors have been
@@ -235,9 +236,13 @@ class RemoteOrchestrator:
         Args:
             op_name: Name of the operation to execute
             input_metadata: Metadata for remote input tensors (always have storage_id)
-            output_metadata: Metadata for remote output tensors (always have storage_id)
+            output_storage_ids: Storage IDs for remote output tensors
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
+            return_metadata: If True, return output tensor metadata instead of None
+
+        Returns:
+            None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
         """
         log.info(
             f"🎯 ORCHESTRATOR: Executing {op_name} with separated input/output interface"
@@ -275,11 +280,16 @@ class RemoteOrchestrator:
         client = self._get_client_for_storage(storage_id)
 
         # Execute with separated input/output interface
-        client.execute_aten_operation(
-            op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs
+        result = client.execute_aten_operation(
+            op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs, return_metadata
         )
 
-        log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
+        if return_metadata:
+            log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata return")
+            return result
+        else:
+            log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
+            return None
 
     def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
         """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
