@@ -195,17 +195,26 @@ class TestSelectionOperations:
     def test_scatter_operations(self, shared_devices, dim):
         device = shared_devices["t4"]
 
+        # Set deterministic seed for reproducible results
+        torch.manual_seed(42 + dim)
+
+        # Create separate base tensors for CPU and remote operations
+        # This avoids in-place modification affecting both tests
         cpu_tensor = torch.zeros(3, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = torch.zeros(3, 4).to(device.device())
 
         # Create index tensor and source tensor for scatter
+        # Use deterministic indices to avoid undefined behavior with duplicates
         if dim == 0:
-            cpu_indices = torch.randint(0, 3, (2, 4))
+            # No duplicate indices - each position gets one value
+            cpu_indices = torch.tensor([[0, 1, 2, 0], [1, 2, 0, 2]])  # 2x4
             cpu_src = torch.randn(2, 4)
         else:
-            cpu_indices = torch.randint(0, 4, (3, 2))
+            # No duplicate indices for dimension 1
+            cpu_indices = torch.tensor([[0, 1], [2, 3], [1, 0]])  # 3x2
             cpu_src = torch.randn(3, 2)
 
+        # Transfer the same data to remote device
         remote_indices = cpu_indices.to(device.device())
         remote_src = cpu_src.to(device.device())
 
@@ -403,9 +412,10 @@ class TestIndexingWithGradients:
     def test_basic_indexing_with_gradients(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.randn(5, 5, requires_grad=True)
-        remote_tensor = cpu_tensor.to(device.device())
-        remote_tensor.requires_grad_(True)
+        # Create independent leaf tensors for proper gradient comparison
+        tensor_data = torch.randn(5, 5)
+        cpu_tensor = tensor_data.clone().requires_grad_(True)
+        remote_tensor = tensor_data.to(device.device()).requires_grad_(True)
 
         # Test slicing with gradients
         cpu_result = cpu_tensor[1:4, 2:5]
@@ -428,9 +438,10 @@ class TestIndexingWithGradients:
     def test_index_select_with_gradients(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.randn(5, 4, requires_grad=True)
-        remote_tensor = cpu_tensor.to(device.device())
-        remote_tensor.requires_grad_(True)
+        # Create independent leaf tensors for proper gradient comparison
+        tensor_data = torch.randn(5, 4)
+        cpu_tensor = tensor_data.clone().requires_grad_(True)
+        remote_tensor = tensor_data.to(device.device()).requires_grad_(True)
 
         cpu_indices = torch.tensor([0, 2, 4])
         remote_indices = cpu_indices.to(device.device())
@@ -455,15 +466,17 @@ class TestIndexingWithGradients:
     def test_where_with_gradients(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_x = torch.randn(4, 4, requires_grad=True)
-        cpu_y = torch.randn(4, 4, requires_grad=True)
+        # Create independent leaf tensors for proper gradient comparison
+        x_data = torch.randn(4, 4)
+        y_data = torch.randn(4, 4)
         cpu_condition = torch.rand(4, 4) > 0.5
 
-        remote_x = cpu_x.to(device.device())
-        remote_y = cpu_y.to(device.device())
+        cpu_x = x_data.clone().requires_grad_(True)
+        cpu_y = y_data.clone().requires_grad_(True)
+
+        remote_x = x_data.to(device.device()).requires_grad_(True)
+        remote_y = y_data.to(device.device()).requires_grad_(True)
         remote_condition = cpu_condition.to(device.device())
-        remote_x.requires_grad_(True)
-        remote_y.requires_grad_(True)
 
         cpu_result = torch.where(cpu_condition, cpu_x, cpu_y)
         remote_result = torch.where(remote_condition, remote_x, remote_y)

@@ -228,7 +228,7 @@ class ModalClient(ClientInterface):
         ]
         log.info(f"📡 Modal Client sending Input Storage IDs: {input_storage_ids}")
         log.info(f"📡 Modal Client sending Output Storage IDs: {output_storage_ids}")
-        
+
         if return_metadata:
             # Use .remote() to get return value when metadata is needed
             log.info(f"📡 Modal Client requesting metadata for {op_name}")

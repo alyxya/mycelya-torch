@@ -513,7 +513,7 @@ def create_modal_app_for_gpu(
                             "storage_nelements": result_tensor.untyped_storage().nbytes() // result_tensor.element_size(),
                         }
                         output_metadata.append(metadata)
-                
+
                 log.info(f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)")
                 return output_metadata
 

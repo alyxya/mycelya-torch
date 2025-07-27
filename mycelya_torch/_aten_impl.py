@@ -74,6 +74,26 @@ def args_to_metadata_with_placeholders(
     return processed_args, processed_kwargs, metadata_list
 
 
+def _get_output_dtype_for_dynamic_operation(op_name: str, args: Tuple[Any, ...]) -> torch.dtype:
+    """Determine the correct output dtype for dynamic output operations.
+
+    Some operations have output dtypes that differ from their input dtypes.
+    For example, nonzero always returns int64 indices regardless of input dtype.
+    """
+    if op_name == "aten::nonzero":
+        # nonzero always returns int64 indices regardless of input dtype
+        return torch.int64
+    elif op_name == "aten::masked_select":
+        # masked_select returns same dtype as the input tensor being selected from
+        return args[0].dtype
+    elif op_name == "aten::index":
+        # index (boolean indexing) returns same dtype as the input tensor being indexed
+        return args[0].dtype
+    else:
+        # Default: use input tensor dtype
+        return args[0].dtype
+
+
 def _execute_meta_operation(
     op: torch._ops.OpOverload,
     args: Tuple[Any, ...],
@@ -264,10 +284,11 @@ def _execute_with_dynamic_outputs(
     if has_out_kwarg:
         log.debug(f"Operation {op_name} has 'out' kwarg, using existing tensor")
         output_tensor = out_tensor
-        output_storage_ids = [None]  # Existing tensor, no new storage
+        # For out tensors, we need to get the storage ID for remote execution
+        output_storage_ids = [output_tensor.untyped_storage().data_ptr()]
     else:
-        # Step 1: Infer output dtype from first tensor argument
-        output_dtype = args[0].dtype
+        # Step 1: Infer output dtype based on operation type
+        output_dtype = _get_output_dtype_for_dynamic_operation(op_name, args)
         log.debug(f"Inferred output dtype: {output_dtype}")
 
         # Step 2: Create minimal placeholder tensor with 0 bytes
@@ -331,6 +352,7 @@ def _execute_aten_operation(
     DYNAMIC_OUTPUT_OPERATIONS = {
         "aten::masked_select",
         "aten::nonzero",
+        "aten::index",  # Boolean indexing (tensor[mask]) uses nonzero internally
         # Add more operations here as needed:
         # "aten::unique",
     }
