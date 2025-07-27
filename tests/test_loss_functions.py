@@ -26,12 +26,7 @@ class TestMSELoss:
         inputs_cpu = torch.randn(3, 4, requires_grad=True)
         targets_cpu = torch.randn(3, 4)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         # CPU computation
@@ -56,12 +51,7 @@ class TestMSELoss:
         inputs_cpu = torch.randn(2, 3, requires_grad=True)
         targets_cpu = torch.randn(2, 3)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         reductions = ["mean", "sum", "none"]
@@ -107,17 +97,16 @@ class TestMSELoss:
             inputs_cpu = torch.randn(shape, requires_grad=True)
             targets_cpu = torch.randn(shape)
 
-            inputs_remote = (
-                inputs_cpu.clone()
-                .detach()
-                .requires_grad_(True)
-                .to(shared_devices["t4"].device())
-            )
+            inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
             targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
             # CPU computation
-            loss_cpu = F.mse_loss(inputs_remote, targets_remote)
+            loss_cpu = F.mse_loss(inputs_cpu, targets_cpu)
             loss_cpu.backward()
+
+            # Remote computation
+            loss_remote = F.mse_loss(inputs_remote, targets_remote)
+            loss_remote.backward()
 
             # Verify gradients exist and have correct shape
             NumericalTestUtils.verify_gradient_flow(inputs_remote)
@@ -136,12 +125,7 @@ class TestCrossEntropyLoss:
         inputs_cpu = torch.randn(batch_size, num_classes, requires_grad=True)
         targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         # CPU computation
@@ -172,12 +156,7 @@ class TestCrossEntropyLoss:
         targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
         weights_cpu = torch.randn(num_classes)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
         weights_remote = weights_cpu.to(shared_devices["t4"].device())
 
@@ -216,12 +195,7 @@ class TestCrossEntropyLoss:
             inputs_cpu = torch.randn(batch_size, num_classes, requires_grad=True)
             targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
-            inputs_remote = (
-                inputs_cpu.clone()
-                .detach()
-                .requires_grad_(True)
-                .to(shared_devices["t4"].device())
-            )
+            inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
             targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
             # Remote computation
@@ -246,12 +220,7 @@ class TestNLLLoss:
         log_probs_cpu = torch.randn(batch_size, num_classes, requires_grad=True)
         targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
-        log_probs_remote = (
-            log_probs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        log_probs_remote = log_probs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         try:
@@ -285,12 +254,7 @@ class TestCustomLossFunctions:
         inputs_cpu = torch.randn(3, 4, requires_grad=True)
         targets_cpu = torch.randn(3, 4)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         try:
@@ -318,12 +282,7 @@ class TestCustomLossFunctions:
         inputs_cpu = torch.randn(2, 3, requires_grad=True)
         targets_cpu = torch.randn(2, 3)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         try:
@@ -353,12 +312,7 @@ class TestCustomLossFunctions:
         inputs_cpu = torch.randn(2, 2, requires_grad=True)
         targets_cpu = torch.randn(2, 2)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         # Custom loss: squared difference with regularization
@@ -395,9 +349,13 @@ class TestLossWithNeuralNetworks:
         input_size = 4
         output_size = 2
 
-        # Create model
-        model = torch.nn.Linear(input_size, output_size)
-        model_remote = model.to(shared_devices["t4"].device())
+        # Create models
+        model_cpu = torch.nn.Linear(input_size, output_size)
+        model_remote = torch.nn.Linear(input_size, output_size)
+        
+        # Copy weights to remote model and move to device
+        model_remote.load_state_dict(model_cpu.state_dict())
+        model_remote = model_remote.to(shared_devices["t4"].device())
 
         # Create data
         inputs_cpu = torch.randn(batch_size, input_size)
@@ -407,7 +365,7 @@ class TestLossWithNeuralNetworks:
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         # CPU computation
-        outputs_cpu = model(inputs_cpu)
+        outputs_cpu = model_cpu(inputs_cpu)
         loss_cpu = F.mse_loss(outputs_cpu, targets_cpu)
         loss_cpu.backward()
 
@@ -423,7 +381,7 @@ class TestLossWithNeuralNetworks:
 
         # Verify gradients exist for model parameters
         for param_cpu, param_remote in zip(
-            model.parameters(), model_remote.parameters()
+            model_cpu.parameters(), model_remote.parameters()
         ):
             assert param_remote.grad is not None
             assert param_remote.grad.shape == param_cpu.grad.shape
@@ -434,13 +392,21 @@ class TestLossWithNeuralNetworks:
         input_size = 8
         num_classes = 3
 
-        # Create model
-        model = torch.nn.Sequential(
+        # Create models
+        model_cpu = torch.nn.Sequential(
             torch.nn.Linear(input_size, 10),
             torch.nn.ReLU(),
             torch.nn.Linear(10, num_classes),
         )
-        model_remote = model.to(shared_devices["t4"].device())
+        model_remote = torch.nn.Sequential(
+            torch.nn.Linear(input_size, 10),
+            torch.nn.ReLU(),
+            torch.nn.Linear(10, num_classes),
+        )
+        
+        # Copy weights to remote model and move to device
+        model_remote.load_state_dict(model_cpu.state_dict())
+        model_remote = model_remote.to(shared_devices["t4"].device())
 
         # Create data
         inputs_cpu = torch.randn(batch_size, input_size)
@@ -450,7 +416,7 @@ class TestLossWithNeuralNetworks:
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         # CPU computation
-        outputs_cpu = model(inputs_cpu)
+        outputs_cpu = model_cpu(inputs_cpu)
         loss_cpu = F.cross_entropy(outputs_cpu, targets_cpu)
         loss_cpu.backward()
 
@@ -486,12 +452,7 @@ class TestLossNumericalStability:
         )
         targets_cpu = torch.tensor([0, 1], dtype=torch.long)
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         try:
@@ -523,12 +484,7 @@ class TestLossNumericalStability:
         inputs_cpu = torch.tensor([[1e-8, 2e-8], [3e-8, 4e-8]], requires_grad=True)
         targets_cpu = torch.tensor([[1.1e-8, 1.9e-8], [3.1e-8, 3.9e-8]])
 
-        inputs_remote = (
-            inputs_cpu.clone()
-            .detach()
-            .requires_grad_(True)
-            .to(shared_devices["t4"].device())
-        )
+        inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
         targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
         # CPU computation
@@ -562,12 +518,7 @@ def test_parametrized_loss_functions(shared_devices, loss_fn, reduction):
     inputs_cpu = torch.randn(3, 4, requires_grad=True)
     targets_cpu = torch.randn(3, 4)
 
-    inputs_remote = (
-        inputs_cpu.clone()
-        .detach()
-        .requires_grad_(True)
-        .to(shared_devices["t4"].device())
-    )
+    inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
     targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
     try:
@@ -608,12 +559,7 @@ def test_parametrized_cross_entropy_dimensions(shared_devices, batch_size, num_c
     inputs_cpu = torch.randn(batch_size, num_classes, requires_grad=True)
     targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
-    inputs_remote = (
-        inputs_cpu.clone()
-        .detach()
-        .requires_grad_(True)
-        .to(shared_devices["t4"].device())
-    )
+    inputs_remote = inputs_cpu.to(shared_devices["t4"].device()).detach().requires_grad_(True)
     targets_remote = targets_cpu.to(shared_devices["t4"].device())
 
     # Remote computation
