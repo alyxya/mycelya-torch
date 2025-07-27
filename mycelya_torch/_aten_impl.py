@@ -418,6 +418,28 @@ def _copy_from(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
     return result
 
 
+def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
+    """Set one tensor to point to another tensor's storage.
+
+    This creates a view relationship where ten1 shares ten2's storage,
+    shape, stride, and offset. Used for tensor aliasing operations.
+
+    Args:
+        ten1: Tensor to modify
+        ten2: Source tensor to point to
+
+    Returns:
+        Modified tensor ten1 pointing to ten2's data
+    """
+    return torch.ops.aten.set_.source_Storage_storage_offset(
+        ten1,
+        ten2.untyped_storage(),
+        ten2.storage_offset(),
+        ten2.shape,
+        ten2.stride(),
+    )
+
+
 def _local_scalar_dense(self: torch.Tensor):
     """Custom implementation of _local_scalar_dense for remote tensors."""
     # Check that tensor is scalar (replicate PyTorch's exact behavior)
@@ -467,48 +489,26 @@ def _local_scalar_dense(self: torch.Tensor):
 def _equal(self: torch.Tensor, other: torch.Tensor) -> bool:
     """Custom implementation of torch.equal for remote tensors."""
     log.info("⚖️ torch.equal operation: comparing tensors on remote device")
-    
+
     # Both tensors should be remote (validated by caller)
     # Check basic compatibility first
     if self.shape != other.shape:
         return False
     if self.dtype != other.dtype:
         return False
-    
+
     # For torch.equal, we'll copy both tensors to CPU and compare locally
     # This is simpler than modifying the entire remote execution pipeline
     log.info("📥 Copying tensors to CPU for comparison")
-    
+
     cpu_self = copy_from_device(self)
     cpu_other = copy_from_device(other)
-    
+
     # Use PyTorch's native equal on CPU tensors
     result = torch.equal(cpu_self, cpu_other)
-    
+
     log.info(f"✅ torch.equal completed: {result}")
     return result
-
-
-def _set_source_tensor(ten1: torch.Tensor, ten2: torch.Tensor) -> torch.Tensor:
-    """Set one tensor to point to another tensor's storage.
-
-    This creates a view relationship where ten1 shares ten2's storage,
-    shape, stride, and offset. Used for tensor aliasing operations.
-
-    Args:
-        ten1: Tensor to modify
-        ten2: Source tensor to point to
-
-    Returns:
-        Modified tensor ten1 pointing to ten2's data
-    """
-    return torch.ops.aten.set_.source_Storage_storage_offset(
-        ten1,
-        ten2.untyped_storage(),
-        ten2.storage_offset(),
-        ten2.shape,
-        ten2.stride(),
-    )
 
 
 _remote_lib = torch.library.Library("_", "IMPL")
