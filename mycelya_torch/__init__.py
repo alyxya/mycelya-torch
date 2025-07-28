@@ -174,7 +174,7 @@ def _create_module() -> types.ModuleType:
 
     def get_amp_supported_dtype():
         """Get the list of supported dtypes for AMP (Automatic Mixed Precision).
-        
+
         Returns:
             List of torch.dtype objects supported for AMP operations
         """

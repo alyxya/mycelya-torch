@@ -11,6 +11,7 @@ along with related functionality for creating and managing Modal applications.
 from typing import Any, Dict, List, Optional, Union
 
 import torch
+
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
@@ -59,7 +60,7 @@ class ModalClient(ClientInterface):
             self._app_context.__enter__()
             # Create server instance when app starts
             self._server_instance = self._server_class()
-            
+
             # Register for RPC batching
             self._register_for_batching()
 
@@ -67,7 +68,7 @@ class ModalClient(ClientInterface):
         """Stop the Modal app context for this machine."""
         # Unregister from RPC batching first
         self._unregister_for_batching()
-        
+
         if self._app_context is not None:
             try:
                 self._app_context.__exit__(None, None, None)
@@ -113,7 +114,7 @@ class ModalClient(ClientInterface):
     def update_storage(
         self,
         storage_id: int,
-        raw_data: bytes,
+        storage_tensor: torch.Tensor,
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
@@ -124,11 +125,11 @@ class ModalClient(ClientInterface):
         target_dtype: str
     ) -> None:
         """
-        Update an existing storage with raw tensor data.
+        Update an existing storage with storage tensor data.
 
         Args:
             storage_id: Storage ID to update
-            raw_data: Raw untyped storage bytes to store
+            storage_tensor: CPU tensor wrapping the storage data (tensor metadata is ignored, only untyped_storage matters)
             source_shape: Shape of the source data
             source_stride: Stride of the source data
             source_storage_offset: Storage offset of the source data
@@ -146,19 +147,11 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Convert raw_data to tensor and serialize with torch.save
-        from ..._tensor_utils import (
-            cpu_tensor_to_torch_bytes,
-            storage_bytes_to_cpu_tensor,
-        )
-
-        # Create CPU tensor from raw data using source metadata
-        cpu_tensor = storage_bytes_to_cpu_tensor(
-            raw_data, source_shape, source_stride, source_storage_offset, source_dtype
-        )
+        # Serialize storage tensor using torch.save
+        from ..._tensor_utils import cpu_tensor_to_torch_bytes
 
         # Serialize tensor using torch.save
-        torch_bytes = cpu_tensor_to_torch_bytes(cpu_tensor)
+        torch_bytes = cpu_tensor_to_torch_bytes(storage_tensor)
 
         # Queue the RPC call for batching (fire-and-forget)
         # Invalidate cache immediately since this modifies storage
@@ -198,14 +191,20 @@ class ModalClient(ClientInterface):
             kwargs={}
         )
 
-        # Deserialize tensor and convert back to raw storage bytes
-        from ..._tensor_utils import (
-            cpu_tensor_to_storage_bytes,
-            torch_bytes_to_cpu_tensor,
-        )
+        # Deserialize tensor and extract storage bytes properly
+        import ctypes
 
-        cpu_tensor = torch_bytes_to_cpu_tensor(torch_bytes)
-        return cpu_tensor_to_storage_bytes(cpu_tensor)
+        from ..._tensor_utils import torch_bytes_to_cpu_tensor
+
+        storage_tensor = torch_bytes_to_cpu_tensor(torch_bytes)
+        # Get the raw storage bytes without calling bytes() on storage object
+        untyped_storage = storage_tensor.untyped_storage()
+        nbytes = untyped_storage.nbytes()
+        data_ptr = untyped_storage.data_ptr()
+
+        # Extract bytes using ctypes from the data pointer
+        raw_bytes = (ctypes.c_uint8 * nbytes).from_address(data_ptr)
+        return bytes(raw_bytes)
 
     def _get_storage_tensor_for_cache(
         self,
@@ -332,7 +331,7 @@ class ModalClient(ClientInterface):
         # Determine which storage IDs will be modified by this operation
         # Filter out None values for cache invalidation
         modified_storage_ids = [sid for sid in output_storage_ids if sid is not None]
-        
+
         if return_metadata:
             # Use remote call type to get return value when metadata is needed
             log.info(f"📡 Modal Client requesting metadata for {op_name}")

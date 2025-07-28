@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
 import torch
+
 from .._batching import RPCBatchQueue
 
 
@@ -33,17 +34,17 @@ class ClientInterface(ABC):
         """
         self.gpu_type = gpu_type
         self.machine_id = machine_id
-        
+
         # Storage cache: storage_id -> underlying 1D uint8 CPU tensor
         self._storage_cache: Dict[int, torch.Tensor] = {}
-        
+
         # Track cache statistics for debugging
         self._cache_hits = 0
         self._cache_misses = 0
-        
+
         # RPC batching queue
         self._batch_queue = RPCBatchQueue(client_id=machine_id)
-        
+
         # Register with orchestrator for batching (will be done in subclass start())
         self._registered_for_batching = False
 
@@ -125,7 +126,7 @@ class ClientInterface(ABC):
     def update_storage(
         self,
         storage_id: int,
-        raw_data: bytes,
+        storage_tensor: torch.Tensor,
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
@@ -143,7 +144,7 @@ class ClientInterface(ABC):
 
         Args:
             storage_id: Storage ID to update
-            raw_data: Raw untyped storage bytes to store
+            storage_tensor: CPU tensor wrapping the storage data (tensor metadata is ignored, only untyped_storage matters)
             source_shape: Shape of the source data
             source_stride: Stride of the source data
             source_storage_offset: Storage offset of the source data
@@ -228,24 +229,24 @@ class ClientInterface(ABC):
         # Check cache first
         if storage_id in self._storage_cache:
             self._cache_hits += 1
-            
+
             # Get cached underlying tensor
             cached_tensor = self._storage_cache[storage_id]
-            
+
             # Create view from cached tensor
             return self._create_view_from_cached_tensor(
                 cached_tensor, shape, stride, storage_offset, dtype
             )
-        
+
         # Cache miss - make RPC call
         self._cache_misses += 1
-        
+
         # Get the actual tensor from the subclass implementation
         underlying_tensor = self._get_storage_tensor_for_cache(storage_id)
-        
+
         # Cache the underlying tensor
         self._storage_cache[storage_id] = underlying_tensor
-        
+
         # Create view from cached tensor
         return self._create_view_from_cached_tensor(
             underlying_tensor, shape, stride, storage_offset, dtype
@@ -312,30 +313,30 @@ class ClientInterface(ABC):
         self,
         cached_tensor: torch.Tensor,
         shape: List[int],
-        stride: List[int], 
+        stride: List[int],
         storage_offset: int,
         dtype: str,
     ) -> torch.Tensor:
         """
         Create a tensor copy from a cached underlying tensor.
-        
+
         This method creates a copy of the data (not a view) to protect
         the cached tensor from accidental mutations.
-        
+
         Args:
             cached_tensor: The cached 1D uint8 underlying tensor
             shape: Desired tensor shape
             stride: Desired tensor stride
             storage_offset: Desired storage offset
             dtype: Desired tensor data type
-            
+
         Returns:
             CPU tensor copy with specified parameters
         """
         # Convert dtype string to torch.dtype
         dtype_name = dtype.replace("torch.", "")
         torch_dtype = getattr(torch, dtype_name)
-        
+
         # Create temporary view from cached tensor to get the data
         temp_tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
         temp_tensor.set_(
@@ -344,7 +345,7 @@ class ClientInterface(ABC):
             shape,
             stride
         )
-        
+
         # Return a copy to protect the cache from mutations
         return temp_tensor.clone()
 
@@ -360,7 +361,7 @@ class ClientInterface(ABC):
     ) -> Optional[Any]:
         """
         Helper method to queue an RPC call for batching.
-        
+
         Args:
             method_name: Name of the RPC method to call
             call_type: "spawn" for fire-and-forget, "remote" for blocking
@@ -368,7 +369,7 @@ class ClientInterface(ABC):
             kwargs: Keyword arguments for the RPC method
             return_future: Whether to return a Future for this call
             invalidate_storage_ids: Storage IDs to invalidate immediately (at queue time)
-            
+
         Returns:
             Future object if return_future=True or call_type="remote", None otherwise
         """
@@ -377,7 +378,7 @@ class ClientInterface(ABC):
             for storage_id in invalidate_storage_ids:
                 if storage_id in self._storage_cache:
                     del self._storage_cache[storage_id]
-        
+
         # Queue the RPC call for batching
         return self._batch_queue.enqueue_call(
             call_type=call_type,
@@ -405,11 +406,11 @@ class ClientInterface(ABC):
     def invalidate_storage_cache(self, storage_id: int) -> None:
         """
         Invalidate cache entry for a specific storage ID.
-        
+
         This method should be called whenever a storage has been modified
         on the remote side to ensure cache consistency. With batching,
         invalidation happens at queue time to maintain correct semantics.
-        
+
         Args:
             storage_id: Storage ID to invalidate
         """
@@ -419,10 +420,10 @@ class ClientInterface(ABC):
     def invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> None:
         """
         Invalidate cache entries for multiple storage IDs.
-        
+
         This method provides efficient batch invalidation for operations
         that modify multiple storages.
-        
+
         Args:
             storage_ids: List of storage IDs to invalidate
         """
@@ -433,7 +434,7 @@ class ClientInterface(ABC):
     def clear_storage_cache(self) -> None:
         """
         Clear all cached storage data.
-        
+
         This method can be used for cleanup or when the client is stopped.
         """
         self._storage_cache.clear()
@@ -441,13 +442,13 @@ class ClientInterface(ABC):
     def get_cache_stats(self) -> Dict[str, int]:
         """
         Get cache statistics for debugging and monitoring.
-        
+
         Returns:
             Dictionary with cache statistics
         """
         total_requests = self._cache_hits + self._cache_misses
         hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0.0
-        
+
         return {
             "cache_size": len(self._storage_cache),
             "cache_hits": self._cache_hits,

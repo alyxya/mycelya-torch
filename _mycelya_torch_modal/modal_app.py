@@ -121,15 +121,13 @@ def create_modal_app_for_gpu(
 
             # Get untyped storage from the stored tensor
             if isinstance(storage, torch.Tensor):
-                untyped_storage = storage.untyped_storage()
                 target_device = storage.device
+                # Reconstruct tensor using storage + parameters (extract storage when needed)
+                tensor = torch.empty(0, dtype=torch_dtype, device=target_device).set_(
+                    storage.untyped_storage(), storage_offset, shape, stride
+                )
             else:
                 raise RuntimeError(f"Unexpected storage type {type(storage)} for storage {storage_id}")
-
-            # Reconstruct tensor using storage + parameters
-            tensor = torch.empty(0, dtype=torch_dtype, device=target_device).set_(
-                untyped_storage, storage_offset, shape, stride
-            )
 
             return tensor
 
@@ -202,7 +200,9 @@ def create_modal_app_for_gpu(
                 # Move source tensor to CUDA for storage
                 cuda_source = source_tensor.to("cuda")
                 expected_bytes = storage_item
-                actual_bytes = cuda_source.untyped_storage().nbytes()
+                # Extract storage once but keep cuda_source alive
+                cuda_source_storage = cuda_source.untyped_storage()
+                actual_bytes = cuda_source_storage.nbytes()
 
                 if expected_bytes != actual_bytes:
                     raise RuntimeError(
@@ -213,7 +213,9 @@ def create_modal_app_for_gpu(
                 log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
                 # Create 1D uint8 tensor from the CUDA source tensor's storage
                 storage_tensor = torch.empty(actual_bytes, dtype=torch.uint8, device="cuda")
-                storage_tensor.untyped_storage().copy_(cuda_source.untyped_storage())
+                storage_tensor.untyped_storage().copy_(cuda_source_storage)
+                # Ensure cuda_source stays alive until after copy operation
+                del cuda_source_storage  # Release reference after use
                 storages[storage_id] = storage_tensor
                 log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_tensor.shape})")
                 return
@@ -511,10 +513,14 @@ def create_modal_app_for_gpu(
 
                     # Store the result tensor as a 1D uint8 tensor
                     result_tensor = result_tensors[i]
-                    storage_nbytes = result_tensor.untyped_storage().nbytes()
+                    # Extract storage once but keep result_tensor alive
+                    result_storage = result_tensor.untyped_storage()
+                    storage_nbytes = result_storage.nbytes()
                     # Create 1D uint8 tensor with the same storage
                     storage_tensor = torch.empty(storage_nbytes, dtype=torch.uint8, device=result_tensor.device)
-                    storage_tensor.untyped_storage().copy_(result_tensor.untyped_storage())
+                    storage_tensor.untyped_storage().copy_(result_storage)
+                    # Ensure result_tensor stays alive until after copy
+                    del result_storage  # Release reference after use
                     storages[storage_id] = storage_tensor
 
             log.debug(
@@ -579,10 +585,10 @@ def create_modal_app_for_gpu(
         ) -> List[Union[None, Any]]:
             """
             Execute a batch of RPC calls in sequence.
-            
+
             This method allows multiple operations to be batched together in a single
             RPC call, reducing network overhead and improving performance.
-            
+
             Args:
                 batch_calls: List of dictionaries, each containing:
                     - method_name: Name of the method to call
@@ -590,26 +596,25 @@ def create_modal_app_for_gpu(
                     - args: Arguments for the method
                     - kwargs: Keyword arguments for the method
                     - call_id: Unique identifier for debugging
-                    
+
             Returns:
                 List of results in the same order as input calls.
                 None for "spawn" calls, actual return value for "remote" calls.
             """
-            import torch
-            
+
             log.info(f"🚀 BATCH EXECUTE: Processing {len(batch_calls)} batched calls")
             results = []
-            
+
             for i, call in enumerate(batch_calls):
                 call_id = call.get("call_id", f"batch_call_{i}")
                 method_name = call["method_name"]
                 call_type = call["call_type"]
                 args = call.get("args", ())
                 kwargs = call.get("kwargs", {})
-                
+
                 try:
                     log.debug(f"📞 Executing batched call {call_id}: {method_name} ({call_type})")
-                    
+
                     # Call the underlying method implementations directly
                     # We need to bypass Modal decorators and call the actual Python methods
                     if method_name == "create_storage":
@@ -626,22 +631,22 @@ def create_modal_app_for_gpu(
                         result = self._execute_aten_operation_impl(*args, **kwargs)
                     else:
                         raise AttributeError(f"Unknown method: {method_name}")
-                    
+
                     # For spawn calls, we return None
                     if call_type == "spawn":
                         results.append(None)
                     else:
                         results.append(result)
-                        
+
                 except Exception as e:
                     log.error(f"❌ Batched call {call_id} failed: {method_name} - {e}")
-                    
+
                     # Store the exception as the result
                     results.append(e)
-            
+
             log.info(f"✅ BATCH COMPLETE: Processed {len(batch_calls)} calls, "
                     f"{sum(1 for r in results if not isinstance(r, Exception))} successful")
-            
+
             return results
 
     return app, PytorchServer

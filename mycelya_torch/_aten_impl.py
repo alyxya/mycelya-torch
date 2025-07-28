@@ -451,16 +451,14 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
     storage_id = to_.untyped_storage().data_ptr()
     log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
 
-    # Get raw untyped storage bytes from CPU tensor
+    # Pass CPU tensor directly to orchestrator without conversion
     from ._remote_orchestrator import remote_orchestrator
-    from ._tensor_utils import cpu_tensor_to_storage_bytes
 
-    raw_data = cpu_tensor_to_storage_bytes(from_)
     # Use orchestrator to update tensor with automatic client routing
     # Pass source and target metadata for proper handling of partial updates
     remote_orchestrator.update_storage(
         storage_id,
-        raw_data,
+        from_,  # Pass storage tensor directly
         source_shape=list(from_.shape),
         source_stride=list(from_.stride()),
         source_storage_offset=from_.storage_offset(),

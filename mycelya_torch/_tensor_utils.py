@@ -140,22 +140,8 @@ class RemoteTensorMetadata(BaseTensorMetadata):
 TensorMetadata = Union[LocalTensorMetadata, RemoteTensorMetadata]
 
 
-def cpu_tensor_to_storage_bytes(tensor: torch.Tensor) -> bytes:
-    """
-    Convert a CPU tensor to raw untyped storage bytes.
-
-    Args:
-        tensor: CPU tensor to extract storage bytes from
-
-    Returns:
-        Raw untyped storage bytes
-    """
-    if tensor.device.type != "cpu":
-        raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
-
-    # Get raw untyped storage bytes
-    untyped_storage = tensor.untyped_storage()
-    return bytes(untyped_storage)
+# cpu_tensor_to_storage_bytes function removed - pass storage tensors directly instead
+# This eliminates the problematic bytes(untyped_storage) call
 
 
 def storage_bytes_to_cpu_tensor(

@@ -11,12 +11,11 @@ Currently supports Modal as the first provider implementation.
 
 import atexit
 import threading
-import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 
-from ._batching import BatchProcessor, RPCBatchQueue
+from ._batching import BatchProcessor
 from ._logging import get_logger
 from ._storage import get_machine_for_storage
 from ._tensor_utils import RemoteTensorMetadata
@@ -36,23 +35,23 @@ class RemoteOrchestrator:
     This class coordinates operation execution between local tensors and remote
     machines, handling tensor transfers, device communication, and distributed
     execution flow. Currently supports Modal as the primary provider.
-    
+
     Also manages background thread for batching RPC calls to improve performance.
     """
 
     def __init__(self):
         # Simple utility-based architecture - no service objects needed
-        
+
         # RPC Batching System
         self._batch_clients: Set[ClientInterface] = set()
         self._batch_lock = threading.RLock()
         self._batch_thread: Optional[threading.Thread] = None
         self._batch_shutdown = threading.Event()
         self._batch_interval = 0.1  # Process batches every 100ms
-        
+
         # Start background thread for batch processing
         self._start_batch_thread()
-        
+
         # Register cleanup on exit
         atexit.register(self._cleanup_batch_thread)
 
@@ -85,47 +84,47 @@ class RemoteOrchestrator:
     def _batch_processing_loop(self) -> None:
         """Main loop for the background batch processing thread."""
         log.info("🚀 RPC batch processing loop started")
-        
+
         while not self._batch_shutdown.is_set():
             try:
                 # Process batches for all registered clients
                 with self._batch_lock:
                     clients_to_process = list(self._batch_clients)
-                
+
                 for client in clients_to_process:
                     try:
                         self._process_client_batch(client)
                     except Exception as e:
                         log.error(f"❌ Error processing batch for client {client}: {e}")
-                
+
                 # Wait for next batch interval
                 self._batch_shutdown.wait(self._batch_interval)
-                
+
             except Exception as e:
                 log.error(f"❌ Error in batch processing loop: {e}")
-        
+
         log.info("🏁 RPC batch processing loop terminated")
 
     def _process_client_batch(self, client: ClientInterface) -> None:
         """Process a batch of RPC calls for a specific client."""
         if not hasattr(client, '_batch_queue'):
             return
-        
+
         batch = client._batch_queue.get_batch()
         if not batch:
             return
-        
+
         try:
             # Execute the batch
             result = BatchProcessor.execute_batch(client._server_instance, batch)
-            
+
             log.debug(f"📊 Batch processed for {client}: "
                      f"{result.success_count} success, {result.error_count} errors, "
                      f"{result.execution_time:.3f}s")
-                     
+
         except Exception as e:
             log.error(f"❌ Batch execution failed for client {client}: {e}")
-            
+
             # Cancel all futures in the batch
             for call in batch:
                 if call.future and not call.future.done():
@@ -152,12 +151,12 @@ class RemoteOrchestrator:
                 "thread_alive": self._batch_thread.is_alive() if self._batch_thread else False,
                 "clients": []
             }
-            
+
             for client in self._batch_clients:
                 if hasattr(client, '_batch_queue'):
                     client_stats = client._batch_queue.get_stats()
                     stats["clients"].append(client_stats)
-            
+
             return stats
 
     def _get_client_for_storage(self, storage_id: int) -> ClientInterface:
@@ -254,13 +253,13 @@ class RemoteOrchestrator:
         client = self._get_validated_client(machine)
         client.create_storage(storage_id, nbytes)
         log.info(f"✅ ORCHESTRATOR: Created storage {storage_id} on device {device_index}")
-        
+
         # Note: No cache invalidation needed for create_storage - new storage has no cached data
 
     def update_storage(
         self,
         storage_id: int,
-        raw_data: bytes,
+        storage_tensor: torch.Tensor,
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
@@ -270,11 +269,11 @@ class RemoteOrchestrator:
         target_storage_offset: int,
         target_dtype: str
     ) -> None:
-        """Update existing storage with raw tensor data.
+        """Update existing storage with storage tensor data.
 
         Args:
             storage_id: Storage ID to update
-            raw_data: Raw untyped storage bytes to store
+            storage_tensor: CPU tensor wrapping the storage data (tensor metadata is ignored, only untyped_storage matters)
             source_shape: Shape of the source data
             source_stride: Stride of the source data
             source_storage_offset: Storage offset of the source data
@@ -289,11 +288,11 @@ class RemoteOrchestrator:
         """
         client = self._get_client_for_storage(storage_id)
         client.update_storage(
-            storage_id, raw_data,
+            storage_id, storage_tensor,
             source_shape, source_stride, source_storage_offset, source_dtype,
             target_shape, target_stride, target_storage_offset, target_dtype
         )
-        
+
         # Note: Cache invalidation now happens at queue time in batching system
         log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id}")
 
@@ -340,7 +339,7 @@ class RemoteOrchestrator:
         """
         client = self._get_client_for_storage(storage_id)
         client.resize_storage(storage_id, nbytes)
-        
+
         # Note: Cache invalidation now happens at queue time in batching system
         log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
 
@@ -355,7 +354,7 @@ class RemoteOrchestrator:
         """
         client = self._get_client_for_storage(storage_id)
         client.remove_storage(storage_id)
-        
+
         # Note: Cache invalidation now happens at queue time in batching system
         log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id}")
 
