@@ -136,6 +136,8 @@ class RemoteOrchestrator:
         client = self._get_validated_client(machine)
         client.create_storage(storage_id, nbytes)
         log.info(f"✅ ORCHESTRATOR: Created storage {storage_id} on device {device_index}")
+        
+        # Note: No cache invalidation needed for create_storage - new storage has no cached data
 
     def update_storage(
         self,
@@ -173,7 +175,10 @@ class RemoteOrchestrator:
             source_shape, source_stride, source_storage_offset, source_dtype,
             target_shape, target_stride, target_storage_offset, target_dtype
         )
-        log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id}")
+        
+        # Invalidate cache for modified storage
+        client.invalidate_storage_cache(storage_id)
+        log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id} and invalidated cache")
 
     def get_storage_tensor(
         self,
@@ -218,7 +223,10 @@ class RemoteOrchestrator:
         """
         client = self._get_client_for_storage(storage_id)
         client.resize_storage(storage_id, nbytes)
-        log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
+        
+        # Invalidate cache for resized storage
+        client.invalidate_storage_cache(storage_id)
+        log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes and invalidated cache")
 
     def remove_storage(self, storage_id: int) -> None:
         """Remove storage from remote machine.
@@ -231,7 +239,10 @@ class RemoteOrchestrator:
         """
         client = self._get_client_for_storage(storage_id)
         client.remove_storage(storage_id)
-        log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id}")
+        
+        # Invalidate cache for removed storage
+        client.invalidate_storage_cache(storage_id)
+        log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id} and invalidated cache")
 
     def execute_aten_operation(
         self,
@@ -298,6 +309,13 @@ class RemoteOrchestrator:
         result = client.execute_aten_operation(
             op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs, return_metadata
         )
+
+        # Invalidate cache for all modified output storages
+        # Filter out None values (which shouldn't exist after our recent refactoring)
+        modified_storage_ids = [sid for sid in output_storage_ids if sid is not None]
+        if modified_storage_ids:
+            client.invalidate_multiple_storage_caches(modified_storage_ids)
+            log.debug(f"Invalidated cache for {len(modified_storage_ids)} storages modified by {op_name}")
 
         if return_metadata:
             log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata return")

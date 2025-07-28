@@ -32,6 +32,13 @@ class ClientInterface(ABC):
         """
         self.gpu_type = gpu_type
         self.machine_id = machine_id
+        
+        # Storage cache: storage_id -> underlying 1D uint8 CPU tensor
+        self._storage_cache: Dict[int, torch.Tensor] = {}
+        
+        # Track cache statistics for debugging
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     @abstractmethod
     def start(self) -> None:
@@ -165,6 +172,26 @@ class ClientInterface(ABC):
         """
         pass
 
+    @abstractmethod
+    def _get_storage_tensor_for_cache(
+        self,
+        storage_id: int,
+    ) -> torch.Tensor:
+        """
+        Retrieve storage data as a 1D uint8 CPU tensor for caching.
+
+        This method should return the underlying storage as a 1D uint8 tensor
+        that can be cached and used to create views. Implementations should
+        use torch.save/torch.load for serialization.
+
+        Args:
+            storage_id: The storage ID to retrieve
+
+        Returns:
+            1D uint8 CPU tensor representing the underlying storage
+        """
+        pass
+
     def get_storage_tensor(
         self,
         storage_id: int,
@@ -176,9 +203,10 @@ class ClientInterface(ABC):
         """
         Retrieve storage data as a tensor with specified view parameters.
 
-        This is a convenience method that combines _get_storage_data() with tensor
-        reconstruction. The default implementation can be overridden by providers
-        for optimization.
+        This method implements caching by:
+        1. Checking if storage_id is in cache
+        2. If cached, creating view from cached tensor
+        3. If not cached, making RPC call and caching result
 
         Args:
             storage_id: The storage ID to retrieve
@@ -190,11 +218,30 @@ class ClientInterface(ABC):
         Returns:
             CPU tensor reconstructed from storage with specified view
         """
-        from .._tensor_utils import storage_bytes_to_cpu_tensor
-
-        raw_bytes = self._get_storage_data(storage_id)
-        return storage_bytes_to_cpu_tensor(
-            raw_bytes, shape, stride, storage_offset, dtype
+        # Check cache first
+        if storage_id in self._storage_cache:
+            self._cache_hits += 1
+            
+            # Get cached underlying tensor
+            cached_tensor = self._storage_cache[storage_id]
+            
+            # Create view from cached tensor
+            return self._create_view_from_cached_tensor(
+                cached_tensor, shape, stride, storage_offset, dtype
+            )
+        
+        # Cache miss - make RPC call
+        self._cache_misses += 1
+        
+        # Get the actual tensor from the subclass implementation
+        underlying_tensor = self._get_storage_tensor_for_cache(storage_id)
+        
+        # Cache the underlying tensor
+        self._storage_cache[storage_id] = underlying_tensor
+        
+        # Create view from cached tensor
+        return self._create_view_from_cached_tensor(
+            underlying_tensor, shape, stride, storage_offset, dtype
         )
 
     @abstractmethod
@@ -254,6 +301,100 @@ class ClientInterface(ABC):
         """
         pass
 
+    def _create_view_from_cached_tensor(
+        self,
+        cached_tensor: torch.Tensor,
+        shape: List[int],
+        stride: List[int], 
+        storage_offset: int,
+        dtype: str,
+    ) -> torch.Tensor:
+        """
+        Create a tensor copy from a cached underlying tensor.
+        
+        This method creates a copy of the data (not a view) to protect
+        the cached tensor from accidental mutations.
+        
+        Args:
+            cached_tensor: The cached 1D uint8 underlying tensor
+            shape: Desired tensor shape
+            stride: Desired tensor stride
+            storage_offset: Desired storage offset
+            dtype: Desired tensor data type
+            
+        Returns:
+            CPU tensor copy with specified parameters
+        """
+        # Convert dtype string to torch.dtype
+        dtype_name = dtype.replace("torch.", "")
+        torch_dtype = getattr(torch, dtype_name)
+        
+        # Create temporary view from cached tensor to get the data
+        temp_tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
+        temp_tensor.set_(
+            cached_tensor.untyped_storage(),
+            storage_offset,
+            shape,
+            stride
+        )
+        
+        # Return a copy to protect the cache from mutations
+        return temp_tensor.clone()
+
+    # Cache invalidation methods
+    def invalidate_storage_cache(self, storage_id: int) -> None:
+        """
+        Invalidate cache entry for a specific storage ID.
+        
+        This method should be called whenever a storage has been modified
+        on the remote side to ensure cache consistency.
+        
+        Args:
+            storage_id: Storage ID to invalidate
+        """
+        if storage_id in self._storage_cache:
+            del self._storage_cache[storage_id]
+
+    def invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> None:
+        """
+        Invalidate cache entries for multiple storage IDs.
+        
+        This method provides efficient batch invalidation for operations
+        that modify multiple storages.
+        
+        Args:
+            storage_ids: List of storage IDs to invalidate
+        """
+        for storage_id in storage_ids:
+            if storage_id in self._storage_cache:
+                del self._storage_cache[storage_id]
+
+    def clear_storage_cache(self) -> None:
+        """
+        Clear all cached storage data.
+        
+        This method can be used for cleanup or when the client is stopped.
+        """
+        self._storage_cache.clear()
+
+    def get_cache_stats(self) -> Dict[str, int]:
+        """
+        Get cache statistics for debugging and monitoring.
+        
+        Returns:
+            Dictionary with cache statistics
+        """
+        total_requests = self._cache_hits + self._cache_misses
+        hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0.0
+        
+        return {
+            "cache_size": len(self._storage_cache),
+            "cache_hits": self._cache_hits,
+            "cache_misses": self._cache_misses,
+            "hit_rate": hit_rate,
+            "total_requests": total_requests,
+        }
+
     # Context manager methods (optional to override, but provide default behavior)
     def __enter__(self):
         """Context manager entry - starts the machine."""
@@ -263,6 +404,7 @@ class ClientInterface(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - stops the machine."""
         self.stop()
+        self.clear_storage_cache()
 
     @abstractmethod
     def __repr__(self) -> str:

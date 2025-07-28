@@ -10,6 +10,7 @@ along with related functionality for creating and managing Modal applications.
 
 from typing import Any, Dict, List, Optional, Union
 
+import torch
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
@@ -182,6 +183,32 @@ class ModalClient(ClientInterface):
 
         cpu_tensor = torch_bytes_to_cpu_tensor(torch_bytes)
         return cpu_tensor_to_storage_bytes(cpu_tensor)
+
+    def _get_storage_tensor_for_cache(
+        self,
+        storage_id: int,
+    ) -> torch.Tensor:
+        """
+        Get storage data as a 1D uint8 CPU tensor for caching.
+
+        Args:
+            storage_id: The storage ID
+
+        Returns:
+            1D uint8 CPU tensor representing the underlying storage
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Get torch.save serialized bytes from Modal app
+        torch_bytes = self._server_instance.get_storage_data.remote(storage_id)
+
+        # Deserialize tensor directly for caching (should be 1D uint8)
+        from ..._tensor_utils import torch_bytes_to_cpu_tensor
+
+        return torch_bytes_to_cpu_tensor(torch_bytes)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """
