@@ -58,8 +58,8 @@ def create_modal_app_for_gpu(
             import torch
 
             if not hasattr(self, "_storages"):
-                # storage_id -> torch.UntypedStorage or int (for lazy allocation)
-                self._storages: Dict[int, Union[torch.UntypedStorage, int]] = {}
+                # storage_id -> torch.Tensor (1D uint8 CUDA) or int (for lazy allocation)
+                self._storages: Dict[int, Union[torch.Tensor, int]] = {}
 
             return self._storages
 
@@ -109,21 +109,25 @@ def create_modal_app_for_gpu(
             if isinstance(storage, int):
                 nbytes = storage
                 device = torch.device("cuda")
-                tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
-                realized_storage = tensor.untyped_storage()
+                # Create 1D uint8 CUDA tensor to hold the storage
+                storage_tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
 
-                # Update the storages mapping with realized storage
-                storages[storage_id] = realized_storage
+                # Update the storages mapping with realized tensor
+                storages[storage_id] = storage_tensor
                 log.info(f"🔄 REALIZED lazy storage {storage_id} ({nbytes} bytes)")
 
-                storage = realized_storage
+                storage = storage_tensor
 
-            # Determine device to use (prefer storage device if available)
-            target_device = storage.device if hasattr(storage, "device") else "cuda"
+            # Get untyped storage from the stored tensor
+            if isinstance(storage, torch.Tensor):
+                untyped_storage = storage.untyped_storage()
+                target_device = storage.device
+            else:
+                raise RuntimeError(f"Unexpected storage type {type(storage)} for storage {storage_id}")
 
             # Reconstruct tensor using storage + parameters
             tensor = torch.empty(0, dtype=torch_dtype, device=target_device).set_(
-                storage, storage_offset, shape, stride
+                untyped_storage, storage_offset, shape, stride
             )
 
             return tensor
@@ -198,19 +202,23 @@ def create_modal_app_for_gpu(
             if storage_id not in storages:
                 raise RuntimeError(f"Storage ID {storage_id} not found")
 
-            # Create source tensor from raw data
-            source_torch_dtype = getattr(torch, source_dtype.replace("torch.", ""))
-            source_storage = torch.UntypedStorage.from_buffer(raw_data, dtype=torch.uint8)
-            source_tensor = torch.empty(0, dtype=source_torch_dtype, device="cpu")
-            source_tensor.set_(source_storage, source_storage_offset, source_shape, source_stride)
+            # Deserialize source tensor from torch.save bytes
+            import io
+            buffer = io.BytesIO(raw_data)
+            source_tensor = torch.load(buffer, map_location="cpu", weights_only=False)
+
+            # Ensure tensor is on CPU and has the expected properties
+            if source_tensor.device.type != "cpu":
+                source_tensor = source_tensor.cpu()
 
             storage_item = storages[storage_id]
 
             # Check if storage is lazy
             if isinstance(storage_item, int):
-                source_tensor = source_tensor.to("cuda")
+                # Move source tensor to CUDA for storage
+                cuda_source = source_tensor.to("cuda")
                 expected_bytes = storage_item
-                actual_bytes = source_tensor.untyped_storage().nbytes()
+                actual_bytes = cuda_source.untyped_storage().nbytes()
 
                 if expected_bytes != actual_bytes:
                     raise RuntimeError(
@@ -219,12 +227,14 @@ def create_modal_app_for_gpu(
                     )
 
                 log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
-                # Force storage realization by using the source tensor's storage
-                storages[storage_id] = source_tensor.untyped_storage()
-                log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_shape})")
+                # Create 1D uint8 tensor from the CUDA source tensor's storage
+                storage_tensor = torch.empty(actual_bytes, dtype=torch.uint8, device="cuda")
+                storage_tensor.untyped_storage().copy_(cuda_source.untyped_storage())
+                storages[storage_id] = storage_tensor
+                log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_tensor.shape})")
                 return
 
-            # Storage is realized (torch.UntypedStorage) - always use in-place view update
+            # Storage is realized (torch.Tensor) - always use in-place view update
             log.info(f"📥 IN-PLACE Updating view of Storage ID {storage_id} (offset: {target_storage_offset})")
 
             # Construct the target view tensor directly using existing method
@@ -236,8 +246,8 @@ def create_modal_app_for_gpu(
                 dtype=target_dtype
             )
 
-            # 2. Copy source tensor data to target view in-place
-            target_tensor.copy_(source_tensor)
+            # Copy source tensor data to target view in-place
+            target_tensor.copy_(source_tensor.to(target_tensor.device))
 
             log.info(
                 f"📥 IN-PLACE Updated view of Storage ID {storage_id} on Modal (target_shape: {target_shape})"
@@ -273,12 +283,18 @@ def create_modal_app_for_gpu(
             if isinstance(storage_item, int):
                 raise RuntimeError(f"Storage ID {storage_id} is lazy (not realized). Cannot retrieve data.")
 
-            # Storage is realized (torch.UntypedStorage)
-            storage = storage_item
-            log.info(f"📦 Retrieving raw storage data for storage {storage_id} ({storage.nbytes()} bytes)")
+            # Storage is realized (torch.Tensor)
+            storage_tensor = storage_item
+            log.info(f"📦 Retrieving tensor data for storage {storage_id} ({storage_tensor.untyped_storage().nbytes()} bytes)")
 
-            # Return raw untyped storage bytes
-            return bytes(storage)
+            # Convert CUDA tensor to CPU and serialize with torch.save
+            import io
+
+            import torch
+            cpu_tensor = storage_tensor.cpu()
+            buffer = io.BytesIO()
+            torch.save(cpu_tensor, buffer)
+            return buffer.getvalue()
 
         @modal.method()
         def resize_storage(self, storage_id: int, nbytes: int) -> None:
@@ -325,9 +341,9 @@ def create_modal_app_for_gpu(
                 )
                 return
 
-            # Handle realized storage (torch.UntypedStorage)
-            elif isinstance(old_storage, torch.UntypedStorage):
-                current_bytes = old_storage.nbytes()
+            # Handle realized storage (torch.Tensor)
+            elif isinstance(old_storage, torch.Tensor):
+                current_bytes = old_storage.untyped_storage().nbytes()
 
                 # Check if resize is actually needed (should be bigger)
                 if nbytes <= current_bytes:
@@ -337,21 +353,9 @@ def create_modal_app_for_gpu(
                     )
                     return  # No-op
 
-                device = old_storage.device
+                # Resize the existing 1D uint8 tensor
+                old_storage.resize_([nbytes])
 
-                # Create a tensor that uses the existing storage to leverage tensor.resize_()
-                # Use uint8 dtype for byte-level operations (1 byte = 1 element)
-                temp_tensor = torch.empty(0, dtype=torch.uint8, device=device)
-                temp_tensor.set_(old_storage, storage_offset=0, size=(current_bytes,))
-
-                # Resize to new byte count (1 byte = 1 element for uint8)
-                temp_tensor.resize_([nbytes])
-
-                # Get the new storage after resize
-                new_storage = temp_tensor.untyped_storage()
-
-                # Update the storage mapping
-                storages[storage_id] = new_storage
                 log.info(
                     f"🔄 REALIZED Resized storage {storage_id} from {current_bytes} "
                     f"to {nbytes} bytes using tensor.resize_()"
@@ -484,7 +488,13 @@ def create_modal_app_for_gpu(
                             f"overwriting with result from {op_name}"
                         )
 
-                    storages[storage_id] = result_tensors[i].untyped_storage()
+                    # Store the result tensor as a 1D uint8 tensor
+                    result_tensor = result_tensors[i]
+                    storage_nbytes = result_tensor.untyped_storage().nbytes()
+                    # Create 1D uint8 tensor with the same storage
+                    storage_tensor = torch.empty(storage_nbytes, dtype=torch.uint8, device=result_tensor.device)
+                    storage_tensor.untyped_storage().copy_(result_tensor.untyped_storage())
+                    storages[storage_id] = storage_tensor
 
             log.debug(
                 f"📦 Updated {len(output_storage_ids)} output storage mappings"

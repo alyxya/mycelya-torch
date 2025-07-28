@@ -133,8 +133,22 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
+        # Convert raw_data to tensor and serialize with torch.save
+        from ..._tensor_utils import (
+            cpu_tensor_to_torch_bytes,
+            storage_bytes_to_cpu_tensor,
+        )
+
+        # Create CPU tensor from raw data using source metadata
+        cpu_tensor = storage_bytes_to_cpu_tensor(
+            raw_data, source_shape, source_stride, source_storage_offset, source_dtype
+        )
+
+        # Serialize tensor using torch.save
+        torch_bytes = cpu_tensor_to_torch_bytes(cpu_tensor)
+
         self._server_instance.update_storage.spawn(
-            storage_id, raw_data,
+            storage_id, torch_bytes,
             source_shape, source_stride, source_storage_offset, source_dtype,
             target_shape, target_stride, target_storage_offset, target_dtype
         )
@@ -157,7 +171,17 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        return self._server_instance.get_storage_data.remote(storage_id)
+        # Get torch.save serialized bytes from Modal app
+        torch_bytes = self._server_instance.get_storage_data.remote(storage_id)
+
+        # Deserialize tensor and convert back to raw storage bytes
+        from ..._tensor_utils import (
+            cpu_tensor_to_storage_bytes,
+            torch_bytes_to_cpu_tensor,
+        )
+
+        cpu_tensor = torch_bytes_to_cpu_tensor(torch_bytes)
+        return cpu_tensor_to_storage_bytes(cpu_tensor)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """

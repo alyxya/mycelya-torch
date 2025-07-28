@@ -227,3 +227,51 @@ def bytes_to_cpu_tensor(data: bytes) -> torch.Tensor:
     """
     buffer = io.BytesIO(data)
     return torch.load(buffer, map_location="cpu", weights_only=False)
+
+
+def cpu_tensor_to_torch_bytes(tensor: torch.Tensor) -> bytes:
+    """
+    Convert a CPU tensor to torch.save serialized bytes.
+
+    This function uses PyTorch's native serialization to convert a CPU tensor
+    to bytes that can be sent over RPC. The tensor is preserved exactly as-is
+    including its shape, stride, storage_offset, and dtype.
+
+    Args:
+        tensor: CPU tensor to serialize
+
+    Returns:
+        Serialized tensor data using torch.save
+
+    Raises:
+        ValueError: If tensor is not on CPU device
+    """
+    if tensor.device.type != "cpu":
+        raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
+
+    buffer = io.BytesIO()
+    torch.save(tensor, buffer)
+    return buffer.getvalue()
+
+
+def torch_bytes_to_cpu_tensor(data: bytes) -> torch.Tensor:
+    """
+    Convert torch.save serialized bytes back to a CPU tensor.
+
+    This function deserializes bytes created by cpu_tensor_to_torch_bytes()
+    back into a CPU tensor, preserving all tensor properties.
+
+    Args:
+        data: Serialized tensor data from torch.save
+
+    Returns:
+        CPU tensor reconstructed from serialized bytes
+    """
+    buffer = io.BytesIO(data)
+    tensor = torch.load(buffer, map_location="cpu", weights_only=False)
+
+    # Ensure the result is on CPU (should already be due to map_location)
+    if tensor.device.type != "cpu":
+        tensor = tensor.cpu()
+
+    return tensor
