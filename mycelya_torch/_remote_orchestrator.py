@@ -9,10 +9,14 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+import atexit
+import threading
+import time
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 
+from ._batching import BatchProcessor, RPCBatchQueue
 from ._logging import get_logger
 from ._storage import get_machine_for_storage
 from ._tensor_utils import RemoteTensorMetadata
@@ -32,15 +36,129 @@ class RemoteOrchestrator:
     This class coordinates operation execution between local tensors and remote
     machines, handling tensor transfers, device communication, and distributed
     execution flow. Currently supports Modal as the primary provider.
+    
+    Also manages background thread for batching RPC calls to improve performance.
     """
 
     def __init__(self):
         # Simple utility-based architecture - no service objects needed
-        pass
+        
+        # RPC Batching System
+        self._batch_clients: Set[ClientInterface] = set()
+        self._batch_lock = threading.RLock()
+        self._batch_thread: Optional[threading.Thread] = None
+        self._batch_shutdown = threading.Event()
+        self._batch_interval = 0.1  # Process batches every 100ms
+        
+        # Start background thread for batch processing
+        self._start_batch_thread()
+        
+        # Register cleanup on exit
+        atexit.register(self._cleanup_batch_thread)
 
     def _get_device_client(self, machine: "RemoteMachine"):
         """Get the active client for a specific machine."""
         return machine._client
+
+    # Background thread management for RPC batching
+    def _start_batch_thread(self) -> None:
+        """Start the background thread for processing RPC batches."""
+        if self._batch_thread is None or not self._batch_thread.is_alive():
+            self._batch_shutdown.clear()
+            self._batch_thread = threading.Thread(
+                target=self._batch_processing_loop,
+                name="RPCBatchProcessor",
+                daemon=True
+            )
+            self._batch_thread.start()
+            log.info("🧵 Started RPC batch processing thread")
+
+    def _cleanup_batch_thread(self) -> None:
+        """Clean up the background batch processing thread."""
+        if self._batch_thread and self._batch_thread.is_alive():
+            log.info("🛑 Shutting down RPC batch processing thread")
+            self._batch_shutdown.set()
+            self._batch_thread.join(timeout=2.0)
+            if self._batch_thread.is_alive():
+                log.warning("⚠️ Batch processing thread did not shutdown cleanly")
+
+    def _batch_processing_loop(self) -> None:
+        """Main loop for the background batch processing thread."""
+        log.info("🚀 RPC batch processing loop started")
+        
+        while not self._batch_shutdown.is_set():
+            try:
+                # Process batches for all registered clients
+                with self._batch_lock:
+                    clients_to_process = list(self._batch_clients)
+                
+                for client in clients_to_process:
+                    try:
+                        self._process_client_batch(client)
+                    except Exception as e:
+                        log.error(f"❌ Error processing batch for client {client}: {e}")
+                
+                # Wait for next batch interval
+                self._batch_shutdown.wait(self._batch_interval)
+                
+            except Exception as e:
+                log.error(f"❌ Error in batch processing loop: {e}")
+        
+        log.info("🏁 RPC batch processing loop terminated")
+
+    def _process_client_batch(self, client: ClientInterface) -> None:
+        """Process a batch of RPC calls for a specific client."""
+        if not hasattr(client, '_batch_queue'):
+            return
+        
+        batch = client._batch_queue.get_batch()
+        if not batch:
+            return
+        
+        try:
+            # Execute the batch
+            result = BatchProcessor.execute_batch(client._server_instance, batch)
+            
+            log.debug(f"📊 Batch processed for {client}: "
+                     f"{result.success_count} success, {result.error_count} errors, "
+                     f"{result.execution_time:.3f}s")
+                     
+        except Exception as e:
+            log.error(f"❌ Batch execution failed for client {client}: {e}")
+            
+            # Cancel all futures in the batch
+            for call in batch:
+                if call.future and not call.future.done():
+                    call.future.set_exception(e)
+
+    def register_client_for_batching(self, client: ClientInterface) -> None:
+        """Register a client for RPC batching."""
+        with self._batch_lock:
+            self._batch_clients.add(client)
+            log.info(f"📝 Registered client for batching: {client}")
+
+    def unregister_client_for_batching(self, client: ClientInterface) -> None:
+        """Unregister a client from RPC batching."""
+        with self._batch_lock:
+            self._batch_clients.discard(client)
+            log.info(f"🗑️ Unregistered client from batching: {client}")
+
+    def get_batch_stats(self) -> Dict[str, Any]:
+        """Get statistics about RPC batching across all clients."""
+        with self._batch_lock:
+            stats = {
+                "registered_clients": len(self._batch_clients),
+                "batch_interval": self._batch_interval,
+                "thread_alive": self._batch_thread.is_alive() if self._batch_thread else False,
+                "clients": []
+            }
+            
+            for client in self._batch_clients:
+                if hasattr(client, '_batch_queue'):
+                    client_stats = client._batch_queue.get_stats()
+                    stats["clients"].append(client_stats)
+            
+            return stats
 
     def _get_client_for_storage(self, storage_id: int) -> ClientInterface:
         """Get the client for a specific storage ID with validation.
@@ -176,9 +294,8 @@ class RemoteOrchestrator:
             target_shape, target_stride, target_storage_offset, target_dtype
         )
         
-        # Invalidate cache for modified storage
-        client.invalidate_storage_cache(storage_id)
-        log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id} and invalidated cache")
+        # Note: Cache invalidation now happens at queue time in batching system
+        log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id}")
 
     def get_storage_tensor(
         self,
@@ -224,9 +341,8 @@ class RemoteOrchestrator:
         client = self._get_client_for_storage(storage_id)
         client.resize_storage(storage_id, nbytes)
         
-        # Invalidate cache for resized storage
-        client.invalidate_storage_cache(storage_id)
-        log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes and invalidated cache")
+        # Note: Cache invalidation now happens at queue time in batching system
+        log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
 
     def remove_storage(self, storage_id: int) -> None:
         """Remove storage from remote machine.
@@ -240,9 +356,8 @@ class RemoteOrchestrator:
         client = self._get_client_for_storage(storage_id)
         client.remove_storage(storage_id)
         
-        # Invalidate cache for removed storage
-        client.invalidate_storage_cache(storage_id)
-        log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id} and invalidated cache")
+        # Note: Cache invalidation now happens at queue time in batching system
+        log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id}")
 
     def execute_aten_operation(
         self,
@@ -310,12 +425,8 @@ class RemoteOrchestrator:
             op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs, return_metadata
         )
 
-        # Invalidate cache for all modified output storages
-        # Filter out None values (which shouldn't exist after our recent refactoring)
-        modified_storage_ids = [sid for sid in output_storage_ids if sid is not None]
-        if modified_storage_ids:
-            client.invalidate_multiple_storage_caches(modified_storage_ids)
-            log.debug(f"Invalidated cache for {len(modified_storage_ids)} storages modified by {op_name}")
+        # Note: With batching, cache invalidation for aten operations happens at queue time
+        # when the operation is queued, not when it's executed
 
         if return_metadata:
             log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata return")

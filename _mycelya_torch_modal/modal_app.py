@@ -133,6 +133,19 @@ def create_modal_app_for_gpu(
             return tensor
 
 
+        def _create_storage_impl(self, storage_id: int, nbytes: int) -> None:
+            """Implementation of create_storage without Modal decorators."""
+            # Store storage as lazy allocation (just the byte count)
+            storages = self._get_storages()
+
+            # Check if storage already exists
+            if storage_id in storages:
+                raise RuntimeError(f"Storage ID {storage_id} already exists")
+
+            # Always store as int for lazy allocation
+            storages[storage_id] = nbytes
+            log.info(f"📝 LAZY Storage ID {storage_id} registered ({nbytes} bytes)")
+
         @modal.method()
         def create_storage(self, storage_id: int, nbytes: int) -> None:
             """
@@ -148,19 +161,9 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
-            # Store storage as lazy allocation (just the byte count)
-            storages = self._get_storages()
+            return self._create_storage_impl(storage_id, nbytes)
 
-            # Check if storage already exists
-            if storage_id in storages:
-                raise RuntimeError(f"Storage ID {storage_id} already exists")
-
-            # Always store as int for lazy allocation
-            storages[storage_id] = nbytes
-            log.info(f"📝 LAZY Storage ID {storage_id} registered ({nbytes} bytes)")
-
-        @modal.method()
-        def update_storage(
+        def _update_storage_impl(
             self,
             storage_id: int,
             raw_data: bytes,
@@ -173,27 +176,7 @@ def create_modal_app_for_gpu(
             target_storage_offset: int,
             target_dtype: str,
         ) -> None:
-            """
-            Update an existing storage with raw tensor data.
-
-            Supports both full storage replacement and partial in-place updates using
-            dual tensor metadata to specify source data layout and target storage view.
-
-            Args:
-                storage_id: Storage ID to update
-                raw_data: Raw untyped storage bytes to store
-                source_shape: Shape of the source data
-                source_stride: Stride of the source data
-                source_storage_offset: Storage offset of the source data
-                source_dtype: Data type of the source data
-                target_shape: Shape of the target view in storage
-                target_stride: Stride of the target view in storage
-                target_storage_offset: Storage offset of the target view in storage
-                target_dtype: Data type of the target view in storage
-
-            Returns:
-                None
-            """
+            """Implementation of update_storage without Modal decorators."""
             import torch
 
             # Get storages
@@ -254,23 +237,50 @@ def create_modal_app_for_gpu(
             )
 
         @modal.method()
-        def get_storage_data(
+        def update_storage(
+            self,
+            storage_id: int,
+            raw_data: bytes,
+            source_shape: List[int],
+            source_stride: List[int],
+            source_storage_offset: int,
+            source_dtype: str,
+            target_shape: List[int],
+            target_stride: List[int],
+            target_storage_offset: int,
+            target_dtype: str,
+        ) -> None:
+            """
+            Update an existing storage with raw tensor data.
+
+            Supports both full storage replacement and partial in-place updates using
+            dual tensor metadata to specify source data layout and target storage view.
+
+            Args:
+                storage_id: Storage ID to update
+                raw_data: Raw untyped storage bytes to store
+                source_shape: Shape of the source data
+                source_stride: Stride of the source data
+                source_storage_offset: Storage offset of the source data
+                source_dtype: Data type of the source data
+                target_shape: Shape of the target view in storage
+                target_stride: Stride of the target view in storage
+                target_storage_offset: Storage offset of the target view in storage
+                target_dtype: Data type of the target view in storage
+
+            Returns:
+                None
+            """
+            return self._update_storage_impl(
+                storage_id, raw_data, source_shape, source_stride, source_storage_offset, source_dtype,
+                target_shape, target_stride, target_storage_offset, target_dtype
+            )
+
+        def _get_storage_data_impl(
             self,
             storage_id: int,
         ) -> bytes:
-            """
-            Retrieve raw storage data by storage ID.
-
-            Returns the complete raw untyped storage bytes. The client interface layer
-            will handle tensor reconstruction from metadata and these raw bytes.
-
-            Args:
-                storage_id: The storage ID
-
-            Returns:
-                Raw untyped storage bytes
-            """
-
+            """Implementation of get_storage_data without Modal decorators."""
             # Get storages
             storages = self._get_storages()
 
@@ -297,21 +307,26 @@ def create_modal_app_for_gpu(
             return buffer.getvalue()
 
         @modal.method()
-        def resize_storage(self, storage_id: int, nbytes: int) -> None:
+        def get_storage_data(
+            self,
+            storage_id: int,
+        ) -> bytes:
             """
-            Resize a storage to accommodate new byte size.
+            Retrieve raw storage data by storage ID.
 
-            Propagates laziness - if storage is lazy, keeps it lazy with new size.
-            If storage is realized, uses tensor.resize_() for proper resizing.
-            Only resizes if nbytes > current storage size.
+            Returns the complete raw untyped storage bytes. The client interface layer
+            will handle tensor reconstruction from metadata and these raw bytes.
 
             Args:
-                storage_id: The storage ID to resize
-                nbytes: The number of bytes needed for the new storage size
+                storage_id: The storage ID
 
             Returns:
-                None
+                Raw untyped storage bytes
             """
+            return self._get_storage_data_impl(storage_id)
+
+        def _resize_storage_impl(self, storage_id: int, nbytes: int) -> None:
+            """Implementation of resize_storage without Modal decorators."""
             import torch
 
             storages = self._get_storages()
@@ -364,6 +379,33 @@ def create_modal_app_for_gpu(
                 raise RuntimeError(f"Unexpected storage type {type(old_storage)} for storage {storage_id}")
 
         @modal.method()
+        def resize_storage(self, storage_id: int, nbytes: int) -> None:
+            """
+            Resize a storage to accommodate new byte size.
+
+            Propagates laziness - if storage is lazy, keeps it lazy with new size.
+            If storage is realized, uses tensor.resize_() for proper resizing.
+            Only resizes if nbytes > current storage size.
+
+            Args:
+                storage_id: The storage ID to resize
+                nbytes: The number of bytes needed for the new storage size
+
+            Returns:
+                None
+            """
+            return self._resize_storage_impl(storage_id, nbytes)
+
+        def _remove_storage_impl(self, storage_id: int) -> None:
+            """Implementation of remove_storage without Modal decorators."""
+            storages = self._get_storages()
+            if storage_id in storages:
+                del storages[storage_id]
+                log.info(f"🗑️ Removed storage {storage_id}")
+            else:
+                log.debug(f"Storage {storage_id} not found for removal")
+
+        @modal.method()
         def remove_storage(self, storage_id: int) -> None:
             """
             Remove a storage from the registry.
@@ -374,15 +416,9 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
-            storages = self._get_storages()
-            if storage_id in storages:
-                del storages[storage_id]
-                log.info(f"🗑️ Removed storage {storage_id}")
-            else:
-                log.debug(f"Storage {storage_id} not found for removal")
+            return self._remove_storage_impl(storage_id)
 
-        @modal.method()
-        def execute_aten_operation(
+        def _execute_aten_operation_impl(
             self,
             op_name: str,
             input_tensor_metadata: List[Dict[str, Any]],
@@ -391,23 +427,7 @@ def create_modal_app_for_gpu(
             kwargs: Dict[str, Any],
             return_metadata: bool = False,
         ) -> Union[None, List[Dict[str, Any]]]:
-            """
-            Execute an operation with separated input metadata and output storage IDs.
-
-            This method handles operations where input tensor metadata and output storage IDs
-            are explicitly separated, making the interface cleaner and more explicit.
-
-            Args:
-                op_name: The operation name to execute
-                input_tensor_metadata: List of metadata for input tensors only
-                output_storage_ids: List of storage IDs to update with results (all output tensors)
-                args: Operation arguments (with tensor placeholders)
-                kwargs: Operation keyword arguments (with tensor placeholders)
-                return_metadata: If True, return output tensor metadata instead of None
-
-            Returns:
-                None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
-            """
+            """Implementation of execute_aten_operation without Modal decorators."""
             # Import torch and tree_map locally to avoid serialization issues
             import torch
             from torch.utils._pytree import tree_map
@@ -519,5 +539,108 @@ def create_modal_app_for_gpu(
 
             log.info(f"✅ Completed: {op_name}")
             return None
+
+        @modal.method()
+        def execute_aten_operation(
+            self,
+            op_name: str,
+            input_tensor_metadata: List[Dict[str, Any]],
+            output_storage_ids: List[Union[int, None]],
+            args: List[Any],
+            kwargs: Dict[str, Any],
+            return_metadata: bool = False,
+        ) -> Union[None, List[Dict[str, Any]]]:
+            """
+            Execute an operation with separated input metadata and output storage IDs.
+
+            This method handles operations where input tensor metadata and output storage IDs
+            are explicitly separated, making the interface cleaner and more explicit.
+
+            Args:
+                op_name: The operation name to execute
+                input_tensor_metadata: List of metadata for input tensors only
+                output_storage_ids: List of storage IDs to update with results (all output tensors)
+                args: Operation arguments (with tensor placeholders)
+                kwargs: Operation keyword arguments (with tensor placeholders)
+                return_metadata: If True, return output tensor metadata instead of None
+
+            Returns:
+                None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
+            """
+            return self._execute_aten_operation_impl(
+                op_name, input_tensor_metadata, output_storage_ids, args, kwargs, return_metadata
+            )
+
+        @modal.method()
+        def execute_batch(
+            self,
+            batch_calls: List[Dict[str, Any]]
+        ) -> List[Union[None, Any]]:
+            """
+            Execute a batch of RPC calls in sequence.
+            
+            This method allows multiple operations to be batched together in a single
+            RPC call, reducing network overhead and improving performance.
+            
+            Args:
+                batch_calls: List of dictionaries, each containing:
+                    - method_name: Name of the method to call
+                    - call_type: "spawn" or "remote"
+                    - args: Arguments for the method
+                    - kwargs: Keyword arguments for the method
+                    - call_id: Unique identifier for debugging
+                    
+            Returns:
+                List of results in the same order as input calls.
+                None for "spawn" calls, actual return value for "remote" calls.
+            """
+            import torch
+            
+            log.info(f"🚀 BATCH EXECUTE: Processing {len(batch_calls)} batched calls")
+            results = []
+            
+            for i, call in enumerate(batch_calls):
+                call_id = call.get("call_id", f"batch_call_{i}")
+                method_name = call["method_name"]
+                call_type = call["call_type"]
+                args = call.get("args", ())
+                kwargs = call.get("kwargs", {})
+                
+                try:
+                    log.debug(f"📞 Executing batched call {call_id}: {method_name} ({call_type})")
+                    
+                    # Call the underlying method implementations directly
+                    # We need to bypass Modal decorators and call the actual Python methods
+                    if method_name == "create_storage":
+                        result = self._create_storage_impl(*args, **kwargs)
+                    elif method_name == "update_storage":
+                        result = self._update_storage_impl(*args, **kwargs)
+                    elif method_name == "get_storage_data":
+                        result = self._get_storage_data_impl(*args, **kwargs)
+                    elif method_name == "resize_storage":
+                        result = self._resize_storage_impl(*args, **kwargs)
+                    elif method_name == "remove_storage":
+                        result = self._remove_storage_impl(*args, **kwargs)
+                    elif method_name == "execute_aten_operation":
+                        result = self._execute_aten_operation_impl(*args, **kwargs)
+                    else:
+                        raise AttributeError(f"Unknown method: {method_name}")
+                    
+                    # For spawn calls, we return None
+                    if call_type == "spawn":
+                        results.append(None)
+                    else:
+                        results.append(result)
+                        
+                except Exception as e:
+                    log.error(f"❌ Batched call {call_id} failed: {method_name} - {e}")
+                    
+                    # Store the exception as the result
+                    results.append(e)
+            
+            log.info(f"✅ BATCH COMPLETE: Processed {len(batch_calls)} calls, "
+                    f"{sum(1 for r in results if not isinstance(r, Exception))} successful")
+            
+            return results
 
     return app, PytorchServer

@@ -59,9 +59,15 @@ class ModalClient(ClientInterface):
             self._app_context.__enter__()
             # Create server instance when app starts
             self._server_instance = self._server_class()
+            
+            # Register for RPC batching
+            self._register_for_batching()
 
     def stop(self):
         """Stop the Modal app context for this machine."""
+        # Unregister from RPC batching first
+        self._unregister_for_batching()
+        
         if self._app_context is not None:
             try:
                 self._app_context.__exit__(None, None, None)
@@ -94,7 +100,13 @@ class ModalClient(ClientInterface):
             )
 
         try:
-            self._server_instance.create_storage.spawn(storage_id, nbytes)
+            # Queue the RPC call for batching (fire-and-forget)
+            self._queue_rpc_call(
+                method_name="create_storage",
+                call_type="spawn",
+                args=(storage_id, nbytes),
+                kwargs={}
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to create storage {storage_id}: {e}") from e
 
@@ -148,10 +160,16 @@ class ModalClient(ClientInterface):
         # Serialize tensor using torch.save
         torch_bytes = cpu_tensor_to_torch_bytes(cpu_tensor)
 
-        self._server_instance.update_storage.spawn(
-            storage_id, torch_bytes,
-            source_shape, source_stride, source_storage_offset, source_dtype,
-            target_shape, target_stride, target_storage_offset, target_dtype
+        # Queue the RPC call for batching (fire-and-forget)
+        # Invalidate cache immediately since this modifies storage
+        self._queue_rpc_call(
+            method_name="update_storage",
+            call_type="spawn",
+            args=(storage_id, torch_bytes,
+                  source_shape, source_stride, source_storage_offset, source_dtype,
+                  target_shape, target_stride, target_storage_offset, target_dtype),
+            kwargs={},
+            invalidate_storage_ids=[storage_id]
         )
 
     def _get_storage_data(
@@ -172,8 +190,13 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Get torch.save serialized bytes from Modal app
-        torch_bytes = self._server_instance.get_storage_data.remote(storage_id)
+        # Queue the RPC call for batching (blocking call that returns data)
+        torch_bytes = self._queue_rpc_call(
+            method_name="get_storage_data",
+            call_type="remote",
+            args=(storage_id,),
+            kwargs={}
+        )
 
         # Deserialize tensor and convert back to raw storage bytes
         from ..._tensor_utils import (
@@ -202,8 +225,18 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Get torch.save serialized bytes from Modal app
-        torch_bytes = self._server_instance.get_storage_data.remote(storage_id)
+        # Queue the RPC call for batching (blocking call that returns data)
+        future = self._queue_rpc_call(
+            method_name="get_storage_data",
+            call_type="remote",
+            args=(storage_id,),
+            kwargs={}
+        )
+
+        # Wait for the result from the Future
+        torch_bytes = future.result() if future else None
+        if torch_bytes is None:
+            raise RuntimeError(f"Failed to retrieve storage data for storage {storage_id}")
 
         # Deserialize tensor directly for caching (should be 1D uint8)
         from ..._tensor_utils import torch_bytes_to_cpu_tensor
@@ -226,7 +259,15 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._server_instance.resize_storage.spawn(storage_id, nbytes)
+        # Queue the RPC call for batching (fire-and-forget)
+        # Invalidate cache immediately since this modifies storage
+        self._queue_rpc_call(
+            method_name="resize_storage",
+            call_type="spawn",
+            args=(storage_id, nbytes),
+            kwargs={},
+            invalidate_storage_ids=[storage_id]
+        )
 
     def remove_storage(self, storage_id: int) -> None:
         """
@@ -243,7 +284,15 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._server_instance.remove_storage.spawn(storage_id)
+        # Queue the RPC call for batching (fire-and-forget)
+        # Invalidate cache immediately since this removes storage
+        self._queue_rpc_call(
+            method_name="remove_storage",
+            call_type="spawn",
+            args=(storage_id,),
+            kwargs={},
+            invalidate_storage_ids=[storage_id]
+        )
 
     # Operation execution methods
     def execute_aten_operation(
@@ -280,17 +329,30 @@ class ModalClient(ClientInterface):
         log.info(f"📡 Modal Client sending Input Storage IDs: {input_storage_ids}")
         log.info(f"📡 Modal Client sending Output Storage IDs: {output_storage_ids}")
 
+        # Determine which storage IDs will be modified by this operation
+        # Filter out None values for cache invalidation
+        modified_storage_ids = [sid for sid in output_storage_ids if sid is not None]
+        
         if return_metadata:
-            # Use .remote() to get return value when metadata is needed
+            # Use remote call type to get return value when metadata is needed
             log.info(f"📡 Modal Client requesting metadata for {op_name}")
-            result = self._server_instance.execute_aten_operation.remote(
-                op_name, input_tensor_metadata, output_storage_ids, args, kwargs, return_metadata=True
+            future = self._queue_rpc_call(
+                method_name="execute_aten_operation",
+                call_type="remote",
+                args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
+                kwargs={"return_metadata": True},
+                invalidate_storage_ids=modified_storage_ids
             )
-            return result
+            # Wait for the result from the Future
+            return future.result() if future else None
         else:
-            # Use .spawn() for fire-and-forget execution (original behavior)
-            self._server_instance.execute_aten_operation.spawn(
-                op_name, input_tensor_metadata, output_storage_ids, args, kwargs
+            # Use spawn call type for fire-and-forget execution (original behavior)
+            self._queue_rpc_call(
+                method_name="execute_aten_operation",
+                call_type="spawn",
+                args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
+                kwargs={},
+                invalidate_storage_ids=modified_storage_ids
             )
             return None
 

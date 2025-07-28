@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
 import torch
+from .._batching import RPCBatchQueue
 
 
 class ClientInterface(ABC):
@@ -39,6 +40,12 @@ class ClientInterface(ABC):
         # Track cache statistics for debugging
         self._cache_hits = 0
         self._cache_misses = 0
+        
+        # RPC batching queue
+        self._batch_queue = RPCBatchQueue(client_id=machine_id)
+        
+        # Register with orchestrator for batching (will be done in subclass start())
+        self._registered_for_batching = False
 
     @abstractmethod
     def start(self) -> None:
@@ -341,13 +348,67 @@ class ClientInterface(ABC):
         # Return a copy to protect the cache from mutations
         return temp_tensor.clone()
 
-    # Cache invalidation methods
+    # RPC batching helper methods
+    def _queue_rpc_call(
+        self,
+        method_name: str,
+        call_type: str,
+        args: tuple,
+        kwargs: dict,
+        return_future: bool = False,
+        invalidate_storage_ids: Optional[List[int]] = None
+    ) -> Optional[Any]:
+        """
+        Helper method to queue an RPC call for batching.
+        
+        Args:
+            method_name: Name of the RPC method to call
+            call_type: "spawn" for fire-and-forget, "remote" for blocking
+            args: Arguments for the RPC method
+            kwargs: Keyword arguments for the RPC method
+            return_future: Whether to return a Future for this call
+            invalidate_storage_ids: Storage IDs to invalidate immediately (at queue time)
+            
+        Returns:
+            Future object if return_future=True or call_type="remote", None otherwise
+        """
+        # Invalidate cache immediately for storage-modifying operations
+        if invalidate_storage_ids:
+            for storage_id in invalidate_storage_ids:
+                if storage_id in self._storage_cache:
+                    del self._storage_cache[storage_id]
+        
+        # Queue the RPC call for batching
+        return self._batch_queue.enqueue_call(
+            call_type=call_type,
+            method_name=method_name,
+            args=args,
+            kwargs=kwargs,
+            return_future=return_future
+        )
+
+    def _register_for_batching(self) -> None:
+        """Register this client with the orchestrator for batching."""
+        if not self._registered_for_batching:
+            from .._remote_orchestrator import remote_orchestrator
+            remote_orchestrator.register_client_for_batching(self)
+            self._registered_for_batching = True
+
+    def _unregister_for_batching(self) -> None:
+        """Unregister this client from the orchestrator for batching."""
+        if self._registered_for_batching:
+            from .._remote_orchestrator import remote_orchestrator
+            remote_orchestrator.unregister_client_for_batching(self)
+            self._registered_for_batching = False
+
+    # Cache invalidation methods (updated for batching timing)
     def invalidate_storage_cache(self, storage_id: int) -> None:
         """
         Invalidate cache entry for a specific storage ID.
         
         This method should be called whenever a storage has been modified
-        on the remote side to ensure cache consistency.
+        on the remote side to ensure cache consistency. With batching,
+        invalidation happens at queue time to maintain correct semantics.
         
         Args:
             storage_id: Storage ID to invalidate
@@ -405,6 +466,7 @@ class ClientInterface(ABC):
         """Context manager exit - stops the machine."""
         self.stop()
         self.clear_storage_cache()
+        self._unregister_for_batching()
 
     @abstractmethod
     def __repr__(self) -> str:
