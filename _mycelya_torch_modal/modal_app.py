@@ -190,8 +190,6 @@ def create_modal_app_for_gpu(
             Returns:
                 None
             """
-            import math
-
             import torch
 
             # Get storages
@@ -398,7 +396,7 @@ def create_modal_app_for_gpu(
             Args:
                 op_name: The operation name to execute
                 input_tensor_metadata: List of metadata for input tensors only
-                output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
+                output_storage_ids: List of storage IDs to update with results (all output tensors)
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 return_metadata: If True, return output tensor metadata instead of None
@@ -478,7 +476,7 @@ def create_modal_app_for_gpu(
             )
 
             for i, storage_id in enumerate(output_storage_ids):
-                if storage_id is not None and i < len(result_tensors):
+                if i < len(result_tensors):
                     # Check if output storage is not lazy (warn if overwriting realized storage)
                     if storage_id in storages and not isinstance(storages[storage_id], int):
                         log.warning(
@@ -489,14 +487,14 @@ def create_modal_app_for_gpu(
                     storages[storage_id] = result_tensors[i].untyped_storage()
 
             log.debug(
-                f"📦 Updated {len([s for s in output_storage_ids if s is not None])} output storage mappings"
+                f"📦 Updated {len(output_storage_ids)} output storage mappings"
             )
 
             # Return metadata if requested
             if return_metadata:
                 output_metadata = []
                 for i, result_tensor in enumerate(result_tensors):
-                    if i < len(output_storage_ids) and output_storage_ids[i] is not None:
+                    if i < len(output_storage_ids):
                         metadata = {
                             "shape": list(result_tensor.shape),
                             "dtype": str(result_tensor.dtype),

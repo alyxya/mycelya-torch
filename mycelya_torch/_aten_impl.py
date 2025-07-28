@@ -134,7 +134,7 @@ def _create_output_tensors(
     Returns:
         tuple: (output_tensors, output_storage_ids)
             - output_tensors: List of created/reused tensors
-            - output_storage_ids: List of storage IDs (int for new tensors, None for reused tensors)
+            - output_storage_ids: List of storage IDs for all output tensors (both new and reused)
     """
     output_tensors = []
     output_storage_ids = []
@@ -144,7 +144,8 @@ def _create_output_tensors(
             # Reuse original tensor (in-place operation)
             tensor = original_tensors[meta_output]
             output_tensors.append(tensor)
-            output_storage_ids.append(None)  # No new storage created
+            # Include storage ID for reused tensors to track all modifications
+            output_storage_ids.append(tensor.untyped_storage().data_ptr())
         else:
             # Create new tensor
             new_tensor = torch.empty(

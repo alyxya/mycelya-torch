@@ -210,7 +210,7 @@ class ModalClient(ClientInterface):
         Args:
             op_name: The aten operation name
             input_tensor_metadata: Metadata for reconstructing input tensors only
-            output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
+            output_storage_ids: List of storage IDs to update with results (all output tensors)
             args: Operation arguments
             kwargs: Operation keyword arguments
             return_metadata: If True, return output tensor metadata instead of None

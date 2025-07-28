@@ -244,7 +244,7 @@ class ClientInterface(ABC):
         Args:
             op_name: The aten operation name to execute
             input_tensor_metadata: Metadata for reconstructing input tensors only
-            output_storage_ids: List of storage IDs to update with results (None for outputs to ignore)
+            output_storage_ids: List of storage IDs to update with results (all output tensors)
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
             return_metadata: If True, return output tensor metadata instead of None

@@ -251,7 +251,7 @@ class RemoteOrchestrator:
         Args:
             op_name: Name of the operation to execute
             input_metadata: Metadata for remote input tensors (always have storage_id)
-            output_storage_ids: Storage IDs for remote output tensors
+            output_storage_ids: Storage IDs for all output tensors (both new and reused)
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
             return_metadata: If True, return output tensor metadata instead of None
@@ -270,7 +270,7 @@ class RemoteOrchestrator:
             input_tensor_metadata_dicts.append(meta_dict)
 
         # output_storage_ids is now passed directly from _create_output_tensors
-        # Contains storage_id for new tensors, None for reused tensors
+        # Contains storage_id for all output tensors (both new and reused)
 
         # Validate that we have input metadata
         if not input_metadata:
