@@ -172,6 +172,14 @@ def _create_module() -> types.ModuleType:
         mycelya_torch._C._init()
         module._initialized = True
 
+    def get_amp_supported_dtype():
+        """Get the list of supported dtypes for AMP (Automatic Mixed Precision).
+        
+        Returns:
+            List of torch.dtype objects supported for AMP operations
+        """
+        return [torch.float16, torch.bfloat16]
+
     module.is_available = is_available  # type: ignore[assignment]
 
     module._initialized = False  # type: ignore[assignment]
@@ -184,6 +192,7 @@ def _create_module() -> types.ModuleType:
     module.initial_seed = initial_seed  # type: ignore[assignment]
     module.manual_seed = manual_seed  # type: ignore[assignment]
     module.manual_seed_all = manual_seed_all  # type: ignore[assignment]
+    module.get_amp_supported_dtype = get_amp_supported_dtype  # type: ignore[assignment]
 
     return module
 

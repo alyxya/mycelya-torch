@@ -51,6 +51,7 @@ def create_modal_app_for_gpu(
         retries=retries,
         serialized=True,
         max_containers=1,
+        min_containers=1,
     )
     class PytorchServer:
         def _get_storages(self):
