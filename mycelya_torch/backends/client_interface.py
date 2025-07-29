@@ -134,7 +134,7 @@ class ClientInterface(ABC):
         target_shape: List[int],
         target_stride: List[int],
         target_storage_offset: int,
-        target_dtype: str
+        target_dtype: str,
     ) -> None:
         """
         Update an existing storage with raw tensor data.
@@ -339,12 +339,7 @@ class ClientInterface(ABC):
 
         # Create temporary view from cached tensor to get the data
         temp_tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
-        temp_tensor.set_(
-            cached_tensor.untyped_storage(),
-            storage_offset,
-            shape,
-            stride
-        )
+        temp_tensor.set_(cached_tensor.untyped_storage(), storage_offset, shape, stride)
 
         # Return a copy to protect the cache from mutations
         return temp_tensor.clone()
@@ -357,7 +352,7 @@ class ClientInterface(ABC):
         args: tuple,
         kwargs: dict,
         return_future: bool = False,
-        invalidate_storage_ids: Optional[List[int]] = None
+        invalidate_storage_ids: Optional[List[int]] = None,
     ) -> Optional[Any]:
         """
         Helper method to queue an RPC call for batching.
@@ -385,13 +380,14 @@ class ClientInterface(ABC):
             method_name=method_name,
             args=args,
             kwargs=kwargs,
-            return_future=return_future
+            return_future=return_future,
         )
 
     def _register_for_batching(self) -> None:
         """Register this client with the orchestrator for batching."""
         if not self._registered_for_batching:
             from .._remote_orchestrator import remote_orchestrator
+
             remote_orchestrator.register_client_for_batching(self)
             self._registered_for_batching = True
 
@@ -399,6 +395,7 @@ class ClientInterface(ABC):
         """Unregister this client from the orchestrator for batching."""
         if self._registered_for_batching:
             from .._remote_orchestrator import remote_orchestrator
+
             remote_orchestrator.unregister_client_for_batching(self)
             self._registered_for_batching = False
 

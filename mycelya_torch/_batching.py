@@ -28,13 +28,16 @@ class BatchedRPCCall:
     This encapsulates all the information needed to execute an RPC call
     along with metadata for batching and future handling.
     """
+
     call_type: str  # "spawn" (fire-and-forget) or "remote" (blocking)
     method_name: str  # e.g., "create_storage", "execute_aten_operation"
     args: tuple
     kwargs: dict
     future: Optional[Future] = None  # Only populated for "remote" calls
     queued_at: float = field(default_factory=time.time)  # For cache invalidation timing
-    call_id: str = field(default_factory=lambda: f"call_{id(object())}")  # Unique ID for debugging
+    call_id: str = field(
+        default_factory=lambda: f"call_{id(object())}"
+    )  # Unique ID for debugging
 
 
 @dataclass
@@ -45,6 +48,7 @@ class BatchExecutionResult:
     Contains both successful results and any errors that occurred,
     allowing for partial batch execution and proper error handling.
     """
+
     results: List[Union[Any, Exception]]  # Results in same order as input calls
     success_count: int
     error_count: int
@@ -81,7 +85,7 @@ class RPCBatchQueue:
         method_name: str,
         args: tuple,
         kwargs: dict,
-        return_future: bool = False
+        return_future: bool = False,
     ) -> Optional[Future]:
         """
         Add an RPC call to the batch queue.
@@ -106,13 +110,15 @@ class RPCBatchQueue:
                 method_name=method_name,
                 args=args,
                 kwargs=kwargs,
-                future=future
+                future=future,
             )
 
             self._queue.put(call)
             self._queued_calls += 1
 
-            log.debug(f"📦 Queued {call_type} call: {method_name} for client {self.client_id}")
+            log.debug(
+                f"📦 Queued {call_type} call: {method_name} for client {self.client_id}"
+            )
 
             return future
 
@@ -141,7 +147,9 @@ class RPCBatchQueue:
             if batch:
                 self._processed_calls += len(batch)
                 self._last_batch_time = time.time()
-                log.debug(f"📋 Retrieved batch of {len(batch)} calls for client {self.client_id}")
+                log.debug(
+                    f"📋 Retrieved batch of {len(batch)} calls for client {self.client_id}"
+                )
 
             return batch
 
@@ -159,7 +167,7 @@ class RPCBatchQueue:
                 "queued_calls": self._queued_calls,
                 "processed_calls": self._processed_calls,
                 "last_batch_time": self._last_batch_time,
-                "pending_calls": self._queued_calls - self._processed_calls
+                "pending_calls": self._queued_calls - self._processed_calls,
             }
 
     def clear(self) -> None:
@@ -186,8 +194,7 @@ class BatchProcessor:
 
     @staticmethod
     def execute_batch(
-        server_instance: Any,
-        batch: List[BatchedRPCCall]
+        server_instance: Any, batch: List[BatchedRPCCall]
     ) -> BatchExecutionResult:
         """
         Execute a batch of RPC calls on the server instance using the batched RPC method.
@@ -215,13 +222,17 @@ class BatchProcessor:
                     "call_type": call.call_type,
                     "args": call.args,
                     "kwargs": call.kwargs,
-                    "call_id": call.call_id
+                    "call_id": call.call_id,
                 }
                 batch_calls.append(batch_call)
 
-            log.info(f"🔍 DEBUG: About to call server_instance.execute_batch.remote() with {len(batch_calls)} calls")
+            log.info(
+                f"🔍 DEBUG: About to call server_instance.execute_batch.remote() with {len(batch_calls)} calls"
+            )
             log.info(f"🔍 DEBUG: server_instance type: {type(server_instance)}")
-            log.info(f"🔍 DEBUG: execute_batch method: {type(getattr(server_instance, 'execute_batch', None))}")
+            log.info(
+                f"🔍 DEBUG: execute_batch method: {type(getattr(server_instance, 'execute_batch', None))}"
+            )
 
             # Execute all calls in a single batched RPC
             results = server_instance.execute_batch.remote(batch_calls)
@@ -244,13 +255,15 @@ class BatchProcessor:
 
             execution_time = time.time() - start_time
 
-            log.info(f"✅ Batch execution complete: {success_count} success, {error_count} errors, {execution_time:.3f}s")
+            log.info(
+                f"✅ Batch execution complete: {success_count} success, {error_count} errors, {execution_time:.3f}s"
+            )
 
             return BatchExecutionResult(
                 results=results,
                 success_count=success_count,
                 error_count=error_count,
-                execution_time=execution_time
+                execution_time=execution_time,
             )
 
         except Exception as e:
@@ -267,5 +280,5 @@ class BatchProcessor:
                 results=[e] * len(batch),
                 success_count=0,
                 error_count=len(batch),
-                execution_time=execution_time
+                execution_time=execution_time,
             )

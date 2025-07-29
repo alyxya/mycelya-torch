@@ -59,17 +59,17 @@ class MockClient(ClientInterface):
             # Create server instance for mock execution
             self._server_instance = self._server_class()
             self._is_running = True
-            
+
             # Register for RPC batching
             self._register_for_batching()
-            
+
             log.info(f"Started mock client: {self.machine_id}")
 
     def stop(self):
         """Stop the mock execution environment."""
         # Unregister from RPC batching first
         self._unregister_for_batching()
-        
+
         if self._is_running:
             self._server_instance = None
             self._is_running = False
@@ -113,7 +113,7 @@ class MockClient(ClientInterface):
         target_shape: List[int],
         target_stride: List[int],
         target_storage_offset: int,
-        target_dtype: str
+        target_dtype: str,
     ) -> None:
         """
         Update an existing storage with storage tensor data using mock execution.
@@ -148,9 +148,16 @@ class MockClient(ClientInterface):
 
         # Execute using .local() instead of queuing for remote execution
         self._server_instance.update_storage.local(
-            storage_id, torch_bytes,
-            source_shape, source_stride, source_storage_offset, source_dtype,
-            target_shape, target_stride, target_storage_offset, target_dtype
+            storage_id,
+            torch_bytes,
+            source_shape,
+            source_stride,
+            source_storage_offset,
+            source_dtype,
+            target_shape,
+            target_stride,
+            target_storage_offset,
+            target_dtype,
         )
 
     def _get_storage_data(
@@ -210,7 +217,9 @@ class MockClient(ClientInterface):
         torch_bytes = self._server_instance.get_storage_data.local(storage_id)
 
         if torch_bytes is None:
-            raise RuntimeError(f"Failed to retrieve storage data for storage {storage_id}")
+            raise RuntimeError(
+                f"Failed to retrieve storage data for storage {storage_id}"
+            )
 
         # Deserialize tensor directly for caching (should be 1D uint8)
         from ..._tensor_utils import torch_bytes_to_cpu_tensor
@@ -301,7 +310,12 @@ class MockClient(ClientInterface):
 
         # Execute using .local() instead of remote call
         result = self._server_instance.execute_aten_operation.local(
-            op_name, input_tensor_metadata, output_storage_ids, args, kwargs, return_metadata
+            op_name,
+            input_tensor_metadata,
+            output_storage_ids,
+            args,
+            kwargs,
+            return_metadata,
         )
 
         if return_metadata:
@@ -317,11 +331,11 @@ class MockClient(ClientInterface):
         args: tuple,
         kwargs: dict,
         return_future: bool = False,
-        invalidate_storage_ids: Optional[List[int]] = None
+        invalidate_storage_ids: Optional[List[int]] = None,
     ) -> Optional[Any]:
         """
         Override the base class method to handle any remaining RPC calls.
-        
+
         This should not be called in the mock client since we execute directly,
         but we provide it for compatibility.
         """
@@ -331,7 +345,9 @@ class MockClient(ClientInterface):
 
         # For mock client, we should not queue calls, but execute directly
         # This method is mainly for compatibility with the base class
-        log.warning(f"Mock client received unexpected RPC call: {method_name}. Consider using direct method calls.")
+        log.warning(
+            f"Mock client received unexpected RPC call: {method_name}. Consider using direct method calls."
+        )
         return None
 
     def __repr__(self) -> str:

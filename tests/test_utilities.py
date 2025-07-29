@@ -104,8 +104,11 @@ class NumericalTestUtils:
             if non_nan_mask.any():
                 actual_clean = actual[non_nan_mask]
                 expected_clean = expected[non_nan_mask]
-                assert torch.allclose(actual_clean, expected_clean, rtol=rtol, atol=atol), \
+                assert torch.allclose(
+                    actual_clean, expected_clean, rtol=rtol, atol=atol
+                ), (
                     f"Non-NaN values not close: max diff = {torch.max(torch.abs(actual_clean - expected_clean)).item()}"
+                )
             return
 
         if msg is None:

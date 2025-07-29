@@ -430,7 +430,13 @@ class TestRobustnessAndRecovery:
                     result = scenario()
                     if result is not None:
                         successful_operations += 1
-            except (RuntimeError, ValueError, NotImplementedError, AttributeError, IndexError):
+            except (
+                RuntimeError,
+                ValueError,
+                NotImplementedError,
+                AttributeError,
+                IndexError,
+            ):
                 # Errors are expected and should be handled gracefully
                 pass
 

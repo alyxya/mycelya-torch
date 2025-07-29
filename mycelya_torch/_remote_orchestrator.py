@@ -67,7 +67,7 @@ class RemoteOrchestrator:
             self._batch_thread = threading.Thread(
                 target=self._batch_processing_loop,
                 name="RPCBatchProcessor",
-                daemon=True
+                daemon=True,
             )
             self._batch_thread.start()
             log.info("🧵 Started RPC batch processing thread")
@@ -107,7 +107,7 @@ class RemoteOrchestrator:
 
     def _process_client_batch(self, client: ClientInterface) -> None:
         """Process a batch of RPC calls for a specific client."""
-        if not hasattr(client, '_batch_queue'):
+        if not hasattr(client, "_batch_queue"):
             return
 
         batch = client._batch_queue.get_batch()
@@ -118,9 +118,11 @@ class RemoteOrchestrator:
             # Execute the batch
             result = BatchProcessor.execute_batch(client._server_instance, batch)
 
-            log.debug(f"📊 Batch processed for {client}: "
-                     f"{result.success_count} success, {result.error_count} errors, "
-                     f"{result.execution_time:.3f}s")
+            log.debug(
+                f"📊 Batch processed for {client}: "
+                f"{result.success_count} success, {result.error_count} errors, "
+                f"{result.execution_time:.3f}s"
+            )
 
         except Exception as e:
             log.error(f"❌ Batch execution failed for client {client}: {e}")
@@ -148,12 +150,14 @@ class RemoteOrchestrator:
             stats = {
                 "registered_clients": len(self._batch_clients),
                 "batch_interval": self._batch_interval,
-                "thread_alive": self._batch_thread.is_alive() if self._batch_thread else False,
-                "clients": []
+                "thread_alive": self._batch_thread.is_alive()
+                if self._batch_thread
+                else False,
+                "clients": [],
             }
 
             for client in self._batch_clients:
-                if hasattr(client, '_batch_queue'):
+                if hasattr(client, "_batch_queue"):
                     client_stats = client._batch_queue.get_stats()
                     stats["clients"].append(client_stats)
 
@@ -175,7 +179,9 @@ class RemoteOrchestrator:
             machine = get_machine_for_storage(storage_id)
             return self._get_validated_client(machine)
         except Exception as e:
-            raise RuntimeError(f"Failed to resolve client for storage {storage_id}: {e}") from e
+            raise RuntimeError(
+                f"Failed to resolve client for storage {storage_id}: {e}"
+            ) from e
 
     def _get_client_for_machine(self, machine: RemoteMachine) -> ClientInterface:
         """Get the client for a specific machine with validation.
@@ -208,7 +214,9 @@ class RemoteOrchestrator:
             raise RuntimeError(f"No client available for machine {machine.machine_id}")
 
         if not client.is_running():
-            raise RuntimeError(f"Client for machine {machine.machine_id} is not running")
+            raise RuntimeError(
+                f"Client for machine {machine.machine_id} is not running"
+            )
 
         return client
 
@@ -252,7 +260,9 @@ class RemoteOrchestrator:
 
         client = self._get_validated_client(machine)
         client.create_storage(storage_id, nbytes)
-        log.info(f"✅ ORCHESTRATOR: Created storage {storage_id} on device {device_index}")
+        log.info(
+            f"✅ ORCHESTRATOR: Created storage {storage_id} on device {device_index}"
+        )
 
         # Note: No cache invalidation needed for create_storage - new storage has no cached data
 
@@ -267,7 +277,7 @@ class RemoteOrchestrator:
         target_shape: List[int],
         target_stride: List[int],
         target_storage_offset: int,
-        target_dtype: str
+        target_dtype: str,
     ) -> None:
         """Update existing storage with storage tensor data.
 
@@ -288,9 +298,16 @@ class RemoteOrchestrator:
         """
         client = self._get_client_for_storage(storage_id)
         client.update_storage(
-            storage_id, storage_tensor,
-            source_shape, source_stride, source_storage_offset, source_dtype,
-            target_shape, target_stride, target_storage_offset, target_dtype
+            storage_id,
+            storage_tensor,
+            source_shape,
+            source_stride,
+            source_storage_offset,
+            source_dtype,
+            target_shape,
+            target_stride,
+            target_storage_offset,
+            target_dtype,
         )
 
         # Note: Cache invalidation now happens at queue time in batching system
@@ -302,7 +319,7 @@ class RemoteOrchestrator:
         shape: List[int],
         stride: List[int],
         storage_offset: int,
-        dtype: str
+        dtype: str,
     ) -> "torch.Tensor":
         """Get storage data as a tensor with specified view parameters.
 
@@ -323,7 +340,9 @@ class RemoteOrchestrator:
             RuntimeError: If storage or client not available
         """
         client = self._get_client_for_storage(storage_id)
-        result = client.get_storage_tensor(storage_id, shape, stride, storage_offset, dtype)
+        result = client.get_storage_tensor(
+            storage_id, shape, stride, storage_offset, dtype
+        )
         log.info(f"✅ ORCHESTRATOR: Retrieved tensor for storage {storage_id}")
         return result
 
@@ -413,6 +432,7 @@ class RemoteOrchestrator:
         # Validate all storage IDs are on the same device
         if all_storage_ids:
             from ._storage import validate_cross_device_operation
+
             validate_cross_device_operation(all_storage_ids)
 
         # Get the client using the first input tensor's storage ID
@@ -421,7 +441,12 @@ class RemoteOrchestrator:
 
         # Execute with separated input/output interface
         result = client.execute_aten_operation(
-            op_name, input_tensor_metadata_dicts, output_storage_ids, args, kwargs, return_metadata
+            op_name,
+            input_tensor_metadata_dicts,
+            output_storage_ids,
+            args,
+            kwargs,
+            return_metadata,
         )
 
         # Note: With batching, cache invalidation for aten operations happens at queue time

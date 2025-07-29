@@ -333,7 +333,7 @@ class TestMathOperationsEdgeCases:
         device = shared_devices["t4"]
 
         # Test with values that might cause numerical issues
-        cpu_tensor = torch.tensor([0.0, 1.0, -1.0, float('inf'), -float('inf')])
+        cpu_tensor = torch.tensor([0.0, 1.0, -1.0, float("inf"), -float("inf")])
         remote_tensor = cpu_tensor.to(device.device())
 
         # Test operations that handle special values
@@ -347,7 +347,8 @@ class TestMathOperationsEdgeCases:
                 NumericalTestUtils.assert_tensors_close(
                     remote_result.cpu()[finite_mask],
                     cpu_result[finite_mask],
-                    rtol=1e-8, atol=1e-8
+                    rtol=1e-8,
+                    atol=1e-8,
                 )
 
     @pytest.mark.fast

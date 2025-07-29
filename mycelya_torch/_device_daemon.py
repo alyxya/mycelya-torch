@@ -181,7 +181,6 @@ class Driver:
 
         return get_storage_device(storage_id)
 
-
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         from ._storage import resize_storage_by_id

@@ -26,8 +26,6 @@ MIN_STORAGE_ID = 1
 MAX_STORAGE_ID = 2**63 - 1  # 64-bit signed integer max
 
 
-
-
 class StorageRegistry:
     """
     Simplified registry to track remote storage IDs only.
@@ -79,7 +77,9 @@ class StorageRegistry:
                 )
 
         if storage_id == 0:
-            log.error(f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts")
+            log.error(
+                f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts"
+            )
             return 0
 
         # Always track the storage ID for all tensors
@@ -92,11 +92,12 @@ class StorageRegistry:
             # Use orchestrator to create storage with device routing
             remote_orchestrator.create_storage(storage_id, nbytes, device_index)
             log.info(
-                f"Registered storage {storage_id} via orchestrator "
-                f"({nbytes} bytes)"
+                f"Registered storage {storage_id} via orchestrator ({nbytes} bytes)"
             )
         except Exception as e:
-            log.warning(f"Failed to register storage {storage_id} via orchestrator: {e}")
+            log.warning(
+                f"Failed to register storage {storage_id} via orchestrator: {e}"
+            )
             # Clean up the failed storage ID
             self.storage_id_to_device.pop(storage_id, None)
             self.generated_storage_ids.discard(storage_id)
@@ -183,7 +184,6 @@ class StorageRegistry:
                 f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}"
             )
 
-
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         """Resize remote storage by storage ID"""
         try:
@@ -227,8 +227,6 @@ def free_storage_with_id(storage_id: int) -> bool:
 def get_storage_device(storage_id: int) -> Optional[int]:
     """Get device index for a storage ID."""
     return _storage_registry.get_storage_device(storage_id)
-
-
 
 
 def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:

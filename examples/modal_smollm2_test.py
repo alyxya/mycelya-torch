@@ -11,6 +11,7 @@ image = modal.Image.debian_slim().pip_install(
     "tokenizers",  # Required by transformers
 )
 
+
 @app.function(
     image=image,
     gpu="T4",
@@ -31,16 +32,20 @@ def run_smollm2():
     print(input_text)
 
     inputs = tokenizer.encode(input_text, return_tensors="pt").to(device)
-    outputs = model.generate(inputs, max_new_tokens=50, temperature=0.2, top_p=0.9, do_sample=True)
+    outputs = model.generate(
+        inputs, max_new_tokens=50, temperature=0.2, top_p=0.9, do_sample=True
+    )
 
     result = tokenizer.decode(outputs[0])
     print(result)
     return result
 
+
 def main():
     with app.run():
         result = run_smollm2.remote()
         print(f"Generated text: {result}")
+
 
 if __name__ == "__main__":
     main()

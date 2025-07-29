@@ -172,7 +172,9 @@ class TestRepeatAndTileOperations:
         )
 
     @pytest.mark.fast
-    @pytest.mark.skip(reason="PyTorch bug: repeat_interleave with tensor repeats causes incorrect dispatch to single-argument overload")
+    @pytest.mark.skip(
+        reason="PyTorch bug: repeat_interleave with tensor repeats causes incorrect dispatch to single-argument overload"
+    )
     def test_repeat_interleave_with_tensor_repeats(self, shared_devices):
         device = shared_devices["t4"]
 
@@ -222,7 +224,9 @@ class TestSortingOperations:
             pytest.skip(f"Dimension {dim} invalid for tensor shape")
 
         cpu_values, cpu_indices = torch.sort(cpu_tensor, dim=dim, descending=descending)
-        remote_values, remote_indices = torch.sort(remote_tensor, dim=dim, descending=descending)
+        remote_values, remote_indices = torch.sort(
+            remote_tensor, dim=dim, descending=descending
+        )
 
         NumericalTestUtils.assert_tensors_close(
             remote_values.cpu(), cpu_values, rtol=1e-8, atol=1e-8
@@ -290,7 +294,7 @@ class TestPaddingOperations:
     """Test tensor padding operations."""
 
     @pytest.mark.parametrize("pad", [(1, 1), (2, 3), (1, 1, 2, 2)])
-    @pytest.mark.parametrize("mode", ['constant', 'reflect', 'replicate'])
+    @pytest.mark.parametrize("mode", ["constant", "reflect", "replicate"])
     @pytest.mark.fast
     def test_pad_operations(self, shared_devices, pad, mode):
         device = shared_devices["t4"]
@@ -304,9 +308,9 @@ class TestPaddingOperations:
         remote_tensor = cpu_tensor.to(device.device())
 
         # For reflect and replicate modes, ensure tensor is large enough
-        if mode in ['reflect', 'replicate']:
+        if mode in ["reflect", "replicate"]:
             min_size = max(pad) + 1
-            if any(s <= min_size for s in cpu_tensor.shape[-len(pad)//2:]):
+            if any(s <= min_size for s in cpu_tensor.shape[-len(pad) // 2 :]):
                 pytest.skip(f"Tensor too small for {mode} padding with pad={pad}")
 
         cpu_result = torch.nn.functional.pad(cpu_tensor, pad, mode=mode)
@@ -325,8 +329,12 @@ class TestPaddingOperations:
         cpu_tensor = torch.randn(4, 5)
         remote_tensor = cpu_tensor.to(device.device())
 
-        cpu_result = torch.nn.functional.pad(cpu_tensor, pad, mode='constant', value=value)
-        remote_result = torch.nn.functional.pad(remote_tensor, pad, mode='constant', value=value)
+        cpu_result = torch.nn.functional.pad(
+            cpu_tensor, pad, mode="constant", value=value
+        )
+        remote_result = torch.nn.functional.pad(
+            remote_tensor, pad, mode="constant", value=value
+        )
 
         NumericalTestUtils.assert_tensors_close(
             remote_result.cpu(), cpu_result, rtol=1e-8, atol=1e-8
@@ -384,7 +392,9 @@ class TestReshapingOperations:
 
         # Skip invalid combinations
         if start + length > cpu_tensor.shape[0]:
-            pytest.skip(f"Invalid narrow: start={start}, length={length} for size {cpu_tensor.shape[0]}")
+            pytest.skip(
+                f"Invalid narrow: start={start}, length={length} for size {cpu_tensor.shape[0]}"
+            )
 
         cpu_result = torch.narrow(cpu_tensor, 0, start, length)
         remote_result = torch.narrow(remote_tensor, 0, start, length)
@@ -444,7 +454,9 @@ class TestTensorManipulationWithGradients:
         device = shared_devices["t4"]
 
         cpu_tensors = [torch.randn(3, 4, requires_grad=True) for _ in range(3)]
-        remote_tensors = [t.to(device.device()).detach().requires_grad_() for t in cpu_tensors]
+        remote_tensors = [
+            t.to(device.device()).detach().requires_grad_() for t in cpu_tensors
+        ]
 
         cpu_result = torch.stack(cpu_tensors, dim=0)
         remote_result = torch.stack(remote_tensors, dim=0)
@@ -537,11 +549,7 @@ class TestTensorManipulationEdgeCases:
         device = shared_devices["t4"]
 
         # Test stacking tensors with different dimensions
-        cpu_tensors = [
-            torch.randn(3, 4),
-            torch.randn(3, 4),
-            torch.randn(3, 4)
-        ]
+        cpu_tensors = [torch.randn(3, 4), torch.randn(3, 4), torch.randn(3, 4)]
         remote_tensors = [t.to(device.device()) for t in cpu_tensors]
 
         # Test different stack dimensions

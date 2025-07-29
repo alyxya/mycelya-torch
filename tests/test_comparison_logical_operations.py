@@ -78,7 +78,9 @@ class TestComparisonOperations:
             cpu_result = op_func(cpu_a, cpu_b)
             remote_result = op_func(remote_a, remote_b)
 
-            assert torch.equal(remote_result.cpu(), cpu_result), f"Operator {op_name} failed"
+            assert torch.equal(remote_result.cpu(), cpu_result), (
+                f"Operator {op_name} failed"
+            )
 
 
 class TestSpecialValueComparisons:
@@ -88,7 +90,7 @@ class TestSpecialValueComparisons:
     def test_isnan_operations(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.tensor([1.0, float('nan'), 2.0, float('nan')])
+        cpu_tensor = torch.tensor([1.0, float("nan"), 2.0, float("nan")])
         remote_tensor = cpu_tensor.to(device.device())
 
         cpu_result = torch.isnan(cpu_tensor)
@@ -100,7 +102,7 @@ class TestSpecialValueComparisons:
     def test_isinf_operations(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.tensor([1.0, float('inf'), -float('inf'), 2.0])
+        cpu_tensor = torch.tensor([1.0, float("inf"), -float("inf"), 2.0])
         remote_tensor = cpu_tensor.to(device.device())
 
         cpu_result = torch.isinf(cpu_tensor)
@@ -112,7 +114,7 @@ class TestSpecialValueComparisons:
     def test_isfinite_operations(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.tensor([1.0, float('inf'), float('nan'), -2.0])
+        cpu_tensor = torch.tensor([1.0, float("inf"), float("nan"), -2.0])
         remote_tensor = cpu_tensor.to(device.device())
 
         cpu_result = torch.isfinite(cpu_tensor)
@@ -124,7 +126,7 @@ class TestSpecialValueComparisons:
     def test_isposinf_isneginf(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.tensor([1.0, float('inf'), -float('inf'), 0.0])
+        cpu_tensor = torch.tensor([1.0, float("inf"), -float("inf"), 0.0])
         remote_tensor = cpu_tensor.to(device.device())
 
         # Test isposinf
@@ -367,13 +369,13 @@ class TestComparisonLogicalEdgeCases:
     def test_comparison_with_special_values(self, shared_devices):
         device = shared_devices["t4"]
 
-        cpu_tensor = torch.tensor([1.0, float('nan'), float('inf'), -float('inf')])
+        cpu_tensor = torch.tensor([1.0, float("nan"), float("inf"), -float("inf")])
         remote_tensor = cpu_tensor.to(device.device())
 
         # Test comparisons with NaN (should always be False except !=)
         for operation in ["eq", "ne", "lt", "le", "gt", "ge"]:
-            cpu_result = getattr(torch, operation)(cpu_tensor, float('nan'))
-            remote_result = getattr(torch, operation)(remote_tensor, float('nan'))
+            cpu_result = getattr(torch, operation)(cpu_tensor, float("nan"))
+            remote_result = getattr(torch, operation)(remote_tensor, float("nan"))
             assert torch.equal(remote_result.cpu(), cpu_result)
 
     @pytest.mark.fast

@@ -11,7 +11,6 @@ This module provides a clean, type-safe API for tensor conversions:
 - Serialization utilities for data transfer
 """
 
-import io
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple, Union
@@ -47,7 +46,6 @@ class BaseTensorMetadata(ABC):
         return torch.empty(self.shape, dtype=self.dtype, device="meta").as_strided(
             self.shape, self.stride, self.storage_offset
         )
-
 
 
 @dataclass
@@ -145,11 +143,7 @@ TensorMetadata = Union[LocalTensorMetadata, RemoteTensorMetadata]
 
 
 def storage_bytes_to_cpu_tensor(
-    raw_bytes: bytes,
-    shape: list,
-    stride: list,
-    storage_offset: int,
-    dtype: str
+    raw_bytes: bytes, shape: list, stride: list, storage_offset: int, dtype: str
 ) -> torch.Tensor:
     """
     Convert raw storage bytes to a CPU tensor with specified view parameters.
@@ -182,7 +176,7 @@ def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     """
     Convert a CPU tensor to bytes for data transfer.
 
-    DEPRECATED: Use cpu_tensor_to_storage_bytes() instead.
+    DEPRECATED: Use cpu_tensor_to_torch_bytes() instead for optimized serialization.
 
     Args:
         tensor: CPU tensor to serialize
@@ -190,20 +184,23 @@ def cpu_tensor_to_bytes(tensor: torch.Tensor) -> bytes:
     Returns:
         Serialized tensor data
     """
-    if tensor.device.type != "cpu":
-        raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
+    import warnings
 
-    # Serialize to bytes
-    buffer = io.BytesIO()
-    torch.save(tensor, buffer)
-    return buffer.getvalue()
+    warnings.warn(
+        "cpu_tensor_to_bytes() is deprecated. Use cpu_tensor_to_torch_bytes() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    # Use the optimized implementation
+    return cpu_tensor_to_torch_bytes(tensor)
 
 
 def bytes_to_cpu_tensor(data: bytes) -> torch.Tensor:
     """
     Convert bytes to a CPU tensor.
 
-    DEPRECATED: Use storage_bytes_to_cpu_tensor() instead.
+    DEPRECATED: Use torch_bytes_to_cpu_tensor() instead for optimized deserialization.
 
     Args:
         data: Serialized tensor data
@@ -211,23 +208,32 @@ def bytes_to_cpu_tensor(data: bytes) -> torch.Tensor:
     Returns:
         CPU tensor reconstructed from bytes (always contiguous and packed)
     """
-    buffer = io.BytesIO(data)
-    return torch.load(buffer, map_location="cpu", weights_only=False)
+    import warnings
+
+    warnings.warn(
+        "bytes_to_cpu_tensor() is deprecated. Use torch_bytes_to_cpu_tensor() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    # Use the optimized implementation
+    return torch_bytes_to_cpu_tensor(data)
 
 
 def cpu_tensor_to_torch_bytes(tensor: torch.Tensor) -> bytes:
     """
-    Convert a CPU tensor to torch.save serialized bytes.
+    Convert a CPU tensor to optimized bytes using a custom serialization format.
 
-    This function uses PyTorch's native serialization to convert a CPU tensor
-    to bytes that can be sent over RPC. The tensor is preserved exactly as-is
-    including its shape, stride, storage_offset, and dtype.
+    This function uses an optimized approach that stores tensor metadata and raw data
+    separately for better performance than torch.save. The format includes:
+    - Shape, stride, storage_offset, dtype as JSON metadata
+    - Raw tensor data using numpy.tobytes()
 
     Args:
         tensor: CPU tensor to serialize
 
     Returns:
-        Serialized tensor data using torch.save
+        Serialized tensor data in optimized format
 
     Raises:
         ValueError: If tensor is not on CPU device
@@ -235,29 +241,104 @@ def cpu_tensor_to_torch_bytes(tensor: torch.Tensor) -> bytes:
     if tensor.device.type != "cpu":
         raise ValueError(f"Expected CPU tensor, got device: {tensor.device}")
 
-    buffer = io.BytesIO()
-    torch.save(tensor, buffer)
-    return buffer.getvalue()
+    import json
+
+    # Create metadata dict
+    metadata = {
+        "shape": list(tensor.shape),
+        "stride": list(tensor.stride()),
+        "storage_offset": tensor.storage_offset(),
+        "dtype": str(tensor.dtype).split(".")[-1],  # e.g., "float32"
+    }
+
+    # Serialize metadata to JSON bytes
+    metadata_json = json.dumps(metadata).encode("utf-8")
+    metadata_length = len(metadata_json)
+
+    # Get raw data using optimized numpy approach
+    raw_data = tensor.numpy().tobytes()
+
+    # Pack format: [metadata_length:4 bytes][metadata:N bytes][raw_data:remaining bytes]
+    return metadata_length.to_bytes(4, byteorder="little") + metadata_json + raw_data
 
 
 def torch_bytes_to_cpu_tensor(data: bytes) -> torch.Tensor:
     """
-    Convert torch.save serialized bytes back to a CPU tensor.
+    Convert optimized serialized bytes back to a CPU tensor.
 
     This function deserializes bytes created by cpu_tensor_to_torch_bytes()
-    back into a CPU tensor, preserving all tensor properties.
+    using the custom format that includes metadata and raw data.
 
     Args:
-        data: Serialized tensor data from torch.save
+        data: Serialized tensor data in optimized format
 
     Returns:
         CPU tensor reconstructed from serialized bytes
     """
-    buffer = io.BytesIO(data)
-    tensor = torch.load(buffer, map_location="cpu", weights_only=False)
+    import json
 
-    # Ensure the result is on CPU (should already be due to map_location)
-    if tensor.device.type != "cpu":
-        tensor = tensor.cpu()
+    # Unpack format: [metadata_length:4 bytes][metadata:N bytes][raw_data:remaining bytes]
+    if len(data) < 4:
+        raise ValueError("Invalid serialized data: too short")
+
+    # Extract metadata length
+    metadata_length = int.from_bytes(data[:4], byteorder="little")
+
+    if len(data) < 4 + metadata_length:
+        raise ValueError("Invalid serialized data: insufficient metadata")
+
+    # Extract and parse metadata
+    metadata_json = data[4 : 4 + metadata_length].decode("utf-8")
+    metadata = json.loads(metadata_json)
+
+    # Extract raw data
+    raw_data = data[4 + metadata_length :]
+
+    # Convert dtype string back to torch.dtype
+    dtype_name = metadata["dtype"]
+    torch_dtype = getattr(torch, dtype_name)
+
+    # Create writable buffer to avoid PyTorch warnings
+    writable_data = bytearray(raw_data)
+
+    # Reconstruct tensor using torch.frombuffer
+    flat_tensor = torch.frombuffer(writable_data, dtype=torch_dtype)
+
+    # Reshape and apply stride/offset
+    tensor = flat_tensor.clone()  # Clone to ensure independent memory
+    tensor = tensor.reshape(metadata["shape"])
+
+    # If the tensor has custom stride or offset, we need to use as_strided
+    if list(tensor.stride()) != metadata["stride"] or metadata["storage_offset"] != 0:
+        tensor = tensor.as_strided(
+            metadata["shape"], metadata["stride"], metadata["storage_offset"]
+        )
 
     return tensor
+
+
+def numpy_bytes_to_cpu_tensor(
+    data: bytes, shape: Tuple[int, ...], dtype: torch.dtype
+) -> torch.Tensor:
+    """
+    Convert numpy serialized bytes back to a CPU tensor with writable buffer handling.
+
+    This function deserializes bytes created by tensor.numpy().tobytes()
+    back into a CPU tensor, ensuring the buffer is writable to avoid PyTorch warnings.
+
+    Args:
+        data: Serialized tensor data from numpy serialization
+        shape: Original tensor shape
+        dtype: Original tensor dtype
+
+    Returns:
+        CPU tensor reconstructed from serialized bytes
+    """
+    # Create a writable bytearray to avoid PyTorch warnings about non-writable buffers
+    writable_data = bytearray(data)
+
+    # Use torch.frombuffer with the writable buffer
+    tensor = torch.frombuffer(writable_data, dtype=dtype).reshape(shape)
+
+    # Clone to ensure we have our own memory (not a view into the bytearray)
+    return tensor.clone()

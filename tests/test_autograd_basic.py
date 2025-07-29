@@ -294,8 +294,12 @@ class TestRetainGradFunctionality:
         loss_cpu.backward()
 
         # Remote computation
-        x_remote = x_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
+        x_remote = (
+            x_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
+        )
+        y_remote = (
+            y_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
+        )
         z_remote = x_remote * y_remote
         z_remote.retain_grad()
         loss_remote = z_remote.sum()
@@ -431,7 +435,9 @@ class TestGradientNumericalVerification:
     def test_gradient_numerical_simple(self, shared_devices):
         """Test gradient computation against CPU reference."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
+        x_remote = (
+            x_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
+        )
 
         # CPU computation
         y_cpu = (x_cpu**2).sum()
@@ -452,7 +458,9 @@ class TestGradientNumericalVerification:
     def test_chain_rule_verification(self, shared_devices):
         """Test chain rule implementation."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
+        x_remote = (
+            x_cpu.clone().to(shared_devices["t4"].device()).detach().requires_grad_()
+        )
 
         # CPU computation: y = (x^2 + 1) * 3
         y_cpu = ((x_cpu**2) + 1) * 3

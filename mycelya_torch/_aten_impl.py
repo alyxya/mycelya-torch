@@ -16,10 +16,13 @@ log = get_logger(__name__)
 def _get_remote_orchestrator():
     """Get the global remote orchestrator instance."""
     from ._remote_orchestrator import remote_orchestrator
+
     return remote_orchestrator
 
 
-def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> torch.device:
+def _validate_cross_device_operation(
+    op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+) -> torch.device:
     """Validate that all tensors are remote and on the same device. Returns the remote device."""
     remote_device = None
 
@@ -37,7 +40,7 @@ def _validate_cross_device_operation(op_name: str, args: Tuple[Any, ...], kwargs
             elif remote_device != obj.device:
                 raise RuntimeError(
                     f'Cannot perform operation "{op_name}" between tensors on different remote devices '
-                    f'({remote_device} and {obj.device}). '
+                    f"({remote_device} and {obj.device}). "
                     f"Transfer tensors to the same device first."
                 )
         return obj
@@ -78,7 +81,7 @@ def _execute_meta_operation(
     op: torch._ops.OpOverload,
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-    track_originals: bool = False
+    track_originals: bool = False,
 ) -> tuple[Any, Dict]:
     """Execute operation on meta tensors for shape inference.
 
@@ -120,7 +123,9 @@ def _execute_meta_operation(
             if "out" in meta_kwargs and isinstance(meta_kwargs["out"], torch.Tensor):
                 meta_out = meta_kwargs["out"]
                 if meta_out.shape != out_tensor.shape:
-                    log.debug(f"Resizing empty 'out' tensor from {out_tensor.shape} to {meta_out.shape}")
+                    log.debug(
+                        f"Resizing empty 'out' tensor from {out_tensor.shape} to {meta_out.shape}"
+                    )
                     out_tensor.resize_(meta_out.shape)
 
     return meta_result, original_tensors
@@ -183,13 +188,16 @@ def _execute_view_operation(
         base_tensor,
         meta_result.shape,
         meta_result.stride(),
-        meta_result.storage_offset()
+        meta_result.storage_offset(),
     )
 
 
 def _execute_with_static_outputs(
-    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any],
-    remote_device: torch.device, op_name: str
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    remote_device: torch.device,
+    op_name: str,
 ) -> Any:
     """Execute operation using meta tensors for shape inference (original path)."""
 
@@ -197,7 +205,9 @@ def _execute_with_static_outputs(
     log.debug(f"🔧 Executing {op_name} on meta tensors for shape inference")
 
     try:
-        meta_result, original_tensors = _execute_meta_operation(op, args, kwargs, track_originals=True)
+        meta_result, original_tensors = _execute_meta_operation(
+            op, args, kwargs, track_originals=True
+        )
         log.debug(f"✅ Meta execution completed successfully for {op_name}")
     except Exception as e:
         log.error(f"Meta execution failed for {op_name}: {e}")
@@ -247,8 +257,11 @@ def _execute_with_static_outputs(
 
 
 def _execute_with_dynamic_outputs(
-    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any],
-    remote_device: torch.device, op_name: str
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    remote_device: torch.device,
+    op_name: str,
 ) -> torch.Tensor:
     """Execute operation with dynamic output shapes - no meta tensor support.
 
@@ -283,37 +296,44 @@ def _execute_with_dynamic_outputs(
 
     orchestrator = _get_remote_orchestrator()
     result_metadata = orchestrator.execute_aten_operation(
-        op_name, input_metadata, output_storage_ids, processed_args, processed_kwargs,
-        return_metadata=True
+        op_name,
+        input_metadata,
+        output_storage_ids,
+        processed_args,
+        processed_kwargs,
+        return_metadata=True,
     )
 
     # Step 4: Update output tensor metadata from remote execution results
     if not result_metadata or len(result_metadata) != 1:
-        raise RuntimeError(f"Expected exactly 1 output metadata for {op_name}, got {len(result_metadata) if result_metadata else 0}")
+        raise RuntimeError(
+            f"Expected exactly 1 output metadata for {op_name}, got {len(result_metadata) if result_metadata else 0}"
+        )
 
     metadata = result_metadata[0]
 
     # Validate dtype matches expectation
     actual_dtype = metadata["dtype"]
     if str(output_tensor.dtype) != actual_dtype:
-        raise RuntimeError(f"Dtype mismatch for {op_name}: expected {output_tensor.dtype}, got {actual_dtype}")
+        raise RuntimeError(
+            f"Dtype mismatch for {op_name}: expected {output_tensor.dtype}, got {actual_dtype}"
+        )
 
     # Resize storage to match remote result
     output_tensor.resize_([metadata["storage_nelements"]])
 
     # Update all tensor metadata at once using as_strided()
     output_tensor = torch.as_strided(
-        output_tensor,
-        metadata["shape"],
-        metadata["stride"],
-        metadata["storage_offset"]
+        output_tensor, metadata["shape"], metadata["stride"], metadata["storage_offset"]
     )
 
     # Step 5: Return single tensor result
     return output_tensor
 
 
-def _has_static_output_shape(op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> bool:
+def _has_static_output_shape(
+    op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+) -> bool:
     """Determine if operation has predictable output shape for meta tensor inference."""
 
     # Always dynamic operations
@@ -327,7 +347,8 @@ def _has_static_output_shape(op_name: str, args: Tuple[Any, ...], kwargs: Dict[s
             # Boolean indexing is dynamic, tensor indexing is static
             return not any(
                 isinstance(idx, torch.Tensor) and idx.dtype == torch.bool
-                for idx in args[1] if idx is not None
+                for idx in args[1]
+                if idx is not None
             )
 
     # TODO: Add more conditional operations here as needed:
@@ -340,7 +361,10 @@ def _has_static_output_shape(op_name: str, args: Tuple[Any, ...], kwargs: Dict[s
 
 
 def _execute_aten_operation(
-    op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device
+    op: torch._ops.OpOverload,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    remote_device: torch.device,
 ) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
 
@@ -379,10 +403,13 @@ def _remote_kernel_fallback(
     # View operations alias their input for reading (is_write=False)
     # In-place/out operations also have alias_info but with is_write=True
     schema = op._schema
-    is_view_op = (schema.returns and len(schema.returns) > 0 and
-                  hasattr(schema.returns[0], 'alias_info') and
-                  schema.returns[0].alias_info is not None and
-                  not schema.returns[0].alias_info.is_write)
+    is_view_op = (
+        schema.returns
+        and len(schema.returns) > 0
+        and hasattr(schema.returns[0], "alias_info")
+        and schema.returns[0].alias_info is not None
+        and not schema.returns[0].alias_info.is_write
+    )
 
     if is_view_op:
         return _execute_view_operation(op, *args, **kwargs)
@@ -466,13 +493,15 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         target_shape=list(to_.shape),
         target_stride=list(to_.stride()),
         target_storage_offset=to_.storage_offset(),
-        target_dtype=str(to_.dtype)
+        target_dtype=str(to_.dtype),
     )
     log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
     return to_
 
 
-def _copy_from(from_: torch.Tensor, to_: torch.Tensor, non_blocking: bool = False) -> torch.Tensor:
+def _copy_from(
+    from_: torch.Tensor, to_: torch.Tensor, non_blocking: bool = False
+) -> torch.Tensor:
     """Copy data from one tensor to another, handling remote device transfers.
 
     This function implements the core copy operation for remote tensors,

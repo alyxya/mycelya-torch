@@ -217,8 +217,8 @@ from .device import (  # noqa: E402
     CloudProvider,
     GPUType,
     RemoteMachine,
-    create_modal_machine,
     create_mock_machine,
+    create_modal_machine,
     get_all_machines,
     get_device_registry,
 )

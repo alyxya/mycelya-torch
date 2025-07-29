@@ -106,7 +106,7 @@ class ModalClient(ClientInterface):
                 method_name="create_storage",
                 call_type="spawn",
                 args=(storage_id, nbytes),
-                kwargs={}
+                kwargs={},
             )
         except Exception as e:
             raise RuntimeError(f"Failed to create storage {storage_id}: {e}") from e
@@ -122,7 +122,7 @@ class ModalClient(ClientInterface):
         target_shape: List[int],
         target_stride: List[int],
         target_storage_offset: int,
-        target_dtype: str
+        target_dtype: str,
     ) -> None:
         """
         Update an existing storage with storage tensor data.
@@ -158,11 +158,20 @@ class ModalClient(ClientInterface):
         self._queue_rpc_call(
             method_name="update_storage",
             call_type="spawn",
-            args=(storage_id, torch_bytes,
-                  source_shape, source_stride, source_storage_offset, source_dtype,
-                  target_shape, target_stride, target_storage_offset, target_dtype),
+            args=(
+                storage_id,
+                torch_bytes,
+                source_shape,
+                source_stride,
+                source_storage_offset,
+                source_dtype,
+                target_shape,
+                target_stride,
+                target_storage_offset,
+                target_dtype,
+            ),
             kwargs={},
-            invalidate_storage_ids=[storage_id]
+            invalidate_storage_ids=[storage_id],
         )
 
     def _get_storage_data(
@@ -188,7 +197,7 @@ class ModalClient(ClientInterface):
             method_name="get_storage_data",
             call_type="remote",
             args=(storage_id,),
-            kwargs={}
+            kwargs={},
         )
 
         # Deserialize tensor and extract storage bytes properly
@@ -229,13 +238,15 @@ class ModalClient(ClientInterface):
             method_name="get_storage_data",
             call_type="remote",
             args=(storage_id,),
-            kwargs={}
+            kwargs={},
         )
 
         # Wait for the result from the Future
         torch_bytes = future.result() if future else None
         if torch_bytes is None:
-            raise RuntimeError(f"Failed to retrieve storage data for storage {storage_id}")
+            raise RuntimeError(
+                f"Failed to retrieve storage data for storage {storage_id}"
+            )
 
         # Deserialize tensor directly for caching (should be 1D uint8)
         from ..._tensor_utils import torch_bytes_to_cpu_tensor
@@ -265,7 +276,7 @@ class ModalClient(ClientInterface):
             call_type="spawn",
             args=(storage_id, nbytes),
             kwargs={},
-            invalidate_storage_ids=[storage_id]
+            invalidate_storage_ids=[storage_id],
         )
 
     def remove_storage(self, storage_id: int) -> None:
@@ -290,7 +301,7 @@ class ModalClient(ClientInterface):
             call_type="spawn",
             args=(storage_id,),
             kwargs={},
-            invalidate_storage_ids=[storage_id]
+            invalidate_storage_ids=[storage_id],
         )
 
     # Operation execution methods
@@ -340,7 +351,7 @@ class ModalClient(ClientInterface):
                 call_type="remote",
                 args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
                 kwargs={"return_metadata": True},
-                invalidate_storage_ids=modified_storage_ids
+                invalidate_storage_ids=modified_storage_ids,
             )
             # Wait for the result from the Future
             return future.result() if future else None
@@ -351,7 +362,7 @@ class ModalClient(ClientInterface):
                 call_type="spawn",
                 args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
                 kwargs={},
-                invalidate_storage_ids=modified_storage_ids
+                invalidate_storage_ids=modified_storage_ids,
             )
             return None
 

@@ -57,7 +57,7 @@ def create_modal_app_for_gpu(
         def _get_device(self):
             """Get the appropriate device for tensor operations."""
             import torch
-            
+
             # Detect if we're running in local mode by checking if CUDA is available
             # In local mode, we should use CPU even if CUDA is available
             try:
@@ -70,7 +70,7 @@ def create_modal_app_for_gpu(
             except Exception:
                 # Fall back to CPU if any issues
                 return torch.device("cpu")
-        
+
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
             import torch
@@ -144,10 +144,11 @@ def create_modal_app_for_gpu(
                     storage.untyped_storage(), storage_offset, shape, stride
                 )
             else:
-                raise RuntimeError(f"Unexpected storage type {type(storage)} for storage {storage_id}")
+                raise RuntimeError(
+                    f"Unexpected storage type {type(storage)} for storage {storage_id}"
+                )
 
             return tensor
-
 
         def _create_storage_impl(self, storage_id: int, nbytes: int) -> None:
             """Implementation of create_storage without Modal decorators."""
@@ -201,10 +202,48 @@ def create_modal_app_for_gpu(
             if storage_id not in storages:
                 raise RuntimeError(f"Storage ID {storage_id} not found")
 
-            # Deserialize source tensor from torch.save bytes
-            import io
-            buffer = io.BytesIO(raw_data)
-            source_tensor = torch.load(buffer, map_location="cpu", weights_only=False)
+            # Deserialize source tensor from optimized bytes
+            import json
+
+            # Unpack format: [metadata_length:4 bytes][metadata:N bytes][raw_data:remaining bytes]
+            if len(raw_data) < 4:
+                raise ValueError("Invalid serialized data: too short")
+
+            # Extract metadata length
+            metadata_length = int.from_bytes(raw_data[:4], byteorder="little")
+
+            if len(raw_data) < 4 + metadata_length:
+                raise ValueError("Invalid serialized data: insufficient metadata")
+
+            # Extract and parse metadata
+            metadata_json = raw_data[4 : 4 + metadata_length].decode("utf-8")
+            metadata = json.loads(metadata_json)
+
+            # Extract raw data
+            tensor_raw_data = raw_data[4 + metadata_length :]
+
+            # Convert dtype string back to torch.dtype
+            dtype_name = metadata["dtype"]
+            torch_dtype = getattr(torch, dtype_name)
+
+            # Create writable buffer to avoid PyTorch warnings
+            writable_data = bytearray(tensor_raw_data)
+
+            # Reconstruct tensor using torch.frombuffer
+            flat_tensor = torch.frombuffer(writable_data, dtype=torch_dtype)
+
+            # Reshape and apply stride/offset
+            source_tensor = flat_tensor.clone()  # Clone to ensure independent memory
+            source_tensor = source_tensor.reshape(metadata["shape"])
+
+            # If the tensor has custom stride or offset, we need to use as_strided
+            if (
+                list(source_tensor.stride()) != metadata["stride"]
+                or metadata["storage_offset"] != 0
+            ):
+                source_tensor = source_tensor.as_strided(
+                    metadata["shape"], metadata["stride"], metadata["storage_offset"]
+                )
 
             # Ensure tensor is on CPU and has the expected properties
             if source_tensor.device.type != "cpu":
@@ -228,18 +267,26 @@ def create_modal_app_for_gpu(
                         f"expected {expected_bytes} bytes, got {actual_bytes} bytes"
                     )
 
-                log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
+                log.info(
+                    f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes"
+                )
                 # Create 1D uint8 tensor from the device source tensor's storage
-                storage_tensor = torch.empty(actual_bytes, dtype=torch.uint8, device=device)
+                storage_tensor = torch.empty(
+                    actual_bytes, dtype=torch.uint8, device=device
+                )
                 storage_tensor.untyped_storage().copy_(device_source_storage)
                 # Ensure device_source stays alive until after copy operation
                 del device_source_storage  # Release reference after use
                 storages[storage_id] = storage_tensor
-                log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_tensor.shape})")
+                log.info(
+                    f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_tensor.shape})"
+                )
                 return
 
             # Storage is realized (torch.Tensor) - always use in-place view update
-            log.info(f"📥 IN-PLACE Updating view of Storage ID {storage_id} (offset: {target_storage_offset})")
+            log.info(
+                f"📥 IN-PLACE Updating view of Storage ID {storage_id} (offset: {target_storage_offset})"
+            )
 
             # Construct the target view tensor directly using existing method
             target_tensor = self._construct_tensor_from_storage(
@@ -247,7 +294,7 @@ def create_modal_app_for_gpu(
                 shape=target_shape,
                 stride=target_stride,
                 storage_offset=target_storage_offset,
-                dtype=target_dtype
+                dtype=target_dtype,
             )
 
             # Copy source tensor data to target view in-place
@@ -293,8 +340,16 @@ def create_modal_app_for_gpu(
                 None
             """
             return self._update_storage_impl(
-                storage_id, raw_data, source_shape, source_stride, source_storage_offset, source_dtype,
-                target_shape, target_stride, target_storage_offset, target_dtype
+                storage_id,
+                raw_data,
+                source_shape,
+                source_stride,
+                source_storage_offset,
+                source_dtype,
+                target_shape,
+                target_stride,
+                target_storage_offset,
+                target_dtype,
             )
 
         def _get_storage_data_impl(
@@ -312,20 +367,43 @@ def create_modal_app_for_gpu(
 
             # Handle lazy storage
             if isinstance(storage_item, int):
-                raise RuntimeError(f"Storage ID {storage_id} is lazy (not realized). Cannot retrieve data.")
+                raise RuntimeError(
+                    f"Storage ID {storage_id} is lazy (not realized). Cannot retrieve data."
+                )
 
             # Storage is realized (torch.Tensor)
             storage_tensor = storage_item
-            log.info(f"📦 Retrieving tensor data for storage {storage_id} ({storage_tensor.untyped_storage().nbytes()} bytes)")
+            log.info(
+                f"📦 Retrieving tensor data for storage {storage_id} ({storage_tensor.untyped_storage().nbytes()} bytes)"
+            )
 
-            # Convert CUDA tensor to CPU and serialize with torch.save
-            import io
+            # Convert CUDA tensor to CPU and serialize with optimized format
+            import json
 
-            import torch
+
             cpu_tensor = storage_tensor.cpu()
-            buffer = io.BytesIO()
-            torch.save(cpu_tensor, buffer)
-            return buffer.getvalue()
+
+            # Create metadata dict
+            metadata = {
+                "shape": list(cpu_tensor.shape),
+                "stride": list(cpu_tensor.stride()),
+                "storage_offset": cpu_tensor.storage_offset(),
+                "dtype": str(cpu_tensor.dtype).split(".")[-1],  # e.g., "float32"
+            }
+
+            # Serialize metadata to JSON bytes
+            metadata_json = json.dumps(metadata).encode("utf-8")
+            metadata_length = len(metadata_json)
+
+            # Get raw data using optimized numpy approach
+            raw_data = cpu_tensor.numpy().tobytes()
+
+            # Pack format: [metadata_length:4 bytes][metadata:N bytes][raw_data:remaining bytes]
+            return (
+                metadata_length.to_bytes(4, byteorder="little")
+                + metadata_json
+                + raw_data
+            )
 
         @modal.method()
         def get_storage_data(
@@ -397,7 +475,9 @@ def create_modal_app_for_gpu(
                     f"to {nbytes} bytes using tensor.resize_()"
                 )
             else:
-                raise RuntimeError(f"Unexpected storage type {type(old_storage)} for storage {storage_id}")
+                raise RuntimeError(
+                    f"Unexpected storage type {type(old_storage)} for storage {storage_id}"
+                )
 
         @modal.method()
         def resize_storage(self, storage_id: int, nbytes: int) -> None:
@@ -523,7 +603,9 @@ def create_modal_app_for_gpu(
             for i, storage_id in enumerate(output_storage_ids):
                 if i < len(result_tensors):
                     # Check if output storage is not lazy (warn if overwriting realized storage)
-                    if storage_id in storages and not isinstance(storages[storage_id], int):
+                    if storage_id in storages and not isinstance(
+                        storages[storage_id], int
+                    ):
                         log.warning(
                             f"⚠️ Output storage {storage_id} is not lazy (type: {type(storages[storage_id])}), "
                             f"overwriting with result from {op_name}"
@@ -535,15 +617,15 @@ def create_modal_app_for_gpu(
                     result_storage = result_tensor.untyped_storage()
                     storage_nbytes = result_storage.nbytes()
                     # Create 1D uint8 tensor with the same storage
-                    storage_tensor = torch.empty(storage_nbytes, dtype=torch.uint8, device=result_tensor.device)
+                    storage_tensor = torch.empty(
+                        storage_nbytes, dtype=torch.uint8, device=result_tensor.device
+                    )
                     storage_tensor.untyped_storage().copy_(result_storage)
                     # Ensure result_tensor stays alive until after copy
                     del result_storage  # Release reference after use
                     storages[storage_id] = storage_tensor
 
-            log.debug(
-                f"📦 Updated {len(output_storage_ids)} output storage mappings"
-            )
+            log.debug(f"📦 Updated {len(output_storage_ids)} output storage mappings")
 
             # Return metadata if requested
             if return_metadata:
@@ -555,11 +637,14 @@ def create_modal_app_for_gpu(
                             "dtype": str(result_tensor.dtype),
                             "stride": list(result_tensor.stride()),
                             "storage_offset": result_tensor.storage_offset(),
-                            "storage_nelements": result_tensor.untyped_storage().nbytes() // result_tensor.element_size(),
+                            "storage_nelements": result_tensor.untyped_storage().nbytes()
+                            // result_tensor.element_size(),
                         }
                         output_metadata.append(metadata)
 
-                log.info(f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)")
+                log.info(
+                    f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)"
+                )
                 return output_metadata
 
             log.info(f"✅ Completed: {op_name}")
@@ -593,13 +678,17 @@ def create_modal_app_for_gpu(
                 None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
             """
             return self._execute_aten_operation_impl(
-                op_name, input_tensor_metadata, output_storage_ids, args, kwargs, return_metadata
+                op_name,
+                input_tensor_metadata,
+                output_storage_ids,
+                args,
+                kwargs,
+                return_metadata,
             )
 
         @modal.method()
         def execute_batch(
-            self,
-            batch_calls: List[Dict[str, Any]]
+            self, batch_calls: List[Dict[str, Any]]
         ) -> List[Union[None, Any]]:
             """
             Execute a batch of RPC calls in sequence.
@@ -631,7 +720,9 @@ def create_modal_app_for_gpu(
                 kwargs = call.get("kwargs", {})
 
                 try:
-                    log.debug(f"📞 Executing batched call {call_id}: {method_name} ({call_type})")
+                    log.debug(
+                        f"📞 Executing batched call {call_id}: {method_name} ({call_type})"
+                    )
 
                     # Call the underlying method implementations directly
                     # We need to bypass Modal decorators and call the actual Python methods
@@ -662,8 +753,10 @@ def create_modal_app_for_gpu(
                     # Store the exception as the result
                     results.append(e)
 
-            log.info(f"✅ BATCH COMPLETE: Processed {len(batch_calls)} calls, "
-                    f"{sum(1 for r in results if not isinstance(r, Exception))} successful")
+            log.info(
+                f"✅ BATCH COMPLETE: Processed {len(batch_calls)} calls, "
+                f"{sum(1 for r in results if not isinstance(r, Exception))} successful"
+            )
 
             return results
 

@@ -142,7 +142,9 @@ class TestMinMaxOperations:
             )
         else:
             cpu_values, cpu_indices = torch.min(cpu_tensor, dim=dim, keepdim=keepdim)
-            remote_values, remote_indices = torch.min(remote_tensor, dim=dim, keepdim=keepdim)
+            remote_values, remote_indices = torch.min(
+                remote_tensor, dim=dim, keepdim=keepdim
+            )
 
             NumericalTestUtils.assert_tensors_close(
                 remote_values.cpu(), cpu_values, rtol=1e-8, atol=1e-8
@@ -171,7 +173,9 @@ class TestMinMaxOperations:
             )
         else:
             cpu_values, cpu_indices = torch.max(cpu_tensor, dim=dim, keepdim=keepdim)
-            remote_values, remote_indices = torch.max(remote_tensor, dim=dim, keepdim=keepdim)
+            remote_values, remote_indices = torch.max(
+                remote_tensor, dim=dim, keepdim=keepdim
+            )
 
             NumericalTestUtils.assert_tensors_close(
                 remote_values.cpu(), cpu_values, rtol=1e-8, atol=1e-8
@@ -327,7 +331,7 @@ class TestSpecializedReductions:
             remote_result.cpu(), cpu_result, rtol=1e-5, atol=1e-6
         )
 
-    @pytest.mark.parametrize("p", [1, 2, float('inf')])
+    @pytest.mark.parametrize("p", [1, 2, float("inf")])
     @pytest.mark.fast
     def test_norm_with_p_values(self, shared_devices, p):
         device = shared_devices["t4"]
