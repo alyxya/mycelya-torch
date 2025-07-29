@@ -38,6 +38,7 @@ class CloudProvider(Enum):
     """Supported cloud providers."""
 
     MODAL = "modal"
+    LOCAL = "local"
     # Future providers can be added here
     # RUNPOD = "runpod"
     # LAMBDA = "lambda"
@@ -117,6 +118,13 @@ class RemoteMachine:
                 raise ValueError(
                     f"GPU type {self.gpu_type.value} not supported by {self.provider.value}"
                 )
+        elif self.provider == CloudProvider.LOCAL:
+            # Local provider supports all GPU types (simulated locally)
+            supported_gpus = set(GPUType)
+            if self.gpu_type not in supported_gpus:
+                raise ValueError(
+                    f"GPU type {self.gpu_type.value} not supported by {self.provider.value}"
+                )
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
 
@@ -128,6 +136,16 @@ class RemoteMachine:
                 from .backends.modal.client import ModalClient
 
                 self._client = ModalClient(
+                    self.gpu_type.value,
+                    self.machine_id,
+                    self.timeout,
+                    self.retries,
+                )
+            elif self.provider == CloudProvider.LOCAL:
+                # Import here to avoid circular imports
+                from .backends.local.client import LocalClient
+
+                self._client = LocalClient(
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
@@ -322,6 +340,54 @@ def create_modal_machine(
 
     machine = RemoteMachine(
         provider=CloudProvider.MODAL,
+        gpu_type=gpu_type,
+        timeout=timeout,
+        retries=retries,
+        start=start,
+    )
+
+    # Register the machine
+    _device_registry.register_device(machine)
+
+    return machine
+
+
+def create_local_machine(
+    gpu: Union[str, GPUType], start: bool = True, timeout: int = 300, retries: int = 0
+) -> RemoteMachine:
+    """
+    Create a local machine that executes operations locally using Modal's .local() calls.
+
+    This provides a development and testing environment that mimics the remote execution
+    interface but runs everything locally without requiring cloud resources.
+
+    Args:
+        gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB) - simulated locally
+        start: Whether to start the client immediately (default: True)
+        timeout: Function timeout in seconds (default: 300, unused for local)
+        retries: Number of retries on failure (default: 0, unused for local)
+
+    Returns:
+        RemoteMachine instance configured for local execution
+
+    Example:
+        >>> machine = create_local_machine("A100-40GB")
+        >>> tensor = torch.randn(3, 3, device=machine.device())
+        >>>
+        >>> # All operations execute locally but with the same interface
+        >>> result = tensor @ tensor.T
+    """
+    if isinstance(gpu, str):
+        try:
+            gpu_type = GPUType(gpu)
+        except ValueError:
+            valid_gpus = [g.value for g in GPUType]
+            raise ValueError(f'Invalid GPU type "{gpu}". Valid types: {valid_gpus}')
+    else:
+        gpu_type = gpu
+
+    machine = RemoteMachine(
+        provider=CloudProvider.LOCAL,
         gpu_type=gpu_type,
         timeout=timeout,
         retries=retries,
