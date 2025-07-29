@@ -101,8 +101,8 @@ class ModalClient(ClientInterface):
             )
 
         try:
-            # Queue the RPC call for batching (fire-and-forget)
-            self._queue_rpc_call(
+            # Queue the RPC for batching (fire-and-forget)
+            self._queue_rpc(
                 method_name="create_storage",
                 call_type="spawn",
                 args=(storage_id, nbytes),
@@ -153,9 +153,9 @@ class ModalClient(ClientInterface):
         # Serialize tensor using numpy approach
         numpy_bytes = cpu_tensor_to_numpy_bytes(storage_tensor)
 
-        # Queue the RPC call for batching (fire-and-forget)
+        # Queue the RPC for batching (fire-and-forget)
         # Invalidate cache immediately since this modifies storage
-        self._queue_rpc_call(
+        self._queue_rpc(
             method_name="update_storage",
             call_type="spawn",
             args=(
@@ -192,8 +192,8 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC call for batching (blocking call that returns raw bytes)
-        raw_bytes = self._queue_rpc_call(
+        # Queue the RPC for batching (blocking call that returns raw bytes)
+        raw_bytes = self._queue_rpc(
             method_name="get_storage_data",
             call_type="remote",
             args=(storage_id,),
@@ -221,8 +221,8 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC call for batching (blocking call that returns raw bytes)
-        future = self._queue_rpc_call(
+        # Queue the RPC for batching (blocking call that returns raw bytes)
+        future = self._queue_rpc(
             method_name="get_storage_data",
             call_type="remote",
             args=(storage_id,),
@@ -257,9 +257,9 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC call for batching (fire-and-forget)
+        # Queue the RPC for batching (fire-and-forget)
         # Invalidate cache immediately since this modifies storage
-        self._queue_rpc_call(
+        self._queue_rpc(
             method_name="resize_storage",
             call_type="spawn",
             args=(storage_id, nbytes),
@@ -282,9 +282,9 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC call for batching (fire-and-forget)
+        # Queue the RPC for batching (fire-and-forget)
         # Invalidate cache immediately since this removes storage
-        self._queue_rpc_call(
+        self._queue_rpc(
             method_name="remove_storage",
             call_type="spawn",
             args=(storage_id,),
@@ -334,7 +334,7 @@ class ModalClient(ClientInterface):
         if return_metadata:
             # Use remote call type to get return value when metadata is needed
             log.info(f"📡 Modal Client requesting metadata for {op_name}")
-            future = self._queue_rpc_call(
+            future = self._queue_rpc(
                 method_name="execute_aten_operation",
                 call_type="remote",
                 args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
@@ -345,7 +345,7 @@ class ModalClient(ClientInterface):
             return future.result() if future else None
         else:
             # Use spawn call type for fire-and-forget execution (original behavior)
-            self._queue_rpc_call(
+            self._queue_rpc(
                 method_name="execute_aten_operation",
                 call_type="spawn",
                 args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),

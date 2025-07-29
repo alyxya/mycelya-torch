@@ -640,10 +640,10 @@ def create_modal_app_for_gpu(
             self, batch_calls: List[Dict[str, Any]]
         ) -> List[Union[None, Any]]:
             """
-            Execute a batch of RPC calls in sequence.
+            Execute a batch of RPCs in sequence.
 
             This method allows multiple operations to be batched together in a single
-            RPC call, reducing network overhead and improving performance.
+            RPC, reducing network overhead and improving performance.
 
             Args:
                 batch_calls: List of dictionaries, each containing:
@@ -658,7 +658,7 @@ def create_modal_app_for_gpu(
                 None for "spawn" calls, actual return value for "remote" calls.
             """
 
-            log.info(f"🚀 BATCH EXECUTE: Processing {len(batch_calls)} batched calls")
+            log.info(f"🚀 BATCH EXECUTE: Processing {len(batch_calls)} batched RPCs")
             results = []
 
             for i, call in enumerate(batch_calls):
@@ -670,7 +670,7 @@ def create_modal_app_for_gpu(
 
                 try:
                     log.debug(
-                        f"📞 Executing batched call {call_id}: {method_name} ({call_type})"
+                        f"📞 Executing batched RPC {call_id}: {method_name} ({call_type})"
                     )
 
                     # Call the underlying method implementations directly
@@ -697,7 +697,7 @@ def create_modal_app_for_gpu(
                         results.append(result)
 
                 except Exception as e:
-                    log.error(f"❌ Batched call {call_id} failed: {method_name} - {e}")
+                    log.error(f"❌ Batched RPC {call_id} failed: {method_name} - {e}")
 
                     # Store the exception as the result
                     results.append(e)

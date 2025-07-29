@@ -214,7 +214,7 @@ class ClientInterface(ABC):
         This method implements caching by:
         1. Checking if storage_id is in cache
         2. If cached, creating view from cached tensor
-        3. If not cached, making RPC call and caching result
+        3. If not cached, making RPC and caching result
 
         Args:
             storage_id: The storage ID to retrieve
@@ -238,7 +238,7 @@ class ClientInterface(ABC):
                 cached_tensor, shape, stride, storage_offset, dtype
             )
 
-        # Cache miss - make RPC call
+        # Cache miss - make RPC
         self._cache_misses += 1
 
         # Get the actual tensor from the subclass implementation
@@ -345,7 +345,7 @@ class ClientInterface(ABC):
         return temp_tensor.clone()
 
     # RPC batching helper methods
-    def _queue_rpc_call(
+    def _queue_rpc(
         self,
         method_name: str,
         call_type: str,
@@ -355,7 +355,7 @@ class ClientInterface(ABC):
         invalidate_storage_ids: Optional[List[int]] = None,
     ) -> Optional[Any]:
         """
-        Helper method to queue an RPC call for batching.
+        Helper method to queue an RPC for batching.
 
         Args:
             method_name: Name of the RPC method to call
@@ -374,7 +374,7 @@ class ClientInterface(ABC):
                 if storage_id in self._storage_cache:
                     del self._storage_cache[storage_id]
 
-        # Queue the RPC call for batching
+        # Queue the RPC for batching
         return self._batch_queue.enqueue_call(
             call_type=call_type,
             method_name=method_name,

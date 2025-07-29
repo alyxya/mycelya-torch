@@ -313,7 +313,7 @@ class MockClient(ClientInterface):
         else:
             return None
 
-    def _queue_rpc_call(
+    def _queue_rpc(
         self,
         method_name: str,
         call_type: str,
@@ -323,7 +323,7 @@ class MockClient(ClientInterface):
         invalidate_storage_ids: Optional[List[int]] = None,
     ) -> Optional[Any]:
         """
-        Override the base class method to handle any remaining RPC calls.
+        Override the base class method to handle any remaining RPCs.
 
         This should not be called in the mock client since we execute directly,
         but we provide it for compatibility.
@@ -335,7 +335,7 @@ class MockClient(ClientInterface):
         # For mock client, we should not queue calls, but execute directly
         # This method is mainly for compatibility with the base class
         log.warning(
-            f"Mock client received unexpected RPC call: {method_name}. Consider using direct method calls."
+            f"Mock client received unexpected RPC: {method_name}. Consider using direct method calls."
         )
         return None
 

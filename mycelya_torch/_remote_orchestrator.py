@@ -36,7 +36,7 @@ class RemoteOrchestrator:
     machines, handling tensor transfers, device communication, and distributed
     execution flow. Currently supports Modal as the primary provider.
 
-    Also manages background thread for batching RPC calls to improve performance.
+    Also manages background thread for batching RPCs to improve performance.
     """
 
     def __init__(self):
@@ -106,7 +106,7 @@ class RemoteOrchestrator:
         log.info("🏁 RPC batch processing loop terminated")
 
     def _process_client_batch(self, client: ClientInterface) -> None:
-        """Process a batch of RPC calls for a specific client."""
+        """Process a batch of RPCs for a specific client."""
         if not hasattr(client, "_batch_queue"):
             return
 

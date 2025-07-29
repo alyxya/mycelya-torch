@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-RPC call batching system for improved performance.
+RPC batching system for improved performance.
 
-This module provides thread-safe batching of RPC calls to reduce network overhead
+This module provides thread-safe batching of RPCs to reduce network overhead
 and improve overall system performance by grouping multiple operations together.
 """
 
@@ -21,11 +21,11 @@ log = get_logger(__name__)
 
 
 @dataclass
-class BatchedRPCCall:
+class BatchedRPC:
     """
-    Represents a single RPC call that has been queued for batching.
+    Represents a single RPC that has been queued for batching.
 
-    This encapsulates all the information needed to execute an RPC call
+    This encapsulates all the information needed to execute an RPC
     along with metadata for batching and future handling.
     """
 
@@ -43,7 +43,7 @@ class BatchedRPCCall:
 @dataclass
 class BatchExecutionResult:
     """
-    Result of executing a batch of RPC calls.
+    Result of executing a batch of RPCs.
 
     Contains both successful results and any errors that occurred,
     allowing for partial batch execution and proper error handling.
@@ -57,9 +57,9 @@ class BatchExecutionResult:
 
 class RPCBatchQueue:
     """
-    Thread-safe queue for batching RPC calls.
+    Thread-safe queue for batching RPCs.
 
-    This queue collects RPC calls from the main thread and allows
+    This queue collects RPCs from the main thread and allows
     a background thread to process them in batches for improved performance.
     """
 
@@ -71,7 +71,7 @@ class RPCBatchQueue:
             client_id: Unique identifier for the client (for logging/debugging)
         """
         self.client_id = client_id
-        self._queue: Queue[BatchedRPCCall] = Queue()
+        self._queue: Queue[BatchedRPC] = Queue()
         self._lock = threading.RLock()  # Re-entrant lock for nested operations
 
         # Statistics for monitoring
@@ -88,7 +88,7 @@ class RPCBatchQueue:
         return_future: bool = False,
     ) -> Optional[Future]:
         """
-        Add an RPC call to the batch queue.
+        Add an RPC to the batch queue.
 
         Args:
             call_type: "spawn" for fire-and-forget, "remote" for blocking
@@ -105,7 +105,7 @@ class RPCBatchQueue:
             if return_future or call_type == "remote":
                 future = Future()
 
-            call = BatchedRPCCall(
+            call = BatchedRPC(
                 call_type=call_type,
                 method_name=method_name,
                 args=args,
@@ -122,7 +122,7 @@ class RPCBatchQueue:
 
             return future
 
-    def get_batch(self, timeout: float = 0.01) -> List[BatchedRPCCall]:
+    def get_batch(self, timeout: float = 0.01) -> List[BatchedRPC]:
         """
         Retrieve all currently queued calls as a batch.
 
@@ -130,7 +130,7 @@ class RPCBatchQueue:
             timeout: Maximum time to wait for calls (in seconds)
 
         Returns:
-            List of BatchedRPCCall objects ready for execution
+            List of BatchedRPC objects ready for execution
         """
         with self._lock:
             batch = []
@@ -186,22 +186,22 @@ class RPCBatchQueue:
 
 class BatchProcessor:
     """
-    Processes batched RPC calls and updates futures with results.
+    Processes batched RPCs and updates futures with results.
 
-    This class handles the execution of batched RPC calls and ensures
+    This class handles the execution of batched RPCs and ensures
     that blocking calls receive their results through the Future mechanism.
     """
 
     @staticmethod
     def execute_batch(
-        server_instance: Any, batch: List[BatchedRPCCall]
+        server_instance: Any, batch: List[BatchedRPC]
     ) -> BatchExecutionResult:
         """
-        Execute a batch of RPC calls on the server instance using the batched RPC method.
+        Execute a batch of RPCs on the server instance using the batched RPC method.
 
         Args:
             server_instance: The Modal server instance to execute calls on
-            batch: List of batched RPC calls to execute
+            batch: List of batched RPCs to execute
 
         Returns:
             BatchExecutionResult containing results and statistics
@@ -211,10 +211,10 @@ class BatchProcessor:
 
         start_time = time.time()
 
-        log.info(f"🚀 Executing batch of {len(batch)} RPC calls using batched RPC")
+        log.info(f"🚀 Executing batch of {len(batch)} RPCs using batched RPC")
 
         try:
-            # Convert BatchedRPCCall objects to the format expected by execute_batch
+            # Convert BatchedRPC objects to the format expected by execute_batch
             batch_calls = []
             for call in batch:
                 batch_call = {
