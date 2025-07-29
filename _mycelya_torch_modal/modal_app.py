@@ -602,15 +602,6 @@ def create_modal_app_for_gpu(
 
             for i, storage_id in enumerate(output_storage_ids):
                 if i < len(result_tensors):
-                    # Check if output storage is not lazy (warn if overwriting realized storage)
-                    if storage_id in storages and not isinstance(
-                        storages[storage_id], int
-                    ):
-                        log.warning(
-                            f"⚠️ Output storage {storage_id} is not lazy (type: {type(storages[storage_id])}), "
-                            f"overwriting with result from {op_name}"
-                        )
-
                     # Store the result tensor as a 1D uint8 tensor
                     result_tensor = result_tensors[i]
                     # Extract storage once but keep result_tensor alive
