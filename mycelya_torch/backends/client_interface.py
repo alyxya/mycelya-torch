@@ -375,13 +375,20 @@ class ClientInterface(ABC):
                     del self._storage_cache[storage_id]
 
         # Queue the RPC for batching
-        return self._batch_queue.enqueue_call(
+        future = self._batch_queue.enqueue_call(
             call_type=call_type,
             method_name=method_name,
             args=args,
             kwargs=kwargs,
             return_future=return_future,
         )
+
+        # Wake up background thread immediately for blocking calls to reduce latency
+        if call_type == "remote" or return_future:
+            from .._remote_orchestrator import remote_orchestrator
+            remote_orchestrator.wake_batch_thread_for_blocking_rpc()
+
+        return future
 
     def _register_for_batching(self) -> None:
         """Register this client with the orchestrator for batching."""

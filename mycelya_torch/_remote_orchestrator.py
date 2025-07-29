@@ -47,6 +47,7 @@ class RemoteOrchestrator:
         self._batch_lock = threading.RLock()
         self._batch_thread: Optional[threading.Thread] = None
         self._batch_shutdown = threading.Event()
+        self._batch_wakeup = threading.Event()  # Wake up thread immediately for blocking calls
         self._batch_interval = 0.1  # Process batches every 100ms
 
         # Start background thread for batch processing
@@ -97,8 +98,12 @@ class RemoteOrchestrator:
                     except Exception as e:
                         log.error(f"❌ Error processing batch for client {client}: {e}")
 
-                # Wait for next batch interval
-                self._batch_shutdown.wait(self._batch_interval)
+                # Wait for next batch interval OR immediate wakeup for blocking calls
+                woken_early = self._batch_wakeup.wait(self._batch_interval)
+                if woken_early:
+                    # Clear the event for next time and process immediately
+                    self._batch_wakeup.clear()
+                    log.debug("🚀 Background thread woken early for blocking RPC")
 
             except Exception as e:
                 log.error(f"❌ Error in batch processing loop: {e}")
@@ -143,6 +148,12 @@ class RemoteOrchestrator:
         with self._batch_lock:
             self._batch_clients.discard(client)
             log.info(f"🗑️ Unregistered client from batching: {client}")
+
+    def wake_batch_thread_for_blocking_rpc(self) -> None:
+        """Wake up the background thread immediately for processing blocking RPCs."""
+        if self._batch_thread and self._batch_thread.is_alive():
+            self._batch_wakeup.set()
+            log.debug("💨 Signaled batch thread to wake up for blocking RPC")
 
     def get_batch_stats(self) -> Dict[str, Any]:
         """Get statistics about RPC batching across all clients."""
