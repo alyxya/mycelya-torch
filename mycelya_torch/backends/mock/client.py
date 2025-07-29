@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Local client implementation for mycelya_torch.
+Mock client implementation for mycelya_torch.
 
-This module provides the LocalClient class that uses Modal's .local() execution
+This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import torch
 
-from .local_modal_app import create_local_modal_app_for_gpu
+from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
 from ..client_interface import ClientInterface
@@ -20,13 +20,13 @@ from ..client_interface import ClientInterface
 log = get_logger(__name__)
 
 
-class LocalClient(ClientInterface):
+class MockClient(ClientInterface):
     """
-    Client interface for local execution using Modal's .local() calls.
+    Client interface for mock execution using Modal's .local() calls.
 
-    This class provides a local execution environment that mimics the Modal cloud GPU
-    interface but runs everything locally. It uses Modal's .local() method to execute
-    the same operations that would normally run on remote GPUs.
+    This class provides a mock execution environment that reuses the existing Modal app
+    but executes all methods locally using .local() instead of .remote() or .spawn().
+    This avoids code duplication while providing the same interface.
     """
 
     def __init__(
@@ -44,45 +44,45 @@ class LocalClient(ClientInterface):
         self.timeout = timeout
         self.retries = retries
 
-        # Initialize the Modal app and server for local execution
+        # Initialize the Modal app and server for mock execution
         self._initialize()
 
     def _initialize(self):
-        """Initialize the local app and server class for local execution."""
-        self._app, self._server_class = create_local_modal_app_for_gpu(
+        """Initialize the Modal app and server class for mock execution."""
+        self._app, self._server_class = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id, self.timeout, self.retries
         )
 
     def start(self):
-        """Start the local execution environment."""
+        """Start the mock execution environment."""
         if not self._is_running:
-            # Create server instance for local execution
+            # Create server instance for mock execution
             self._server_instance = self._server_class()
             self._is_running = True
             
             # Register for RPC batching
             self._register_for_batching()
             
-            log.info(f"Started local client: {self.machine_id}")
+            log.info(f"Started mock client: {self.machine_id}")
 
     def stop(self):
-        """Stop the local execution environment."""
+        """Stop the mock execution environment."""
         # Unregister from RPC batching first
         self._unregister_for_batching()
         
         if self._is_running:
             self._server_instance = None
             self._is_running = False
-            log.info(f"Stopped local client: {self.machine_id}")
+            log.info(f"Stopped mock client: {self.machine_id}")
 
     def is_running(self) -> bool:
-        """Check if the local client is currently running."""
+        """Check if the mock client is currently running."""
         return self._is_running
 
     # Storage management methods
     def create_storage(self, storage_id: int, nbytes: int) -> None:
         """
-        Create a storage locally.
+        Create a storage using mock execution.
 
         Args:
             storage_id: Specific ID to use for the storage (required)
@@ -97,13 +97,8 @@ class LocalClient(ClientInterface):
             )
 
         try:
-            # Execute locally using .local() method
-            self._queue_rpc_call(
-                method_name="create_storage",
-                call_type="spawn",
-                args=(storage_id, nbytes),
-                kwargs={}
-            )
+            # Execute using .local() instead of queuing for remote execution
+            self._server_instance.create_storage.local(storage_id, nbytes)
         except Exception as e:
             raise RuntimeError(f"Failed to create storage {storage_id}: {e}") from e
 
@@ -121,7 +116,7 @@ class LocalClient(ClientInterface):
         target_dtype: str
     ) -> None:
         """
-        Update an existing storage with storage tensor data locally.
+        Update an existing storage with storage tensor data using mock execution.
 
         Args:
             storage_id: Storage ID to update
@@ -148,16 +143,14 @@ class LocalClient(ClientInterface):
 
         torch_bytes = cpu_tensor_to_torch_bytes(storage_tensor)
 
-        # Queue the RPC call for batching (fire-and-forget)
         # Invalidate cache immediately since this modifies storage
-        self._queue_rpc_call(
-            method_name="update_storage",
-            call_type="spawn",
-            args=(storage_id, torch_bytes,
-                  source_shape, source_stride, source_storage_offset, source_dtype,
-                  target_shape, target_stride, target_storage_offset, target_dtype),
-            kwargs={},
-            invalidate_storage_ids=[storage_id]
+        self.invalidate_storage_cache(storage_id)
+
+        # Execute using .local() instead of queuing for remote execution
+        self._server_instance.update_storage.local(
+            storage_id, torch_bytes,
+            source_shape, source_stride, source_storage_offset, source_dtype,
+            target_shape, target_stride, target_storage_offset, target_dtype
         )
 
     def _get_storage_data(
@@ -165,7 +158,7 @@ class LocalClient(ClientInterface):
         storage_id: int,
     ) -> bytes:
         """
-        Get raw storage data by ID locally.
+        Get raw storage data by ID using mock execution.
 
         Args:
             storage_id: The storage ID
@@ -178,13 +171,8 @@ class LocalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute locally using .local() method
-        torch_bytes = self._queue_rpc_call(
-            method_name="get_storage_data",
-            call_type="remote",
-            args=(storage_id,),
-            kwargs={}
-        )
+        # Execute using .local() instead of remote call
+        torch_bytes = self._server_instance.get_storage_data.local(storage_id)
 
         # Deserialize tensor and extract storage bytes properly
         import ctypes
@@ -218,15 +206,9 @@ class LocalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute locally using .local() method
-        future = self._queue_rpc_call(
-            method_name="get_storage_data",
-            call_type="remote",
-            args=(storage_id,),
-            kwargs={}
-        )
+        # Execute using .local() instead of remote call
+        torch_bytes = self._server_instance.get_storage_data.local(storage_id)
 
-        torch_bytes = future.result() if future else None
         if torch_bytes is None:
             raise RuntimeError(f"Failed to retrieve storage data for storage {storage_id}")
 
@@ -237,7 +219,7 @@ class LocalClient(ClientInterface):
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """
-        Resize a storage locally.
+        Resize a storage using mock execution.
 
         Args:
             storage_id: The storage ID to resize
@@ -251,18 +233,15 @@ class LocalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute locally using .local() method
-        self._queue_rpc_call(
-            method_name="resize_storage",
-            call_type="spawn",
-            args=(storage_id, nbytes),
-            kwargs={},
-            invalidate_storage_ids=[storage_id]
-        )
+        # Invalidate cache immediately since this modifies storage
+        self.invalidate_storage_cache(storage_id)
+
+        # Execute using .local() instead of remote call
+        self._server_instance.resize_storage.local(storage_id, nbytes)
 
     def remove_storage(self, storage_id: int) -> None:
         """
-        Remove a storage locally.
+        Remove a storage using mock execution.
 
         Args:
             storage_id: The storage ID
@@ -275,14 +254,11 @@ class LocalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute locally using .local() method
-        self._queue_rpc_call(
-            method_name="remove_storage",
-            call_type="spawn",
-            args=(storage_id,),
-            kwargs={},
-            invalidate_storage_ids=[storage_id]
-        )
+        # Invalidate cache immediately since this removes storage
+        self.invalidate_storage_cache(storage_id)
+
+        # Execute using .local() instead of remote call
+        self._server_instance.remove_storage.local(storage_id)
 
     # Operation execution methods
     def execute_aten_operation(
@@ -295,7 +271,7 @@ class LocalClient(ClientInterface):
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """
-        Execute an aten operation locally.
+        Execute an aten operation using mock execution.
 
         Args:
             op_name: The aten operation name
@@ -316,58 +292,23 @@ class LocalClient(ClientInterface):
         input_storage_ids = [
             metadata["storage_id"] for metadata in input_tensor_metadata
         ]
-        log.info(f"📡 Local Client sending Input Storage IDs: {input_storage_ids}")
-        log.info(f"📡 Local Client sending Output Storage IDs: {output_storage_ids}")
+        log.info(f"📡 Mock Client sending Input Storage IDs: {input_storage_ids}")
+        log.info(f"📡 Mock Client sending Output Storage IDs: {output_storage_ids}")
 
-        # Determine which storage IDs will be modified by this operation
+        # Invalidate cache immediately for storage IDs that will be modified
         modified_storage_ids = [sid for sid in output_storage_ids if sid is not None]
+        self.invalidate_multiple_storage_caches(modified_storage_ids)
+
+        # Execute using .local() instead of remote call
+        result = self._server_instance.execute_aten_operation.local(
+            op_name, input_tensor_metadata, output_storage_ids, args, kwargs, return_metadata
+        )
 
         if return_metadata:
-            # Use remote call type to get return value when metadata is needed
-            log.info(f"📡 Local Client requesting metadata for {op_name}")
-            future = self._queue_rpc_call(
-                method_name="execute_aten_operation",
-                call_type="remote",
-                args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
-                kwargs={"return_metadata": True},
-                invalidate_storage_ids=modified_storage_ids
-            )
-            return future.result() if future else None
+            log.info(f"📡 Mock Client received metadata for {op_name}")
+            return result
         else:
-            # Use spawn call type for fire-and-forget execution
-            self._queue_rpc_call(
-                method_name="execute_aten_operation",
-                call_type="spawn",
-                args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
-                kwargs={},
-                invalidate_storage_ids=modified_storage_ids
-            )
             return None
-
-    def _execute_local_call(self, method_name: str, args: tuple, kwargs: dict) -> Any:
-        """
-        Execute a method call locally using Modal's .local() functionality.
-        
-        This method maps RPC calls to local method execution on the server instance.
-        """
-        if not self._server_instance:
-            raise RuntimeError("Server instance not initialized")
-
-        # Get the actual method from the server instance and call it locally
-        if method_name == "create_storage":
-            return self._server_instance._create_storage_impl(*args, **kwargs)
-        elif method_name == "update_storage":
-            return self._server_instance._update_storage_impl(*args, **kwargs)
-        elif method_name == "get_storage_data":
-            return self._server_instance._get_storage_data_impl(*args, **kwargs)
-        elif method_name == "resize_storage":
-            return self._server_instance._resize_storage_impl(*args, **kwargs)
-        elif method_name == "remove_storage":
-            return self._server_instance._remove_storage_impl(*args, **kwargs)
-        elif method_name == "execute_aten_operation":
-            return self._server_instance._execute_aten_operation_impl(*args, **kwargs)
-        else:
-            raise AttributeError(f"Unknown method: {method_name}")
 
     def _queue_rpc_call(
         self,
@@ -379,41 +320,23 @@ class LocalClient(ClientInterface):
         invalidate_storage_ids: Optional[List[int]] = None
     ) -> Optional[Any]:
         """
-        Override the base class method to execute calls locally instead of queuing.
+        Override the base class method to handle any remaining RPC calls.
         
-        For the local client, we execute immediately rather than batching,
-        but maintain the same interface for compatibility.
+        This should not be called in the mock client since we execute directly,
+        but we provide it for compatibility.
         """
         # Invalidate cache immediately for storage-modifying operations
         if invalidate_storage_ids:
-            for storage_id in invalidate_storage_ids:
-                if storage_id in self._storage_cache:
-                    del self._storage_cache[storage_id]
+            self.invalidate_multiple_storage_caches(invalidate_storage_ids)
 
-        # Execute locally instead of queuing for remote execution
-        try:
-            result = self._execute_local_call(method_name, args, kwargs)
-            
-            if call_type == "spawn":
-                # Fire-and-forget calls return None
-                return None
-            else:
-                # Remote calls return the actual result
-                # For compatibility with the Future interface, we'll wrap in a simple object
-                class LocalResult:
-                    def __init__(self, value):
-                        self._value = value
-                    def result(self):
-                        return self._value
-                
-                return LocalResult(result)
-        except Exception as e:
-            log.error(f"Local execution failed for {method_name}: {e}")
-            raise
+        # For mock client, we should not queue calls, but execute directly
+        # This method is mainly for compatibility with the base class
+        log.warning(f"Mock client received unexpected RPC call: {method_name}. Consider using direct method calls.")
+        return None
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
         return (
-            f'LocalClient(gpu_type="{self.gpu_type}", '
+            f'MockClient(gpu_type="{self.gpu_type}", '
             f'machine_id="{self.machine_id}", status="{status}")'
         )

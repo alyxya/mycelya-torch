@@ -38,7 +38,7 @@ class CloudProvider(Enum):
     """Supported cloud providers."""
 
     MODAL = "modal"
-    LOCAL = "local"
+    MOCK = "mock"
     # Future providers can be added here
     # RUNPOD = "runpod"
     # LAMBDA = "lambda"
@@ -118,8 +118,8 @@ class RemoteMachine:
                 raise ValueError(
                     f"GPU type {self.gpu_type.value} not supported by {self.provider.value}"
                 )
-        elif self.provider == CloudProvider.LOCAL:
-            # Local provider supports all GPU types (simulated locally)
+        elif self.provider == CloudProvider.MOCK:
+            # Mock provider supports all GPU types (simulated locally)
             supported_gpus = set(GPUType)
             if self.gpu_type not in supported_gpus:
                 raise ValueError(
@@ -141,11 +141,11 @@ class RemoteMachine:
                     self.timeout,
                     self.retries,
                 )
-            elif self.provider == CloudProvider.LOCAL:
+            elif self.provider == CloudProvider.MOCK:
                 # Import here to avoid circular imports
-                from .backends.local.client import LocalClient
+                from .backends.mock.client import MockClient
 
-                self._client = LocalClient(
+                self._client = MockClient(
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
@@ -352,11 +352,11 @@ def create_modal_machine(
     return machine
 
 
-def create_local_machine(
+def create_mock_machine(
     gpu: Union[str, GPUType], start: bool = True, timeout: int = 300, retries: int = 0
 ) -> RemoteMachine:
     """
-    Create a local machine that executes operations locally using Modal's .local() calls.
+    Create a mock machine that executes operations locally using Modal's .local() calls.
 
     This provides a development and testing environment that mimics the remote execution
     interface but runs everything locally without requiring cloud resources.
@@ -364,14 +364,14 @@ def create_local_machine(
     Args:
         gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB) - simulated locally
         start: Whether to start the client immediately (default: True)
-        timeout: Function timeout in seconds (default: 300, unused for local)
-        retries: Number of retries on failure (default: 0, unused for local)
+        timeout: Function timeout in seconds (default: 300, unused for mock)
+        retries: Number of retries on failure (default: 0, unused for mock)
 
     Returns:
-        RemoteMachine instance configured for local execution
+        RemoteMachine instance configured for mock execution
 
     Example:
-        >>> machine = create_local_machine("A100-40GB")
+        >>> machine = create_mock_machine("A100-40GB")
         >>> tensor = torch.randn(3, 3, device=machine.device())
         >>>
         >>> # All operations execute locally but with the same interface
@@ -387,7 +387,7 @@ def create_local_machine(
         gpu_type = gpu
 
     machine = RemoteMachine(
-        provider=CloudProvider.LOCAL,
+        provider=CloudProvider.MOCK,
         gpu_type=gpu_type,
         timeout=timeout,
         retries=retries,

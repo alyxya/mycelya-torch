@@ -54,12 +54,29 @@ def create_modal_app_for_gpu(
         min_containers=1,
     )
     class PytorchServer:
+        def _get_device(self):
+            """Get the appropriate device for tensor operations."""
+            import torch
+            
+            # Detect if we're running in local mode by checking if CUDA is available
+            # In local mode, we should use CPU even if CUDA is available
+            try:
+                # Try to check if we're running in Modal's local execution mode
+                # This is a heuristic - if torch.cuda.is_available() is False, we're likely local
+                if torch.cuda.is_available():
+                    return torch.device("cuda")
+                else:
+                    return torch.device("cpu")
+            except Exception:
+                # Fall back to CPU if any issues
+                return torch.device("cpu")
+        
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
             import torch
 
             if not hasattr(self, "_storages"):
-                # storage_id -> torch.Tensor (1D uint8 CUDA) or int (for lazy allocation)
+                # storage_id -> torch.Tensor (1D uint8 CUDA/CPU) or int (for lazy allocation)
                 self._storages: Dict[int, Union[torch.Tensor, int]] = {}
 
             return self._storages
@@ -109,8 +126,8 @@ def create_modal_app_for_gpu(
             # Handle lazy storage (int) - realize it
             if isinstance(storage, int):
                 nbytes = storage
-                device = torch.device("cuda")
-                # Create 1D uint8 CUDA tensor to hold the storage
+                device = self._get_device()  # Use appropriate device (CUDA or CPU)
+                # Create 1D uint8 tensor to hold the storage
                 storage_tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
 
                 # Update the storages mapping with realized tensor
@@ -197,12 +214,13 @@ def create_modal_app_for_gpu(
 
             # Check if storage is lazy
             if isinstance(storage_item, int):
-                # Move source tensor to CUDA for storage
-                cuda_source = source_tensor.to("cuda")
+                # Move source tensor to appropriate device for storage
+                device = self._get_device()
+                device_source = source_tensor.to(device)
                 expected_bytes = storage_item
-                # Extract storage once but keep cuda_source alive
-                cuda_source_storage = cuda_source.untyped_storage()
-                actual_bytes = cuda_source_storage.nbytes()
+                # Extract storage once but keep device_source alive
+                device_source_storage = device_source.untyped_storage()
+                actual_bytes = device_source_storage.nbytes()
 
                 if expected_bytes != actual_bytes:
                     raise RuntimeError(
@@ -211,11 +229,11 @@ def create_modal_app_for_gpu(
                     )
 
                 log.info(f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes")
-                # Create 1D uint8 tensor from the CUDA source tensor's storage
-                storage_tensor = torch.empty(actual_bytes, dtype=torch.uint8, device="cuda")
-                storage_tensor.untyped_storage().copy_(cuda_source_storage)
-                # Ensure cuda_source stays alive until after copy operation
-                del cuda_source_storage  # Release reference after use
+                # Create 1D uint8 tensor from the device source tensor's storage
+                storage_tensor = torch.empty(actual_bytes, dtype=torch.uint8, device=device)
+                storage_tensor.untyped_storage().copy_(device_source_storage)
+                # Ensure device_source stays alive until after copy operation
+                del device_source_storage  # Release reference after use
                 storages[storage_id] = storage_tensor
                 log.info(f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_tensor.shape})")
                 return
