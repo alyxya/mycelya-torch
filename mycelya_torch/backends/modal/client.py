@@ -193,12 +193,19 @@ class ModalClient(ClientInterface):
             )
 
         # Queue the RPC for batching (blocking call that returns raw bytes)
-        raw_bytes = self._queue_rpc(
+        future = self._queue_rpc(
             method_name="get_storage_data",
             call_type="remote",
             args=(storage_id,),
             kwargs={},
         )
+
+        # Wait for the result from the Future
+        raw_bytes = future.result() if future else None
+        if raw_bytes is None:
+            raise RuntimeError(
+                f"Failed to retrieve storage data for storage {storage_id}"
+            )
 
         # Return raw bytes directly - no deserialization needed
         return raw_bytes
