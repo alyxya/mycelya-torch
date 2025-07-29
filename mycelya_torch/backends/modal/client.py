@@ -147,11 +147,11 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Serialize storage tensor using torch.save
-        from ..._tensor_utils import cpu_tensor_to_torch_bytes
+        # Serialize storage tensor using numpy approach
+        from ..._tensor_utils import cpu_tensor_to_numpy_bytes
 
-        # Serialize tensor using torch.save
-        torch_bytes = cpu_tensor_to_torch_bytes(storage_tensor)
+        # Serialize tensor using numpy approach
+        numpy_bytes = cpu_tensor_to_numpy_bytes(storage_tensor)
 
         # Queue the RPC call for batching (fire-and-forget)
         # Invalidate cache immediately since this modifies storage
@@ -160,7 +160,7 @@ class ModalClient(ClientInterface):
             call_type="spawn",
             args=(
                 storage_id,
-                torch_bytes,
+                numpy_bytes,
                 source_shape,
                 source_stride,
                 source_storage_offset,
@@ -192,28 +192,16 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC call for batching (blocking call that returns data)
-        torch_bytes = self._queue_rpc_call(
+        # Queue the RPC call for batching (blocking call that returns raw bytes)
+        raw_bytes = self._queue_rpc_call(
             method_name="get_storage_data",
             call_type="remote",
             args=(storage_id,),
             kwargs={},
         )
 
-        # Deserialize tensor and extract storage bytes properly
-        import ctypes
-
-        from ..._tensor_utils import torch_bytes_to_cpu_tensor
-
-        storage_tensor = torch_bytes_to_cpu_tensor(torch_bytes)
-        # Get the raw storage bytes without calling bytes() on storage object
-        untyped_storage = storage_tensor.untyped_storage()
-        nbytes = untyped_storage.nbytes()
-        data_ptr = untyped_storage.data_ptr()
-
-        # Extract bytes using ctypes from the data pointer
-        raw_bytes = (ctypes.c_uint8 * nbytes).from_address(data_ptr)
-        return bytes(raw_bytes)
+        # Return raw bytes directly - no deserialization needed
+        return raw_bytes
 
     def _get_storage_tensor_for_cache(
         self,
@@ -233,7 +221,7 @@ class ModalClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC call for batching (blocking call that returns data)
+        # Queue the RPC call for batching (blocking call that returns raw bytes)
         future = self._queue_rpc_call(
             method_name="get_storage_data",
             call_type="remote",
@@ -242,16 +230,16 @@ class ModalClient(ClientInterface):
         )
 
         # Wait for the result from the Future
-        torch_bytes = future.result() if future else None
-        if torch_bytes is None:
+        raw_bytes = future.result() if future else None
+        if raw_bytes is None:
             raise RuntimeError(
                 f"Failed to retrieve storage data for storage {storage_id}"
             )
 
-        # Deserialize tensor directly for caching (should be 1D uint8)
-        from ..._tensor_utils import torch_bytes_to_cpu_tensor
+        # Create 1D uint8 tensor directly from raw bytes for caching
+        from ..._tensor_utils import numpy_bytes_to_cpu_tensor
 
-        return torch_bytes_to_cpu_tensor(torch_bytes)
+        return numpy_bytes_to_cpu_tensor(raw_bytes, (len(raw_bytes),), torch.uint8)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """

@@ -202,47 +202,27 @@ def create_modal_app_for_gpu(
             if storage_id not in storages:
                 raise RuntimeError(f"Storage ID {storage_id} not found")
 
-            # Deserialize source tensor from optimized bytes
-            import json
-
-            # Unpack format: [metadata_length:4 bytes][metadata:N bytes][raw_data:remaining bytes]
-            if len(raw_data) < 4:
-                raise ValueError("Invalid serialized data: too short")
-
-            # Extract metadata length
-            metadata_length = int.from_bytes(raw_data[:4], byteorder="little")
-
-            if len(raw_data) < 4 + metadata_length:
-                raise ValueError("Invalid serialized data: insufficient metadata")
-
-            # Extract and parse metadata
-            metadata_json = raw_data[4 : 4 + metadata_length].decode("utf-8")
-            metadata = json.loads(metadata_json)
-
-            # Extract raw data
-            tensor_raw_data = raw_data[4 + metadata_length :]
-
+            # Deserialize source tensor from raw numpy bytes using provided metadata
             # Convert dtype string back to torch.dtype
-            dtype_name = metadata["dtype"]
+            dtype_name = source_dtype.replace("torch.", "")
             torch_dtype = getattr(torch, dtype_name)
 
             # Create writable buffer to avoid PyTorch warnings
-            writable_data = bytearray(tensor_raw_data)
+            writable_data = bytearray(raw_data)
 
-            # Reconstruct tensor using torch.frombuffer
+            # Reconstruct tensor using torch.frombuffer - no clone needed since temp tensor
             flat_tensor = torch.frombuffer(writable_data, dtype=torch_dtype)
 
-            # Reshape and apply stride/offset
-            source_tensor = flat_tensor.clone()  # Clone to ensure independent memory
-            source_tensor = source_tensor.reshape(metadata["shape"])
+            # Reshape and apply stride/offset using provided metadata
+            source_tensor = flat_tensor.reshape(source_shape)
 
             # If the tensor has custom stride or offset, we need to use as_strided
             if (
-                list(source_tensor.stride()) != metadata["stride"]
-                or metadata["storage_offset"] != 0
+                list(source_tensor.stride()) != source_stride
+                or source_storage_offset != 0
             ):
                 source_tensor = source_tensor.as_strided(
-                    metadata["shape"], metadata["stride"], metadata["storage_offset"]
+                    source_shape, source_stride, source_storage_offset
                 )
 
             # Ensure tensor is on CPU and has the expected properties
@@ -377,33 +357,11 @@ def create_modal_app_for_gpu(
                 f"📦 Retrieving tensor data for storage {storage_id} ({storage_tensor.untyped_storage().nbytes()} bytes)"
             )
 
-            # Convert CUDA tensor to CPU and serialize with optimized format
-            import json
-
-
+            # Convert CUDA tensor to CPU and serialize with pure numpy approach
             cpu_tensor = storage_tensor.cpu()
 
-            # Create metadata dict
-            metadata = {
-                "shape": list(cpu_tensor.shape),
-                "stride": list(cpu_tensor.stride()),
-                "storage_offset": cpu_tensor.storage_offset(),
-                "dtype": str(cpu_tensor.dtype).split(".")[-1],  # e.g., "float32"
-            }
-
-            # Serialize metadata to JSON bytes
-            metadata_json = json.dumps(metadata).encode("utf-8")
-            metadata_length = len(metadata_json)
-
-            # Get raw data using optimized numpy approach
-            raw_data = cpu_tensor.numpy().tobytes()
-
-            # Pack format: [metadata_length:4 bytes][metadata:N bytes][raw_data:remaining bytes]
-            return (
-                metadata_length.to_bytes(4, byteorder="little")
-                + metadata_json
-                + raw_data
-            )
+            # Return raw numpy bytes directly - no metadata needed since it's handled separately
+            return cpu_tensor.numpy().tobytes()
 
         @modal.method()
         def get_storage_data(
