@@ -8,7 +8,6 @@ This module provides thread-safe batching of RPCs to reduce network overhead
 and improve overall system performance by grouping multiple operations together.
 """
 
-import threading
 import time
 from concurrent.futures import Future
 from dataclasses import dataclass, field
@@ -61,6 +60,7 @@ class RPCBatchQueue:
 
     This queue collects RPCs from the main thread and allows
     a background thread to process them in batches for improved performance.
+    Python's Queue is already thread-safe, so no additional locking is needed.
     """
 
     def __init__(self, client_id: str):
@@ -72,12 +72,6 @@ class RPCBatchQueue:
         """
         self.client_id = client_id
         self._queue: Queue[BatchedRPC] = Queue()
-        self._lock = threading.RLock()  # Re-entrant lock for nested operations
-
-        # Statistics for monitoring
-        self._queued_calls = 0
-        self._processed_calls = 0
-        self._last_batch_time = time.time()
 
     def enqueue_call(
         self,
@@ -100,58 +94,53 @@ class RPCBatchQueue:
         Returns:
             Future object if return_future=True, None otherwise
         """
-        with self._lock:
-            future = None
-            if return_future or call_type == "remote":
-                future = Future()
+        future = None
+        if return_future or call_type == "remote":
+            future = Future()
 
-            call = BatchedRPC(
-                call_type=call_type,
-                method_name=method_name,
-                args=args,
-                kwargs=kwargs,
-                future=future,
-            )
+        call = BatchedRPC(
+            call_type=call_type,
+            method_name=method_name,
+            args=args,
+            kwargs=kwargs,
+            future=future,
+        )
 
-            self._queue.put(call)
-            self._queued_calls += 1
+        self._queue.put(call)  # Queue.put() is thread-safe
 
-            log.debug(
-                f"📦 Queued {call_type} call: {method_name} for client {self.client_id}"
-            )
+        log.debug(
+            f"📦 Queued {call_type} call: {method_name} for client {self.client_id}"
+        )
 
-            return future
+        return future
 
     def get_batch(self, timeout: float = 0.01) -> List[BatchedRPC]:
         """
         Retrieve all currently queued calls as a batch.
 
         Args:
-            timeout: Maximum time to wait for calls (in seconds)
+            timeout: Maximum time to wait for calls (in seconds) - unused but kept for compatibility
 
         Returns:
             List of BatchedRPC objects ready for execution
         """
-        with self._lock:
-            batch = []
+        batch = []
 
-            # Get all available calls without blocking
-            try:
-                while True:
-                    call = self._queue.get_nowait()
-                    batch.append(call)
-                    self._queue.task_done()
-            except Empty:
-                pass
+        # Get all available calls without blocking - Queue operations are thread-safe
+        try:
+            while True:
+                call = self._queue.get_nowait()
+                batch.append(call)
+                self._queue.task_done()
+        except Empty:
+            pass
 
-            if batch:
-                self._processed_calls += len(batch)
-                self._last_batch_time = time.time()
-                log.debug(
-                    f"📋 Retrieved batch of {len(batch)} calls for client {self.client_id}"
-                )
+        if batch:
+            log.debug(
+                f"📋 Retrieved batch of {len(batch)} calls for client {self.client_id}"
+            )
 
-            return batch
+        return batch
 
     def get_stats(self) -> Dict[str, Any]:
         """
@@ -160,27 +149,22 @@ class RPCBatchQueue:
         Returns:
             Dictionary containing queue statistics
         """
-        with self._lock:
-            return {
-                "client_id": self.client_id,
-                "queue_size": self._queue.qsize(),
-                "queued_calls": self._queued_calls,
-                "processed_calls": self._processed_calls,
-                "last_batch_time": self._last_batch_time,
-                "pending_calls": self._queued_calls - self._processed_calls,
-            }
+        return {
+            "client_id": self.client_id,
+            "queue_size": self._queue.qsize(),  # Queue.qsize() is thread-safe
+        }
 
     def clear(self) -> None:
         """Clear all pending calls from the queue."""
-        with self._lock:
-            while not self._queue.empty():
-                try:
-                    call = self._queue.get_nowait()
-                    if call.future:
-                        call.future.cancel()
-                    self._queue.task_done()
-                except Empty:
-                    break
+        # Queue operations are thread-safe
+        while not self._queue.empty():
+            try:
+                call = self._queue.get_nowait()
+                if call.future:
+                    call.future.cancel()
+                self._queue.task_done()
+            except Empty:
+                break
             log.info(f"🧹 Cleared batch queue for client {self.client_id}")
 
 
