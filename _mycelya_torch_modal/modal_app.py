@@ -81,6 +81,45 @@ def create_modal_app_for_gpu(
 
             return self._storages
 
+        def _get_tensor_mappings(self):
+            """Get or create tensor ID mappings for this server instance."""
+            if not hasattr(self, "_storage_to_tensors"):
+                # storage_id -> set[tensor_id]
+                self._storage_to_tensors: Dict[int, set] = {}
+
+            if not hasattr(self, "_tensor_cache"):
+                # tensor_id -> torch.Tensor (actual tensor objects for efficient operations)
+                self._tensor_cache: Dict[int, Any] = {}
+
+            return self._storage_to_tensors, self._tensor_cache
+
+        def _cache_tensor(self, tensor_id: int, storage_id: int, tensor):
+            """Cache a tensor by tensor ID and establish storage relationship."""
+            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
+
+            # Cache the tensor
+            tensor_cache[tensor_id] = tensor
+
+            # Track storage -> tensor relationship
+            if storage_id not in storage_to_tensors:
+                storage_to_tensors[storage_id] = set()
+            storage_to_tensors[storage_id].add(tensor_id)
+
+        def _get_cached_tensor(self, tensor_id: int):
+            """Get a cached tensor by tensor ID."""
+            _, tensor_cache = self._get_tensor_mappings()
+            return tensor_cache.get(tensor_id)
+
+        def _cleanup_tensor_cache_for_storage(self, storage_id: int):
+            """Clean up all cached tensors associated with a storage ID."""
+            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
+
+            if storage_id in storage_to_tensors:
+                tensor_ids_to_remove = storage_to_tensors[storage_id].copy()
+                for tensor_id in tensor_ids_to_remove:
+                    tensor_cache.pop(tensor_id, None)
+                storage_to_tensors.pop(storage_id, None)
+
         def _construct_tensor_from_storage(
             self,
             storage_id: int,
@@ -459,8 +498,11 @@ def create_modal_app_for_gpu(
             """Implementation of remove_storage without Modal decorators."""
             storages = self._get_storages()
             if storage_id in storages:
+                # Clean up tensor cache associated with this storage
+                self._cleanup_tensor_cache_for_storage(storage_id)
+                # Remove the storage itself
                 del storages[storage_id]
-                log.info(f"🗑️ Removed storage {storage_id}")
+                log.info(f"🗑️ Removed storage {storage_id} and associated tensor cache")
             else:
                 log.debug(f"Storage {storage_id} not found for removal")
 
@@ -485,6 +527,8 @@ def create_modal_app_for_gpu(
             args: List[Any],
             kwargs: Dict[str, Any],
             return_metadata: bool = False,
+            input_tensor_ids: List[int] = None,
+            output_tensor_ids: List[int] = None,
         ) -> Union[None, List[Dict[str, Any]]]:
             """Implementation of execute_aten_operation without Modal decorators."""
             # Import torch and tree_map locally to avoid serialization issues
@@ -499,21 +543,40 @@ def create_modal_app_for_gpu(
             log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
             log.debug(f"Input storage IDs: {input_storage_ids}")
             log.debug(f"Output storage IDs: {output_storage_ids}")
+            log.debug(f"Input tensor IDs: {input_tensor_ids}")
+            log.debug(f"Output tensor IDs: {output_tensor_ids}")
 
             # Get storage mapping
             storages = self._get_storages()
 
-            # Reconstruct input tensors from storage and metadata
-            input_tensors = [
-                self._construct_tensor_from_storage(
-                    storage_id=metadata["storage_id"],
-                    shape=metadata["shape"],
-                    stride=metadata["stride"],
-                    storage_offset=metadata["storage_offset"],
-                    dtype=metadata["dtype"],
-                )
-                for metadata in input_tensor_metadata
-            ]
+            # Reconstruct input tensors - use cached tensors when available
+            input_tensors = []
+            for i, metadata in enumerate(input_tensor_metadata):
+                # Try to get cached tensor first if tensor ID is provided
+                tensor = None
+                if input_tensor_ids and i < len(input_tensor_ids):
+                    tensor_id = input_tensor_ids[i]
+                    tensor = self._get_cached_tensor(tensor_id)
+                    if tensor is not None:
+                        log.debug(f"📋 Using cached tensor for tensor_id {tensor_id}")
+
+                # If not cached, reconstruct from storage and cache it
+                if tensor is None:
+                    tensor = self._construct_tensor_from_storage(
+                        storage_id=metadata["storage_id"],
+                        shape=metadata["shape"],
+                        stride=metadata["stride"],
+                        storage_offset=metadata["storage_offset"],
+                        dtype=metadata["dtype"],
+                    )
+
+                    # Cache the reconstructed tensor if tensor ID is provided
+                    if input_tensor_ids and i < len(input_tensor_ids):
+                        tensor_id = input_tensor_ids[i]
+                        self._cache_tensor(tensor_id, metadata["storage_id"], tensor)
+                        log.debug(f"💾 Cached tensor for tensor_id {tensor_id}")
+
+                input_tensors.append(tensor)
 
             log.debug(f"📥 Reconstructed {len(input_tensors)} input tensors")
 
@@ -574,6 +637,12 @@ def create_modal_app_for_gpu(
                     del result_storage  # Release reference after use
                     storages[storage_id] = storage_tensor
 
+                    # Cache the result tensor if tensor ID is provided
+                    if output_tensor_ids and i < len(output_tensor_ids):
+                        tensor_id = output_tensor_ids[i]
+                        self._cache_tensor(tensor_id, storage_id, result_tensor)
+                        log.debug(f"💾 Cached output tensor for tensor_id {tensor_id}")
+
             log.debug(f"📦 Updated {len(output_storage_ids)} output storage mappings")
 
             # Return metadata if requested
@@ -608,12 +677,15 @@ def create_modal_app_for_gpu(
             args: List[Any],
             kwargs: Dict[str, Any],
             return_metadata: bool = False,
+            input_tensor_ids: List[int] = None,
+            output_tensor_ids: List[int] = None,
         ) -> Union[None, List[Dict[str, Any]]]:
             """
-            Execute an operation with separated input metadata and output storage IDs.
+            Execute an operation with separated input metadata, output storage IDs, and tensor IDs.
 
             This method handles operations where input tensor metadata and output storage IDs
-            are explicitly separated, making the interface cleaner and more explicit.
+            are explicitly separated, making the interface cleaner and more explicit. Tensor IDs
+            enable efficient caching of reconstructed tensors on the remote side.
 
             Args:
                 op_name: The operation name to execute
@@ -622,6 +694,8 @@ def create_modal_app_for_gpu(
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 return_metadata: If True, return output tensor metadata instead of None
+                input_tensor_ids: List of tensor IDs for input tensors (for remote caching)
+                output_tensor_ids: List of tensor IDs for output tensors (for remote caching)
 
             Returns:
                 None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
@@ -633,6 +707,8 @@ def create_modal_app_for_gpu(
                 args,
                 kwargs,
                 return_metadata,
+                input_tensor_ids,
+                output_tensor_ids,
             )
 
         @modal.method()
