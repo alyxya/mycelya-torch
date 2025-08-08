@@ -398,12 +398,10 @@ class RemoteOrchestrator:
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         return_metadata: bool = False,
-        input_tensor_ids: Optional[List[int]] = None,
-        output_tensor_ids: Optional[List[int]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
-        """Execute remote operation with pure metadata and tensor IDs (early conversion boundary).
+        """Execute remote operation with pure metadata (early conversion boundary).
 
-        This method represents the new clean boundary where all tensors have been
+        This method represents the clean boundary where all tensors have been
         converted to metadata at the PyTorch integration layer. No raw tensors
         should be passed to this method.
 
@@ -414,8 +412,6 @@ class RemoteOrchestrator:
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
             return_metadata: If True, return output tensor metadata instead of None
-            input_tensor_ids: List of tensor IDs for input tensors (for remote caching)
-            output_tensor_ids: List of tensor IDs for output tensors (for remote caching)
 
         Returns:
             None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
@@ -456,7 +452,7 @@ class RemoteOrchestrator:
         storage_id = input_metadata[0].storage_id
         client = self._get_client_for_storage(storage_id)
 
-        # Execute with separated input/output interface and tensor IDs
+        # Execute with separated input/output interface
         result = client.execute_aten_operation(
             op_name,
             input_tensor_metadata_dicts,
@@ -464,8 +460,6 @@ class RemoteOrchestrator:
             args,
             kwargs,
             return_metadata,
-            input_tensor_ids=input_tensor_ids,
-            output_tensor_ids=output_tensor_ids,
         )
 
         # Note: With batching, cache invalidation for aten operations happens at queue time

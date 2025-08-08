@@ -233,39 +233,11 @@ def create_huggingface_model_from_remote(
         model, state_dict_metadata, {}
     )  # No storage mapping needed in new architecture
 
-    # Step 5: Generate tensor IDs for remote caching
-    log.info(f"🆔 Generating tensor IDs for {len(local_storage_ids)} model tensors...")
-    tensor_ids = []
-
-    from ._storage import get_or_create_tensor_id
-    from ._tensor_utils import RemoteTensorMetadata
-
-    # Generate tensor IDs for each parameter/buffer
-    for local_storage_id, param_name in zip(local_storage_ids, parameter_names):
-        # Get the remote tensor to extract metadata
-        if param_name in state_dict_metadata:
-            meta = state_dict_metadata[param_name]
-        else:
-            meta = buffer_metadata[param_name]
-
-        # Create metadata object for tensor ID generation
-        metadata = RemoteTensorMetadata(
-            storage_id=local_storage_id,
-            shape=meta["shape"],
-            dtype=meta["dtype"],
-            stride=meta["stride"],
-            storage_offset=meta["storage_offset"],
-        )
-
-        # Generate tensor ID using the local tensor ID manager
-        tensor_id = get_or_create_tensor_id(metadata)
-        tensor_ids.append(tensor_id)
-        log.debug(f"Generated tensor_id {tensor_id} for parameter {param_name}")
-
+    # Step 5: Link local storage IDs to remote model parameters
     log.info(
         f"🔗 Queueing linking of {len(local_storage_ids)} local storage IDs to remote model parameters..."
     )
-    client.link_model_tensors(local_storage_ids, parameter_names, tensor_ids)
+    client.link_model_tensors(local_storage_ids, parameter_names)
 
     # Wait for all batched operations (including tensor linking) to complete
     log.info("🚀 Waiting for all storage operations and tensor linking to complete...")

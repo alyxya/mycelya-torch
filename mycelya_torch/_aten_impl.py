@@ -212,8 +212,6 @@ def _execute_view_operation(
         [output_storage_id],
         processed_args,
         processed_kwargs,
-        input_tensor_ids=None,
-        output_tensor_ids=None,
     )
 
     log.debug(f"View operation {op_name} propagated to remote")
@@ -273,8 +271,6 @@ def _execute_with_static_outputs(
         output_storage_ids,
         processed_args,
         processed_kwargs,
-        input_tensor_ids=None,
-        output_tensor_ids=None,
     )
 
     # Step 5: Correct output tensor shapes to match meta tensor shapes
@@ -340,8 +336,6 @@ def _execute_with_dynamic_outputs(
         processed_args,
         processed_kwargs,
         return_metadata=True,
-        input_tensor_ids=None,
-        output_tensor_ids=None,
     )
 
     # Step 4: Update output tensor metadata from remote execution results

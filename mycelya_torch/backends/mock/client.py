@@ -267,8 +267,6 @@ class MockClient(ClientInterface):
         args: List[Any],
         kwargs: Dict[str, Any],
         return_metadata: bool = False,
-        input_tensor_ids: Optional[List[int]] = None,
-        output_tensor_ids: Optional[List[int]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Execute an aten operation using mock execution.
@@ -280,8 +278,6 @@ class MockClient(ClientInterface):
             args: Operation arguments
             kwargs: Operation keyword arguments
             return_metadata: If True, return output tensor metadata instead of None
-            input_tensor_ids: List of tensor IDs for input tensors (for remote caching)
-            output_tensor_ids: List of tensor IDs for output tensors (for remote caching)
 
         Returns:
             None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
