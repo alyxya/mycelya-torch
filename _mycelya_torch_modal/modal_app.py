@@ -20,8 +20,10 @@ import modal
 
 log = logging.getLogger(__name__)
 
-# Create simplified image with just PyTorch and CUDA support
-image = modal.Image.debian_slim().pip_install("numpy", "torch")
+# Create image with PyTorch, CUDA support, and transformers for HuggingFace models
+image = modal.Image.debian_slim().pip_install(
+    "numpy", "torch", "transformers", "huggingface_hub", "safetensors", "accelerate"
+)
 
 
 def create_modal_app_for_gpu(
@@ -92,6 +94,14 @@ def create_modal_app_for_gpu(
                 self._tensor_cache: Dict[int, Any] = {}
 
             return self._storage_to_tensors, self._tensor_cache
+
+        def _get_model_registry(self):
+            """Get or create model registry for this server instance."""
+            if not hasattr(self, "_model_registry"):
+                # checkpoint -> {model: nn.Module, parameter_storage_map: Dict[str, int]}
+                self._model_registry: Dict[str, Dict[str, Any]] = {}
+
+            return self._model_registry
 
         def _cache_tensor(self, tensor_id: int, storage_id: int, tensor):
             """Cache a tensor by tensor ID and establish storage relationship."""
@@ -519,6 +529,335 @@ def create_modal_app_for_gpu(
             """
             return self._remove_storage_impl(storage_id)
 
+        def _prepare_huggingface_model_impl(
+            self,
+            checkpoint: str,
+            torch_dtype: str = "auto",
+            trust_remote_code: bool = False,
+        ) -> Dict[str, Any]:
+            """Implementation of prepare_huggingface_model without Modal decorators."""
+            import torch
+
+            log.info(
+                f"🤗 Loading HuggingFace model {checkpoint} directly on {gpu_type}"
+            )
+
+            try:
+                from transformers import AutoModelForCausalLM
+            except ImportError:
+                raise ImportError(
+                    "transformers library required for HuggingFace model loading. "
+                    "Add 'transformers' to the Modal image dependencies."
+                )
+
+            # Get the appropriate device for tensor operations
+            device = self._get_device()
+            log.info(f"Loading model on device: {device}")
+
+            # Handle torch_dtype parameter
+            if torch_dtype == "auto" or torch_dtype is None:
+                torch_dtype_obj = (
+                    torch.float16 if device.type == "cuda" else torch.float32
+                )
+            elif torch_dtype.startswith("torch."):
+                # Handle string like "torch.float32"
+                dtype_name = torch_dtype.split(".")[-1]  # Get "float32" from "torch.float32"
+                torch_dtype_obj = getattr(torch, dtype_name)
+            else:
+                # Handle string like "float32"
+                torch_dtype_obj = getattr(torch, torch_dtype)
+
+            # Load model directly to appropriate device
+            log.info(
+                f"Downloading and loading {checkpoint} with dtype {torch_dtype_obj}"
+            )
+            if device.type == "cpu":
+                # For CPU/mock execution, don't use device_map (requires accelerate)
+                model = AutoModelForCausalLM.from_pretrained(
+                    checkpoint,
+                    torch_dtype=torch_dtype_obj,
+                    trust_remote_code=trust_remote_code,
+                )
+                model = model.to(device)
+            else:
+                # For GPU execution, use device_map
+                model = AutoModelForCausalLM.from_pretrained(
+                    checkpoint,
+                    torch_dtype=torch_dtype_obj,
+                    device_map={"": device},  # Load directly to our device
+                    trust_remote_code=trust_remote_code,
+                )
+            log.info(f"✅ Model {checkpoint} loaded successfully on {device}")
+
+            # Get storage mapping
+            storages = self._get_storages()
+
+            # Extract state dict metadata without transferring data
+            state_dict_metadata = {}
+            param_count = 0
+            total_params = sum(1 for _ in model.named_parameters())
+
+            for name, param in model.named_parameters():
+                param_count += 1
+                log.debug(f"Processing parameter {param_count}/{total_params}: {name}")
+
+                # Create storage for this parameter
+                storage_id = self._create_storage_for_tensor(param, storages, device)
+
+                # Collect metadata for client
+                state_dict_metadata[name] = {
+                    "storage_id": storage_id,
+                    "shape": list(param.shape),
+                    "stride": list(param.stride()),
+                    "dtype": str(param.dtype),
+                    "storage_offset": param.storage_offset(),
+                    "requires_grad": param.requires_grad,
+                }
+
+                log.debug(
+                    f"Stored parameter {name}: shape={param.shape}, storage_id={storage_id}"
+                )
+
+            # Also handle buffers (non-trainable parameters like batch norm running stats)
+            buffer_metadata = {}
+            for name, buffer in model.named_buffers():
+                # Create storage for this buffer
+                storage_id = self._create_storage_for_tensor(buffer, storages, device)
+
+                buffer_metadata[name] = {
+                    "storage_id": storage_id,
+                    "shape": list(buffer.shape),
+                    "stride": list(buffer.stride()),
+                    "dtype": str(buffer.dtype),
+                    "storage_offset": buffer.storage_offset(),
+                    "requires_grad": False,  # Buffers don't require gradients
+                }
+
+                log.debug(
+                    f"Stored buffer {name}: shape={buffer.shape}, storage_id={storage_id}"
+                )
+
+            # Store model and parameter mapping for later linking
+            model_registry = self._get_model_registry()
+            parameter_storage_map = {}
+            for name, metadata in state_dict_metadata.items():
+                parameter_storage_map[name] = metadata["storage_id"]
+            for name, metadata in buffer_metadata.items():
+                parameter_storage_map[name] = metadata["storage_id"]
+
+            model_registry[checkpoint] = {
+                "model": model,
+                "parameter_storage_map": parameter_storage_map,
+            }
+
+            log.info(
+                f"🎯 Model preparation complete: {len(state_dict_metadata)} parameters, {len(buffer_metadata)} buffers"
+            )
+
+            return {
+                "state_dict_metadata": state_dict_metadata,
+                "buffer_metadata": buffer_metadata,
+                "config": model.config.to_dict(),
+                "model_type": type(model).__name__,
+                "checkpoint": checkpoint,
+            }
+
+        def _create_storage_for_tensor(self, tensor, storages, device):
+            """Helper method to create storage for a model parameter/buffer tensor."""
+            import random
+
+            import torch
+
+            # Generate a unique storage ID (using existing pattern from storage system)
+            MAX_STORAGE_ID = 2**63 - 1
+            MIN_STORAGE_ID = 1
+
+            # Simple ID generation for now - in production should use proper collision detection
+            storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
+            while storage_id in storages:
+                storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
+
+            # Store the tensor as a 1D uint8 tensor (following existing pattern but with explicit conversion)
+            # First, ensure the tensor is contiguous and has proper data
+            contiguous_tensor = tensor.detach().contiguous()
+            tensor_storage = contiguous_tensor.untyped_storage()
+            storage_nbytes = tensor_storage.nbytes()
+
+            log.debug(f"Creating storage for tensor: shape={contiguous_tensor.shape}, dtype={contiguous_tensor.dtype}")
+            log.debug(f"Original tensor data range: [{contiguous_tensor.min().item():.6f}, {contiguous_tensor.max().item():.6f}]")
+            log.debug(f"Storage size: {storage_nbytes} bytes")
+
+            # Create 1D uint8 tensor with the same number of bytes
+            storage_tensor = torch.empty(
+                storage_nbytes, dtype=torch.uint8, device=device
+            )
+
+            # Perform a direct memory copy from the contiguous tensor's storage
+            storage_tensor.untyped_storage().copy_(tensor_storage)
+
+            # Verify the copy worked by checking a reconstructed view
+            try:
+                # Reconstruct the original tensor from the uint8 storage to verify
+                test_tensor = torch.empty(0, dtype=contiguous_tensor.dtype, device=device)
+                test_tensor.set_(storage_tensor.untyped_storage(), 0, contiguous_tensor.shape, contiguous_tensor.stride())
+                log.debug(f"Reconstructed tensor data range: [{test_tensor.min().item():.6f}, {test_tensor.max().item():.6f}]")
+
+                # Check if data was preserved
+                if torch.allclose(contiguous_tensor, test_tensor, atol=1e-6):
+                    log.debug("✅ Storage copy verification successful")
+                else:
+                    log.error("❌ Storage copy verification failed - data was not preserved")
+            except Exception as e:
+                log.error(f"❌ Storage copy verification error: {e}")
+
+            # Store in storage mapping
+            storages[storage_id] = storage_tensor
+
+            return storage_id
+
+        @modal.method()
+        def prepare_huggingface_model(
+            self,
+            checkpoint: str,
+            torch_dtype: str = "auto",
+            trust_remote_code: bool = False,
+        ) -> Dict[str, Any]:
+            """
+            Download and prepare a HuggingFace model directly on the remote machine.
+
+            This method downloads the model weights directly on the remote GPU,
+            loads them into GPU memory, and returns metadata needed to create
+            local tensor stubs.
+
+            Args:
+                checkpoint: HuggingFace model checkpoint (e.g., "gpt2", "bert-base-uncased")
+                torch_dtype: Data type for model weights ("auto", "float32", "float16", etc.)
+                trust_remote_code: Whether to trust remote code for custom models
+
+            Returns:
+                Dict containing state_dict_metadata, config, and model_type
+            """
+            return self._prepare_huggingface_model_impl(
+                checkpoint, torch_dtype, trust_remote_code
+            )
+
+        def _link_model_tensors_impl(self, local_storage_ids: List[int], parameter_names: List[str]) -> None:
+            """Implementation of link_model_tensors without Modal decorators."""
+            import random
+
+            if len(local_storage_ids) != len(parameter_names):
+                raise ValueError(
+                    f"Mismatch between storage IDs ({len(local_storage_ids)}) and parameter names ({len(parameter_names)})"
+                )
+
+            log.info(
+                f"🔗 Linking {len(local_storage_ids)} local storage IDs to remote model parameters"
+            )
+            log.debug(f"Parameter names to link: {parameter_names[:5]}...")  # Show first 5
+
+            storages = self._get_storages()
+            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
+            model_registry = self._get_model_registry()
+
+            log.debug(f"Model registry contains {len(model_registry)} models")
+            for checkpoint, model_info in model_registry.items():
+                log.debug(f"Model {checkpoint}: {len(model_info['parameter_storage_map'])} parameters")
+
+            # Find the model that contains these parameters
+            parameter_storage_map = None
+            for checkpoint, model_info in model_registry.items():
+                param_map = model_info["parameter_storage_map"]
+                missing_params = [p for p in parameter_names if p not in param_map]
+                if len(missing_params) == 0:
+                    parameter_storage_map = param_map
+                    log.info(f"Found matching model: {checkpoint}")
+                    break
+                else:
+                    log.debug(f"Model {checkpoint} missing {len(missing_params)} parameters")
+
+            if parameter_storage_map is None:
+                log.error(f"Available model parameters (first model): {list(list(model_registry.values())[0]['parameter_storage_map'].keys())[:10] if model_registry else 'No models'}")
+                raise RuntimeError(
+                    f"Could not find model containing all parameters: {parameter_names[:5]}..."
+                )
+
+            linked_count = 0
+            for local_storage_id, param_name in zip(local_storage_ids, parameter_names):
+                # Get the remote storage ID that contains the actual parameter data
+                remote_storage_id = parameter_storage_map[param_name]
+
+                if remote_storage_id not in storages:
+                    log.warning(
+                        f"Remote storage {remote_storage_id} for parameter {param_name} not found"
+                    )
+                    continue
+
+                log.debug(
+                    f"Linking local storage {local_storage_id} -> remote storage {remote_storage_id} (parameter: {param_name})"
+                )
+
+                # Check what type of data is in the remote storage
+                remote_tensor = storages[remote_storage_id]
+                log.debug(f"Remote storage type: {type(remote_tensor)}, shape: {getattr(remote_tensor, 'shape', 'N/A')}")
+                if hasattr(remote_tensor, 'dtype'):
+                    log.debug(f"Remote tensor dtype: {remote_tensor.dtype}")
+                if hasattr(remote_tensor, 'min') and hasattr(remote_tensor, 'max'):
+                    try:
+                        import torch
+                        with torch.no_grad():
+                            min_val = remote_tensor.min().item()
+                            max_val = remote_tensor.max().item()
+                            log.debug(f"Remote tensor range: [{min_val:.6f}, {max_val:.6f}]")
+                    except Exception:
+                        log.debug("Could not compute tensor range")
+
+                # Create tensor ID for the local storage ID
+                MAX_TENSOR_ID = 2**63 - 1
+                MIN_TENSOR_ID = 1
+                tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
+
+                # Ensure tensor ID is unique
+                while tensor_id in tensor_cache:
+                    tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
+
+                # Link local storage ID to the existing remote parameter storage
+                storages[local_storage_id] = storages[remote_storage_id]
+
+                # Establish tensor ID mapping for the local storage
+                if local_storage_id not in storage_to_tensors:
+                    storage_to_tensors[local_storage_id] = set()
+                storage_to_tensors[local_storage_id].add(tensor_id)
+
+                # Cache reference to the remote tensor for this tensor ID
+                tensor_cache[tensor_id] = remote_tensor
+
+                linked_count += 1
+
+                log.debug(
+                    f"Linked parameter {param_name}: local_storage_id={local_storage_id}, tensor_id={tensor_id}, remote_storage_id={remote_storage_id}"
+                )
+
+            log.info(
+                f"✅ Model tensor linking complete: {linked_count}/{len(local_storage_ids)} links successful"
+            )
+
+        @modal.method()
+        def link_model_tensors(self, local_storage_ids: List[int], parameter_names: List[str]) -> None:
+            """
+            Link local mycelya tensor storage/tensor IDs to remote model parameter tensors.
+
+            This method creates tensor IDs for local storage IDs and establishes proper
+            linkage to remote model parameters by name.
+
+            Args:
+                local_storage_ids: List of local storage IDs from created mycelya tensors
+                parameter_names: List of parameter names corresponding to each storage ID
+
+            Returns:
+                None
+            """
+            return self._link_model_tensors_impl(local_storage_ids, parameter_names)
+
         def _execute_aten_operation_impl(
             self,
             op_name: str,
@@ -763,6 +1102,10 @@ def create_modal_app_for_gpu(
                         result = self._remove_storage_impl(*args, **kwargs)
                     elif method_name == "execute_aten_operation":
                         result = self._execute_aten_operation_impl(*args, **kwargs)
+                    elif method_name == "prepare_huggingface_model":
+                        result = self._prepare_huggingface_model_impl(*args, **kwargs)
+                    elif method_name == "link_model_tensors":
+                        result = self._link_model_tensors_impl(*args, **kwargs)
                     else:
                         raise AttributeError(f"Unknown method: {method_name}")
 

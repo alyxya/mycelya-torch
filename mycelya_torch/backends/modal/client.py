@@ -372,6 +372,73 @@ class ModalClient(ClientInterface):
             )
             return None
 
+    # HuggingFace model loading methods
+    def prepare_huggingface_model(
+        self,
+        checkpoint: str,
+        torch_dtype: str = "auto",
+        trust_remote_code: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Download and prepare a HuggingFace model directly on the remote machine.
+
+        Args:
+            checkpoint: HuggingFace model checkpoint (e.g., "gpt2", "bert-base-uncased")
+            torch_dtype: Data type for model weights ("auto", "float32", "float16", etc.)
+            trust_remote_code: Whether to trust remote code for custom models
+
+        Returns:
+            Dict containing state_dict_metadata, config, and model_type
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        log.info(f"📡 Modal Client preparing HuggingFace model: {checkpoint}")
+
+        # Use remote call to get model metadata
+        future = self._queue_rpc(
+            method_name="prepare_huggingface_model",
+            call_type="remote",
+            args=(checkpoint,),
+            kwargs={
+                "torch_dtype": str(torch_dtype) if torch_dtype is not None else None,
+                "trust_remote_code": trust_remote_code,
+            },
+        )
+
+        result = future.result() if future else None
+        log.info(
+            f"✅ Modal Client completed HuggingFace model preparation for {checkpoint}"
+        )
+        return result
+
+    def link_model_tensors(
+        self,
+        local_storage_ids: List[int],
+        parameter_names: List[str]
+    ) -> None:
+        """
+        Link local mycelya tensor storage/tensor IDs to remote model parameter tensors.
+
+        Args:
+            local_storage_ids: List of local storage IDs from created mycelya tensors
+            parameter_names: List of parameter names corresponding to each storage ID
+        """
+        log.info(f"📡 Modal Client linking {len(local_storage_ids)} local tensors to remote model parameters")
+
+        # Queue the linking RPC - this will execute after all create_storage calls in the batch
+        self._queue_rpc(
+            "link_model_tensors",
+            "spawn",  # No return value needed
+            (local_storage_ids, parameter_names),
+            {},
+        )
+
+        # Don't wait for result here - let it execute in batch with proper ordering
+        log.info("✅ Modal Client queued model tensor linking")
+
     def __enter__(self):
         """Context manager entry - starts the machine."""
         self.start()

@@ -267,6 +267,8 @@ class MockClient(ClientInterface):
         args: List[Any],
         kwargs: Dict[str, Any],
         return_metadata: bool = False,
+        input_tensor_ids: Optional[List[int]] = None,
+        output_tensor_ids: Optional[List[int]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Execute an aten operation using mock execution.
@@ -278,6 +280,8 @@ class MockClient(ClientInterface):
             args: Operation arguments
             kwargs: Operation keyword arguments
             return_metadata: If True, return output tensor metadata instead of None
+            input_tensor_ids: List of tensor IDs for input tensors (for remote caching)
+            output_tensor_ids: List of tensor IDs for output tensors (for remote caching)
 
         Returns:
             None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
@@ -305,6 +309,8 @@ class MockClient(ClientInterface):
             args,
             kwargs,
             return_metadata,
+            input_tensor_ids,
+            output_tensor_ids,
         )
 
         if return_metadata:
@@ -312,6 +318,60 @@ class MockClient(ClientInterface):
             return result
         else:
             return None
+
+    def prepare_huggingface_model(
+        self,
+        checkpoint: str,
+        torch_dtype: str = "auto",
+        trust_remote_code: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Prepare a HuggingFace model using mock execution.
+
+        Args:
+            checkpoint: HuggingFace model checkpoint (e.g., "gpt2", "bert-base-uncased")
+            torch_dtype: Data type for model weights ("auto", "float32", "float16", etc.)
+            trust_remote_code: Whether to trust remote code for custom models
+
+        Returns:
+            Dict containing state_dict_metadata, config, and model_type
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Execute using .local() instead of remote call
+        result = self._server_instance.prepare_huggingface_model.local(
+            checkpoint, torch_dtype, trust_remote_code
+        )
+
+        log.info(f"📡 Mock Client prepared HuggingFace model {checkpoint}")
+        return result
+
+    def link_model_tensors(
+        self,
+        local_storage_ids: List[int],
+        parameter_names: List[str]
+    ) -> None:
+        """
+        Link local mycelya tensor storage/tensor IDs to remote model parameter tensors using mock execution.
+
+        Args:
+            local_storage_ids: List of local storage IDs from created mycelya tensors
+            parameter_names: List of parameter names corresponding to each storage ID
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        log.info(f"📡 Mock Client linking {len(local_storage_ids)} local tensors to remote model parameters")
+
+        # Execute using .local() instead of remote call
+        self._server_instance.link_model_tensors.local(local_storage_ids, parameter_names)
+
+        log.info("✅ Mock Client completed model tensor linking")
 
     def _queue_rpc(
         self,

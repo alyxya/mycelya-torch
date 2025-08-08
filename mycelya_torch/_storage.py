@@ -127,9 +127,13 @@ class StorageRegistry:
 
         if storage_id in self.storage_id_to_device:
             # Clean up associated tensor IDs first
-            tensor_cleanup_count = _tensor_id_manager.cleanup_storage_tensors(storage_id)
+            tensor_cleanup_count = _tensor_id_manager.cleanup_storage_tensors(
+                storage_id
+            )
             if tensor_cleanup_count > 0:
-                log.debug(f"Cleaned up {tensor_cleanup_count} tensor IDs for storage {storage_id}")
+                log.debug(
+                    f"Cleaned up {tensor_cleanup_count} tensor IDs for storage {storage_id}"
+                )
 
             # Clean up storage tracking
             self.storage_id_to_device.pop(storage_id, None)
@@ -222,7 +226,7 @@ class StorageRegistry:
 class TensorIdManager:
     """
     Registry for passively generated tensor IDs.
-    
+
     Key concepts:
     - tensor_id: Unique identifier for each tensor (including views)
     - Passive generation: Tensor IDs created on-demand during operations
@@ -233,8 +237,12 @@ class TensorIdManager:
     def __init__(self) -> None:
         # Core mappings
         self._tensor_to_storage: Dict[int, int] = {}  # tensor_id -> storage_id
-        self._storage_to_tensors: Dict[int, Set[int]] = {}  # storage_id -> set[tensor_id]
-        self._tensor_to_metadata: Dict[int, RemoteTensorMetadata] = {}  # tensor_id -> metadata
+        self._storage_to_tensors: Dict[
+            int, Set[int]
+        ] = {}  # storage_id -> set[tensor_id]
+        self._tensor_to_metadata: Dict[
+            int, RemoteTensorMetadata
+        ] = {}  # tensor_id -> metadata
 
         # ID generation tracking
         self._generated_tensor_ids: Set[int] = set()
@@ -244,16 +252,16 @@ class TensorIdManager:
     def get_or_create_tensor_id(self, metadata: RemoteTensorMetadata) -> int:
         """
         Generate a unique tensor ID for the given metadata.
-        
+
         This is the main method for passive tensor ID generation. It creates
         a new tensor ID and establishes the mapping to the storage ID.
-        
+
         Args:
             metadata: RemoteTensorMetadata containing storage_id and tensor info
-            
+
         Returns:
             int: Generated tensor ID
-            
+
         Raises:
             RuntimeError: If unable to generate unique tensor ID
         """
@@ -306,13 +314,13 @@ class TensorIdManager:
     def cleanup_tensor_id(self, tensor_id: int) -> bool:
         """
         Clean up a tensor ID when the tensor is no longer needed.
-        
+
         This removes the tensor ID from all mappings and cleans up
         the storage -> tensors relationship if this was the last tensor.
-        
+
         Args:
             tensor_id: Tensor ID to clean up
-            
+
         Returns:
             bool: True if cleanup was successful
         """
@@ -340,13 +348,13 @@ class TensorIdManager:
     def cleanup_storage_tensors(self, storage_id: int) -> int:
         """
         Clean up all tensor IDs associated with a storage ID.
-        
+
         This is called when storage is being freed to clean up
         all associated tensor IDs.
-        
+
         Args:
             storage_id: Storage ID whose tensors should be cleaned up
-            
+
         Returns:
             int: Number of tensor IDs cleaned up
         """

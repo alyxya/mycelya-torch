@@ -186,6 +186,21 @@ class RemoteMachine:
                 )
         self._client = None
 
+    def get_client(self):
+        """Get the client for this device.
+
+        Returns:
+            The client interface for this device
+
+        Raises:
+            RuntimeError: If client is not available or not running
+        """
+        if self._client is None:
+            raise RuntimeError(f"No client available for machine {self.machine_id}")
+        if not self._client.is_running():
+            raise RuntimeError(f"Client for machine {self.machine_id} is not running")
+        return self._client
+
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
         if self._client is None or not self._client.is_running():

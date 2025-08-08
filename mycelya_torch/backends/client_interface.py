@@ -313,6 +313,64 @@ class ClientInterface(ABC):
         """
         pass
 
+    # HuggingFace model loading methods
+    @abstractmethod
+    def prepare_huggingface_model(
+        self,
+        checkpoint: str,
+        torch_dtype: str = "auto",
+        trust_remote_code: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Download and prepare a HuggingFace model directly on the remote machine.
+
+        This method downloads the model weights directly on the remote GPU,
+        loads them into GPU memory, and returns metadata needed to create
+        local tensor stubs.
+
+        Args:
+            checkpoint: HuggingFace model checkpoint (e.g., "gpt2", "bert-base-uncased")
+            torch_dtype: Data type for model weights ("auto", "float32", "float16", etc.)
+            trust_remote_code: Whether to trust remote code for custom models
+
+        Returns:
+            Dict containing:
+            - state_dict_metadata: Dict[str, Dict] mapping parameter names to tensor metadata
+            - config: Model configuration dictionary
+            - model_type: Model class name string
+        """
+        pass
+
+    @abstractmethod
+    def link_model_tensors(
+        self,
+        local_storage_ids: List[int],
+        parameter_names: List[str]
+    ) -> None:
+        """
+        Link local mycelya tensor storage/tensor IDs to remote model parameter tensors.
+
+        This method is used after HuggingFace model loading to connect the locally
+        created mycelya tensors to the corresponding remote model parameter tensors.
+        The remote side will create tensor IDs for local storage IDs and establish
+        the proper linkage to model parameters.
+
+        Args:
+            local_storage_ids: List of local storage IDs from created mycelya tensors
+            parameter_names: List of parameter names corresponding to each storage ID
+                (e.g., ["model.embed_tokens.weight", "model.layers.0.self_attn.q_proj.weight"])
+
+        Returns:
+            None
+
+        Example:
+            # After model preparation and local tensor creation
+            local_storage_ids = [tensor.untyped_storage().data_ptr() for tensor in model.parameters()]
+            parameter_names = ["model.embed_tokens.weight", "layer.0.weight", ...]
+            client.link_model_tensors(local_storage_ids, parameter_names)
+        """
+        pass
+
     def _create_view_from_cached_tensor(
         self,
         cached_tensor: torch.Tensor,
@@ -390,6 +448,7 @@ class ClientInterface(ABC):
         # Wake up background thread immediately for blocking calls to reduce latency
         if call_type == "remote" or return_future:
             from .._remote_orchestrator import remote_orchestrator
+
             remote_orchestrator.wake_batch_thread_for_blocking_rpc()
 
         return future

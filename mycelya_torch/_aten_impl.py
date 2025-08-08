@@ -68,6 +68,7 @@ def args_to_metadata_with_placeholders(
 
             # Generate tensor ID for this tensor
             from ._storage import get_or_create_tensor_id
+
             tensor_id = get_or_create_tensor_id(metadata)
 
             tensor_index = len(metadata_list)
@@ -165,6 +166,7 @@ def _create_output_tensors(
             # Generate tensor ID for the reused tensor
             from ._storage import get_or_create_tensor_id
             from ._tensor_utils import RemoteTensorMetadata
+
             metadata = RemoteTensorMetadata.from_remote_tensor(tensor)
             tensor_id = get_or_create_tensor_id(metadata)
             output_tensor_ids.append(tensor_id)
@@ -191,6 +193,7 @@ def _create_output_tensors(
             # Generate tensor ID for the new tensor
             from ._storage import get_or_create_tensor_id
             from ._tensor_utils import RemoteTensorMetadata
+
             metadata = RemoteTensorMetadata.from_remote_tensor(new_tensor)
             tensor_id = get_or_create_tensor_id(metadata)
             output_tensor_ids.append(tensor_id)
@@ -227,6 +230,7 @@ def _execute_view_operation(
     # Generate tensor ID for the view result
     from ._storage import get_or_create_tensor_id
     from ._tensor_utils import RemoteTensorMetadata
+
     view_metadata = RemoteTensorMetadata.from_remote_tensor(view_tensor)
     output_tensor_id = get_or_create_tensor_id(view_metadata)
 
@@ -245,7 +249,9 @@ def _execute_view_operation(
         output_tensor_ids=[output_tensor_id],
     )
 
-    log.debug(f"View operation {op_name} propagated to remote with tensor ID {output_tensor_id}")
+    log.debug(
+        f"View operation {op_name} propagated to remote with tensor ID {output_tensor_id}"
+    )
     return view_tensor
 
 
@@ -347,6 +353,7 @@ def _execute_with_dynamic_outputs(
         # Generate tensor ID for the output tensor
         from ._storage import get_or_create_tensor_id
         from ._tensor_utils import RemoteTensorMetadata
+
         output_metadata = RemoteTensorMetadata.from_remote_tensor(output_tensor)
         output_tensor_ids = [get_or_create_tensor_id(output_metadata)]
     else:
@@ -361,6 +368,7 @@ def _execute_with_dynamic_outputs(
         # Generate tensor ID for the placeholder tensor
         from ._storage import get_or_create_tensor_id
         from ._tensor_utils import RemoteTensorMetadata
+
         output_metadata = RemoteTensorMetadata.from_remote_tensor(output_tensor)
         output_tensor_ids = [get_or_create_tensor_id(output_metadata)]
 
@@ -413,8 +421,13 @@ def _has_static_output_shape(
 ) -> bool:
     """Determine if operation has predictable output shape for meta tensor inference."""
 
-    # Always dynamic operations
-    ALWAYS_DYNAMIC = {"aten::masked_select", "aten::nonzero"}
+    # Always dynamic operations (output shape depends on data)
+    ALWAYS_DYNAMIC = {
+        "aten::masked_select",
+        "aten::nonzero",
+        "aten::unique",
+        "aten::_unique2"
+    }
     if op_name in ALWAYS_DYNAMIC:
         return False
 
@@ -429,8 +442,6 @@ def _has_static_output_shape(
             )
 
     # TODO: Add more conditional operations here as needed:
-    # if op_name == "aten::unique":
-    #     return not (kwargs.get("return_inverse", False) or kwargs.get("return_counts", False))
     # if op_name == "aten::where":
     #     return len(args) != 1  # 1-arg form is dynamic, 3-arg form is static
 

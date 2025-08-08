@@ -47,7 +47,9 @@ class RemoteOrchestrator:
         self._batch_lock = threading.RLock()
         self._batch_thread: Optional[threading.Thread] = None
         self._batch_shutdown = threading.Event()
-        self._batch_wakeup = threading.Event()  # Wake up thread immediately for blocking calls
+        self._batch_wakeup = (
+            threading.Event()
+        )  # Wake up thread immediately for blocking calls
         self._batch_interval = 0.1  # Process batches every 100ms
 
         # Start background thread for batch processing
