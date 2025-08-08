@@ -917,24 +917,30 @@ def create_modal_app_for_gpu(
                 else []
             )
 
-            for i, storage_id in enumerate(output_storage_ids):
-                if i < len(result_tensors):
-                    # Store just the byte count for the result tensor
-                    result_tensor = result_tensors[i]
-                    storage_nbytes = result_tensor.untyped_storage().nbytes()
-                    storages[storage_id] = storage_nbytes
+            # Enforce contract: output_storage_ids and result_tensors must have same length
+            if len(output_storage_ids) != len(result_tensors):
+                raise RuntimeError(
+                    f"Contract violation in {op_name}: output_storage_ids length ({len(output_storage_ids)}) "
+                    f"!= result_tensors length ({len(result_tensors)}). This indicates a bug in the client-side "
+                    f"meta tensor execution or output tensor creation."
+                )
 
-                    # Cache the result tensor if tensor ID is provided
-                    if output_tensor_ids and i < len(output_tensor_ids):
-                        tensor_id = output_tensor_ids[i]
-                        self._cache_tensor(tensor_id, storage_id, result_tensor)
-                        log.debug(f"💾 Cached output tensor for tensor_id {tensor_id}")
-                    else:
-                        # Even without explicit tensor ID, cache with a temporary ID
-                        import random
-                        temp_tensor_id = random.randint(1, 2**63 - 1)
-                        self._cache_tensor(temp_tensor_id, storage_id, result_tensor)
-                        log.debug(f"💾 Cached output tensor with temp ID {temp_tensor_id}")
+            for i, (storage_id, result_tensor) in enumerate(zip(output_storage_ids, result_tensors)):
+                # Store just the byte count for the result tensor
+                storage_nbytes = result_tensor.untyped_storage().nbytes()
+                storages[storage_id] = storage_nbytes
+
+                # Cache the result tensor if tensor ID is provided
+                if output_tensor_ids and i < len(output_tensor_ids):
+                    tensor_id = output_tensor_ids[i]
+                    self._cache_tensor(tensor_id, storage_id, result_tensor)
+                    log.debug(f"💾 Cached output tensor for tensor_id {tensor_id}")
+                else:
+                    # Even without explicit tensor ID, cache with a temporary ID
+                    import random
+                    temp_tensor_id = random.randint(1, 2**63 - 1)
+                    self._cache_tensor(temp_tensor_id, storage_id, result_tensor)
+                    log.debug(f"💾 Cached output tensor with temp ID {temp_tensor_id}")
 
             log.debug(f"📦 Updated {len(output_storage_ids)} output storage mappings")
 
