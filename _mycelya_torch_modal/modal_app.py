@@ -75,11 +75,10 @@ def create_modal_app_for_gpu(
 
         def _get_storages(self):
             """Get or create storage mapping for this server instance."""
-            import torch
-
             if not hasattr(self, "_storages"):
-                # storage_id -> torch.Tensor (1D uint8 CUDA/CPU) or int (for lazy allocation)
-                self._storages: Dict[int, Union[torch.Tensor, int]] = {}
+                # storage_id -> int (lazy allocation byte count only)
+                # Actual tensor data is stored in tensor_cache, accessed via storage_to_tensors mapping
+                self._storages: Dict[int, int] = {}
 
             return self._storages
 
@@ -120,6 +119,18 @@ def create_modal_app_for_gpu(
             _, tensor_cache = self._get_tensor_mappings()
             return tensor_cache.get(tensor_id)
 
+        def _get_any_cached_tensor_for_storage(self, storage_id: int):
+            """Get any cached tensor for a storage ID (for reconstruction purposes)."""
+            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
+            
+            if storage_id in storage_to_tensors:
+                # Get any tensor ID for this storage
+                tensor_ids = storage_to_tensors[storage_id]
+                if tensor_ids:
+                    tensor_id = next(iter(tensor_ids))
+                    return tensor_cache.get(tensor_id)
+            return None
+
         def _cleanup_tensor_cache_for_storage(self, storage_id: int):
             """Clean up all cached tensors associated with a storage ID."""
             storage_to_tensors, tensor_cache = self._get_tensor_mappings()
@@ -141,6 +152,8 @@ def create_modal_app_for_gpu(
             """
             Construct a tensor from storage ID and tensor parameters.
 
+            Uses cached tensors when available, or creates empty tensors for lazy storage.
+
             Args:
                 storage_id: The storage ID to look up
                 shape: Tensor shape
@@ -149,11 +162,10 @@ def create_modal_app_for_gpu(
                 dtype: Data type as string
 
             Returns:
-                Reconstructed tensor on CUDA device
+                Reconstructed tensor on appropriate device
 
             Raises:
                 KeyError: If storage_id is not found
-                RuntimeError: If storage is lazy-allocated
             """
             import torch
 
@@ -166,37 +178,31 @@ def create_modal_app_for_gpu(
                 log.error(f"📋 Available Storage IDs on Modal: {available_ids}")
                 raise KeyError(f"Storage ID {storage_id} not found")
 
-            storage = storages[storage_id]
-
             # Parse dtype string back to torch.dtype
             dtype_str = dtype.replace("torch.", "")
             torch_dtype = getattr(torch, dtype_str)
 
-            # Handle lazy storage (int) - realize it
-            if isinstance(storage, int):
-                nbytes = storage
-                device = self._get_device()  # Use appropriate device (CUDA or CPU)
-                # Create 1D uint8 tensor to hold the storage
-                storage_tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
-
-                # Update the storages mapping with realized tensor
-                storages[storage_id] = storage_tensor
-                log.info(f"🔄 REALIZED lazy storage {storage_id} ({nbytes} bytes)")
-
-                storage = storage_tensor
-
-            # Get untyped storage from the stored tensor
-            if isinstance(storage, torch.Tensor):
-                target_device = storage.device
-                # Reconstruct tensor using storage + parameters (extract storage when needed)
+            # Try to get a cached tensor for this storage first
+            cached_tensor = self._get_any_cached_tensor_for_storage(storage_id)
+            
+            if cached_tensor is not None:
+                # Reconstruct from cached tensor's storage
+                target_device = cached_tensor.device
                 tensor = torch.empty(0, dtype=torch_dtype, device=target_device).set_(
-                    storage.untyped_storage(), storage_offset, shape, stride
+                    cached_tensor.untyped_storage(), storage_offset, shape, stride
                 )
-            else:
-                raise RuntimeError(
-                    f"Unexpected storage type {type(storage)} for storage {storage_id}"
-                )
-
+                log.debug(f"🔄 Reconstructed tensor from cached storage {storage_id}")
+                return tensor
+            
+            # No cached tensor - this is lazy storage, create empty tensor
+            nbytes = storages[storage_id]  # This should be int (byte count)
+            device = self._get_device()
+            
+            # For lazy storage, create an empty tensor with the requested shape
+            # The actual data will be filled when the tensor is first used
+            tensor = torch.empty(shape, dtype=torch_dtype, device=device)
+            log.debug(f"🔄 Created empty tensor for lazy storage {storage_id} ({nbytes} bytes)")
+            
             return tensor
 
         def _create_storage_impl(self, storage_id: int, nbytes: int) -> None:
@@ -278,59 +284,53 @@ def create_modal_app_for_gpu(
             if source_tensor.device.type != "cpu":
                 source_tensor = source_tensor.cpu()
 
-            storage_item = storages[storage_id]
+            expected_bytes = storages[storage_id]  # Always int now
 
-            # Check if storage is lazy
-            if isinstance(storage_item, int):
-                # Move source tensor to appropriate device for storage
-                device = self._get_device()
+            # Check if we have a cached tensor for this storage
+            cached_tensor = self._get_any_cached_tensor_for_storage(storage_id)
+            
+            if cached_tensor is not None:
+                # Update existing cached tensor in-place using target view
+                device = cached_tensor.device
                 device_source = source_tensor.to(device)
-                expected_bytes = storage_item
-                # Extract storage once but keep device_source alive
-                device_source_storage = device_source.untyped_storage()
-                actual_bytes = device_source_storage.nbytes()
-
-                if expected_bytes != actual_bytes:
-                    raise RuntimeError(
-                        f"Storage size mismatch for storage {storage_id}: "
-                        f"expected {expected_bytes} bytes, got {actual_bytes} bytes"
-                    )
-
-                log.info(
-                    f"📥 LAZY Storage {storage_id} update triggering realization with {expected_bytes} bytes"
+                
+                # Create target view from cached tensor's storage
+                target_tensor = torch.empty(0, dtype=cached_tensor.dtype, device=device).set_(
+                    cached_tensor.untyped_storage(),
+                    target_storage_offset,
+                    target_shape,
+                    target_stride
                 )
-                # Create 1D uint8 tensor from the device source tensor's storage
-                storage_tensor = torch.empty(
-                    actual_bytes, dtype=torch.uint8, device=device
-                )
-                storage_tensor.untyped_storage().copy_(device_source_storage)
-                # Ensure device_source stays alive until after copy operation
-                del device_source_storage  # Release reference after use
-                storages[storage_id] = storage_tensor
+                
+                # Copy source data to target view in-place
+                target_tensor.copy_(device_source)
                 log.info(
-                    f"📥 LAZY Updated Storage ID {storage_id} on Modal (realized: shape: {source_tensor.shape})"
+                    f"📥 Updated cached tensor storage {storage_id} (shape: {target_shape})"
                 )
                 return
+                
+            # No cached tensor - this is first write to lazy storage
+            # Move source tensor to appropriate device and cache it
+            device = self._get_device()
+            device_source = source_tensor.to(device)
+            actual_bytes = device_source.untyped_storage().nbytes()
 
-            # Storage is realized (torch.Tensor) - always use in-place view update
+            if expected_bytes != actual_bytes:
+                raise RuntimeError(
+                    f"Storage size mismatch for storage {storage_id}: "
+                    f"expected {expected_bytes} bytes, got {actual_bytes} bytes"
+                )
+
+            # For first write, we'll cache the source tensor directly (it becomes our storage)
+            # Generate a temporary tensor ID to cache it
+            import random
+            temp_tensor_id = random.randint(1, 2**63 - 1)
+            
+            # Cache the tensor 
+            self._cache_tensor(temp_tensor_id, storage_id, device_source)
+            
             log.info(
-                f"📥 IN-PLACE Updating view of Storage ID {storage_id} (offset: {target_storage_offset})"
-            )
-
-            # Construct the target view tensor directly using existing method
-            target_tensor = self._construct_tensor_from_storage(
-                storage_id=storage_id,
-                shape=target_shape,
-                stride=target_stride,
-                storage_offset=target_storage_offset,
-                dtype=target_dtype,
-            )
-
-            # Copy source tensor data to target view in-place
-            target_tensor.copy_(source_tensor.to(target_tensor.device))
-
-            log.info(
-                f"📥 IN-PLACE Updated view of Storage ID {storage_id} on Modal (target_shape: {target_shape})"
+                f"📥 First write to lazy storage {storage_id}, cached with temp ID {temp_tensor_id}"
             )
 
         @modal.method()
@@ -386,31 +386,28 @@ def create_modal_app_for_gpu(
             storage_id: int,
         ) -> bytes:
             """Implementation of get_storage_data without Modal decorators."""
-            # Get storages
             storages = self._get_storages()
 
             if storage_id not in storages:
                 raise RuntimeError(f"Storage ID {storage_id} not found")
 
-            storage_item = storages[storage_id]
-
-            # Handle lazy storage
-            if isinstance(storage_item, int):
-                raise RuntimeError(
-                    f"Storage ID {storage_id} is lazy (not realized). Cannot retrieve data."
+            # Try to get a cached tensor for this storage
+            cached_tensor = self._get_any_cached_tensor_for_storage(storage_id)
+            
+            if cached_tensor is not None:
+                # Return data from cached tensor
+                log.info(
+                    f"📦 Retrieving tensor data for storage {storage_id} from cached tensor ({cached_tensor.untyped_storage().nbytes()} bytes)"
                 )
-
-            # Storage is realized (torch.Tensor)
-            storage_tensor = storage_item
-            log.info(
-                f"📦 Retrieving tensor data for storage {storage_id} ({storage_tensor.untyped_storage().nbytes()} bytes)"
+                
+                # Convert to CPU and serialize with pure numpy approach
+                cpu_tensor = cached_tensor.cpu()
+                return cpu_tensor.numpy().tobytes()
+            
+            # No cached tensor - this is lazy storage with no data yet
+            raise RuntimeError(
+                f"Storage ID {storage_id} is lazy (no cached tensor). Cannot retrieve data."
             )
-
-            # Convert CUDA tensor to CPU and serialize with pure numpy approach
-            cpu_tensor = storage_tensor.cpu()
-
-            # Return raw numpy bytes directly - no metadata needed since it's handled separately
-            return cpu_tensor.numpy().tobytes()
 
         @modal.method()
         def get_storage_data(
@@ -433,58 +430,30 @@ def create_modal_app_for_gpu(
 
         def _resize_storage_impl(self, storage_id: int, nbytes: int) -> None:
             """Implementation of resize_storage without Modal decorators."""
-            import torch
-
             storages = self._get_storages()
             if storage_id not in storages:
                 log.warning(f"Storage ID {storage_id} not found for resize")
                 return
 
-            old_storage = storages[storage_id]
+            current_bytes = storages[storage_id]  # Always int now
 
-            # Handle lazy storage (int) - propagate laziness
-            if isinstance(old_storage, int):
-                current_bytes = old_storage
-
-                # Check if resize is actually needed (should be bigger)
-                if nbytes <= current_bytes:
-                    log.debug(
-                        f"Lazy storage {storage_id} resize skipped: "
-                        f"nbytes ({nbytes}) <= current_bytes ({current_bytes})"
-                    )
-                    return  # No-op
-
-                # Update lazy storage with new byte count
-                storages[storage_id] = nbytes
-                log.info(
-                    f"🔄 LAZY Resized storage {storage_id} from {current_bytes} "
-                    f"to {nbytes} bytes (kept lazy)"
+            # Check if resize is actually needed (should be bigger)
+            if nbytes <= current_bytes:
+                log.debug(
+                    f"Storage {storage_id} resize skipped: "
+                    f"nbytes ({nbytes}) <= current_bytes ({current_bytes})"
                 )
-                return
+                return  # No-op
 
-            # Handle realized storage (torch.Tensor)
-            elif isinstance(old_storage, torch.Tensor):
-                current_bytes = old_storage.untyped_storage().nbytes()
-
-                # Check if resize is actually needed (should be bigger)
-                if nbytes <= current_bytes:
-                    log.debug(
-                        f"Realized storage {storage_id} resize skipped: "
-                        f"nbytes ({nbytes}) <= current_bytes ({current_bytes})"
-                    )
-                    return  # No-op
-
-                # Resize the existing 1D uint8 tensor
-                old_storage.resize_([nbytes])
-
-                log.info(
-                    f"🔄 REALIZED Resized storage {storage_id} from {current_bytes} "
-                    f"to {nbytes} bytes using tensor.resize_()"
-                )
-            else:
-                raise RuntimeError(
-                    f"Unexpected storage type {type(old_storage)} for storage {storage_id}"
-                )
+            # Update lazy storage with new byte count
+            storages[storage_id] = nbytes
+            log.info(
+                f"🔄 Resized storage {storage_id} from {current_bytes} to {nbytes} bytes"
+            )
+            
+            # Note: If there are cached tensors, they may need to be invalidated
+            # for operations that require the full storage size. However, for most
+            # operations, cached tensors remain valid as views into the larger storage.
 
         @modal.method()
         def resize_storage(self, storage_id: int, nbytes: int) -> None:
@@ -666,8 +635,6 @@ def create_modal_app_for_gpu(
             """Helper method to create storage for a model parameter/buffer tensor."""
             import random
 
-            import torch
-
             # Generate a unique storage ID (using existing pattern from storage system)
             MAX_STORAGE_ID = 2**63 - 1
             MIN_STORAGE_ID = 1
@@ -677,41 +644,26 @@ def create_modal_app_for_gpu(
             while storage_id in storages:
                 storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
 
-            # Store the tensor as a 1D uint8 tensor (following existing pattern but with explicit conversion)
-            # First, ensure the tensor is contiguous and has proper data
-            contiguous_tensor = tensor.detach().contiguous()
-            tensor_storage = contiguous_tensor.untyped_storage()
-            storage_nbytes = tensor_storage.nbytes()
+            # Ensure the tensor is contiguous and on the correct device
+            contiguous_tensor = tensor.detach().contiguous().to(device)
+            storage_nbytes = contiguous_tensor.untyped_storage().nbytes()
 
             log.debug(f"Creating storage for tensor: shape={contiguous_tensor.shape}, dtype={contiguous_tensor.dtype}")
             log.debug(f"Original tensor data range: [{contiguous_tensor.min().item():.6f}, {contiguous_tensor.max().item():.6f}]")
             log.debug(f"Storage size: {storage_nbytes} bytes")
 
-            # Create 1D uint8 tensor with the same number of bytes
-            storage_tensor = torch.empty(
-                storage_nbytes, dtype=torch.uint8, device=device
-            )
+            # Store just the byte count in storage mapping (lazy approach)
+            storages[storage_id] = storage_nbytes
 
-            # Perform a direct memory copy from the contiguous tensor's storage
-            storage_tensor.untyped_storage().copy_(tensor_storage)
+            # Generate a tensor ID and cache the actual tensor
+            MAX_TENSOR_ID = 2**63 - 1
+            MIN_TENSOR_ID = 1
+            tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
+            
+            # Cache the actual tensor directly
+            self._cache_tensor(tensor_id, storage_id, contiguous_tensor)
 
-            # Verify the copy worked by checking a reconstructed view
-            try:
-                # Reconstruct the original tensor from the uint8 storage to verify
-                test_tensor = torch.empty(0, dtype=contiguous_tensor.dtype, device=device)
-                test_tensor.set_(storage_tensor.untyped_storage(), 0, contiguous_tensor.shape, contiguous_tensor.stride())
-                log.debug(f"Reconstructed tensor data range: [{test_tensor.min().item():.6f}, {test_tensor.max().item():.6f}]")
-
-                # Check if data was preserved
-                if torch.allclose(contiguous_tensor, test_tensor, atol=1e-6):
-                    log.debug("✅ Storage copy verification successful")
-                else:
-                    log.error("❌ Storage copy verification failed - data was not preserved")
-            except Exception as e:
-                log.error(f"❌ Storage copy verification error: {e}")
-
-            # Store in storage mapping
-            storages[storage_id] = storage_tensor
+            log.debug(f"✅ Created storage {storage_id} with cached tensor {tensor_id}")
 
             return storage_id
 
@@ -796,12 +748,12 @@ def create_modal_app_for_gpu(
                     f"Linking local storage {local_storage_id} -> remote storage {remote_storage_id} (parameter: {param_name})"
                 )
 
-                # Check what type of data is in the remote storage
-                remote_tensor = storages[remote_storage_id]
-                log.debug(f"Remote storage type: {type(remote_tensor)}, shape: {getattr(remote_tensor, 'shape', 'N/A')}")
-                if hasattr(remote_tensor, 'dtype'):
+                # Get the cached tensor for the remote storage
+                remote_tensor = self._get_any_cached_tensor_for_storage(remote_storage_id)
+                
+                if remote_tensor is not None:
+                    log.debug(f"Remote tensor type: {type(remote_tensor)}, shape: {remote_tensor.shape}")
                     log.debug(f"Remote tensor dtype: {remote_tensor.dtype}")
-                if hasattr(remote_tensor, 'min') and hasattr(remote_tensor, 'max'):
                     try:
                         import torch
                         with torch.no_grad():
@@ -810,6 +762,8 @@ def create_modal_app_for_gpu(
                             log.debug(f"Remote tensor range: [{min_val:.6f}, {max_val:.6f}]")
                     except Exception:
                         log.debug("Could not compute tensor range")
+                else:
+                    log.warning(f"No cached tensor found for remote storage {remote_storage_id}")
 
                 # Create tensor ID for the local storage ID
                 MAX_TENSOR_ID = 2**63 - 1
@@ -820,16 +774,19 @@ def create_modal_app_for_gpu(
                 while tensor_id in tensor_cache:
                     tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
 
-                # Link local storage ID to the existing remote parameter storage
+                # Link local storage ID to the same byte count as remote storage
                 storages[local_storage_id] = storages[remote_storage_id]
 
-                # Establish tensor ID mapping for the local storage
-                if local_storage_id not in storage_to_tensors:
-                    storage_to_tensors[local_storage_id] = set()
-                storage_to_tensors[local_storage_id].add(tensor_id)
+                # Establish tensor ID mapping for the local storage and cache the remote tensor
+                if remote_tensor is not None:
+                    if local_storage_id not in storage_to_tensors:
+                        storage_to_tensors[local_storage_id] = set()
+                    storage_to_tensors[local_storage_id].add(tensor_id)
 
-                # Cache reference to the remote tensor for this tensor ID
-                tensor_cache[tensor_id] = remote_tensor
+                    # Cache reference to the remote tensor for this tensor ID
+                    tensor_cache[tensor_id] = remote_tensor
+                else:
+                    log.warning(f"Skipping tensor cache for {param_name} - no remote tensor available")
 
                 linked_count += 1
 
@@ -962,25 +919,22 @@ def create_modal_app_for_gpu(
 
             for i, storage_id in enumerate(output_storage_ids):
                 if i < len(result_tensors):
-                    # Store the result tensor as a 1D uint8 tensor
+                    # Store just the byte count for the result tensor
                     result_tensor = result_tensors[i]
-                    # Extract storage once but keep result_tensor alive
-                    result_storage = result_tensor.untyped_storage()
-                    storage_nbytes = result_storage.nbytes()
-                    # Create 1D uint8 tensor with the same storage
-                    storage_tensor = torch.empty(
-                        storage_nbytes, dtype=torch.uint8, device=result_tensor.device
-                    )
-                    storage_tensor.untyped_storage().copy_(result_storage)
-                    # Ensure result_tensor stays alive until after copy
-                    del result_storage  # Release reference after use
-                    storages[storage_id] = storage_tensor
+                    storage_nbytes = result_tensor.untyped_storage().nbytes()
+                    storages[storage_id] = storage_nbytes
 
                     # Cache the result tensor if tensor ID is provided
                     if output_tensor_ids and i < len(output_tensor_ids):
                         tensor_id = output_tensor_ids[i]
                         self._cache_tensor(tensor_id, storage_id, result_tensor)
                         log.debug(f"💾 Cached output tensor for tensor_id {tensor_id}")
+                    else:
+                        # Even without explicit tensor ID, cache with a temporary ID
+                        import random
+                        temp_tensor_id = random.randint(1, 2**63 - 1)
+                        self._cache_tensor(temp_tensor_id, storage_id, result_tensor)
+                        log.debug(f"💾 Cached output tensor with temp ID {temp_tensor_id}")
 
             log.debug(f"📦 Updated {len(output_storage_ids)} output storage mappings")
 
