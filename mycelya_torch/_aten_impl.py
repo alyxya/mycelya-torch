@@ -56,24 +56,16 @@ def _validate_cross_device_operation(
 def args_to_metadata_with_placeholders(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMetadata], List[int]]:
-    """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata and tensor IDs."""
+) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMetadata]]:
+    """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
     metadata_list: List[RemoteTensorMetadata] = []
-    tensor_id_list: List[int] = []
 
     def replace_remote_tensor_with_placeholder(obj):
-        """Replace remote tensors with placeholders and collect metadata/tensor IDs."""
+        """Replace remote tensors with placeholders and collect metadata."""
         if isinstance(obj, torch.Tensor):
             metadata = RemoteTensorMetadata.from_remote_tensor(obj)
-
-            # Generate tensor ID for this tensor
-            from ._storage import get_or_create_tensor_id
-
-            tensor_id = get_or_create_tensor_id(metadata)
-
             tensor_index = len(metadata_list)
             metadata_list.append(metadata)
-            tensor_id_list.append(tensor_id)
             return f"__TENSOR_{tensor_index}"
         return obj
 
@@ -82,7 +74,7 @@ def args_to_metadata_with_placeholders(
         replace_remote_tensor_with_placeholder, (args, kwargs)
     )
 
-    return processed_args, processed_kwargs, metadata_list, tensor_id_list
+    return processed_args, processed_kwargs, metadata_list
 
 
 def _execute_meta_operation(
@@ -141,18 +133,16 @@ def _execute_meta_operation(
 
 def _create_output_tensors(
     meta_outputs: List, original_tensors: Dict, remote_device: torch.device
-) -> tuple[List, List, List]:
+) -> tuple[List, List]:
     """Create output tensors based on meta execution results.
 
     Returns:
-        tuple: (output_tensors, output_storage_ids, output_tensor_ids)
+        tuple: (output_tensors, output_storage_ids)
             - output_tensors: List of created/reused tensors
             - output_storage_ids: List of storage IDs for all output tensors (both new and reused)
-            - output_tensor_ids: List of tensor IDs for all output tensors
     """
     output_tensors = []
     output_storage_ids = []
-    output_tensor_ids = []
 
     for meta_output in meta_outputs:
         if meta_output in original_tensors:
@@ -162,14 +152,6 @@ def _create_output_tensors(
             # Include storage ID for reused tensors to track all modifications
             storage_id = tensor.untyped_storage().data_ptr()
             output_storage_ids.append(storage_id)
-
-            # Generate tensor ID for the reused tensor
-            from ._storage import get_or_create_tensor_id
-            from ._tensor_utils import RemoteTensorMetadata
-
-            metadata = RemoteTensorMetadata.from_remote_tensor(tensor)
-            tensor_id = get_or_create_tensor_id(metadata)
-            output_tensor_ids.append(tensor_id)
         else:
             # Create new tensor
             new_tensor = torch.empty(
@@ -190,15 +172,7 @@ def _create_output_tensors(
             storage_id = new_tensor.untyped_storage().data_ptr()
             output_storage_ids.append(storage_id)
 
-            # Generate tensor ID for the new tensor
-            from ._storage import get_or_create_tensor_id
-            from ._tensor_utils import RemoteTensorMetadata
-
-            metadata = RemoteTensorMetadata.from_remote_tensor(new_tensor)
-            tensor_id = get_or_create_tensor_id(metadata)
-            output_tensor_ids.append(tensor_id)
-
-    return output_tensors, output_storage_ids, output_tensor_ids
+    return output_tensors, output_storage_ids
 
 
 def _execute_view_operation(
@@ -222,17 +196,10 @@ def _execute_view_operation(
     )
 
     # Now propagate the view operation to the remote side for tensor ID mapping
-    # Generate tensor IDs for input and output
-    processed_args, processed_kwargs, input_metadata, input_tensor_ids = (
+    # Generate metadata for input tensors
+    processed_args, processed_kwargs, input_metadata = (
         args_to_metadata_with_placeholders(args, kwargs)
     )
-
-    # Generate tensor ID for the view result
-    from ._storage import get_or_create_tensor_id
-    from ._tensor_utils import RemoteTensorMetadata
-
-    view_metadata = RemoteTensorMetadata.from_remote_tensor(view_tensor)
-    output_tensor_id = get_or_create_tensor_id(view_metadata)
 
     # Get output storage ID
     output_storage_id = view_tensor.untyped_storage().data_ptr()
@@ -245,13 +212,11 @@ def _execute_view_operation(
         [output_storage_id],
         processed_args,
         processed_kwargs,
-        input_tensor_ids=input_tensor_ids,
-        output_tensor_ids=[output_tensor_id],
+        input_tensor_ids=None,
+        output_tensor_ids=None,
     )
 
-    log.debug(
-        f"View operation {op_name} propagated to remote with tensor ID {output_tensor_id}"
-    )
+    log.debug(f"View operation {op_name} propagated to remote")
     return view_tensor
 
 
@@ -290,14 +255,14 @@ def _execute_with_static_outputs(
 
     # Step 3: Create output tensors (empty list for non-tensor results)
     if meta_outputs:
-        output_tensors, output_storage_ids, output_tensor_ids = _create_output_tensors(
+        output_tensors, output_storage_ids = _create_output_tensors(
             meta_outputs, original_tensors, remote_device
         )
     else:
-        output_tensors, output_storage_ids, output_tensor_ids = [], [], []
+        output_tensors, output_storage_ids = [], []
 
     # Step 4: Execute remotely
-    processed_args, processed_kwargs, input_metadata, input_tensor_ids = (
+    processed_args, processed_kwargs, input_metadata = (
         args_to_metadata_with_placeholders(args, kwargs)
     )
 
@@ -308,8 +273,8 @@ def _execute_with_static_outputs(
         output_storage_ids,
         processed_args,
         processed_kwargs,
-        input_tensor_ids=input_tensor_ids,
-        output_tensor_ids=output_tensor_ids,
+        input_tensor_ids=None,
+        output_tensor_ids=None,
     )
 
     # Step 5: Correct output tensor shapes to match meta tensor shapes
@@ -350,12 +315,7 @@ def _execute_with_dynamic_outputs(
         # For out tensors, we need to get the storage ID for remote execution
         output_storage_ids = [output_tensor.untyped_storage().data_ptr()]
 
-        # Generate tensor ID for the output tensor
-        from ._storage import get_or_create_tensor_id
-        from ._tensor_utils import RemoteTensorMetadata
-
-        output_metadata = RemoteTensorMetadata.from_remote_tensor(output_tensor)
-        output_tensor_ids = [get_or_create_tensor_id(output_metadata)]
+        # Note: No tensor ID generation needed with metadata-based caching
     else:
         # Step 1: Infer output dtype based on operation type
         output_dtype = torch.int64 if op_name == "aten::nonzero" else args[0].dtype
@@ -365,15 +325,10 @@ def _execute_with_dynamic_outputs(
         output_tensor = torch.empty(0, dtype=output_dtype, device=remote_device)
         output_storage_ids = [output_tensor.untyped_storage().data_ptr()]
 
-        # Generate tensor ID for the placeholder tensor
-        from ._storage import get_or_create_tensor_id
-        from ._tensor_utils import RemoteTensorMetadata
-
-        output_metadata = RemoteTensorMetadata.from_remote_tensor(output_tensor)
-        output_tensor_ids = [get_or_create_tensor_id(output_metadata)]
+        # Note: No tensor ID generation needed with metadata-based caching
 
     # Step 3: Execute remotely and request metadata return
-    processed_args, processed_kwargs, input_metadata, input_tensor_ids = (
+    processed_args, processed_kwargs, input_metadata = (
         args_to_metadata_with_placeholders(args, kwargs)
     )
 
@@ -385,8 +340,8 @@ def _execute_with_dynamic_outputs(
         processed_args,
         processed_kwargs,
         return_metadata=True,
-        input_tensor_ids=input_tensor_ids,
-        output_tensor_ids=output_tensor_ids,
+        input_tensor_ids=None,
+        output_tensor_ids=None,
     )
 
     # Step 4: Update output tensor metadata from remote execution results
@@ -426,7 +381,7 @@ def _has_static_output_shape(
         "aten::masked_select",
         "aten::nonzero",
         "aten::unique",
-        "aten::_unique2"
+        "aten::_unique2",
     }
     if op_name in ALWAYS_DYNAMIC:
         return False

@@ -309,8 +309,6 @@ class MockClient(ClientInterface):
             args,
             kwargs,
             return_metadata,
-            input_tensor_ids,
-            output_tensor_ids,
         )
 
         if return_metadata:
@@ -352,10 +350,10 @@ class MockClient(ClientInterface):
     def link_model_tensors(
         self,
         local_storage_ids: List[int],
-        parameter_names: List[str]
+        parameter_names: List[str],
     ) -> None:
         """
-        Link local mycelya tensor storage/tensor IDs to remote model parameter tensors using mock execution.
+        Link local mycelya tensor storage IDs to remote model parameter tensors using mock execution.
 
         Args:
             local_storage_ids: List of local storage IDs from created mycelya tensors
@@ -366,10 +364,14 @@ class MockClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        log.info(f"📡 Mock Client linking {len(local_storage_ids)} local tensors to remote model parameters")
+        log.info(
+            f"📡 Mock Client linking {len(local_storage_ids)} local tensors to remote model parameters"
+        )
 
         # Execute using .local() instead of remote call
-        self._server_instance.link_model_tensors.local(local_storage_ids, parameter_names)
+        self._server_instance.link_model_tensors.local(
+            local_storage_ids, parameter_names
+        )
 
         log.info("✅ Mock Client completed model tensor linking")
 

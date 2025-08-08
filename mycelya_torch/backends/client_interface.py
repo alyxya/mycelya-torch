@@ -345,20 +345,17 @@ class ClientInterface(ABC):
     def link_model_tensors(
         self,
         local_storage_ids: List[int],
-        parameter_names: List[str]
+        parameter_names: List[str],
     ) -> None:
         """
-        Link local mycelya tensor storage/tensor IDs to remote model parameter tensors.
+        Link local mycelya tensor storage IDs to remote model parameter tensors.
 
         This method is used after HuggingFace model loading to connect the locally
         created mycelya tensors to the corresponding remote model parameter tensors.
-        The remote side will create tensor IDs for local storage IDs and establish
-        the proper linkage to model parameters.
 
         Args:
             local_storage_ids: List of local storage IDs from created mycelya tensors
             parameter_names: List of parameter names corresponding to each storage ID
-                (e.g., ["model.embed_tokens.weight", "model.layers.0.self_attn.q_proj.weight"])
 
         Returns:
             None

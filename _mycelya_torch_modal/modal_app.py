@@ -82,17 +82,14 @@ def create_modal_app_for_gpu(
 
             return self._storages
 
-        def _get_tensor_mappings(self):
-            """Get or create tensor ID mappings for this server instance."""
-            if not hasattr(self, "_storage_to_tensors"):
-                # storage_id -> set[tensor_id]
-                self._storage_to_tensors: Dict[int, set] = {}
-
+        def _get_tensor_cache(self):
+            """Get or create tensor cache for this server instance."""
             if not hasattr(self, "_tensor_cache"):
-                # tensor_id -> torch.Tensor (actual tensor objects for efficient operations)
-                self._tensor_cache: Dict[int, Any] = {}
+                # storage_id -> {metadata_key -> torch.Tensor}
+                # where metadata_key is a hash of (shape, stride, offset, dtype)
+                self._tensor_cache: Dict[int, Dict[str, Any]] = {}
 
-            return self._storage_to_tensors, self._tensor_cache
+            return self._tensor_cache
 
         def _get_model_registry(self):
             """Get or create model registry for this server instance."""
@@ -102,44 +99,70 @@ def create_modal_app_for_gpu(
 
             return self._model_registry
 
-        def _cache_tensor(self, tensor_id: int, storage_id: int, tensor):
-            """Cache a tensor by tensor ID and establish storage relationship."""
-            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
+        def _make_tensor_metadata_key(
+            self, shape: List[int], stride: List[int], storage_offset: int, dtype: str
+        ) -> str:
+            """Create a unique key for tensor metadata."""
+            return f"{tuple(shape)}-{tuple(stride)}-{storage_offset}-{dtype}"
+
+        def _cache_tensor(
+            self,
+            storage_id: int,
+            shape: List[int],
+            stride: List[int],
+            storage_offset: int,
+            dtype: str,
+            tensor,
+        ):
+            """Cache a tensor with metadata-based key."""
+            tensor_cache = self._get_tensor_cache()
+
+            # Create metadata key
+            metadata_key = self._make_tensor_metadata_key(
+                shape, stride, storage_offset, dtype
+            )
+
+            # Ensure storage_id entry exists
+            if storage_id not in tensor_cache:
+                tensor_cache[storage_id] = {}
 
             # Cache the tensor
-            tensor_cache[tensor_id] = tensor
+            tensor_cache[storage_id][metadata_key] = tensor
 
-            # Track storage -> tensor relationship
-            if storage_id not in storage_to_tensors:
-                storage_to_tensors[storage_id] = set()
-            storage_to_tensors[storage_id].add(tensor_id)
+        def _get_cached_tensor(
+            self,
+            storage_id: int,
+            shape: List[int],
+            stride: List[int],
+            storage_offset: int,
+            dtype: str,
+        ):
+            """Get a cached tensor by storage ID and metadata."""
+            tensor_cache = self._get_tensor_cache()
 
-        def _get_cached_tensor(self, tensor_id: int):
-            """Get a cached tensor by tensor ID."""
-            _, tensor_cache = self._get_tensor_mappings()
-            return tensor_cache.get(tensor_id)
+            if storage_id not in tensor_cache:
+                return None
+
+            metadata_key = self._make_tensor_metadata_key(
+                shape, stride, storage_offset, dtype
+            )
+            return tensor_cache[storage_id].get(metadata_key)
 
         def _get_any_cached_tensor_for_storage(self, storage_id: int):
             """Get any cached tensor for a storage ID (for reconstruction purposes)."""
-            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
-            
-            if storage_id in storage_to_tensors:
-                # Get any tensor ID for this storage
-                tensor_ids = storage_to_tensors[storage_id]
-                if tensor_ids:
-                    tensor_id = next(iter(tensor_ids))
-                    return tensor_cache.get(tensor_id)
+            tensor_cache = self._get_tensor_cache()
+
+            if storage_id in tensor_cache and tensor_cache[storage_id]:
+                # Return any cached tensor for this storage
+                return next(iter(tensor_cache[storage_id].values()))
             return None
 
         def _cleanup_tensor_cache_for_storage(self, storage_id: int):
             """Clean up all cached tensors associated with a storage ID."""
-            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
+            tensor_cache = self._get_tensor_cache()
 
-            if storage_id in storage_to_tensors:
-                tensor_ids_to_remove = storage_to_tensors[storage_id].copy()
-                for tensor_id in tensor_ids_to_remove:
-                    tensor_cache.pop(tensor_id, None)
-                storage_to_tensors.pop(storage_id, None)
+            if storage_id in tensor_cache:
+                tensor_cache.pop(storage_id, None)
 
         def _construct_tensor_from_storage(
             self,
@@ -182,27 +205,44 @@ def create_modal_app_for_gpu(
             dtype_str = dtype.replace("torch.", "")
             torch_dtype = getattr(torch, dtype_str)
 
-            # Try to get a cached tensor for this storage first
+            # Try to get a cached tensor with exact metadata first
+            cached_tensor = self._get_cached_tensor(
+                storage_id, shape, stride, storage_offset, dtype
+            )
+
+            if cached_tensor is not None:
+                log.debug(f"🎯 Found exact cached tensor for storage {storage_id}")
+                return cached_tensor
+
+            # Try to get any cached tensor for this storage to reconstruct from
             cached_tensor = self._get_any_cached_tensor_for_storage(storage_id)
-            
+
             if cached_tensor is not None:
                 # Reconstruct from cached tensor's storage
                 target_device = cached_tensor.device
                 tensor = torch.empty(0, dtype=torch_dtype, device=target_device).set_(
                     cached_tensor.untyped_storage(), storage_offset, shape, stride
                 )
-                log.debug(f"🔄 Reconstructed tensor from cached storage {storage_id}")
+                # Cache this new tensor view
+                self._cache_tensor(
+                    storage_id, shape, stride, storage_offset, dtype, tensor
+                )
+                log.debug(
+                    f"🔄 Reconstructed and cached tensor from storage {storage_id}"
+                )
                 return tensor
-            
+
             # No cached tensor - this is lazy storage, create empty tensor
             nbytes = storages[storage_id]  # This should be int (byte count)
             device = self._get_device()
-            
+
             # For lazy storage, create an empty tensor with the requested shape
             # The actual data will be filled when the tensor is first used
             tensor = torch.empty(shape, dtype=torch_dtype, device=device)
-            log.debug(f"🔄 Created empty tensor for lazy storage {storage_id} ({nbytes} bytes)")
-            
+            log.debug(
+                f"🔄 Created empty tensor for lazy storage {storage_id} ({nbytes} bytes)"
+            )
+
             return tensor
 
         def _create_storage_impl(self, storage_id: int, nbytes: int) -> None:
@@ -288,27 +328,29 @@ def create_modal_app_for_gpu(
 
             # Check if we have a cached tensor for this storage
             cached_tensor = self._get_any_cached_tensor_for_storage(storage_id)
-            
+
             if cached_tensor is not None:
                 # Update existing cached tensor in-place using target view
                 device = cached_tensor.device
                 device_source = source_tensor.to(device)
-                
+
                 # Create target view from cached tensor's storage
-                target_tensor = torch.empty(0, dtype=cached_tensor.dtype, device=device).set_(
+                target_tensor = torch.empty(
+                    0, dtype=cached_tensor.dtype, device=device
+                ).set_(
                     cached_tensor.untyped_storage(),
                     target_storage_offset,
                     target_shape,
-                    target_stride
+                    target_stride,
                 )
-                
+
                 # Copy source data to target view in-place
                 target_tensor.copy_(device_source)
                 log.info(
                     f"📥 Updated cached tensor storage {storage_id} (shape: {target_shape})"
                 )
                 return
-                
+
             # No cached tensor - this is first write to lazy storage
             # Move source tensor to appropriate device and cache it
             device = self._get_device()
@@ -322,15 +364,18 @@ def create_modal_app_for_gpu(
                 )
 
             # For first write, we'll cache the source tensor directly (it becomes our storage)
-            # Generate a temporary tensor ID to cache it
-            import random
-            temp_tensor_id = random.randint(1, 2**63 - 1)
-            
-            # Cache the tensor 
-            self._cache_tensor(temp_tensor_id, storage_id, device_source)
-            
+            # Cache with target metadata since that's the final view we want
+            self._cache_tensor(
+                storage_id,
+                target_shape,
+                target_stride,
+                target_storage_offset,
+                target_dtype,
+                device_source,
+            )
+
             log.info(
-                f"📥 First write to lazy storage {storage_id}, cached with temp ID {temp_tensor_id}"
+                f"📥 First write to lazy storage {storage_id}, cached with metadata"
             )
 
         @modal.method()
@@ -393,17 +438,17 @@ def create_modal_app_for_gpu(
 
             # Try to get a cached tensor for this storage
             cached_tensor = self._get_any_cached_tensor_for_storage(storage_id)
-            
+
             if cached_tensor is not None:
                 # Return data from cached tensor
                 log.info(
                     f"📦 Retrieving tensor data for storage {storage_id} from cached tensor ({cached_tensor.untyped_storage().nbytes()} bytes)"
                 )
-                
+
                 # Convert to CPU and serialize with pure numpy approach
                 cpu_tensor = cached_tensor.cpu()
                 return cpu_tensor.numpy().tobytes()
-            
+
             # No cached tensor - this is lazy storage with no data yet
             raise RuntimeError(
                 f"Storage ID {storage_id} is lazy (no cached tensor). Cannot retrieve data."
@@ -450,7 +495,7 @@ def create_modal_app_for_gpu(
             log.info(
                 f"🔄 Resized storage {storage_id} from {current_bytes} to {nbytes} bytes"
             )
-            
+
             # Note: If there are cached tensors, they may need to be invalidated
             # for operations that require the full storage size. However, for most
             # operations, cached tensors remain valid as views into the larger storage.
@@ -530,7 +575,9 @@ def create_modal_app_for_gpu(
                 )
             elif torch_dtype.startswith("torch."):
                 # Handle string like "torch.float32"
-                dtype_name = torch_dtype.split(".")[-1]  # Get "float32" from "torch.float32"
+                dtype_name = torch_dtype.split(".")[
+                    -1
+                ]  # Get "float32" from "torch.float32"
                 torch_dtype_obj = getattr(torch, dtype_name)
             else:
                 # Handle string like "float32"
@@ -558,8 +605,7 @@ def create_modal_app_for_gpu(
                 )
             log.info(f"✅ Model {checkpoint} loaded successfully on {device}")
 
-            # Get storage mapping
-            storages = self._get_storages()
+            # Note: storages not needed since metadata extraction doesn't require storage mapping
 
             # Extract state dict metadata without transferring data
             state_dict_metadata = {}
@@ -607,8 +653,14 @@ def create_modal_app_for_gpu(
             model_registry = self._get_model_registry()
             model_registry[checkpoint] = {
                 "model": model,
-                "parameter_tensors": {name: metadata["_tensor_data"] for name, metadata in state_dict_metadata.items()},
-                "buffer_tensors": {name: metadata["_tensor_data"] for name, metadata in buffer_metadata.items()},
+                "parameter_tensors": {
+                    name: metadata["_tensor_data"]
+                    for name, metadata in state_dict_metadata.items()
+                },
+                "buffer_tensors": {
+                    name: metadata["_tensor_data"]
+                    for name, metadata in buffer_metadata.items()
+                },
             }
 
             log.info(
@@ -616,10 +668,14 @@ def create_modal_app_for_gpu(
             )
 
             # Clean metadata for return (remove internal tensor data)
-            clean_state_dict = {name: {k: v for k, v in meta.items() if k != "_tensor_data"} 
-                               for name, meta in state_dict_metadata.items()}
-            clean_buffer_dict = {name: {k: v for k, v in meta.items() if k != "_tensor_data"} 
-                                for name, meta in buffer_metadata.items()}
+            clean_state_dict = {
+                name: {k: v for k, v in meta.items() if k != "_tensor_data"}
+                for name, meta in state_dict_metadata.items()
+            }
+            clean_buffer_dict = {
+                name: {k: v for k, v in meta.items() if k != "_tensor_data"}
+                for name, meta in buffer_metadata.items()
+            }
 
             return {
                 "state_dict_metadata": clean_state_dict,
@@ -628,7 +684,6 @@ def create_modal_app_for_gpu(
                 "model_type": type(model).__name__,
                 "checkpoint": checkpoint,
             }
-
 
         @modal.method()
         def prepare_huggingface_model(
@@ -656,9 +711,12 @@ def create_modal_app_for_gpu(
                 checkpoint, torch_dtype, trust_remote_code
             )
 
-        def _link_model_tensors_impl(self, local_storage_ids: List[int], parameter_names: List[str]) -> None:
+        def _link_model_tensors_impl(
+            self,
+            local_storage_ids: List[int],
+            parameter_names: List[str],
+        ) -> None:
             """Implementation of link_model_tensors without Modal decorators."""
-            import random
 
             if len(local_storage_ids) != len(parameter_names):
                 raise ValueError(
@@ -668,15 +726,18 @@ def create_modal_app_for_gpu(
             log.info(
                 f"🔗 Linking {len(local_storage_ids)} local storage IDs to remote model parameters"
             )
-            log.debug(f"Parameter names to link: {parameter_names[:5]}...")  # Show first 5
+            log.debug(
+                f"Parameter names to link: {parameter_names[:5]}..."
+            )  # Show first 5
 
             storages = self._get_storages()
-            storage_to_tensors, tensor_cache = self._get_tensor_mappings()
             model_registry = self._get_model_registry()
 
             log.debug(f"Model registry contains {len(model_registry)} models")
             if not model_registry:
-                raise RuntimeError("No models found in registry. Call prepare_huggingface_model first.")
+                raise RuntimeError(
+                    "No models found in registry. Call prepare_huggingface_model first."
+                )
 
             # Find the model that contains these parameters
             model_data = None
@@ -685,17 +746,27 @@ def create_modal_app_for_gpu(
                 param_tensors = model_info.get("parameter_tensors", {})
                 buffer_tensors = model_info.get("buffer_tensors", {})
                 all_tensors = {**param_tensors, **buffer_tensors}
-                
+
                 missing_params = [p for p in parameter_names if p not in all_tensors]
                 if len(missing_params) == 0:
                     model_data = model_info
                     log.info(f"Found matching model: {checkpoint}")
                     break
                 else:
-                    log.debug(f"Model {checkpoint} missing {len(missing_params)} parameters")
+                    log.debug(
+                        f"Model {checkpoint} missing {len(missing_params)} parameters"
+                    )
 
             if model_data is None:
-                available_params = list(next(iter(model_registry.values())).get("parameter_tensors", {}).keys())[:10] if model_registry else []
+                available_params = (
+                    list(
+                        next(iter(model_registry.values()))
+                        .get("parameter_tensors", {})
+                        .keys()
+                    )[:10]
+                    if model_registry
+                    else []
+                )
                 raise RuntimeError(
                     f"Could not find model containing all parameters: {parameter_names[:5]}... "
                     f"Available parameters: {available_params}"
@@ -714,11 +785,13 @@ def create_modal_app_for_gpu(
 
                 # Get the actual tensor data
                 remote_tensor = all_tensors[param_name]
-                
+
                 log.debug(
                     f"Linking local storage {local_storage_id} to parameter {param_name}"
                 )
-                log.debug(f"Remote tensor type: {type(remote_tensor)}, shape: {remote_tensor.shape}")
+                log.debug(
+                    f"Remote tensor type: {type(remote_tensor)}, shape: {remote_tensor.shape}"
+                )
                 log.debug(f"Remote tensor dtype: {remote_tensor.dtype}")
 
                 # Calculate storage size from tensor
@@ -727,19 +800,22 @@ def create_modal_app_for_gpu(
                 # Create storage entry for the local storage ID
                 storages[local_storage_id] = storage_nbytes
 
-                # Generate unique tensor ID for caching
-                MAX_TENSOR_ID = 2**63 - 1
-                MIN_TENSOR_ID = 1
-                tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
+                # Cache the tensor with its metadata
+                tensor_shape = list(remote_tensor.shape)
+                tensor_stride = list(remote_tensor.stride())
+                tensor_offset = remote_tensor.storage_offset()
+                tensor_dtype = str(remote_tensor.dtype)
 
-                # Ensure tensor ID is unique
-                while tensor_id in tensor_cache:
-                    tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
+                self._cache_tensor(
+                    local_storage_id,
+                    tensor_shape,
+                    tensor_stride,
+                    tensor_offset,
+                    tensor_dtype,
+                    remote_tensor,
+                )
+                log.debug(f"Cached parameter {param_name} with metadata key")
 
-                # Cache the tensor with the generated tensor ID
-                self._cache_tensor(tensor_id, local_storage_id, remote_tensor)
-                
-                log.debug(f"Cached parameter {param_name} with tensor ID {tensor_id}")
                 linked_count += 1
 
             log.info(
@@ -747,12 +823,16 @@ def create_modal_app_for_gpu(
             )
 
         @modal.method()
-        def link_model_tensors(self, local_storage_ids: List[int], parameter_names: List[str]) -> None:
+        def link_model_tensors(
+            self,
+            local_storage_ids: List[int],
+            parameter_names: List[str],
+        ) -> None:
             """
-            Link local mycelya tensor storage/tensor IDs to remote model parameter tensors.
+            Link local mycelya tensor storage IDs to remote model parameter tensors.
 
-            This method creates tensor IDs for local storage IDs and establishes proper
-            linkage to remote model parameters by name.
+            This method establishes linkage between local storage IDs and remote model parameters,
+            caching tensors with metadata-based keys for efficient lookup.
 
             Args:
                 local_storage_ids: List of local storage IDs from created mycelya tensors
@@ -771,8 +851,6 @@ def create_modal_app_for_gpu(
             args: List[Any],
             kwargs: Dict[str, Any],
             return_metadata: bool = False,
-            input_tensor_ids: List[int] = None,
-            output_tensor_ids: List[int] = None,
         ) -> Union[None, List[Dict[str, Any]]]:
             """Implementation of execute_aten_operation without Modal decorators."""
             # Import torch and tree_map locally to avoid serialization issues
@@ -787,39 +865,21 @@ def create_modal_app_for_gpu(
             log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
             log.debug(f"Input storage IDs: {input_storage_ids}")
             log.debug(f"Output storage IDs: {output_storage_ids}")
-            log.debug(f"Input tensor IDs: {input_tensor_ids}")
-            log.debug(f"Output tensor IDs: {output_tensor_ids}")
 
             # Get storage mapping
             storages = self._get_storages()
 
             # Reconstruct input tensors - use cached tensors when available
             input_tensors = []
-            for i, metadata in enumerate(input_tensor_metadata):
-                # Try to get cached tensor first if tensor ID is provided
-                tensor = None
-                if input_tensor_ids and i < len(input_tensor_ids):
-                    tensor_id = input_tensor_ids[i]
-                    tensor = self._get_cached_tensor(tensor_id)
-                    if tensor is not None:
-                        log.debug(f"📋 Using cached tensor for tensor_id {tensor_id}")
-
-                # If not cached, reconstruct from storage and cache it
-                if tensor is None:
-                    tensor = self._construct_tensor_from_storage(
-                        storage_id=metadata["storage_id"],
-                        shape=metadata["shape"],
-                        stride=metadata["stride"],
-                        storage_offset=metadata["storage_offset"],
-                        dtype=metadata["dtype"],
-                    )
-
-                    # Cache the reconstructed tensor if tensor ID is provided
-                    if input_tensor_ids and i < len(input_tensor_ids):
-                        tensor_id = input_tensor_ids[i]
-                        self._cache_tensor(tensor_id, metadata["storage_id"], tensor)
-                        log.debug(f"💾 Cached tensor for tensor_id {tensor_id}")
-
+            for _i, metadata in enumerate(input_tensor_metadata):
+                # Use the _construct_tensor_from_storage which already handles metadata-based caching
+                tensor = self._construct_tensor_from_storage(
+                    storage_id=metadata["storage_id"],
+                    shape=metadata["shape"],
+                    stride=metadata["stride"],
+                    storage_offset=metadata["storage_offset"],
+                    dtype=metadata["dtype"],
+                )
                 input_tensors.append(tensor)
 
             log.debug(f"📥 Reconstructed {len(input_tensors)} input tensors")
@@ -873,22 +933,28 @@ def create_modal_app_for_gpu(
                     f"meta tensor execution or output tensor creation."
                 )
 
-            for i, (storage_id, result_tensor) in enumerate(zip(output_storage_ids, result_tensors)):
+            for _i, (storage_id, result_tensor) in enumerate(
+                zip(output_storage_ids, result_tensors)
+            ):
                 # Store just the byte count for the result tensor
                 storage_nbytes = result_tensor.untyped_storage().nbytes()
                 storages[storage_id] = storage_nbytes
 
-                # Cache the result tensor if tensor ID is provided
-                if output_tensor_ids and i < len(output_tensor_ids):
-                    tensor_id = output_tensor_ids[i]
-                    self._cache_tensor(tensor_id, storage_id, result_tensor)
-                    log.debug(f"💾 Cached output tensor for tensor_id {tensor_id}")
-                else:
-                    # Even without explicit tensor ID, cache with a temporary ID
-                    import random
-                    temp_tensor_id = random.randint(1, 2**63 - 1)
-                    self._cache_tensor(temp_tensor_id, storage_id, result_tensor)
-                    log.debug(f"💾 Cached output tensor with temp ID {temp_tensor_id}")
+                # Always cache result tensors with their metadata
+                result_shape = list(result_tensor.shape)
+                result_stride = list(result_tensor.stride())
+                result_offset = result_tensor.storage_offset()
+                result_dtype = str(result_tensor.dtype)
+
+                self._cache_tensor(
+                    storage_id,
+                    result_shape,
+                    result_stride,
+                    result_offset,
+                    result_dtype,
+                    result_tensor,
+                )
+                log.debug("💾 Cached output tensor with metadata")
 
             log.debug(f"📦 Updated {len(output_storage_ids)} output storage mappings")
 
@@ -924,15 +990,12 @@ def create_modal_app_for_gpu(
             args: List[Any],
             kwargs: Dict[str, Any],
             return_metadata: bool = False,
-            input_tensor_ids: List[int] = None,
-            output_tensor_ids: List[int] = None,
         ) -> Union[None, List[Dict[str, Any]]]:
             """
-            Execute an operation with separated input metadata, output storage IDs, and tensor IDs.
+            Execute an operation with separated input metadata and output storage IDs.
 
             This method handles operations where input tensor metadata and output storage IDs
-            are explicitly separated, making the interface cleaner and more explicit. Tensor IDs
-            enable efficient caching of reconstructed tensors on the remote side.
+            are explicitly separated. Tensors are cached automatically based on their metadata.
 
             Args:
                 op_name: The operation name to execute
@@ -941,8 +1004,6 @@ def create_modal_app_for_gpu(
                 args: Operation arguments (with tensor placeholders)
                 kwargs: Operation keyword arguments (with tensor placeholders)
                 return_metadata: If True, return output tensor metadata instead of None
-                input_tensor_ids: List of tensor IDs for input tensors (for remote caching)
-                output_tensor_ids: List of tensor IDs for output tensors (for remote caching)
 
             Returns:
                 None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
@@ -954,8 +1015,6 @@ def create_modal_app_for_gpu(
                 args,
                 kwargs,
                 return_metadata,
-                input_tensor_ids,
-                output_tensor_ids,
             )
 
         @modal.method()

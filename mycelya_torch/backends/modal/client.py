@@ -351,8 +351,6 @@ class ModalClient(ClientInterface):
                 args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
                 kwargs={
                     "return_metadata": True,
-                    "input_tensor_ids": input_tensor_ids,
-                    "output_tensor_ids": output_tensor_ids,
                 },
                 invalidate_storage_ids=modified_storage_ids,
             )
@@ -364,10 +362,7 @@ class ModalClient(ClientInterface):
                 method_name="execute_aten_operation",
                 call_type="spawn",
                 args=(op_name, input_tensor_metadata, output_storage_ids, args, kwargs),
-                kwargs={
-                    "input_tensor_ids": input_tensor_ids,
-                    "output_tensor_ids": output_tensor_ids,
-                },
+                kwargs={},
                 invalidate_storage_ids=modified_storage_ids,
             )
             return None
@@ -417,16 +412,18 @@ class ModalClient(ClientInterface):
     def link_model_tensors(
         self,
         local_storage_ids: List[int],
-        parameter_names: List[str]
+        parameter_names: List[str],
     ) -> None:
         """
-        Link local mycelya tensor storage/tensor IDs to remote model parameter tensors.
+        Link local mycelya tensor storage IDs to remote model parameter tensors.
 
         Args:
             local_storage_ids: List of local storage IDs from created mycelya tensors
             parameter_names: List of parameter names corresponding to each storage ID
         """
-        log.info(f"📡 Modal Client linking {len(local_storage_ids)} local tensors to remote model parameters")
+        log.info(
+            f"📡 Modal Client linking {len(local_storage_ids)} local tensors to remote model parameters"
+        )
 
         # Queue the linking RPC - this will execute after all create_storage calls in the batch
         self._queue_rpc(

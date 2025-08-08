@@ -181,7 +181,7 @@ def create_huggingface_model_from_remote(
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
         _storage_registry.generated_storage_ids.add(local_storage_id)
-        
+
         # Track for linking
         local_storage_ids.append(local_storage_id)
         parameter_names.append(name)
@@ -216,7 +216,7 @@ def create_huggingface_model_from_remote(
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
         _storage_registry.generated_storage_ids.add(local_storage_id)
-        
+
         # Track for linking
         local_storage_ids.append(local_storage_id)
         parameter_names.append(name)
@@ -229,20 +229,55 @@ def create_huggingface_model_from_remote(
 
     # Step 4.5: Handle weight tying for parameters not in state_dict_metadata
     log.info("Checking for tied weights that need linking...")
-    _handle_tied_weights(model, state_dict_metadata, {})  # No storage mapping needed in new architecture
+    _handle_tied_weights(
+        model, state_dict_metadata, {}
+    )  # No storage mapping needed in new architecture
 
-    log.info(f"🔗 Queueing linking of {len(local_storage_ids)} local storage IDs to remote model parameters...")
-    client.link_model_tensors(local_storage_ids, parameter_names)
+    # Step 5: Generate tensor IDs for remote caching
+    log.info(f"🆔 Generating tensor IDs for {len(local_storage_ids)} model tensors...")
+    tensor_ids = []
+
+    from ._storage import get_or_create_tensor_id
+    from ._tensor_utils import RemoteTensorMetadata
+
+    # Generate tensor IDs for each parameter/buffer
+    for local_storage_id, param_name in zip(local_storage_ids, parameter_names):
+        # Get the remote tensor to extract metadata
+        if param_name in state_dict_metadata:
+            meta = state_dict_metadata[param_name]
+        else:
+            meta = buffer_metadata[param_name]
+
+        # Create metadata object for tensor ID generation
+        metadata = RemoteTensorMetadata(
+            storage_id=local_storage_id,
+            shape=meta["shape"],
+            dtype=meta["dtype"],
+            stride=meta["stride"],
+            storage_offset=meta["storage_offset"],
+        )
+
+        # Generate tensor ID using the local tensor ID manager
+        tensor_id = get_or_create_tensor_id(metadata)
+        tensor_ids.append(tensor_id)
+        log.debug(f"Generated tensor_id {tensor_id} for parameter {param_name}")
+
+    log.info(
+        f"🔗 Queueing linking of {len(local_storage_ids)} local storage IDs to remote model parameters..."
+    )
+    client.link_model_tensors(local_storage_ids, parameter_names, tensor_ids)
 
     # Wait for all batched operations (including tensor linking) to complete
     log.info("🚀 Waiting for all storage operations and tensor linking to complete...")
-    if hasattr(client, '_batch_queue') and client._batch_queue:
+    if hasattr(client, "_batch_queue") and client._batch_queue:
         # Wake up the batch processor and wait for completion
         from ._remote_orchestrator import remote_orchestrator
+
         remote_orchestrator.wake_batch_thread_for_blocking_rpc()
 
         # Wait a moment for batch processing to complete
         import time
+
         time.sleep(0.5)  # Give time for batch to process
 
     log.info("✅ Model tensor linking completed successfully")
@@ -309,7 +344,9 @@ def _set_nested_buffer(
     current_module.register_buffer(final_name, buffer_value)
 
 
-def _handle_tied_weights(model, state_dict_metadata: Dict[str, Any], storage_mapping: Dict[int, int]):
+def _handle_tied_weights(
+    model, state_dict_metadata: Dict[str, Any], storage_mapping: Dict[int, int]
+):
     """Handle tied weights by finding parameters that share storage but only one was in state_dict_metadata.
 
     Args:
@@ -366,9 +403,13 @@ def _handle_tied_weights(model, state_dict_metadata: Dict[str, Any], storage_map
             log.warning(f"❌ Could not find tied parameter for {meta_name}")
 
     # Verify all parameters are now properly linked
-    remaining_meta_params = [name for name, param in model.named_parameters() if param.device.type == "meta"]
+    remaining_meta_params = [
+        name for name, param in model.named_parameters() if param.device.type == "meta"
+    ]
     if remaining_meta_params:
-        log.warning(f"❌ Still have meta parameters after tying: {remaining_meta_params}")
+        log.warning(
+            f"❌ Still have meta parameters after tying: {remaining_meta_params}"
+        )
     else:
         log.info("✅ All parameters successfully linked - no meta devices remaining")
 
