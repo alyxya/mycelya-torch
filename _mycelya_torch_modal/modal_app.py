@@ -570,102 +570,65 @@ def create_modal_app_for_gpu(
                 param_count += 1
                 log.debug(f"Processing parameter {param_count}/{total_params}: {name}")
 
-                # Create storage for this parameter
-                storage_id = self._create_storage_for_tensor(param, storages, device)
-
-                # Collect metadata for client
+                # Collect metadata for client (no storage ID generation here)
                 state_dict_metadata[name] = {
-                    "storage_id": storage_id,
                     "shape": list(param.shape),
                     "stride": list(param.stride()),
                     "dtype": str(param.dtype),
                     "storage_offset": param.storage_offset(),
                     "requires_grad": param.requires_grad,
+                    # Store actual tensor data for later linking
+                    "_tensor_data": param.detach().contiguous().to(device),
                 }
 
                 log.debug(
-                    f"Stored parameter {name}: shape={param.shape}, storage_id={storage_id}"
+                    f"Cached parameter {name}: shape={param.shape}, dtype={param.dtype}"
                 )
 
             # Also handle buffers (non-trainable parameters like batch norm running stats)
             buffer_metadata = {}
             for name, buffer in model.named_buffers():
-                # Create storage for this buffer
-                storage_id = self._create_storage_for_tensor(buffer, storages, device)
-
+                # Collect metadata for client (no storage ID generation here)
                 buffer_metadata[name] = {
-                    "storage_id": storage_id,
                     "shape": list(buffer.shape),
                     "stride": list(buffer.stride()),
                     "dtype": str(buffer.dtype),
                     "storage_offset": buffer.storage_offset(),
                     "requires_grad": False,  # Buffers don't require gradients
+                    # Store actual tensor data for later linking
+                    "_tensor_data": buffer.detach().contiguous().to(device),
                 }
 
                 log.debug(
-                    f"Stored buffer {name}: shape={buffer.shape}, storage_id={storage_id}"
+                    f"Cached buffer {name}: shape={buffer.shape}, dtype={buffer.dtype}"
                 )
 
-            # Store model and parameter mapping for later linking
+            # Store model and tensor data for later linking
             model_registry = self._get_model_registry()
-            parameter_storage_map = {}
-            for name, metadata in state_dict_metadata.items():
-                parameter_storage_map[name] = metadata["storage_id"]
-            for name, metadata in buffer_metadata.items():
-                parameter_storage_map[name] = metadata["storage_id"]
-
             model_registry[checkpoint] = {
                 "model": model,
-                "parameter_storage_map": parameter_storage_map,
+                "parameter_tensors": {name: metadata["_tensor_data"] for name, metadata in state_dict_metadata.items()},
+                "buffer_tensors": {name: metadata["_tensor_data"] for name, metadata in buffer_metadata.items()},
             }
 
             log.info(
                 f"🎯 Model preparation complete: {len(state_dict_metadata)} parameters, {len(buffer_metadata)} buffers"
             )
 
+            # Clean metadata for return (remove internal tensor data)
+            clean_state_dict = {name: {k: v for k, v in meta.items() if k != "_tensor_data"} 
+                               for name, meta in state_dict_metadata.items()}
+            clean_buffer_dict = {name: {k: v for k, v in meta.items() if k != "_tensor_data"} 
+                                for name, meta in buffer_metadata.items()}
+
             return {
-                "state_dict_metadata": state_dict_metadata,
-                "buffer_metadata": buffer_metadata,
+                "state_dict_metadata": clean_state_dict,
+                "buffer_metadata": clean_buffer_dict,
                 "config": model.config.to_dict(),
                 "model_type": type(model).__name__,
                 "checkpoint": checkpoint,
             }
 
-        def _create_storage_for_tensor(self, tensor, storages, device):
-            """Helper method to create storage for a model parameter/buffer tensor."""
-            import random
-
-            # Generate a unique storage ID (using existing pattern from storage system)
-            MAX_STORAGE_ID = 2**63 - 1
-            MIN_STORAGE_ID = 1
-
-            # Simple ID generation for now - in production should use proper collision detection
-            storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
-            while storage_id in storages:
-                storage_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
-
-            # Ensure the tensor is contiguous and on the correct device
-            contiguous_tensor = tensor.detach().contiguous().to(device)
-            storage_nbytes = contiguous_tensor.untyped_storage().nbytes()
-
-            log.debug(f"Creating storage for tensor: shape={contiguous_tensor.shape}, dtype={contiguous_tensor.dtype}")
-            log.debug(f"Original tensor data range: [{contiguous_tensor.min().item():.6f}, {contiguous_tensor.max().item():.6f}]")
-            log.debug(f"Storage size: {storage_nbytes} bytes")
-
-            # Store just the byte count in storage mapping (lazy approach)
-            storages[storage_id] = storage_nbytes
-
-            # Generate a tensor ID and cache the actual tensor
-            MAX_TENSOR_ID = 2**63 - 1
-            MIN_TENSOR_ID = 1
-            tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
-            
-            # Cache the actual tensor directly
-            self._cache_tensor(tensor_id, storage_id, contiguous_tensor)
-
-            log.debug(f"✅ Created storage {storage_id} with cached tensor {tensor_id}")
-
-            return storage_id
 
         @modal.method()
         def prepare_huggingface_model(
@@ -712,60 +675,59 @@ def create_modal_app_for_gpu(
             model_registry = self._get_model_registry()
 
             log.debug(f"Model registry contains {len(model_registry)} models")
-            for checkpoint, model_info in model_registry.items():
-                log.debug(f"Model {checkpoint}: {len(model_info['parameter_storage_map'])} parameters")
+            if not model_registry:
+                raise RuntimeError("No models found in registry. Call prepare_huggingface_model first.")
 
             # Find the model that contains these parameters
-            parameter_storage_map = None
+            model_data = None
             for checkpoint, model_info in model_registry.items():
-                param_map = model_info["parameter_storage_map"]
-                missing_params = [p for p in parameter_names if p not in param_map]
+                # Check if this model has the requested parameters
+                param_tensors = model_info.get("parameter_tensors", {})
+                buffer_tensors = model_info.get("buffer_tensors", {})
+                all_tensors = {**param_tensors, **buffer_tensors}
+                
+                missing_params = [p for p in parameter_names if p not in all_tensors]
                 if len(missing_params) == 0:
-                    parameter_storage_map = param_map
+                    model_data = model_info
                     log.info(f"Found matching model: {checkpoint}")
                     break
                 else:
                     log.debug(f"Model {checkpoint} missing {len(missing_params)} parameters")
 
-            if parameter_storage_map is None:
-                log.error(f"Available model parameters (first model): {list(list(model_registry.values())[0]['parameter_storage_map'].keys())[:10] if model_registry else 'No models'}")
+            if model_data is None:
+                available_params = list(next(iter(model_registry.values())).get("parameter_tensors", {}).keys())[:10] if model_registry else []
                 raise RuntimeError(
-                    f"Could not find model containing all parameters: {parameter_names[:5]}..."
+                    f"Could not find model containing all parameters: {parameter_names[:5]}... "
+                    f"Available parameters: {available_params}"
                 )
+
+            # Get all available tensors from the model
+            param_tensors = model_data.get("parameter_tensors", {})
+            buffer_tensors = model_data.get("buffer_tensors", {})
+            all_tensors = {**param_tensors, **buffer_tensors}
 
             linked_count = 0
             for local_storage_id, param_name in zip(local_storage_ids, parameter_names):
-                # Get the remote storage ID that contains the actual parameter data
-                remote_storage_id = parameter_storage_map[param_name]
-
-                if remote_storage_id not in storages:
-                    log.warning(
-                        f"Remote storage {remote_storage_id} for parameter {param_name} not found"
-                    )
+                if param_name not in all_tensors:
+                    log.warning(f"Parameter {param_name} not found in model tensors")
                     continue
 
-                log.debug(
-                    f"Linking local storage {local_storage_id} -> remote storage {remote_storage_id} (parameter: {param_name})"
-                )
-
-                # Get the cached tensor for the remote storage
-                remote_tensor = self._get_any_cached_tensor_for_storage(remote_storage_id)
+                # Get the actual tensor data
+                remote_tensor = all_tensors[param_name]
                 
-                if remote_tensor is not None:
-                    log.debug(f"Remote tensor type: {type(remote_tensor)}, shape: {remote_tensor.shape}")
-                    log.debug(f"Remote tensor dtype: {remote_tensor.dtype}")
-                    try:
-                        import torch
-                        with torch.no_grad():
-                            min_val = remote_tensor.min().item()
-                            max_val = remote_tensor.max().item()
-                            log.debug(f"Remote tensor range: [{min_val:.6f}, {max_val:.6f}]")
-                    except Exception:
-                        log.debug("Could not compute tensor range")
-                else:
-                    log.warning(f"No cached tensor found for remote storage {remote_storage_id}")
+                log.debug(
+                    f"Linking local storage {local_storage_id} to parameter {param_name}"
+                )
+                log.debug(f"Remote tensor type: {type(remote_tensor)}, shape: {remote_tensor.shape}")
+                log.debug(f"Remote tensor dtype: {remote_tensor.dtype}")
 
-                # Create tensor ID for the local storage ID
+                # Calculate storage size from tensor
+                storage_nbytes = remote_tensor.untyped_storage().nbytes()
+
+                # Create storage entry for the local storage ID
+                storages[local_storage_id] = storage_nbytes
+
+                # Generate unique tensor ID for caching
                 MAX_TENSOR_ID = 2**63 - 1
                 MIN_TENSOR_ID = 1
                 tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
@@ -774,25 +736,11 @@ def create_modal_app_for_gpu(
                 while tensor_id in tensor_cache:
                     tensor_id = random.randint(MIN_TENSOR_ID, MAX_TENSOR_ID)
 
-                # Link local storage ID to the same byte count as remote storage
-                storages[local_storage_id] = storages[remote_storage_id]
-
-                # Establish tensor ID mapping for the local storage and cache the remote tensor
-                if remote_tensor is not None:
-                    if local_storage_id not in storage_to_tensors:
-                        storage_to_tensors[local_storage_id] = set()
-                    storage_to_tensors[local_storage_id].add(tensor_id)
-
-                    # Cache reference to the remote tensor for this tensor ID
-                    tensor_cache[tensor_id] = remote_tensor
-                else:
-                    log.warning(f"Skipping tensor cache for {param_name} - no remote tensor available")
-
+                # Cache the tensor with the generated tensor ID
+                self._cache_tensor(tensor_id, local_storage_id, remote_tensor)
+                
+                log.debug(f"Cached parameter {param_name} with tensor ID {tensor_id}")
                 linked_count += 1
-
-                log.debug(
-                    f"Linked parameter {param_name}: local_storage_id={local_storage_id}, tensor_id={tensor_id}, remote_storage_id={remote_storage_id}"
-                )
 
             log.info(
                 f"✅ Model tensor linking complete: {linked_count}/{len(local_storage_ids)} links successful"
