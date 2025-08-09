@@ -237,11 +237,22 @@ def create_modal_app_for_gpu(
             device = self._get_device()
 
             if isinstance(storage_item, int):
-                # Lazy storage - create empty tensor (data will be filled when first written)
+                # Lazy storage - need to realize it with actual storage tensor
                 nbytes = storage_item
-                tensor = torch.empty(shape, dtype=torch_dtype, device=device)
+                
+                # Create 1D uint8 tensor to hold the storage data
+                storage_tensor = torch.empty(nbytes, dtype=torch.uint8, device=device)
+                
+                # Update the storages mapping with realized tensor
+                storages[storage_id] = storage_tensor
+                log.info(f"🔄 REALIZED lazy storage {storage_id} ({nbytes} bytes)")
+                
+                # Now reconstruct tensor from realized storage
+                tensor = torch.empty(0, dtype=torch_dtype, device=device).set_(
+                    storage_tensor.untyped_storage(), storage_offset, shape, stride
+                )
                 log.debug(
-                    f"🔄 Created empty tensor for lazy storage {storage_id} ({nbytes} bytes)"
+                    f"🔄 Reconstructed tensor from realized storage {storage_id}"
                 )
             else:
                 # Realized storage - reconstruct from actual data
