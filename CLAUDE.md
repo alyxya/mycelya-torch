@@ -1,13 +1,16 @@
 # Mycelya: PyTorch Remote Tensor Execution System
 
-A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. The system uses a pure tensor ID-based architecture for memory-efficient distributed computing.
+A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. The system uses a sequential tensor ID architecture with custom PyTorch integration for memory-efficient distributed computing.
 
 ## Architecture Overview
 
-- **Pure Tensor ID System**: Remote tensors store only metadata locally (ID, shape, dtype) with actual data on remote GPUs
+- **Sequential Tensor ID System**: Remote tensors have unique incremental IDs (1, 2, 3...) with `tensor.id` property
+- **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns
 - **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution
 - **Multi-GPU Support**: 9 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
-- **Provider Abstraction**: Pluggable backend system (Modal currently, extensible for other providers)
+- **Provider Abstraction**: Pluggable backend system (Modal, Mock providers, extensible for others)
+- **RPC Batching**: Background thread processing for reduced network overhead
+- **HuggingFace Integration**: Direct remote model loading with parameter linking
 
 ## Development Commands
 
@@ -42,50 +45,63 @@ To run type checking:
 ## Key Components
 
 ### Core Modules
-- `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
-- `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with simple conditionals
-- `mycelya_torch/_remote_orchestrator.py` - Remote execution orchestration with direct service instances
-- `mycelya_torch/_device_daemon.py` - Local tensor ID registry and device daemon interface  
-- `mycelya_torch/device.py` - RemoteMachine abstraction and device management
+- `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration with tensor ID monkey patching
+- `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with meta tensor inference and view handling
+- `mycelya_torch/_remote_orchestrator.py` - Remote execution orchestration with RPC batching integration
+- `mycelya_torch/_device_daemon.py` - Device registry and storage operations with centralized logging
+- `mycelya_torch/device.py` - RemoteMachine abstraction supporting Modal and Mock providers
 
-### Utility Modules
-- `mycelya_torch/_tensor_utils.py` - Tensor metadata, serialization, and transfer utilities
-- `mycelya_torch/_storage.py` - Storage ID mapping and cross-device validation
+### Utility and Support Modules
+- `mycelya_torch/_tensor_utils.py` - Clean metadata classes and serialization utilities
+- `mycelya_torch/_storage.py` - Storage ID lifecycle management and cross-device validation
+- `mycelya_torch/_batching.py` - RPC batching system with background thread processing
+- `mycelya_torch/_huggingface_utils.py` - Model loading and tensor linking utilities for HuggingFace models
+- `mycelya_torch/_logging.py` - Centralized logging configuration with hierarchical loggers
 
 ### Simple Operation Dispatch
 - Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns
 
 ### Provider Interface
-- `mycelya_torch/backends/client_interface.py` - Standardized provider interface with raw bytes storage API
-- `mycelya_torch/backends/modal/client.py` - Modal provider implementation with dual tensor metadata support
+- `mycelya_torch/backends/client_interface.py` - Standardized provider interface with caching and RPC batching support
+- `mycelya_torch/backends/modal/client.py` - Modal provider implementation with RPC batching integration
+- `mycelya_torch/backends/mock/client.py` - Local execution provider for development and testing
 
 ### Remote Execution Provider
 - `_mycelya_torch_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
 
 ### C++ Backend Integration
-- `mycelya_torch/csrc/RemoteMem.cpp` - Custom allocator storing tensor IDs as data pointers
-- `mycelya_torch/csrc/RemoteHooks.cpp` - PyTorch PrivateUse1 backend implementation
+- `mycelya_torch/csrc/MycelyaTensorImpl.cpp` - Custom tensor implementation with unique sequential IDs
+- `mycelya_torch/csrc/MycelyaStorageImpl.cpp` - Custom storage implementation with storage ID tracking
+- `mycelya_torch/csrc/MycelyaAllocator.cpp` - Enhanced allocator with storage ID management
+- `mycelya_torch/csrc/MycelyaHooks.cpp` - PyTorch PrivateUse1 backend hooks with custom implementations
+- `mycelya_torch/csrc/mycelya_extension.cpp` - Python bindings and extensions
 
-## Current Architecture (Post-Cleanup)
+## Current Architecture (2025-08-10)
 
 ### Key Design Principles
+- **Sequential Tensor ID System**: Incremental unique IDs (1, 2, 3...) with `tensor.id` property for debugging
+- **Custom PyTorch Integration**: Complete TensorImpl/StorageImpl following pytorch-npu architecture patterns
 - **Clean Input/Output Separation**: Efficient data transfer with clear boundaries
-- **Pure Tensor ID Coordination**: 64-bit tensor IDs for all remote coordination
 - **Zero Local Memory**: No tensor data stored locally for remote tensors
-- **Eliminated Fallbacks**: All remote operations must succeed remotely or fail clearly
+- **RPC Batching**: Background thread processing for performance optimization
+- **Multi-Provider Support**: Extensible backend system with Modal and Mock implementations
 
 ### Memory Efficiency
-- **50% memory reduction** compared to previous implementations  
-- Remote tensors use meta tensors locally (no data storage)
-- C++ allocator stores tensor ID as data pointer for efficient lookup
-- Automatic cleanup via PyTorch's memory management system
-- **Raw bytes storage architecture** eliminates torch.save/load overhead for improved performance
+- **Zero local memory overhead** for remote tensors with custom TensorImpl/StorageImpl
+- **Dual storage architecture**: Lazy allocation vs realized storage on remote GPUs
+- **Raw bytes storage**: Direct numpy serialization eliminating torch.save/load overhead
+- **Metadata-based caching**: Shape/stride/offset keys instead of tensor ID parameters
+- **Automatic cache invalidation**: Proper cache semantics with batching operations
+- **Thread-safe tensor ID generation**: Atomic counter for unique sequential IDs
 
 ### Operation Dispatch Flow
-1. **Local Operations**: View operations executed locally with shared storage IDs
-2. **Remote Operations**: All compute operations dispatched to remote GPUs
-3. **Meta Execution**: Shape inference using PyTorch meta tensors
-4. **Data Transfer**: Raw untyped storage bytes only when crossing device boundaries (CPU ↔ Remote)
+1. **Meta Tensor Inference**: Shape inference using PyTorch's meta device
+2. **View Operation Handling**: Local view creation with remote propagation
+3. **Dynamic Output Support**: Special handling for operations with data-dependent output shapes
+4. **RPC Batching**: Operations queued and batched in background thread
+5. **Remote Execution**: All compute operations dispatched to remote GPUs
+6. **Cache Management**: Immediate invalidation at queue time for correctness
+7. **Data Transfer**: Raw untyped storage bytes only when crossing device boundaries
 
 ## Usage Patterns
 
@@ -105,37 +121,62 @@ result = x @ y  # Matrix multiplication on remote T4
 
 ### Advanced Usage
 ```python
-# Neural network training
+# Neural network training with tensor IDs
 model = nn.Linear(784, 10).to(machine.device())
 optimizer = torch.optim.Adam(model.parameters())
 
 # Full training loop on remote GPU
 for data, target in dataloader:
     data, target = data.to(machine.device()), target.to(machine.device())
+    print(f"Data tensor ID: {data.id}")  # Unique sequential ID
     output = model(data)
     loss = criterion(output, target)
     loss.backward()  # Gradients computed remotely
     optimizer.step()
 ```
 
+### HuggingFace Integration
+```python
+# Direct remote model loading
+import mycelya_torch.huggingface as mhf
+
+machine = mycelya_torch.create_modal_machine("T4")
+model = mhf.load_model_remote(
+    "microsoft/DialoGPT-medium", 
+    machine, 
+    torch_dtype=torch.float16
+)
+
+# Model parameters are already on remote GPU
+for name, param in model.named_parameters():
+    print(f"{name}: tensor ID {param.id}, device {param.device}")
+```
+
 ## Implementation Details
 
 ### Tensor ID System
-- **64-bit random IDs** generated for each remote tensor
-- **Stored as data pointer** in C++ allocator for efficient lookup
-- **Collision detection** with retry mechanism
-- **Automatic cleanup** when tensors are garbage collected
+- **Sequential incremental IDs** (1, 2, 3...) generated for each mycelya tensor
+- **Python API integration**: `tensor.id` property and `tensor.get_tensor_id()` method
+- **Thread-safe implementation**: Uses `std::atomic<uint64_t>` counter in C++
+- **Custom TensorImpl integration**: Tensor IDs stored as member variable in MycelyaTensorImpl
+- **Zero memory overhead**: Efficient storage without additional allocations
+- **Debugging support**: Unique identification for complex tensor flows
 
 ### Error Handling
 - **Cross-device operation prevention**: Clear errors when mixing different machines
-- **Stale reference detection**: Validation of tensor references
-- **Connection management**: Automatic reconnection on failures
-- **Comprehensive error handling**: Clear RuntimeError and ValueError messages for different failure modes
+- **Type safety**: Clear error messages for non-mycelya tensors accessing tensor IDs
+- **Storage validation**: Proper error handling for lazy vs realized storage access
+- **Connection management**: Automatic reconnection with RPC batching
+- **Comprehensive error handling**: Descriptive RuntimeError messages for all failure modes
+- **Batch error propagation**: Proper error handling in background thread processing
 
 ### Provider Interface
-- **Standardized client interface** for multiple providers
-- **Modal implementation** as reference implementation
+- **Standardized client interface** for multiple providers with RPC batching support
+- **Modal implementation** as production cloud provider
+- **Mock implementation** for local development and testing
 - **Extensible architecture** for RunPod, Lambda Labs, etc.
+- **Dual storage support**: Lazy allocation and realized storage across providers
+- **Connection lifecycle management**: Proper initialization and cleanup
 
 ## Documentation Maintenance
 
@@ -157,14 +198,17 @@ for data, target in dataloader:
 
 #### Tensor ID Architecture Rules
 - **Never store tensor data locally** for remote tensors - only metadata
-- **64-bit tensor IDs** stored as data pointers in C++ allocator
-- **Clean separation** between local metadata and remote storage
+- **Sequential tensor IDs** (1, 2, 3...) stored in custom TensorImpl
+- **Clean separation** between tensor IDs (debugging) and storage IDs (memory management)
+- **Custom PyTorch integration** following pytorch-npu implementation patterns
+- **Thread-safe ID generation** using atomic counters
 
 #### Provider Implementation Patterns  
 - Follow Modal implementation pattern in `_mycelya_torch_modal/`
-- Implement standardized client interface
-- Support multi-GPU configuration
-- Handle connection lifecycle properly
+- Implement standardized client interface with RPC batching support
+- Support multi-GPU configuration with lazy/realized storage
+- Handle connection lifecycle and background thread processing properly
+- Integrate with centralized logging system
 
 #### Code Quality Standards
 - **Use ruff for linting and formatting**
@@ -180,6 +224,36 @@ for data, target in dataloader:
 - **Test markers**: Use `@pytest.mark.critical` and `@pytest.mark.fast` for categorization
 
 ### Recent Development Notes
+
+#### Custom TensorImpl Integration (2025-08-10)
+- **Complete custom tensor stack**: MycelyaTensorImpl, MycelyaStorageImpl, MycelyaAllocator
+- **Sequential tensor IDs**: Unique incremental IDs (1, 2, 3...) with `tensor.id` property
+- **pytorch-npu compliance**: Following established integration patterns for production readiness
+- **Python API enhancement**: Monkey patching torch.Tensor with mycelya-specific methods
+- **Thread-safe implementation**: Atomic counter for collision-free ID generation
+- **Zero memory overhead**: Custom implementations maintain existing efficiency
+- **Diagnostic capabilities**: Testing functions to verify custom implementation usage
+
+#### RPC Batching System (2025-08-08)
+- **Background thread processing**: Queue-based batching reduces network overhead
+- **Thread-safe operations**: `RPCBatchQueue` with automatic futures handling
+- **Comprehensive error handling**: `BatchProcessor` with proper error propagation
+- **Cache invalidation timing**: Invalidation at queue time for correct semantics
+- **Provider integration**: Seamless integration with Modal and Mock clients
+
+#### HuggingFace Integration (2025-08-08)
+- **Direct remote model loading**: Load models directly on remote GPUs without data transfer
+- **Local model skeleton**: Create parameter stubs with remote tensor linking
+- **Storage ID linking**: Automatic parameter connection to remote storage
+- **Tied weights support**: Proper handling of shared parameters (e.g., embedding layers)
+- **Dual loading approaches**: Remote-first vs local-then-transfer strategies
+
+#### Dual Storage Architecture (2025-08-08)
+- **Lazy storage**: Integer byte counts for deferred allocation
+- **Realized storage**: Actual tensor data on remote GPUs
+- **Modal server support**: Both lazy and realized storage types
+- **Fallback mechanisms**: Proper error handling for storage retrieval
+- **Model parameter compatibility**: Improved access patterns for HuggingFace models
 
 #### Raw Bytes Storage Refactoring (2025-07-27)
 - **Eliminated torch.save/load overhead**: Replaced with direct raw untyped storage byte operations
@@ -212,13 +286,15 @@ for data, target in dataloader:
 - **Simplified Error Handling**: Removed custom exception hierarchy in favor of descriptive RuntimeError messages
 
 #### Current Status
-- Core functionality stable and tested
-- Memory efficiency optimizations in place
-- Clean error handling throughout
-- Modal provider fully functional
-- Minimal regression test suite in place
-- Clean service-oriented architecture with dependency injection
-- Strategy pattern for extensible operation dispatch
-- Ready for additional provider implementations
+- **Production-ready architecture** with custom PyTorch integration following pytorch-npu patterns
+- **Sequential tensor ID system** with `tensor.id` property for enhanced debugging
+- **RPC batching optimization** reducing network overhead with background thread processing
+- **Multi-provider support** with Modal (production) and Mock (development) implementations
+- **HuggingFace integration** enabling direct remote model loading and parameter linking
+- **Comprehensive test coverage** with critical regression tests and extended functional tests
+- **Zero memory overhead** custom implementations maintaining efficiency
+- **Thread-safe operations** throughout the entire stack
+- **Clean error handling** with descriptive messages and proper error propagation
+- **Extensible architecture** ready for additional cloud providers
 
-Last updated: 2025-07-27
+Last updated: 2025-08-10

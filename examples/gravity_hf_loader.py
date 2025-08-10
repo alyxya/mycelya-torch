@@ -8,6 +8,7 @@ import torch
 from transformers import AutoTokenizer
 
 import mycelya_torch
+import mycelya_torch.huggingface as mhf
 
 
 def main():
@@ -18,21 +19,29 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Create remote machine and load model with HuggingFace loader
+    # Create remote machine and load model with new HuggingFace integration
     machine = mycelya_torch.create_modal_machine("T4")
-    model = mycelya_torch.load_huggingface_model(
+    model = mhf.load_model_remote(
         "HuggingFaceTB/SmolLM2-135M-Instruct", machine, torch_dtype=torch.float32
     )
+
+    # Show model parameters with tensor IDs
+    print("\nModel parameters with tensor IDs:")
+    for name, param in model.named_parameters():
+        if "embed" in name or "lm_head" in name:  # Show key parameters
+            print(f"  {name}: ID={param.id}, shape={param.shape}, device={param.device}")
 
     # Prepare input
     input_text = "what is gravity?"
     tokens = tokenizer.encode(input_text, return_tensors="pt").to(machine.device())
 
-    print(f"Input: '{input_text}'")
+    print(f"\nInput: '{input_text}'")
+    print(f"Input tokens tensor ID: {tokens.id}")
     print("Generating 50 tokens...")
 
     model.eval()
     generated_tokens = tokens.clone()
+    print(f"Generated tokens tensor ID: {generated_tokens.id}")
 
     # Generate exactly 50 tokens
     for i in range(50):

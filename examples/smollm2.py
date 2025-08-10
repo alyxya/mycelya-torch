@@ -18,8 +18,14 @@ messages = [{"role": "user", "content": "What is gravity?"}]
 input_text = tokenizer.apply_chat_template(messages, tokenize=False)
 print(input_text)
 inputs = tokenizer.encode(input_text, return_tensors="pt").to(device)
+
+# Demonstrate tensor ID functionality
+print(f"Input tensor ID: {inputs.id}")
+print(f"Input tensor device: {inputs.device}")
+
 outputs = model.generate(
     inputs, max_new_tokens=50, temperature=0.2, top_p=0.9, do_sample=True
 )
+print(f"Output tensor ID: {outputs.id}")
 print(f"{outputs=}")
 print(tokenizer.decode(outputs[0]))
