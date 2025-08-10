@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "Mycelya.h"
+#include "MycelyaTensorImpl.h"
 
 #include <ATen/CPUGeneratorImpl.h>
 #include <ATen/core/GeneratorForPrivateuseone.h>
@@ -121,6 +122,12 @@ struct MycelyaHooksInterface : public at::PrivateUse1HooksInterface {
 
 static bool register_hook_flag [[maybe_unused]] = []() {
   at::RegisterPrivateUse1HooksInterface(new MycelyaHooksInterface());
+  
+  // Register custom storage factory function (following pytorch-npu pattern)
+  // This enables PyTorch to create custom MycelyaStorageImpl instances
+  // when creating storages for PrivateUse1 device
+  c10::SetStorageImplCreate(c10::DeviceType::PrivateUse1, &make_mycelya_storage_impl);
+  
   return true;
 }();
 

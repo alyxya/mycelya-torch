@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "Mycelya.h"
+#include "MycelyaTensorImpl.h"
 
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <ATen/ops/as_strided_cpu_dispatch.h>
@@ -77,6 +78,8 @@ struct MycelyaAllocator final : at::Allocator {
 static MycelyaAllocator global_mycelya_alloc;
 REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_mycelya_alloc);
 
+// Always use custom TensorImpl - this is now the default and only option
+
 } // namespace
 
 // Validate device index
@@ -113,7 +116,7 @@ at::Tensor empty_mycelya(at::IntArrayRef size,
   // Handle other parameters
   auto resolved_dtype = dtype.value_or(at::get_default_dtype_as_scalartype());
   auto resolved_layout = layout.value_or(at::Layout::Strided);
-  auto resolved_memory_format =
+  auto resolved_memory_format [[maybe_unused]] =
       memory_format.value_or(at::MemoryFormat::Contiguous);
 
   TORCH_CHECK(resolved_layout == at::Layout::Strided,
@@ -124,10 +127,31 @@ at::Tensor empty_mycelya(at::IntArrayRef size,
   // Set device guard to ensure allocation happens on correct device
   const c10::DeviceGuard device_guard(target_device);
 
-  // Use the enhanced allocator to create tensor
-  constexpr c10::DispatchKeySet mycelya_dks(c10::DispatchKey::PrivateUse1);
-  return at::detail::empty_generic(size, &global_mycelya_alloc, mycelya_dks,
-                                   resolved_dtype, resolved_memory_format);
+  // Calculate storage size requirements
+  int64_t numel = 1;
+  for (auto s : size) {
+    numel *= s;
+  }
+  size_t element_size = c10::elementSize(resolved_dtype);
+  size_t size_bytes = numel * element_size;
+
+  // Create custom storage using registered factory (this will automatically
+  // use our custom MycelyaStorageImpl through c10::SetStorageImplCreate)
+  c10::intrusive_ptr<c10::StorageImpl> storage_impl = make_mycelya_storage_impl(
+    c10::StorageImpl::use_byte_size_t(),
+    c10::SymInt(size_bytes),
+    c10::DataPtr(),  // Empty DataPtr - let the factory call our allocator
+    &global_mycelya_alloc,
+    true);
+
+  // Create tensor using custom MycelyaTensorImpl (following pytorch-npu pattern)
+  auto tensor = at::detail::make_tensor<MycelyaTensorImpl>(
+    c10::Storage(storage_impl), 
+    caffe2::TypeMeta::fromScalarType(resolved_dtype));
+  
+  // Set the proper sizes and strides for the requested shape
+  tensor.unsafeGetTensorImpl()->set_sizes_and_strides(size, c10::contiguous_strides(size));
+  return tensor;
 }
 
 // C++ implementation of empty_strided_mycelya
@@ -161,10 +185,34 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
   // Set device guard to ensure allocation happens on correct device
   const c10::DeviceGuard device_guard(target_device);
 
-  // Use the enhanced allocator to create strided tensor
-  constexpr c10::DispatchKeySet mycelya_dks(c10::DispatchKey::PrivateUse1);
-  return at::detail::empty_strided_generic(size, stride, &global_mycelya_alloc,
-                                           mycelya_dks, resolved_dtype);
+  // Calculate storage size requirements based on strides
+  int64_t storage_size = 1;
+  for (size_t i = 0; i < size.size(); ++i) {
+    if (size[i] == 0) {
+      storage_size = 0;
+      break;
+    }
+    storage_size = std::max(storage_size, (size[i] - 1) * stride[i] + 1);
+  }
+  size_t element_size = c10::elementSize(resolved_dtype);
+  size_t size_bytes = storage_size * element_size;
+
+  // Create custom storage using registered factory
+  c10::intrusive_ptr<c10::StorageImpl> storage_impl = make_mycelya_storage_impl(
+    c10::StorageImpl::use_byte_size_t(),
+    c10::SymInt(size_bytes),
+    c10::DataPtr(),  // Empty DataPtr - let the factory call our allocator
+    &global_mycelya_alloc,
+    true);
+
+  // Create tensor using custom MycelyaTensorImpl (following pytorch-npu pattern)
+  auto tensor = at::detail::make_tensor<MycelyaTensorImpl>(
+    c10::Storage(storage_impl), 
+    caffe2::TypeMeta::fromScalarType(resolved_dtype));
+  
+  // Set the proper sizes and strides for the requested shape
+  tensor.unsafeGetTensorImpl()->set_sizes_and_strides(size, stride);
+  return tensor;
 }
 
 // C++ implementation of as_strided for view operations

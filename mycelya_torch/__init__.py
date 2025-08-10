@@ -228,3 +228,32 @@ from .device import (  # noqa: E402
     get_all_machines,
     get_device_registry,
 )
+
+# Custom TensorImpl testing functions (experimental)
+def is_using_custom_tensorimpl(tensor: torch.Tensor) -> bool:
+    """Check if a tensor is using the custom MycelyaTensorImpl.
+    
+    This is an experimental testing function to verify that custom
+    TensorImpl integration is working correctly.
+    
+    Args:
+        tensor: Tensor to check
+        
+    Returns:
+        True if tensor is using custom MycelyaTensorImpl, False otherwise
+    """
+    return mycelya_torch._C._is_using_custom_tensorimpl(tensor)
+
+def was_tensor_accessed_via_custom_impl(tensor: torch.Tensor) -> bool:
+    """Check if a tensor was accessed through custom TensorImpl methods.
+    
+    This is an experimental testing function to verify that custom
+    TensorImpl methods are being called during tensor operations.
+    
+    Args:
+        tensor: Tensor to check
+        
+    Returns:
+        True if tensor was accessed via custom TensorImpl, False otherwise
+    """
+    return mycelya_torch._C._was_tensor_accessed_via_custom_impl(tensor)

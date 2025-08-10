@@ -5,6 +5,8 @@
 
 #include <ATen/ATen.h>
 #include <c10/core/Device.h>
+#include <c10/core/StorageImpl.h>
+#include <c10/core/TensorImpl.h>
 #include <random>
 #include <string>
 #include <torch/csrc/utils/pybind.h>
@@ -34,5 +36,19 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
 
 // Utility functions for storage ID management
 bool validate_device_index(c10::DeviceIndex device_index);
+
+// Custom TensorImpl factory functions for optional integration
+// These can be used to create tensors with custom MycelyaTensorImpl
+// while preserving backward compatibility with existing tensor creation
+at::Tensor make_mycelya_tensor_with_custom_impl(
+  const c10::Storage& storage,
+  const caffe2::TypeMeta& data_type);
+
+c10::intrusive_ptr<c10::StorageImpl> make_mycelya_storage_impl(
+  c10::StorageImpl::use_byte_size_t use_byte_size,
+  c10::SymInt size_bytes,
+  c10::DataPtr data_ptr,
+  c10::Allocator* allocator,
+  bool resizable);
 
 } // namespace mycelya
