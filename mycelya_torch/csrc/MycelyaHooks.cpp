@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "Mycelya.h"
-#include "MycelyaTensorImpl.h"
+#include "MycelyaStorageImpl.h"
 
 #include <ATen/CPUGeneratorImpl.h>
 #include <ATen/core/GeneratorForPrivateuseone.h>

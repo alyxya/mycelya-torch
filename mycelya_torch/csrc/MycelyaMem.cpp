@@ -3,6 +3,8 @@
 
 #include "Mycelya.h"
 #include "MycelyaTensorImpl.h"
+#include "MycelyaStorageImpl.h"
+#include "MycelyaAllocator.h"
 
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <ATen/ops/as_strided_cpu_dispatch.h>
@@ -14,69 +16,6 @@
 
 namespace mycelya {
 namespace {
-
-// ID-based allocator that stores storage IDs as data pointers
-struct MycelyaAllocator final : at::Allocator {
-  MycelyaAllocator() = default;
-
-  at::DataPtr allocate(size_t nbytes) override {
-    py::gil_scoped_acquire acquire;
-    auto curr_device_idx = get_method("get_device")().cast<c10::DeviceIndex>();
-    auto curr_device =
-        c10::Device(c10::DeviceType::PrivateUse1, curr_device_idx);
-    void *data = nullptr;
-
-    // Create storage and get the generated storage ID
-    // Returns the storage ID on success, or 0 on failure
-    storage_id_t storage_id =
-        get_method("create_storage")(nbytes, curr_device_idx).cast<storage_id_t>();
-
-    TORCH_CHECK(storage_id != 0, "Failed to allocate storage (", nbytes,
-                " bytes) on mycelya device ", curr_device_idx);
-
-    // Store the storage ID as the data pointer (always non-zero)
-    data = reinterpret_cast<void *>(storage_id);
-
-    return {data, data, &ReportAndDelete, curr_device};
-  }
-
-  static void ReportAndDelete(void *ptr) {
-    if (!ptr || !Py_IsInitialized()) {
-      return;
-    }
-
-    py::gil_scoped_acquire acquire;
-
-    PyObject *type = nullptr, *value = nullptr, *traceback = nullptr;
-    // Always stash, this will be a no-op if there is no error
-    PyErr_Fetch(&type, &value, &traceback);
-
-    // Convert pointer back to storage ID for deletion
-    storage_id_t storage_id = reinterpret_cast<storage_id_t>(ptr);
-    TORCH_CHECK(get_method("free_storage_with_id")(storage_id).cast<bool>(),
-                "Failed to free storage with ID ", storage_id);
-
-    // If that user code raised an error, just print it without raising it
-    if (PyErr_Occurred()) {
-      PyErr_Print();
-    }
-
-    // Restore the original error
-    PyErr_Restore(type, value, traceback);
-  }
-
-  at::DeleterFnPtr raw_deleter() const override {
-    return &ReportAndDelete;
-  }
-
-  void copy_data(void *dest, const void *src, std::size_t count) const final {
-    // No-op: Mycelya tensors handle data copying through PyTorch operations
-    // rather than raw memory copying
-  }
-};
-
-static MycelyaAllocator global_mycelya_alloc;
-REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_mycelya_alloc);
 
 // Always use custom TensorImpl - this is now the default and only option
 
@@ -141,7 +80,7 @@ at::Tensor empty_mycelya(at::IntArrayRef size,
     c10::StorageImpl::use_byte_size_t(),
     c10::SymInt(size_bytes),
     c10::DataPtr(),  // Empty DataPtr - let the factory call our allocator
-    &global_mycelya_alloc,
+    &get_mycelya_allocator(),
     true);
 
   // Create tensor using custom MycelyaTensorImpl (following pytorch-npu pattern)
@@ -202,7 +141,7 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
     c10::StorageImpl::use_byte_size_t(),
     c10::SymInt(size_bytes),
     c10::DataPtr(),  // Empty DataPtr - let the factory call our allocator
-    &global_mycelya_alloc,
+    &get_mycelya_allocator(),
     true);
 
   // Create tensor using custom MycelyaTensorImpl (following pytorch-npu pattern)

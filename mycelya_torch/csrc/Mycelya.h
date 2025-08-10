@@ -44,11 +44,4 @@ at::Tensor make_mycelya_tensor_with_custom_impl(
   const c10::Storage& storage,
   const caffe2::TypeMeta& data_type);
 
-c10::intrusive_ptr<c10::StorageImpl> make_mycelya_storage_impl(
-  c10::StorageImpl::use_byte_size_t use_byte_size,
-  c10::SymInt size_bytes,
-  c10::DataPtr data_ptr,
-  c10::Allocator* allocator,
-  bool resizable);
-
 } // namespace mycelya
