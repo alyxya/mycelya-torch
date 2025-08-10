@@ -5,6 +5,7 @@
 #include <ATen/TensorUtils.h>
 #include <c10/core/TensorImpl.h>
 #include <iostream>
+#include <atomic>
 
 namespace mycelya {
 
@@ -15,15 +16,17 @@ MycelyaTensorImpl::MycelyaTensorImpl(
   : c10::TensorImpl(
       c10::Storage(storage),  // Copy construct for move
       c10::DispatchKeySet{c10::DispatchKey::PrivateUse1, c10::DispatchKey::AutogradPrivateUse1},
-      data_type) {
+      data_type),
+    tensor_id_(next_tensor_id()) {
   
   // Following pytorch-npu pattern
   is_non_overlapping_and_dense_ = false;
   
   // Simple verification: log creation for debugging
   if (std::getenv("MYCELYA_DEBUG_TENSORIMPL")) {
-    std::cout << "[MycelyaTensorImpl] Created tensor with storage_id=" 
-              << get_storage_id() << " dtype=" << data_type.name() << std::endl;
+    std::cout << "[MycelyaTensorImpl] Created tensor_id=" << tensor_id_ 
+              << " with storage_id=" << get_storage_id() 
+              << " dtype=" << data_type.name() << std::endl;
   }
 }
 
@@ -88,6 +91,11 @@ storage_id_t MycelyaTensorImpl::get_storage_id() const {
   return reinterpret_cast<storage_id_t>(storage().data_ptr().get());
 }
 
+tensor_id_t MycelyaTensorImpl::get_tensor_id() const {
+  mark_accessed();
+  return tensor_id_;
+}
+
 void MycelyaTensorImpl::mark_accessed() const {
   accessed_via_custom_impl_ = true;
   
@@ -100,6 +108,11 @@ void MycelyaTensorImpl::mark_accessed() const {
 
 bool MycelyaTensorImpl::was_accessed_via_custom_impl() const {
   return accessed_via_custom_impl_;
+}
+
+tensor_id_t MycelyaTensorImpl::next_tensor_id() {
+  static std::atomic<tensor_id_t> counter{1};
+  return counter.fetch_add(1, std::memory_order_relaxed);
 }
 
 // Factory functions

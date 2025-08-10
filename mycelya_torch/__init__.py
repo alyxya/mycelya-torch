@@ -229,31 +229,52 @@ from .device import (  # noqa: E402
     get_device_registry,
 )
 
-# Custom TensorImpl testing functions (experimental)
-def is_using_custom_tensorimpl(tensor: torch.Tensor) -> bool:
-    """Check if a tensor is using the custom MycelyaTensorImpl.
-    
-    This is an experimental testing function to verify that custom
-    TensorImpl integration is working correctly.
-    
-    Args:
-        tensor: Tensor to check
-        
-    Returns:
-        True if tensor is using custom MycelyaTensorImpl, False otherwise
-    """
-    return mycelya_torch._C._is_using_custom_tensorimpl(tensor)
 
-def was_tensor_accessed_via_custom_impl(tensor: torch.Tensor) -> bool:
-    """Check if a tensor was accessed through custom TensorImpl methods.
+
+def get_tensor_id(tensor: torch.Tensor) -> int:
+    """Get the unique tensor ID for a mycelya tensor.
     
-    This is an experimental testing function to verify that custom
-    TensorImpl methods are being called during tensor operations.
+    Each mycelya tensor created with custom TensorImpl gets a unique
+    incremental integer ID (1, 2, 3, ...). This ID is separate from
+    the storage ID and identifies the tensor instance itself.
     
     Args:
-        tensor: Tensor to check
+        tensor: Mycelya tensor to get ID for
         
     Returns:
-        True if tensor was accessed via custom TensorImpl, False otherwise
+        Unique integer ID for this tensor
+        
+    Raises:
+        RuntimeError: If tensor is not a mycelya tensor with custom TensorImpl
     """
-    return mycelya_torch._C._was_tensor_accessed_via_custom_impl(tensor)
+    return mycelya_torch._C._get_tensor_id(tensor)
+
+
+def _add_mycelya_tensor_methods():
+    """Add mycelya-specific methods to torch.Tensor using wrapper functions"""
+    
+    def safe_get_tensor_id(self):
+        """Get tensor ID for mycelya tensors"""
+        return mycelya_torch._C._get_tensor_id(self)
+    
+    # Add methods to torch.Tensor class
+    torch.Tensor.get_tensor_id = safe_get_tensor_id
+    
+    # Add convenient property for tensor.id syntax
+    torch.Tensor.id = property(lambda self: self.get_tensor_id())
+    
+    print("✅ Added tensor ID methods via monkey patching torch.Tensor")
+    return True
+
+# Add tensor methods after importing _C, but only if we're not currently importing
+try:
+    _add_mycelya_tensor_methods()
+except Exception as e:
+    print(f"Warning: Could not add tensor methods: {e}")
+    import traceback
+    traceback.print_exc()
+    # Continue loading without tensor methods for now
+
+
+
+

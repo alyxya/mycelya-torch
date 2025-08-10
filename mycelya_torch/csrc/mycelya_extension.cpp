@@ -34,11 +34,12 @@ static PyObject *_getDefaultGenerator(PyObject *self, PyObject *arg) {
   END_HANDLE_TH_ERRORS
 }
 
-// Test function to check if a tensor is using custom TensorImpl
-static PyObject *_is_using_custom_tensorimpl(PyObject *self, PyObject *arg) {
+
+// Get the unique tensor ID for a mycelya tensor
+static PyObject *_get_tensor_id(PyObject *self, PyObject *arg) {
   HANDLE_TH_ERRORS
   TORCH_CHECK(THPVariable_Check(arg),
-              "_is_using_custom_tensorimpl expects a tensor, but got ",
+              "_get_tensor_id expects a tensor, but got ",
               THPUtils_typename(arg));
   
   auto tensor = THPVariable_Unpack(arg);
@@ -46,39 +47,20 @@ static PyObject *_is_using_custom_tensorimpl(PyObject *self, PyObject *arg) {
   // Check if tensor is using our custom TensorImpl
   auto* impl_ptr = dynamic_cast<mycelya::MycelyaTensorImpl*>(tensor.unsafeGetTensorImpl());
   if (impl_ptr) {
-    return PyBool_FromLong(1);
+    auto tensor_id = impl_ptr->get_tensor_id();
+    return PyLong_FromUnsignedLongLong(tensor_id);
   } else {
-    return PyBool_FromLong(0);
+    TORCH_CHECK(false, "Tensor is not a mycelya tensor with custom TensorImpl");
   }
   
   END_HANDLE_TH_ERRORS
 }
 
-// Test function to check if a tensor was accessed via custom TensorImpl
-static PyObject *_was_tensor_accessed_via_custom_impl(PyObject *self, PyObject *arg) {
-  HANDLE_TH_ERRORS
-  TORCH_CHECK(THPVariable_Check(arg),
-              "_was_tensor_accessed_via_custom_impl expects a tensor, but got ",
-              THPUtils_typename(arg));
-  
-  auto tensor = THPVariable_Unpack(arg);
-  
-  // Check if tensor is using our custom TensorImpl and was accessed
-  auto* impl_ptr = dynamic_cast<mycelya::MycelyaTensorImpl*>(tensor.unsafeGetTensorImpl());
-  if (impl_ptr) {
-    return PyBool_FromLong(impl_ptr->was_accessed_via_custom_impl() ? 1 : 0);
-  } else {
-    return PyBool_FromLong(0);
-  }
-  
-  END_HANDLE_TH_ERRORS
-}
 
 static PyMethodDef methods[] = {
     {"_init", _initExtension, METH_NOARGS, nullptr},
     {"_get_default_generator", _getDefaultGenerator, METH_O, nullptr},
-    {"_is_using_custom_tensorimpl", _is_using_custom_tensorimpl, METH_O, nullptr},
-    {"_was_tensor_accessed_via_custom_impl", _was_tensor_accessed_via_custom_impl, METH_O, nullptr},
+    {"_get_tensor_id", _get_tensor_id, METH_O, nullptr},
     {nullptr, nullptr, 0, nullptr}};
 
 static struct PyModuleDef mycelya_C_module = {
