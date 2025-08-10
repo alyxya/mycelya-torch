@@ -1,7 +1,7 @@
 // Copyright (C) 2025 alyxya
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#include "Remote.h"
+#include "Mycelya.h"
 
 #include <ATen/CPUGeneratorImpl.h>
 #include <ATen/core/GeneratorForPrivateuseone.h>
@@ -11,7 +11,7 @@
 #include <c10/core/Device.h>
 #include <c10/core/impl/DeviceGuardImplInterface.h>
 
-namespace remote {
+namespace mycelya {
 namespace {
 
 // Python factory function for method implementations
@@ -27,25 +27,25 @@ static c10::DeviceIndex current_device_idx() {
   return get_method("get_device")().cast<c10::DeviceIndex>();
 }
 
-class RemoteGeneratorImpl : public at::CPUGeneratorImpl {
+class MycelyaGeneratorImpl : public at::CPUGeneratorImpl {
 public:
-  RemoteGeneratorImpl(c10::DeviceIndex device_index) {
+  MycelyaGeneratorImpl(c10::DeviceIndex device_index) {
     device_ = c10::Device(c10::DeviceType::PrivateUse1, device_index);
     key_set_ = c10::DispatchKeySet(c10::DispatchKey::PrivateUse1);
   }
-  ~RemoteGeneratorImpl() override = default;
+  ~MycelyaGeneratorImpl() override = default;
 };
 
-static at::Generator make_remote_generator(c10::DeviceIndex device_index) {
-  return at::make_generator<RemoteGeneratorImpl>(device_index);
+static at::Generator make_mycelya_generator(c10::DeviceIndex device_index) {
+  return at::make_generator<MycelyaGeneratorImpl>(device_index);
 }
 
 // Default, global generators, one per device.
 static std::vector<at::Generator> default_generators;
 
-struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
-  RemoteHooksInterface() {};
-  ~RemoteHooksInterface() override = default;
+struct MycelyaHooksInterface : public at::PrivateUse1HooksInterface {
+  MycelyaHooksInterface() {};
+  ~MycelyaHooksInterface() override = default;
 
   bool hasPrimaryContext(c10::DeviceIndex device_index) const override {
     py::gil_scoped_acquire acquire;
@@ -64,7 +64,7 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
       auto device_nums = device_count();
       default_generators.resize(device_nums);
       for (auto i = 0; i < device_nums; i++) {
-        default_generators[i] = make_remote_generator(i);
+        default_generators[i] = make_mycelya_generator(i);
         default_generators[i].seed();
       }
       return true;
@@ -80,7 +80,7 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
   }
 
   at::Generator getNewGenerator(c10::DeviceIndex device_index) const override {
-    return make_remote_generator(device_index);
+    return make_mycelya_generator(device_index);
   }
 
   void resizePrivateUse1Bytes(const c10::Storage &storage,
@@ -120,7 +120,7 @@ struct RemoteHooksInterface : public at::PrivateUse1HooksInterface {
 };
 
 static bool register_hook_flag [[maybe_unused]] = []() {
-  at::RegisterPrivateUse1HooksInterface(new RemoteHooksInterface());
+  at::RegisterPrivateUse1HooksInterface(new MycelyaHooksInterface());
   return true;
 }();
 
@@ -261,4 +261,4 @@ py::function get_method(const char *name) {
   return factory(name);
 }
 
-} // namespace remote
+} // namespace mycelya

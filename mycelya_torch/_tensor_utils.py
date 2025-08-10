@@ -6,7 +6,7 @@ Tensor utilities for metadata handling, serialization, and device transfers.
 
 This module provides a clean, type-safe API for tensor conversions:
 - LocalTensorMetadata for CPU/meta tensors (no storage_id)
-- RemoteTensorMetadata for remote tensors (always has storage_id)
+- MycelyaTensorMetadata for remote tensors (always has storage_id)
 - Methods for converting between CPU, remote, and meta tensors
 - Serialization utilities for data transfer
 """
@@ -95,7 +95,7 @@ class LocalTensorMetadata(BaseTensorMetadata):
 
 
 @dataclass
-class RemoteTensorMetadata(BaseTensorMetadata):
+class MycelyaTensorMetadata(BaseTensorMetadata):
     """Metadata for remote tensors - always has storage_id."""
 
     storage_id: int
@@ -113,10 +113,10 @@ class RemoteTensorMetadata(BaseTensorMetadata):
         return True
 
     @classmethod
-    def from_remote_tensor(cls, tensor: torch.Tensor) -> "RemoteTensorMetadata":
-        """Create metadata from a remote tensor."""
+    def from_mycelya_tensor(cls, tensor: torch.Tensor) -> "MycelyaTensorMetadata":
+        """Create metadata from a mycelya tensor."""
         if tensor.device.type != "mycelya":
-            raise ValueError(f"Expected remote tensor, got device: {tensor.device}")
+            raise ValueError(f"Expected mycelya tensor, got device: {tensor.device}")
         storage_id = tensor.untyped_storage().data_ptr()
         return cls(
             shape=tuple(tensor.shape),
@@ -128,14 +128,14 @@ class RemoteTensorMetadata(BaseTensorMetadata):
 
     def __repr__(self) -> str:
         return (
-            f"RemoteTensorMetadata(shape={self.shape}, stride={self.stride}, "
+            f"MycelyaTensorMetadata(shape={self.shape}, stride={self.stride}, "
             f"storage_offset={self.storage_offset}, dtype={self.dtype}, "
             f"storage_id={self.storage_id})"
         )
 
 
 # Union type for contexts that can handle either
-TensorMetadata = Union[LocalTensorMetadata, RemoteTensorMetadata]
+TensorMetadata = Union[LocalTensorMetadata, MycelyaTensorMetadata]
 
 
 # cpu_tensor_to_storage_bytes function removed - pass storage tensors directly instead

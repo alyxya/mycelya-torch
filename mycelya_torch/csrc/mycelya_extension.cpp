@@ -1,7 +1,7 @@
 // Copyright (C) 2025 alyxya
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#include "Remote.h"
+#include "Mycelya.h"
 
 #include <ATen/Context.h>
 
@@ -37,15 +37,15 @@ static PyMethodDef methods[] = {
     {"_get_default_generator", _getDefaultGenerator, METH_O, nullptr},
     {nullptr, nullptr, 0, nullptr}};
 
-static struct PyModuleDef remote_C_module = {
+static struct PyModuleDef mycelya_C_module = {
     PyModuleDef_HEAD_INIT, "mycelya_torch._C", nullptr, -1, methods};
 
 PyMODINIT_FUNC PyInit__C(void) {
-  PyObject *mod = PyModule_Create(&remote_C_module);
+  PyObject *mod = PyModule_Create(&mycelya_C_module);
 
-  py::object remote_mod = py::module_::import("mycelya_torch");
+  py::object mycelya_mod = py::module_::import("mycelya_torch");
   // Only borrowed from the python side!
-  remote::set_impl_factory(remote_mod.attr("impl_factory").ptr());
+  mycelya::set_impl_factory(mycelya_mod.attr("impl_factory").ptr());
 
   return mod;
 }

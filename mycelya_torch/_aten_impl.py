@@ -8,7 +8,7 @@ from torch.utils._pytree import tree_map
 
 # Simple operation dispatch - no complex patterns needed
 from ._logging import get_logger
-from ._tensor_utils import RemoteTensorMetadata
+from ._tensor_utils import MycelyaTensorMetadata
 
 log = get_logger(__name__)
 
@@ -56,14 +56,14 @@ def _validate_cross_device_operation(
 def args_to_metadata_with_placeholders(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[RemoteTensorMetadata]]:
+) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[MycelyaTensorMetadata]]:
     """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
-    metadata_list: List[RemoteTensorMetadata] = []
+    metadata_list: List[MycelyaTensorMetadata] = []
 
     def replace_remote_tensor_with_placeholder(obj):
         """Replace remote tensors with placeholders and collect metadata."""
         if isinstance(obj, torch.Tensor):
-            metadata = RemoteTensorMetadata.from_remote_tensor(obj)
+            metadata = MycelyaTensorMetadata.from_mycelya_tensor(obj)
             tensor_index = len(metadata_list)
             metadata_list.append(metadata)
             return f"__TENSOR_{tensor_index}"

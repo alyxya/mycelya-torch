@@ -18,7 +18,7 @@ import torch
 from ._batching import BatchProcessor
 from ._logging import get_logger
 from ._storage import get_machine_for_storage
-from ._tensor_utils import RemoteTensorMetadata
+from ._tensor_utils import MycelyaTensorMetadata
 from .backends.client_interface import ClientInterface
 from .device import RemoteMachine
 
@@ -393,7 +393,7 @@ class RemoteOrchestrator:
     def execute_aten_operation(
         self,
         op_name: str,
-        input_metadata: List[RemoteTensorMetadata],
+        input_metadata: List[MycelyaTensorMetadata],
         output_storage_ids: List[Optional[int]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
@@ -494,7 +494,7 @@ class RemoteOrchestrator:
         storage_id = remote_tensor.untyped_storage().data_ptr()
 
         # Create metadata for the remote tensor
-        metadata = RemoteTensorMetadata.from_remote_tensor(remote_tensor)
+        metadata = MycelyaTensorMetadata.from_mycelya_tensor(remote_tensor)
 
         # Get tensor data from remote storage using new interface
         return self.get_storage_tensor(

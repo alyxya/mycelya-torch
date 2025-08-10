@@ -1,7 +1,7 @@
 // Copyright (C) 2025 alyxya
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#include "Remote.h"
+#include "Mycelya.h"
 
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <ATen/ops/as_strided_cpu_dispatch.h>
@@ -11,12 +11,12 @@
 #include <sstream>
 #include <torch/library.h>
 
-namespace remote {
+namespace mycelya {
 namespace {
 
 // ID-based allocator that stores storage IDs as data pointers
-struct RemoteAllocator final : at::Allocator {
-  RemoteAllocator() = default;
+struct MycelyaAllocator final : at::Allocator {
+  MycelyaAllocator() = default;
 
   at::DataPtr allocate(size_t nbytes) override {
     py::gil_scoped_acquire acquire;
@@ -31,7 +31,7 @@ struct RemoteAllocator final : at::Allocator {
         get_method("create_storage")(nbytes, curr_device_idx).cast<storage_id_t>();
 
     TORCH_CHECK(storage_id != 0, "Failed to allocate storage (", nbytes,
-                " bytes) on remote device ", curr_device_idx);
+                " bytes) on mycelya device ", curr_device_idx);
 
     // Store the storage ID as the data pointer (always non-zero)
     data = reinterpret_cast<void *>(storage_id);
@@ -69,13 +69,13 @@ struct RemoteAllocator final : at::Allocator {
   }
 
   void copy_data(void *dest, const void *src, std::size_t count) const final {
-    // No-op: Remote tensors handle data copying through PyTorch operations
+    // No-op: Mycelya tensors handle data copying through PyTorch operations
     // rather than raw memory copying
   }
 };
 
-static RemoteAllocator global_remote_alloc;
-REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_remote_alloc);
+static MycelyaAllocator global_mycelya_alloc;
+REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_mycelya_alloc);
 
 } // namespace
 
@@ -90,8 +90,8 @@ bool validate_device_index(c10::DeviceIndex device_index) {
   }
 }
 
-// C++ implementation of empty_remote using direct allocator integration
-at::Tensor empty_remote(at::IntArrayRef size,
+// C++ implementation of empty_mycelya using direct allocator integration
+at::Tensor empty_mycelya(at::IntArrayRef size,
                         c10::optional<at::ScalarType> dtype,
                         c10::optional<at::Layout> layout,
                         c10::optional<at::Device> device,
@@ -125,13 +125,13 @@ at::Tensor empty_remote(at::IntArrayRef size,
   const c10::DeviceGuard device_guard(target_device);
 
   // Use the enhanced allocator to create tensor
-  constexpr c10::DispatchKeySet remote_dks(c10::DispatchKey::PrivateUse1);
-  return at::detail::empty_generic(size, &global_remote_alloc, remote_dks,
+  constexpr c10::DispatchKeySet mycelya_dks(c10::DispatchKey::PrivateUse1);
+  return at::detail::empty_generic(size, &global_mycelya_alloc, mycelya_dks,
                                    resolved_dtype, resolved_memory_format);
 }
 
-// C++ implementation of empty_strided_remote
-at::Tensor empty_strided_remote(at::IntArrayRef size, at::IntArrayRef stride,
+// C++ implementation of empty_strided_mycelya
+at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
                                 c10::optional<at::ScalarType> dtype,
                                 c10::optional<at::Layout> layout,
                                 c10::optional<at::Device> device,
@@ -162,27 +162,27 @@ at::Tensor empty_strided_remote(at::IntArrayRef size, at::IntArrayRef stride,
   const c10::DeviceGuard device_guard(target_device);
 
   // Use the enhanced allocator to create strided tensor
-  constexpr c10::DispatchKeySet remote_dks(c10::DispatchKey::PrivateUse1);
-  return at::detail::empty_strided_generic(size, stride, &global_remote_alloc,
-                                           remote_dks, resolved_dtype);
+  constexpr c10::DispatchKeySet mycelya_dks(c10::DispatchKey::PrivateUse1);
+  return at::detail::empty_strided_generic(size, stride, &global_mycelya_alloc,
+                                           mycelya_dks, resolved_dtype);
 }
 
 // C++ implementation of as_strided for view operations
-at::Tensor as_strided_remote(const at::Tensor &self, at::IntArrayRef size,
+at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
                              at::IntArrayRef stride,
                              c10::optional<int64_t> storage_offset) {
 
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
-              "as_strided_remote expects a remote tensor");
+              "as_strided_mycelya expects a mycelya tensor");
 
   // Use the CPU implementation directly to avoid infinite recursion
-  // This creates a view tensor that shares storage without triggering remote
+  // This creates a view tensor that shares storage without triggering mycelya
   // calls
   return at::cpu::as_strided(self, size, stride, storage_offset);
 }
 
 // C++ implementation of set_ for tensor metadata operations
-at::Tensor &set_remote(at::Tensor &result, at::Storage storage,
+at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
                        int64_t storage_offset, at::IntArrayRef size,
                        at::IntArrayRef stride) {
   // Use the CPU implementation directly to avoid infinite recursion
@@ -191,7 +191,7 @@ at::Tensor &set_remote(at::Tensor &result, at::Storage storage,
 
 // C++ implementation of resize_ that explicitly calls storage resize hooks
 const at::Tensor &
-resize_remote_(const at::Tensor &self, at::IntArrayRef size,
+resize_mycelya_(const at::Tensor &self, at::IntArrayRef size,
                c10::optional<at::MemoryFormat> memory_format) {
 
   // Calculate required storage size for new shape
@@ -239,18 +239,18 @@ resize_remote_(const at::Tensor &self, at::IntArrayRef size,
 TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // Register our C++ implementations for empty tensor creation
   // These will override the Python fallback for these specific operations
-  m.impl("empty.memory_format", empty_remote);
-  m.impl("empty_strided", empty_strided_remote);
+  m.impl("empty.memory_format", empty_mycelya);
+  m.impl("empty_strided", empty_strided_mycelya);
 
   // Register as_strided and set_ like pytorch-openreg-2
   // All other operations (transpose, squeeze, unsqueeze, view) go through
   // Python fallback
-  m.impl("as_strided", as_strided_remote);
-  m.impl("set_.source_Storage_storage_offset", set_remote);
+  m.impl("as_strided", as_strided_mycelya);
+  m.impl("set_.source_Storage_storage_offset", set_mycelya);
 
   // Register resize_ following OpenReg pattern - uses default implementation
   // with custom hook
-  m.impl("resize_", resize_remote_);
+  m.impl("resize_", resize_mycelya_);
 }
 
-} // namespace remote
+} // namespace mycelya
