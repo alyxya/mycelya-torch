@@ -8,7 +8,8 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Set, Union
 
 import torch
 
@@ -43,6 +44,9 @@ class ModalClient(ClientInterface):
         self._app_context = None
         self.timeout = timeout
         self.retries = retries
+
+        # Storage to tensor mapping for the new tensor-based architecture
+        self._storage_to_tensor_ids: Dict[int, Set[int]] = defaultdict(set)
 
         # Initialize the Modal app and server
         self._initialize()
@@ -299,6 +303,191 @@ class ModalClient(ClientInterface):
             invalidate_storage_ids=[storage_id],
         )
 
+    # New tensor-based methods for the refactored architecture
+    def create_empty_tensor(self, tensor_id: int, shape: List[int], dtype: str) -> None:
+        """
+        Create an empty tensor on the remote machine with the given tensor_id.
+
+        Args:
+            tensor_id: Unique tensor ID (metadata hash)
+            shape: Shape of the tensor to create
+            dtype: Data type of the tensor (e.g., "float32", "int64")
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        try:
+            # Queue the RPC for batching (fire-and-forget)
+            self._queue_rpc(
+                method_name="create_empty_tensor",
+                call_type="spawn",
+                args=(tensor_id, shape, dtype),
+                kwargs={},
+            )
+            log.info(f"Queued creation of empty tensor {tensor_id} with shape {shape}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
+
+    def create_tensor_view(
+        self,
+        tensor_id: int,
+        base_storage_id: int,
+        shape: List[int],
+        stride: List[int],
+        offset: int,
+        dtype: str,
+    ) -> None:
+        """
+        Create a tensor view on the remote machine from an existing storage.
+
+        Args:
+            tensor_id: Unique tensor ID (metadata hash)
+            base_storage_id: Storage ID of the base tensor to create view from
+            shape: Shape of the view
+            stride: Stride of the view
+            offset: Storage offset of the view
+            dtype: Data type of the view
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        try:
+            # Queue the RPC for batching (fire-and-forget)
+            self._queue_rpc(
+                method_name="create_tensor_view",
+                call_type="spawn",
+                args=(tensor_id, base_storage_id, shape, stride, offset, dtype),
+                kwargs={},
+            )
+            log.info(f"Queued creation of tensor view {tensor_id} from storage {base_storage_id}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to create tensor view {tensor_id}: {e}") from e
+
+    def update_tensor(self, tensor_id: int, tensor: torch.Tensor) -> None:
+        """
+        Update an existing tensor with new data.
+
+        Args:
+            tensor_id: Unique tensor ID (metadata hash)
+            tensor: CPU tensor containing the data to upload
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Serialize tensor using numpy approach
+        from ..._tensor_utils import cpu_tensor_to_numpy_bytes
+
+        numpy_bytes = cpu_tensor_to_numpy_bytes(tensor)
+
+        # Queue the RPC for batching (fire-and-forget)
+        self._queue_rpc(
+            method_name="update_tensor",
+            call_type="spawn",
+            args=(tensor_id, numpy_bytes),
+            kwargs={},
+            # Note: We don't invalidate by storage_id here since we're using tensor_id
+        )
+        log.info(f"Queued update for tensor {tensor_id}")
+
+    def get_tensor_data(self, tensor_id: int) -> bytes:
+        """
+        Get raw tensor data by tensor ID.
+
+        Args:
+            tensor_id: The tensor ID (metadata hash)
+
+        Returns:
+            Raw tensor data as bytes
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Queue the RPC for batching (blocking call that returns raw bytes)
+        future = self._queue_rpc(
+            method_name="get_tensor_data",
+            call_type="remote",
+            args=(tensor_id,),
+            kwargs={},
+        )
+
+        # Wait for the result from the Future
+        raw_bytes = future.result() if future else None
+        if raw_bytes is None:
+            raise RuntimeError(
+                f"Failed to retrieve tensor data for tensor {tensor_id}"
+            )
+
+        return raw_bytes
+
+    def remove_tensors(self, tensor_ids: List[int]) -> None:
+        """
+        Remove multiple tensors from the remote machine.
+
+        Args:
+            tensor_ids: List of tensor IDs to remove
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        if not tensor_ids:
+            return
+
+        # Queue the RPC for batching (fire-and-forget)
+        self._queue_rpc(
+            method_name="remove_tensors",
+            call_type="spawn",
+            args=(tensor_ids,),
+            kwargs={},
+        )
+        log.info(f"Queued removal of {len(tensor_ids)} tensors")
+
+    def resize_tensor_storage(self, tensor_id: int, nbytes: int) -> None:
+        """
+        Resize the underlying storage for a tensor (be careful about shared storage).
+
+        Args:
+            tensor_id: The tensor ID
+            nbytes: The number of bytes needed for the new storage size
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Queue the RPC for batching (fire-and-forget)
+        self._queue_rpc(
+            method_name="resize_tensor_storage",
+            call_type="spawn",
+            args=(tensor_id, nbytes),
+            kwargs={},
+        )
+        log.info(f"Queued storage resize for tensor {tensor_id} to {nbytes} bytes")
+
     # Operation execution methods
     def execute_aten_operation(
         self,
@@ -431,6 +620,85 @@ class ModalClient(ClientInterface):
 
         # Don't wait for result here - let it execute in batch with proper ordering
         log.info("✅ Modal Client queued model tensor linking")
+
+    # Helper methods for storage-to-tensor mapping management
+    def _get_all_tracked_tensor_ids(self) -> Set[int]:
+        """Get all tensor IDs currently tracked by this client."""
+        all_tensor_ids: Set[int] = set()
+        for tensor_ids in self._storage_to_tensor_ids.values():
+            all_tensor_ids.update(tensor_ids)
+        return all_tensor_ids
+
+    def _add_tensor_to_storage_mapping(self, storage_id: int, tensor_id: int) -> None:
+        """Add a tensor ID to the mapping for the given storage ID."""
+        self._storage_to_tensor_ids[storage_id].add(tensor_id)
+
+    def _remove_tensor_from_storage_mapping(self, storage_id: int, tensor_id: int) -> None:
+        """Remove a tensor ID from the mapping for the given storage ID."""
+        if storage_id in self._storage_to_tensor_ids:
+            self._storage_to_tensor_ids[storage_id].discard(tensor_id)
+            # Clean up empty sets
+            if not self._storage_to_tensor_ids[storage_id]:
+                del self._storage_to_tensor_ids[storage_id]
+
+    def _get_tensor_ids_for_storage(self, storage_id: int) -> Set[int]:
+        """Get all tensor IDs associated with a storage ID."""
+        return self._storage_to_tensor_ids.get(storage_id, set()).copy()
+
+    def _is_storage_new(self, storage_id: int) -> bool:
+        """Check if this is the first tensor for the given storage ID."""
+        return storage_id not in self._storage_to_tensor_ids or len(self._storage_to_tensor_ids[storage_id]) == 0
+
+    def _ensure_tensor_exists(self, tensor: torch.Tensor) -> int:
+        """
+        Ensure that a tensor exists on the remote side, creating it if necessary.
+        
+        This method implements the core implicit tensor creation logic:
+        - Calculate tensor_id from metadata hash
+        - Check if tensor already exists
+        - If not, add to storage mapping and create on remote side
+        - First tensor for storage -> create empty tensor
+        - Additional tensors for storage -> create view
+        
+        Args:
+            tensor: The tensor to ensure exists remotely
+            
+        Returns:
+            tensor_id: The tensor ID (metadata hash)
+        """
+        # Calculate tensor ID from metadata hash
+        tensor_id = tensor.get_metadata_hash()
+        storage_id = tensor.untyped_storage().data_ptr()
+        
+        # Check if tensor already tracked
+        if tensor_id in self._get_all_tracked_tensor_ids():
+            return tensor_id
+            
+        # Add tensor to storage mapping
+        self._add_tensor_to_storage_mapping(storage_id, tensor_id)
+        
+        # Decide whether to create empty tensor or view
+        if len(self._storage_to_tensor_ids[storage_id]) == 1:
+            # First tensor for this storage - create empty tensor
+            log.info(f"Creating first tensor {tensor_id} for storage {storage_id}")
+            self.create_empty_tensor(
+                tensor_id=tensor_id,
+                shape=list(tensor.shape),
+                dtype=str(tensor.dtype).replace("torch.", "")  # Remove torch. prefix
+            )
+        else:
+            # Additional tensor for existing storage - create as view
+            log.info(f"Creating view tensor {tensor_id} for existing storage {storage_id}")
+            self.create_tensor_view(
+                tensor_id=tensor_id,
+                base_storage_id=storage_id,
+                shape=list(tensor.shape),
+                stride=list(tensor.stride()),
+                offset=tensor.storage_offset(),
+                dtype=str(tensor.dtype).replace("torch.", "")  # Remove torch. prefix
+            )
+        
+        return tensor_id
 
     def __enter__(self):
         """Context manager entry - starts the machine."""

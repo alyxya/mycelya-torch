@@ -455,7 +455,7 @@ def _remote_kernel_fallback(
 
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
-    """Copy data from remote tensor to CPU tensor using remote execution"""
+    """Copy data from remote tensor to CPU tensor using tensor-based execution"""
     if from_.device.type != "mycelya":
         raise ValueError("copy_from_device requires a remote tensor")
 
@@ -493,7 +493,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
-    """Copy data from CPU tensor to remote tensor using remote execution"""
+    """Copy data from CPU tensor to remote tensor using tensor-based execution"""
     if to_.device.type != "mycelya":
         raise ValueError("copy_from_host_to_device requires a remote target tensor")
     if from_.device.type != "cpu":
@@ -511,7 +511,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
             f"No RemoteMachine found for remote device index {to_.device.index}"
         )
 
-    # Send tensor data using orchestrator for centralized client management
+    # For now, fall back to the legacy storage-based approach since the tensor-based
+    # approach needs more integration work. We'll use the old update_storage method.
     storage_id = to_.untyped_storage().data_ptr()
     log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
 
@@ -532,7 +533,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         target_storage_offset=to_.storage_offset(),
         target_dtype=str(to_.dtype),
     )
-    log.info(f"Successfully created/updated remote tensor with ID {storage_id}")
+    
+    log.info(f"Successfully updated remote tensor with storage ID {storage_id}")
     return to_
 
 
@@ -630,10 +632,7 @@ def _local_scalar_dense(self: torch.Tensor):
         "🔢 _local_scalar_dense operation: retrieving scalar value from remote device"
     )
 
-    # Get storage ID and remote machine
-    storage_id = self.untyped_storage().data_ptr()
-
-    # Get the remote machine using device registry
+    # Get remote machine using device registry
     from .device import get_device_registry
 
     registry = get_device_registry()
@@ -643,6 +642,9 @@ def _local_scalar_dense(self: torch.Tensor):
         raise RuntimeError(
             f"No RemoteMachine found for remote device index {self.device.index}"
         )
+
+    # Get storage ID and tensor data using legacy approach
+    storage_id = self.untyped_storage().data_ptr()
 
     # Get tensor data for this scalar using orchestrator
     from ._remote_orchestrator import remote_orchestrator

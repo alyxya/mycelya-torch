@@ -180,7 +180,6 @@ def create_huggingface_model_from_remote(
         from ._storage import _storage_registry
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
-        _storage_registry.generated_storage_ids.add(local_storage_id)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)
@@ -215,7 +214,6 @@ def create_huggingface_model_from_remote(
         from ._storage import _storage_registry
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
-        _storage_registry.generated_storage_ids.add(local_storage_id)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)

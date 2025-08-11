@@ -390,6 +390,53 @@ class RemoteOrchestrator:
         # Note: Cache invalidation now happens at queue time in batching system
         log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id}")
 
+    # New tensor-based methods for the refactored architecture
+    def update_tensor(self, tensor_id: int, tensor: torch.Tensor) -> None:
+        """Update a tensor with new data using tensor-based approach.
+
+        Args:
+            tensor_id: The tensor ID (metadata hash)
+            tensor: CPU tensor containing the data to upload
+
+        Raises:
+            RuntimeError: If tensor or client not available
+        """
+        # Get client by first finding the storage ID for the tensor
+        storage_id = tensor.untyped_storage().data_ptr()
+        client = self._get_client_for_storage(storage_id)
+        client.update_tensor(tensor_id, tensor)
+
+        log.info(f"✅ ORCHESTRATOR: Updated tensor {tensor_id}")
+
+    def get_tensor_data(self, tensor_id: int, tensor: torch.Tensor) -> torch.Tensor:
+        """Get tensor data from remote using tensor-based approach.
+
+        Args:
+            tensor_id: The tensor ID (metadata hash)
+            tensor: Reference tensor to get client routing information
+
+        Returns:
+            CPU tensor with the retrieved data
+
+        Raises:
+            RuntimeError: If tensor or client not available
+        """
+        # Get client by first finding the storage ID for the tensor
+        storage_id = tensor.untyped_storage().data_ptr()
+        client = self._get_client_for_storage(storage_id)
+        
+        # Get raw bytes from client
+        raw_bytes = client.get_tensor_data(tensor_id)
+        
+        # Reconstruct CPU tensor from raw bytes
+        from ._tensor_utils import numpy_bytes_to_cpu_tensor
+        result = numpy_bytes_to_cpu_tensor(
+            raw_bytes, tensor.shape, tensor.dtype
+        )
+        
+        log.info(f"✅ ORCHESTRATOR: Retrieved tensor data for tensor {tensor_id}")
+        return result
+
     def execute_aten_operation(
         self,
         op_name: str,

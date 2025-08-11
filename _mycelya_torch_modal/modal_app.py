@@ -73,22 +73,28 @@ def create_modal_app_for_gpu(
                 # Fall back to CPU if any issues
                 return torch.device("cpu")
 
-        def _get_storages(self):
-            """Get or create storage mapping for this server instance."""
-            if not hasattr(self, "_storages"):
-                # storage_id -> int (lazy allocation byte count) or torch.Tensor (realized storage)
-                # Actual tensor data is stored in tensor_cache, accessed via storage_to_tensors mapping
-                self._storages: Dict[int, Union[torch.Tensor, int]] = {}
+        def _get_tensor_registry(self):
+            """Get or create tensor registry for this server instance.
+            
+            This is the NEW tensor-based architecture where tensor_id (metadata hash)
+            directly maps to tensors. This is the preferred approach going forward.
+            """
+            if not hasattr(self, "_tensor_registry"):
+                # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
+                self._tensor_registry: Dict[int, torch.Tensor] = {}
 
+            return self._tensor_registry
+
+        def _get_storages(self):
+            """Get or create storage mapping (legacy support)."""
+            if not hasattr(self, "_storages"):
+                self._storages: Dict[int, Union[torch.Tensor, int]] = {}
             return self._storages
 
         def _get_tensor_cache(self):
-            """Get or create tensor cache for this server instance."""
+            """Get or create tensor cache (legacy support)."""
             if not hasattr(self, "_tensor_cache"):
-                # storage_id -> {metadata_key -> torch.Tensor}
-                # where metadata_key is a hash of (shape, stride, offset, dtype)
                 self._tensor_cache: Dict[int, Dict[str, Any]] = {}
-
             return self._tensor_cache
 
         def _get_model_registry(self):
@@ -99,9 +105,17 @@ def create_modal_app_for_gpu(
 
             return self._model_registry
 
-        def _make_tensor_metadata_key(
-            self, shape: List[int], stride: List[int], storage_offset: int, dtype: str
-        ) -> str:
+        def _find_tensor_by_storage(self, storage_id: int):
+            """Find any existing tensor that shares the same storage_id for view creation."""
+            tensor_registry = self._get_tensor_registry()
+            
+            for tensor_id, tensor in tensor_registry.items():
+                if hasattr(tensor, 'untyped_storage') and tensor.untyped_storage().data_ptr() == storage_id:
+                    return tensor
+                    
+            return None
+
+        def _make_tensor_metadata_key(self, shape: List[int], stride: List[int], storage_offset: int, dtype: str) -> str:
             """Create a unique key for tensor metadata."""
             return f"{tuple(shape)}-{tuple(stride)}-{storage_offset}-{dtype}"
 
@@ -611,6 +625,151 @@ def create_modal_app_for_gpu(
                 None
             """
             return self._remove_storage_impl(storage_id)
+
+        # Tensor ID-based methods
+        def _create_empty_tensor_impl(self, tensor_id: int, shape: List[int], dtype: str) -> None:
+            """Create an empty tensor with given tensor_id."""
+            import torch
+
+            tensor_registry = self._get_tensor_registry()
+
+            if tensor_id in tensor_registry:
+                raise ValueError(f"Tensor ID {tensor_id} already exists")
+
+            torch_dtype = getattr(torch, dtype.replace("torch.", ""))
+            device = self._get_device()
+            tensor = torch.empty(shape, dtype=torch_dtype, device=device)
+            tensor_registry[tensor_id] = tensor
+
+            log.info(f"✅ Created empty tensor {tensor_id} with shape {shape}")
+
+        @modal.method()
+        def create_empty_tensor(self, tensor_id: int, shape: List[int], dtype: str) -> None:
+            """Create an empty tensor on the remote machine."""
+            return self._create_empty_tensor_impl(tensor_id, shape, dtype)
+
+        def _create_tensor_view_impl(
+            self,
+            tensor_id: int,
+            base_storage_id: int,
+            shape: List[int],
+            stride: List[int],
+            offset: int,
+            dtype: str,
+        ) -> None:
+            """Create a tensor view from existing storage."""
+            import torch
+
+            tensor_registry = self._get_tensor_registry()
+
+            if tensor_id in tensor_registry:
+                raise ValueError(f"Tensor ID {tensor_id} already exists")
+
+            base_tensor = self._find_tensor_by_storage(base_storage_id)
+            if base_tensor is None:
+                raise ValueError(f"No base tensor found for storage {base_storage_id}")
+
+            torch_dtype = getattr(torch, dtype.replace("torch.", ""))
+            view_tensor = torch.empty(0, dtype=torch_dtype, device=base_tensor.device).set_(
+                base_tensor.untyped_storage(), offset, shape, stride
+            )
+            tensor_registry[tensor_id] = view_tensor
+
+            log.info(f"✅ Created tensor view {tensor_id} from storage {base_storage_id}")
+
+        @modal.method()
+        def create_tensor_view(self, tensor_id: int, base_storage_id: int, shape: List[int], stride: List[int], offset: int, dtype: str) -> None:
+            """Create a tensor view from existing storage."""
+            return self._create_tensor_view_impl(tensor_id, base_storage_id, shape, stride, offset, dtype)
+
+        def _update_tensor_impl(self, tensor_id: int, raw_data: bytes) -> None:
+            """Update an existing tensor with new data."""
+            import torch
+
+            tensor_registry = self._get_tensor_registry()
+
+            if tensor_id not in tensor_registry:
+                raise ValueError(f"Tensor ID {tensor_id} does not exist")
+
+            target_tensor = tensor_registry[tensor_id]
+            expected_bytes = target_tensor.numel() * target_tensor.element_size()
+
+            if len(raw_data) != expected_bytes:
+                raise RuntimeError(
+                    f"Data size mismatch for tensor {tensor_id}: "
+                    f"expected {expected_bytes} bytes, got {len(raw_data)} bytes"
+                )
+
+            writable_data = bytearray(raw_data)
+            cpu_tensor = torch.frombuffer(writable_data, dtype=target_tensor.dtype).reshape(target_tensor.shape)
+            target_tensor.copy_(cpu_tensor)
+
+            log.info(f"✅ Updated tensor {tensor_id}")
+
+        @modal.method()
+        def update_tensor(self, tensor_id: int, raw_data: bytes) -> None:
+            """Update an existing tensor with new data."""
+            return self._update_tensor_impl(tensor_id, raw_data)
+
+        def _get_tensor_data_impl(self, tensor_id: int) -> bytes:
+            """Get raw tensor data by tensor ID."""
+            tensor_registry = self._get_tensor_registry()
+
+            if tensor_id not in tensor_registry:
+                raise ValueError(f"Tensor ID {tensor_id} does not exist")
+
+            tensor = tensor_registry[tensor_id]
+            log.info(f"📦 Retrieving tensor data for tensor {tensor_id}")
+            return tensor.cpu().numpy().tobytes()
+
+        @modal.method()
+        def get_tensor_data(self, tensor_id: int) -> bytes:
+            """Get raw tensor data by tensor ID."""
+            return self._get_tensor_data_impl(tensor_id)
+
+        def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
+            """Remove multiple tensors from the remote machine."""
+            tensor_registry = self._get_tensor_registry()
+
+            removed_count = 0
+            for tensor_id in tensor_ids:
+                if tensor_id in tensor_registry:
+                    del tensor_registry[tensor_id]
+                    removed_count += 1
+
+            log.info(f"🗑️ Removed {removed_count}/{len(tensor_ids)} tensors")
+
+        @modal.method()
+        def remove_tensors(self, tensor_ids: List[int]) -> None:
+            """Remove multiple tensors from the remote machine."""
+            return self._remove_tensors_impl(tensor_ids)
+
+        def _resize_tensor_storage_impl(self, tensor_id: int, nbytes: int) -> None:
+            """Resize the underlying storage for a tensor."""
+            import torch
+
+            tensor_registry = self._get_tensor_registry()
+
+            if tensor_id not in tensor_registry:
+                raise ValueError(f"Tensor ID {tensor_id} does not exist")
+
+            tensor = tensor_registry[tensor_id]
+            current_bytes = tensor.untyped_storage().nbytes()
+
+            if nbytes <= current_bytes:
+                return
+
+            # Create temporary view and resize underlying storage
+            temp_storage_tensor = torch.empty(0, dtype=torch.uint8, device=tensor.device)
+            temp_storage_tensor.set_(tensor.untyped_storage(), 0, [current_bytes])
+            temp_storage_tensor.resize_([nbytes])
+
+            log.info(f"🔄 Resized storage for tensor {tensor_id}")
+
+        @modal.method()
+        def resize_tensor_storage(self, tensor_id: int, nbytes: int) -> None:
+            """Resize the underlying storage for a tensor."""
+            return self._resize_tensor_storage_impl(tensor_id, nbytes)
 
         def _prepare_huggingface_model_impl(
             self,
@@ -1191,6 +1350,20 @@ def create_modal_app_for_gpu(
                         result = self._resize_storage_impl(*args, **kwargs)
                     elif method_name == "remove_storage":
                         result = self._remove_storage_impl(*args, **kwargs)
+                    # New tensor-based methods
+                    elif method_name == "create_empty_tensor":
+                        result = self._create_empty_tensor_impl(*args, **kwargs)
+                    elif method_name == "create_tensor_view":
+                        result = self._create_tensor_view_impl(*args, **kwargs)
+                    elif method_name == "update_tensor":
+                        result = self._update_tensor_impl(*args, **kwargs)
+                    elif method_name == "get_tensor_data":
+                        result = self._get_tensor_data_impl(*args, **kwargs)
+                    elif method_name == "remove_tensors":
+                        result = self._remove_tensors_impl(*args, **kwargs)
+                    elif method_name == "resize_tensor_storage":
+                        result = self._resize_tensor_storage_impl(*args, **kwargs)
+                    # Legacy methods
                     elif method_name == "execute_aten_operation":
                         result = self._execute_aten_operation_impl(*args, **kwargs)
                     elif method_name == "prepare_huggingface_model":

@@ -12,7 +12,7 @@ This module manages storage IDs and their lifecycle:
 - Storage statistics and information
 """
 
-import random
+import threading
 from typing import Dict, List, Optional, Set
 
 from ._logging import get_logger
@@ -21,22 +21,14 @@ from .device import RemoteMachine, get_device_registry
 
 log = get_logger(__name__)
 
-# Constants for storage ID generation
-MAX_ID_GENERATION_ATTEMPTS = 100
-MIN_STORAGE_ID = 1
-MAX_STORAGE_ID = 2**63 - 1  # 64-bit signed integer max
-
-# Constants for tensor ID generation
-MIN_TENSOR_ID = 1
-MAX_TENSOR_ID = 2**63 - 1  # 64-bit signed integer max
-
 
 class StorageRegistry:
     """
     Simplified registry to track remote storage IDs only.
 
     Key concepts:
-    - storage_id: Identifies remote memory allocation on clients
+    - storage_id: Identifies remote memory allocation on clients  
+    - Uses incremental storage IDs starting from 1 (1, 2, 3, ...)
     - No local device simulation or memory allocation
     - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
     - Storage cleanup: Handles remote storage cleanup when tensors are freed
@@ -46,14 +38,15 @@ class StorageRegistry:
         # Storage ID tracking - maps storage to device
         self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
 
-        # Set for tracking all generated storage IDs to avoid duplicates
-        self.generated_storage_ids: Set[int] = set()
+        # Thread-safe counter for generating incremental storage IDs
+        self._storage_id_counter = 1
+        self._storage_id_lock = threading.Lock()
 
         log.info("🚀 Storage registry initialized")
 
     def create_storage(self, nbytes: int, device_index: int) -> int:
         """
-        Create remote storage with a generated unique ID.
+        Create remote storage with an incremental unique ID.
 
         Args:
             nbytes: Number of bytes to allocate
@@ -62,30 +55,12 @@ class StorageRegistry:
         Returns:
             int: The generated storage ID on success, or 0 on failure
         """
-        global MAX_ID_GENERATION_ATTEMPTS
-
-        # Generate a unique storage ID
-        storage_id = 0
-        for attempt in range(1, MAX_ID_GENERATION_ATTEMPTS + 1):
-            # Generate a random 64-bit integer within the valid range
-            candidate_id = random.randint(MIN_STORAGE_ID, MAX_STORAGE_ID)
-
-            # Check if this ID is already in use
-            if candidate_id not in self.generated_storage_ids:
-                storage_id = candidate_id
-                self.generated_storage_ids.add(storage_id)
-                log.info(f"🆔 GENERATED Storage ID: {storage_id}")
-                break
-            else:
-                log.debug(
-                    f"Generated duplicate storage ID {candidate_id}, retrying (attempt {attempt})"
-                )
-
-        if storage_id == 0:
-            log.error(
-                f"Failed to generate unique storage ID after {MAX_ID_GENERATION_ATTEMPTS} attempts"
-            )
-            return 0
+        # Generate incremental storage ID in thread-safe manner
+        with self._storage_id_lock:
+            storage_id = self._storage_id_counter
+            self._storage_id_counter += 1
+        
+        log.info(f"🆔 GENERATED Storage ID: {storage_id}")
 
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
@@ -105,7 +80,6 @@ class StorageRegistry:
             )
             # Clean up the failed storage ID
             self.storage_id_to_device.pop(storage_id, None)
-            self.generated_storage_ids.discard(storage_id)
             return 0
 
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
@@ -128,7 +102,6 @@ class StorageRegistry:
         if storage_id in self.storage_id_to_device:
             # Clean up storage tracking
             self.storage_id_to_device.pop(storage_id, None)
-            self.generated_storage_ids.discard(storage_id)
 
             # Remote cleanup if device information is available
             if device_idx is not None:
@@ -169,20 +142,41 @@ class StorageRegistry:
                 )
                 return
 
-            # Call cleanup on orchestrator
-            log.info(f"Calling remove_storage_from_remote for storage {storage_id}")
-            success = orchestrator.remove_tensor_from_remote(storage_id, device)
-
-            if success:
+            # Get client and handle tensor cleanup using new tensor-based approach
+            client = device.get_client()
+            
+            # Get all tensor IDs associated with this storage
+            tensor_ids = client._get_tensor_ids_for_storage(storage_id)
+            
+            if tensor_ids:
+                log.info(f"Cleaning up {len(tensor_ids)} tensor IDs for storage {storage_id}")
+                
+                # Remove tensors from remote side
+                client.remove_tensors(list(tensor_ids))
+                
+                # Clean up client-side mapping
+                for tensor_id in tensor_ids:
+                    client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
+                
                 log.info(
-                    f"✅ Successfully cleaned up remote storage {storage_id} "
+                    f"✅ Successfully cleaned up {len(tensor_ids)} tensors for storage {storage_id} "
                     f"on device {device_idx}"
                 )
             else:
-                log.warning(
-                    f"❌ Remote cleanup returned false for storage {storage_id} "
-                    f"on device {device_idx}"
-                )
+                # Fall back to legacy storage cleanup if no tensor IDs found
+                log.info(f"No tensor IDs found for storage {storage_id}, using legacy cleanup")
+                success = orchestrator.remove_tensor_from_remote(storage_id, device)
+                
+                if success:
+                    log.info(
+                        f"✅ Successfully cleaned up remote storage {storage_id} "
+                        f"on device {device_idx} (legacy)"
+                    )
+                else:
+                    log.warning(
+                        f"❌ Legacy cleanup returned false for storage {storage_id} "
+                        f"on device {device_idx}"
+                    )
 
         except Exception as e:
             log.error(
