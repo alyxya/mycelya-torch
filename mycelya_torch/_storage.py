@@ -15,9 +15,8 @@ This module manages storage IDs and their lifecycle:
 import threading
 from typing import Dict, List, Optional, Set
 
-from ._logging import get_logger
-from ._tensor_utils import MycelyaTensorMetadata
 from ._device import get_device_registry
+from ._logging import get_logger
 from ._machine import RemoteMachine
 
 log = get_logger(__name__)
@@ -28,7 +27,7 @@ class StorageRegistry:
     Simplified registry to track remote storage IDs only.
 
     Key concepts:
-    - storage_id: Identifies remote memory allocation on clients  
+    - storage_id: Identifies remote memory allocation on clients
     - Uses incremental storage IDs starting from 1 (1, 2, 3, ...)
     - No local device simulation or memory allocation
     - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
@@ -60,7 +59,7 @@ class StorageRegistry:
         with self._storage_id_lock:
             storage_id = self._storage_id_counter
             self._storage_id_counter += 1
-        
+
         log.info(f"🆔 GENERATED Storage ID: {storage_id}")
 
         # Always track the storage ID for all tensors
@@ -145,29 +144,33 @@ class StorageRegistry:
 
             # Get client and handle tensor cleanup using new tensor-based approach
             client = device.get_client()
-            
+
             # Get all tensor IDs associated with this storage
             tensor_ids = client._get_tensor_ids_for_storage(storage_id)
-            
+
             if tensor_ids:
-                log.info(f"Cleaning up {len(tensor_ids)} tensor IDs for storage {storage_id}")
-                
+                log.info(
+                    f"Cleaning up {len(tensor_ids)} tensor IDs for storage {storage_id}"
+                )
+
                 # Remove tensors from remote side
                 client.remove_tensors(list(tensor_ids))
-                
+
                 # Clean up client-side mapping
                 for tensor_id in tensor_ids:
                     client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
-                
+
                 log.info(
                     f"✅ Successfully cleaned up {len(tensor_ids)} tensors for storage {storage_id} "
                     f"on device {device_idx}"
                 )
             else:
                 # Fall back to legacy storage cleanup if no tensor IDs found
-                log.info(f"No tensor IDs found for storage {storage_id}, using legacy cleanup")
+                log.info(
+                    f"No tensor IDs found for storage {storage_id}, using legacy cleanup"
+                )
                 success = orchestrator.remove_tensor_from_remote(storage_id, device)
-                
+
                 if success:
                     log.info(
                         f"✅ Successfully cleaned up remote storage {storage_id} "

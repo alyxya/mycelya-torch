@@ -204,6 +204,14 @@ torch._register_device_module("mycelya", _create_module())
 # Import ATen implementations to ensure PyTorch registrations are executed
 import mycelya_torch._aten_impl  # noqa: E402
 
+from ._device import (  # noqa: E402
+    CloudProvider,
+    GPUType,
+    RemoteMachine,
+    get_all_machines,
+    get_device_registry,
+)
+
 # HuggingFace model loading utilities
 from ._huggingface_utils import (  # noqa: E402
     create_huggingface_model_from_remote,
@@ -219,35 +227,27 @@ from ._logging import (  # noqa: E402
     reset_logging,
     set_logging_level,
 )
-from ._device import (  # noqa: E402
-    CloudProvider,
-    GPUType,
-    RemoteMachine,
-    get_all_machines,
-    get_device_registry,
-)
-
 
 
 def get_metadata_hash(tensor: torch.Tensor) -> int:
     """Get a metadata hash for a mycelya tensor based on shape, stride, dtype, offset, and storage.
-    
+
     This creates a unique identifier based on the tensor's metadata:
     - Shape dimensions
-    - Stride values  
+    - Stride values
     - Data type
     - Storage offset
     - Storage ID
-    
+
     Tensors with the same metadata AND storage will have the same hash. This makes
     it useful for caching and detecting when tensor metadata or storage has changed.
-    
+
     Args:
         tensor: Mycelya tensor to get metadata hash for
-        
+
     Returns:
         64-bit integer hash of the tensor's metadata and storage
-        
+
     Raises:
         RuntimeError: If tensor is not a mycelya tensor with custom TensorImpl
     """
@@ -256,19 +256,20 @@ def get_metadata_hash(tensor: torch.Tensor) -> int:
 
 def _add_mycelya_tensor_methods():
     """Add mycelya-specific methods to torch.Tensor using wrapper functions"""
-    
+
     def safe_get_metadata_hash(self):
         """Get metadata hash for mycelya tensors"""
         return mycelya_torch._C._get_metadata_hash(self)
-    
+
     # Add method to torch.Tensor class
     torch.Tensor.get_metadata_hash = safe_get_metadata_hash
-    
+
     # Add convenient property
     torch.Tensor.metadata_hash = property(lambda self: self.get_metadata_hash())
-    
+
     print("✅ Added metadata hash method via monkey patching torch.Tensor")
     return True
+
 
 # Add tensor methods after importing _C, but only if we're not currently importing
 try:
@@ -276,6 +277,7 @@ try:
 except Exception as e:
     print(f"Warning: Could not add tensor methods: {e}")
     import traceback
+
     traceback.print_exc()
     # Continue loading without tensor methods for now
 
@@ -284,25 +286,18 @@ except Exception as e:
 __all__ = [
     # Core machine and device classes
     "RemoteMachine",
-    "CloudProvider", 
+    "CloudProvider",
     "GPUType",
-    
     # HuggingFace model loading
     "load_huggingface_model",
     "create_huggingface_model_from_remote",
-    
     # Logging utilities
     "enable_debug_logging",
-    "enable_info_logging", 
+    "enable_info_logging",
     "disable_logging",
     "get_logging_level",
-    "set_logging_level", 
+    "set_logging_level",
     "reset_logging",
-    
     # Device management utilities
     "get_all_machines",
 ]
-
-
-
-

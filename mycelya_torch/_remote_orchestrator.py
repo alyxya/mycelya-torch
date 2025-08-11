@@ -17,10 +17,10 @@ import torch
 
 from ._batching import BatchProcessor
 from ._logging import get_logger
+from ._machine import RemoteMachine
 from ._storage import get_machine_for_storage
 from ._tensor_utils import MycelyaTensorMetadata
 from .backends.client_interface import ClientInterface
-from ._machine import RemoteMachine
 
 log = get_logger(__name__)
 
@@ -424,16 +424,15 @@ class RemoteOrchestrator:
         # Get client by first finding the storage ID for the tensor
         storage_id = tensor.untyped_storage().data_ptr()
         client = self._get_client_for_storage(storage_id)
-        
+
         # Get raw bytes from client
         raw_bytes = client.get_tensor_data(tensor_id)
-        
+
         # Reconstruct CPU tensor from raw bytes
         from ._tensor_utils import numpy_bytes_to_cpu_tensor
-        result = numpy_bytes_to_cpu_tensor(
-            raw_bytes, tensor.shape, tensor.dtype
-        )
-        
+
+        result = numpy_bytes_to_cpu_tensor(raw_bytes, tensor.shape, tensor.dtype)
+
         log.info(f"✅ ORCHESTRATOR: Retrieved tensor data for tensor {tensor_id}")
         return result
 

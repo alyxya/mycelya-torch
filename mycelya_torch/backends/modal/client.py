@@ -367,9 +367,13 @@ class ModalClient(ClientInterface):
                 args=(new_tensor_id, base_tensor_id, shape, stride, offset),
                 kwargs={},
             )
-            log.info(f"Queued creation of tensor view {new_tensor_id} from tensor {base_tensor_id}")
+            log.info(
+                f"Queued creation of tensor view {new_tensor_id} from tensor {base_tensor_id}"
+            )
         except Exception as e:
-            raise RuntimeError(f"Failed to create tensor view {new_tensor_id}: {e}") from e
+            raise RuntimeError(
+                f"Failed to create tensor view {new_tensor_id}: {e}"
+            ) from e
 
     def update_tensor(self, tensor_id: int, tensor: torch.Tensor) -> None:
         """
@@ -428,9 +432,7 @@ class ModalClient(ClientInterface):
         # Wait for the result from the Future
         raw_bytes = future.result() if future else None
         if raw_bytes is None:
-            raise RuntimeError(
-                f"Failed to retrieve tensor data for tensor {tensor_id}"
-            )
+            raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
 
         return raw_bytes
 
@@ -631,7 +633,9 @@ class ModalClient(ClientInterface):
         """Add a tensor ID to the mapping for the given storage ID."""
         self._storage_to_tensor_ids[storage_id].add(tensor_id)
 
-    def _remove_tensor_from_storage_mapping(self, storage_id: int, tensor_id: int) -> None:
+    def _remove_tensor_from_storage_mapping(
+        self, storage_id: int, tensor_id: int
+    ) -> None:
         """Remove a tensor ID from the mapping for the given storage ID."""
         if storage_id in self._storage_to_tensor_ids:
             self._storage_to_tensor_ids[storage_id].discard(tensor_id)
@@ -645,36 +649,39 @@ class ModalClient(ClientInterface):
 
     def _is_storage_new(self, storage_id: int) -> bool:
         """Check if this is the first tensor for the given storage ID."""
-        return storage_id not in self._storage_to_tensor_ids or len(self._storage_to_tensor_ids[storage_id]) == 0
+        return (
+            storage_id not in self._storage_to_tensor_ids
+            or len(self._storage_to_tensor_ids[storage_id]) == 0
+        )
 
     def _ensure_tensor_exists(self, tensor: torch.Tensor) -> int:
         """
         Ensure that a tensor exists on the remote side, creating it if necessary.
-        
+
         This method implements the core implicit tensor creation logic:
         - Calculate tensor_id from metadata hash
         - Check if tensor already exists
         - If not, add to storage mapping and create on remote side
         - First tensor for storage -> create empty tensor
         - Additional tensors for storage -> create view
-        
+
         Args:
             tensor: The tensor to ensure exists remotely
-            
+
         Returns:
             tensor_id: The tensor ID (metadata hash)
         """
         # Calculate tensor ID from metadata hash
         tensor_id = tensor.get_metadata_hash()
         storage_id = tensor.untyped_storage().data_ptr()
-        
+
         # Check if tensor already tracked
         if tensor_id in self._get_all_tracked_tensor_ids():
             return tensor_id
-            
+
         # Add tensor to storage mapping
         self._add_tensor_to_storage_mapping(storage_id, tensor_id)
-        
+
         # Decide whether to create empty tensor or view
         if len(self._storage_to_tensor_ids[storage_id]) == 1:
             # First tensor for this storage - create empty tensor
@@ -682,15 +689,17 @@ class ModalClient(ClientInterface):
             self.create_empty_tensor(
                 tensor_id=tensor_id,
                 shape=list(tensor.shape),
-                dtype=str(tensor.dtype).replace("torch.", "")  # Remove torch. prefix
+                dtype=str(tensor.dtype).replace("torch.", ""),  # Remove torch. prefix
             )
         else:
             # Additional tensor for existing storage - create as view from the first tensor
             existing_tensor_ids = self._storage_to_tensor_ids[storage_id]
             # Get the first tensor ID (excluding the current one) as the base
             base_tensor_id = next(iter(existing_tensor_ids - {tensor_id}))
-            
-            log.info(f"Creating view tensor {tensor_id} from base tensor {base_tensor_id}")
+
+            log.info(
+                f"Creating view tensor {tensor_id} from base tensor {base_tensor_id}"
+            )
             self.create_tensor_view(
                 new_tensor_id=tensor_id,
                 base_tensor_id=base_tensor_id,
@@ -698,7 +707,7 @@ class ModalClient(ClientInterface):
                 stride=list(tensor.stride()),
                 offset=tensor.storage_offset(),
             )
-        
+
         return tensor_id
 
     def __enter__(self):

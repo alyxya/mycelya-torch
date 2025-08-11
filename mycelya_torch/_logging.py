@@ -141,10 +141,10 @@ def reset_logging() -> None:
 # Public API for this module
 __all__ = [
     "enable_debug_logging",
-    "enable_info_logging", 
+    "enable_info_logging",
     "disable_logging",
     "get_logging_level",
-    "set_logging_level", 
+    "set_logging_level",
     "reset_logging",
     "get_logger",  # Also useful for external modules
 ]

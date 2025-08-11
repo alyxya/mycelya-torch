@@ -514,7 +514,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         target_storage_offset=to_.storage_offset(),
         target_dtype=str(to_.dtype),
     )
-    
+
     log.info(f"Successfully updated remote tensor with storage ID {storage_id}")
     return to_
 

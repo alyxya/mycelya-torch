@@ -54,11 +54,11 @@ def create_remote_tensor_stub(
     # This accounts for HuggingFace tensors being views of larger storage
     max_offset = sum(s * (d - 1) for s, d in zip(stride, shape)) + storage_offset
     storage_elements_needed = max_offset + 1
-    
+
     # Create tensor with sufficient underlying storage first
     # Use a 1D tensor with enough elements, then as_strided to the desired view
     base_tensor = torch.empty(storage_elements_needed, dtype=torch_dtype, device=device)
-    
+
     # Use as_strided to create the exact tensor view that matches the HF parameter
     # Note: as_strided preserves the device and creates a proper mycelya tensor
     remote_tensor = torch.as_strided(
@@ -67,7 +67,7 @@ def create_remote_tensor_stub(
         stride,
         storage_offset,
     )
-    
+
     # Verify that the tensor has the expected storage size
     expected_storage_bytes = storage_elements_needed * remote_tensor.element_size()
     actual_storage_bytes = remote_tensor.untyped_storage().nbytes()
@@ -171,9 +171,8 @@ def create_huggingface_model_from_remote(
     # Track storage IDs and parameter names for linking
     local_storage_ids = []
     parameter_names = []
-    
+
     # Track storage sharing: remote_storage_id -> local_base_tensor
-    shared_storage_map = {}
 
     for name, param_metadata in state_dict_metadata.items():
         log.debug(f"Creating remote tensor stub for parameter: {name}")
@@ -197,7 +196,7 @@ def create_huggingface_model_from_remote(
         from ._storage import _storage_registry
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
-        
+
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
         client._ensure_tensor_exists(remote_tensor)
@@ -235,7 +234,7 @@ def create_huggingface_model_from_remote(
         from ._storage import _storage_registry
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
-        
+
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
         client._ensure_tensor_exists(remote_tensor)

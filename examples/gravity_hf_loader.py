@@ -36,7 +36,7 @@ def main():
     generated_tokens = tokens.clone()
 
     # Generate exactly 50 tokens
-    for i in range(50):
+    for _i in range(50):
         with torch.no_grad():
             logits = model(generated_tokens).logits[0, -1]  # Get last token logits
 

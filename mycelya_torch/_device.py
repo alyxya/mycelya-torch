@@ -10,8 +10,6 @@ and their device indices for PyTorch integration.
 
 from typing import Dict, Optional
 
-from ._machine import RemoteMachine
-
 # Re-export machine types for backward compatibility
 from ._machine import CloudProvider, GPUType, RemoteMachine
 
@@ -97,13 +95,12 @@ def get_all_machines() -> list[RemoteMachine]:
     return _device_registry.get_all_machines()
 
 
-# Public API for this module  
+# Public API for this module
 __all__ = [
     # Core classes and enums (re-exported from _machine)
     "CloudProvider",
-    "GPUType", 
+    "GPUType",
     "RemoteMachine",
-    
-    # Device registry functions  
+    # Device registry functions
     "get_all_machines",
 ]
