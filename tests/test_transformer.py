@@ -40,7 +40,7 @@ class SimpleTransformer(nn.Module):
 
 @pytest.fixture(scope="session")
 def t4_device():
-    return mycelya_torch.create_modal_machine("T4")
+    return mycelya_torch.RemoteMachine("modal", "T4")
 
 
 def test_simple_transformer_forward_backward(t4_device):

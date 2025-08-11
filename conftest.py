@@ -27,8 +27,8 @@ def shared_devices():
     Add more device types here as needed.
     """
     devices = {
-        "t4": mycelya_torch.create_modal_machine("T4"),
-        "l4": mycelya_torch.create_modal_machine("L4"),
+        "t4": mycelya_torch.RemoteMachine("modal", "T4"),
+        "l4": mycelya_torch.RemoteMachine("modal", "L4"),
     }
     yield devices
     # Cleanup if needed

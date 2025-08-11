@@ -63,26 +63,48 @@ class RemoteMachine:
 
     def __init__(
         self,
-        provider: CloudProvider,
-        gpu_type: GPUType,
-        timeout: int,
-        retries: int,
+        provider: Union[str, CloudProvider],
+        gpu_type: Union[str, GPUType],
+        timeout: int = 300,
+        retries: int = None,
         start: bool = True,
     ) -> None:
         """
-        Initialize a backend device.
+        Initialize a remote machine.
 
         Args:
-            provider: The cloud provider (e.g., Modal)
-            gpu_type: The GPU type (e.g., A100-40GB)
-            timeout: Function timeout in seconds
-            retries: Number of retries on failure
+            provider: The cloud provider (e.g., "modal" or CloudProvider.MODAL)
+            gpu_type: The GPU type (e.g., "A100-40GB" or GPUType.A100_40GB)
+            timeout: Function timeout in seconds (default: 300)
+            retries: Number of retries on failure (default: 1 for modal, 0 for mock)
             start: Whether to start the client immediately (default: True)
         """
-        self.provider = provider
-        self.gpu_type = gpu_type
+        # Handle string providers
+        if isinstance(provider, str):
+            try:
+                self.provider = CloudProvider(provider)
+            except ValueError:
+                valid_providers = [p.value for p in CloudProvider]
+                raise ValueError(f'Invalid provider "{provider}". Valid providers: {valid_providers}')
+        else:
+            self.provider = provider
+        
+        # Handle string GPU types
+        if isinstance(gpu_type, str):
+            try:
+                self.gpu_type = GPUType(gpu_type)
+            except ValueError:
+                valid_gpus = [g.value for g in GPUType]
+                raise ValueError(f'Invalid GPU type "{gpu_type}". Valid types: {valid_gpus}')
+        else:
+            self.gpu_type = gpu_type
         self.timeout = timeout
-        self.retries = retries
+        
+        # Set default retries based on provider
+        if retries is None:
+            self.retries = 0 if self.provider == CloudProvider.MOCK else 1
+        else:
+            self.retries = retries
         self.machine_id = self._generate_machine_id()
         self._client = None
 
@@ -95,6 +117,11 @@ class RemoteMachine:
         # Start the client if requested
         if start:
             self.start()
+
+        # Register with device registry
+        from ._device import get_device_registry
+        registry = get_device_registry()
+        registry.register_device(self)
 
         # Register cleanup on exit
         atexit.register(self.stop)
@@ -254,109 +281,11 @@ class RemoteMachine:
             torch.device: A PyTorch device object with type "mycelya" and the device's index
 
         Example:
-            >>> backend_device = create_modal_machine("A100-40GB")
-            >>> torch_device = backend_device.device()
+            >>> machine = RemoteMachine("modal", "A100-40GB")
+            >>> torch_device = machine.device()
             >>> tensor = torch.randn(3, 3, device=torch_device)
         """
         remote_index = self.remote_index
         if remote_index is None:
             raise RuntimeError("Device not registered in device registry")
         return torch.device("mycelya", remote_index)
-
-
-def create_modal_machine(
-    gpu: Union[str, GPUType], start: bool = True, timeout: int = 300, retries: int = 1
-) -> RemoteMachine:
-    """
-    Create a Modal remote machine with the specified GPU type.
-
-    Args:
-        gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB)
-        start: Whether to start the client immediately (default: True)
-        timeout: Function timeout in seconds (default: 300)
-        retries: Number of retries on failure (default: 1)
-
-    Returns:
-        RemoteMachine instance for the specified GPU
-
-    Example:
-        >>> machine = create_modal_machine("A100-40GB")
-        >>> tensor = torch.randn(3, 3, device=machine.device())
-        >>>
-        >>> # Create with custom timeout
-        >>> machine = create_modal_machine("A100-40GB", timeout=600, retries=3)
-        >>> machine.start()  # Start manually later
-    """
-    if isinstance(gpu, str):
-        try:
-            gpu_type = GPUType(gpu)
-        except ValueError:
-            valid_gpus = [g.value for g in GPUType]
-            raise ValueError(f'Invalid GPU type "{gpu}". Valid types: {valid_gpus}')
-    else:
-        gpu_type = gpu
-
-    machine = RemoteMachine(
-        provider=CloudProvider.MODAL,
-        gpu_type=gpu_type,
-        timeout=timeout,
-        retries=retries,
-        start=start,
-    )
-
-    # Register the machine
-    from ._device import get_device_registry
-    registry = get_device_registry()
-    registry.register_device(machine)
-
-    return machine
-
-
-def create_mock_machine(
-    gpu: Union[str, GPUType], start: bool = True, timeout: int = 300, retries: int = 0
-) -> RemoteMachine:
-    """
-    Create a mock machine that executes operations locally using Modal's .local() calls.
-
-    This provides a development and testing environment that mimics the remote execution
-    interface but runs everything locally without requiring cloud resources.
-
-    Args:
-        gpu: GPU type (e.g., "A100-40GB" or GPUType.A100_40GB) - simulated locally
-        start: Whether to start the client immediately (default: True)
-        timeout: Function timeout in seconds (default: 300, unused for mock)
-        retries: Number of retries on failure (default: 0, unused for mock)
-
-    Returns:
-        RemoteMachine instance configured for mock execution
-
-    Example:
-        >>> machine = create_mock_machine("A100-40GB")
-        >>> tensor = torch.randn(3, 3, device=machine.device())
-        >>>
-        >>> # All operations execute locally but with the same interface
-        >>> result = tensor @ tensor.T
-    """
-    if isinstance(gpu, str):
-        try:
-            gpu_type = GPUType(gpu)
-        except ValueError:
-            valid_gpus = [g.value for g in GPUType]
-            raise ValueError(f'Invalid GPU type "{gpu}". Valid types: {valid_gpus}')
-    else:
-        gpu_type = gpu
-
-    machine = RemoteMachine(
-        provider=CloudProvider.MOCK,
-        gpu_type=gpu_type,
-        timeout=timeout,
-        retries=retries,
-        start=start,
-    )
-
-    # Register the machine
-    from ._device import get_device_registry
-    registry = get_device_registry()
-    registry.register_device(machine)
-
-    return machine

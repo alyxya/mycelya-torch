@@ -431,7 +431,7 @@ def load_huggingface_model(
         PyTorch model with all parameters as remote tensors
 
     Example:
-        machine = mycelya_torch.create_modal_machine("T4")
+        machine = mycelya_torch.RemoteMachine("modal", "T4")
         model = mycelya_torch.load_huggingface_model("gpt2", machine)
 
         # Model can now be used normally, all operations execute remotely

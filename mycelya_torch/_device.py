@@ -13,7 +13,7 @@ from typing import Dict, Optional
 from ._machine import RemoteMachine
 
 # Re-export machine types for backward compatibility
-from ._machine import CloudProvider, GPUType, create_mock_machine, create_modal_machine
+from ._machine import CloudProvider, GPUType, RemoteMachine
 
 
 class DeviceRegistry:
@@ -88,8 +88,8 @@ def get_all_machines() -> list[RemoteMachine]:
         List of all RemoteMachine instances that have been created
 
     Example:
-        >>> machine1 = create_modal_machine("T4")
-        >>> machine2 = create_modal_machine("A100-40GB")
+        >>> machine1 = RemoteMachine("modal", "T4")
+        >>> machine2 = RemoteMachine("modal", "A100-40GB")
         >>> machines = get_all_machines()
         >>> print(f"Created {len(machines)} machines")
         Created 2 machines

@@ -24,7 +24,7 @@ class TestCriticalRegression:
     def test_basic_imports(self):
         """Test that core modules import successfully."""
         # Test that mycelya_torch imports
-        assert hasattr(mycelya_torch, "create_modal_machine")
+        assert hasattr(mycelya_torch, "RemoteMachine")
         assert hasattr(mycelya_torch, "GPUType")
         assert hasattr(mycelya_torch, "RemoteMachine")
 
@@ -138,7 +138,7 @@ class TestCriticalRegression:
         """Test that invalid operations fail gracefully."""
         # Test invalid GPU type
         with pytest.raises((ValueError, KeyError, RuntimeError)):
-            mycelya_torch.create_modal_machine("INVALID_GPU")
+            mycelya_torch.RemoteMachine("modal", "INVALID_GPU")
 
         # Test invalid device operations don't crash the system
         try:
