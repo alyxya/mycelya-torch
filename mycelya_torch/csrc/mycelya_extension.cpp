@@ -35,11 +35,11 @@ static PyObject *_getDefaultGenerator(PyObject *self, PyObject *arg) {
 }
 
 
-// Get the unique tensor ID for a mycelya tensor
-static PyObject *_get_tensor_id(PyObject *self, PyObject *arg) {
+// Get the metadata hash for a mycelya tensor
+static PyObject *_get_metadata_hash(PyObject *self, PyObject *arg) {
   HANDLE_TH_ERRORS
   TORCH_CHECK(THPVariable_Check(arg),
-              "_get_tensor_id expects a tensor, but got ",
+              "_get_metadata_hash expects a tensor, but got ",
               THPUtils_typename(arg));
   
   auto tensor = THPVariable_Unpack(arg);
@@ -47,8 +47,8 @@ static PyObject *_get_tensor_id(PyObject *self, PyObject *arg) {
   // Check if tensor is using our custom TensorImpl
   auto* impl_ptr = dynamic_cast<mycelya::MycelyaTensorImpl*>(tensor.unsafeGetTensorImpl());
   if (impl_ptr) {
-    auto tensor_id = impl_ptr->get_tensor_id();
-    return PyLong_FromUnsignedLongLong(tensor_id);
+    auto metadata_hash = impl_ptr->get_metadata_hash();
+    return PyLong_FromUnsignedLongLong(metadata_hash);
   } else {
     TORCH_CHECK(false, "Tensor is not a mycelya tensor with custom TensorImpl");
   }
@@ -60,7 +60,7 @@ static PyObject *_get_tensor_id(PyObject *self, PyObject *arg) {
 static PyMethodDef methods[] = {
     {"_init", _initExtension, METH_NOARGS, nullptr},
     {"_get_default_generator", _getDefaultGenerator, METH_O, nullptr},
-    {"_get_tensor_id", _get_tensor_id, METH_O, nullptr},
+    {"_get_metadata_hash", _get_metadata_hash, METH_O, nullptr},
     {nullptr, nullptr, 0, nullptr}};
 
 static struct PyModuleDef mycelya_C_module = {

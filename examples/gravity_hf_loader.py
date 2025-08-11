@@ -25,23 +25,23 @@ def main():
         "HuggingFaceTB/SmolLM2-135M-Instruct", machine, torch_dtype=torch.float32
     )
 
-    # Show model parameters with tensor IDs
-    print("\nModel parameters with tensor IDs:")
+    # Show model parameters with metadata hashes
+    print("\nModel parameters with metadata hashes:")
     for name, param in model.named_parameters():
         if "embed" in name or "lm_head" in name:  # Show key parameters
-            print(f"  {name}: ID={param.id}, shape={param.shape}, device={param.device}")
+            print(f"  {name}: hash={param.metadata_hash}, shape={param.shape}, device={param.device}")
 
     # Prepare input
     input_text = "what is gravity?"
     tokens = tokenizer.encode(input_text, return_tensors="pt").to(machine.device())
 
     print(f"\nInput: '{input_text}'")
-    print(f"Input tokens tensor ID: {tokens.id}")
+    print(f"Input tokens metadata hash: {tokens.metadata_hash}")
     print("Generating 50 tokens...")
 
     model.eval()
     generated_tokens = tokens.clone()
-    print(f"Generated tokens tensor ID: {generated_tokens.id}")
+    print(f"Generated tokens metadata hash: {generated_tokens.metadata_hash}")
 
     # Generate exactly 50 tokens
     for i in range(50):

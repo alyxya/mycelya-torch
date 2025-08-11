@@ -6,6 +6,7 @@
 #include <c10/core/TensorImpl.h>
 #include <iostream>
 #include <atomic>
+#include <functional>
 
 namespace mycelya {
 
@@ -16,16 +17,14 @@ MycelyaTensorImpl::MycelyaTensorImpl(
   : c10::TensorImpl(
       c10::Storage(storage),  // Copy construct for move
       c10::DispatchKeySet{c10::DispatchKey::PrivateUse1, c10::DispatchKey::AutogradPrivateUse1},
-      data_type),
-    tensor_id_(next_tensor_id()) {
+      data_type) {
   
   // Following pytorch-npu pattern
   is_non_overlapping_and_dense_ = false;
   
   // Simple verification: log creation for debugging
   if (std::getenv("MYCELYA_DEBUG_TENSORIMPL")) {
-    std::cout << "[MycelyaTensorImpl] Created tensor_id=" << tensor_id_ 
-              << " with storage_id=" << get_storage_id() 
+    std::cout << "[MycelyaTensorImpl] Created tensor with storage_id=" << get_storage_id() 
               << " dtype=" << data_type.name() << std::endl;
   }
 }
@@ -91,9 +90,42 @@ storage_id_t MycelyaTensorImpl::get_storage_id() const {
   return reinterpret_cast<storage_id_t>(storage().data_ptr().get());
 }
 
-tensor_id_t MycelyaTensorImpl::get_tensor_id() const {
+uint64_t MycelyaTensorImpl::get_metadata_hash() const {
   mark_accessed();
-  return tensor_id_;
+  
+  // Simple but effective hash combining shape, strides, dtype, offset, and storage ID
+  // Using FNV-1a style hash for fast computation
+  uint64_t hash = 14695981039346656037ULL;  // FNV offset basis
+  const uint64_t prime = 1099511628211ULL;   // FNV prime
+  
+  // Hash shape dimensions
+  for (auto size : sizes()) {
+    hash ^= static_cast<uint64_t>(size);
+    hash *= prime;
+  }
+  
+  // Hash stride values
+  for (auto stride : strides()) {
+    hash ^= static_cast<uint64_t>(stride);
+    hash *= prime;
+  }
+  
+  // Hash dtype (use name hash since TypeMeta doesn't have simple conversion)
+  auto dtype_name = dtype().name();
+  for (char c : dtype_name) {
+    hash ^= static_cast<uint64_t>(c);
+    hash *= prime;
+  }
+  
+  // Hash storage offset
+  hash ^= static_cast<uint64_t>(storage_offset());
+  hash *= prime;
+  
+  // Hash storage ID to distinguish tensors with different storage
+  hash ^= get_storage_id();
+  hash *= prime;
+  
+  return hash;
 }
 
 void MycelyaTensorImpl::mark_accessed() const {
@@ -110,10 +142,6 @@ bool MycelyaTensorImpl::was_accessed_via_custom_impl() const {
   return accessed_via_custom_impl_;
 }
 
-tensor_id_t MycelyaTensorImpl::next_tensor_id() {
-  static std::atomic<tensor_id_t> counter{1};
-  return counter.fetch_add(1, std::memory_order_relaxed);
-}
 
 // Factory functions
 at::Tensor make_mycelya_tensor_with_custom_impl(

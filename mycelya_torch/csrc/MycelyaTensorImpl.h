@@ -9,8 +9,6 @@
 
 namespace mycelya {
 
-using tensor_id_t = uint64_t;
-
 // Custom TensorImpl that stores metadata locally for efficient access
 class MycelyaTensorImpl : public c10::TensorImpl {
 public:
@@ -33,8 +31,8 @@ public:
   // Get storage ID efficiently without casting data pointer
   storage_id_t get_storage_id() const;
   
-  // Get unique tensor ID for this tensor instance
-  tensor_id_t get_tensor_id() const;
+  // Get metadata hash based on shape, stride, dtype, offset, and storage ID
+  uint64_t get_metadata_hash() const;
   
   // Simple verification method to test custom behavior
   void mark_accessed() const;
@@ -43,12 +41,6 @@ public:
 private:
   // Simple verification flag to test custom behavior
   mutable bool accessed_via_custom_impl_ = false;
-  
-  // Unique tensor ID for this tensor instance
-  const tensor_id_t tensor_id_;
-  
-  // Static counter for generating incremental tensor IDs
-  static tensor_id_t next_tensor_id();
 };
 
 // Factory function to create tensors with custom MycelyaTensorImpl

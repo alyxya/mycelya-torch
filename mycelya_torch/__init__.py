@@ -231,39 +231,45 @@ from .device import (  # noqa: E402
 
 
 
-def get_tensor_id(tensor: torch.Tensor) -> int:
-    """Get the unique tensor ID for a mycelya tensor.
+def get_metadata_hash(tensor: torch.Tensor) -> int:
+    """Get a metadata hash for a mycelya tensor based on shape, stride, dtype, offset, and storage.
     
-    Each mycelya tensor created with custom TensorImpl gets a unique
-    incremental integer ID (1, 2, 3, ...). This ID is separate from
-    the storage ID and identifies the tensor instance itself.
+    This creates a unique identifier based on the tensor's metadata:
+    - Shape dimensions
+    - Stride values  
+    - Data type
+    - Storage offset
+    - Storage ID
+    
+    Tensors with the same metadata AND storage will have the same hash. This makes
+    it useful for caching and detecting when tensor metadata or storage has changed.
     
     Args:
-        tensor: Mycelya tensor to get ID for
+        tensor: Mycelya tensor to get metadata hash for
         
     Returns:
-        Unique integer ID for this tensor
+        64-bit integer hash of the tensor's metadata and storage
         
     Raises:
         RuntimeError: If tensor is not a mycelya tensor with custom TensorImpl
     """
-    return mycelya_torch._C._get_tensor_id(tensor)
+    return mycelya_torch._C._get_metadata_hash(tensor)
 
 
 def _add_mycelya_tensor_methods():
     """Add mycelya-specific methods to torch.Tensor using wrapper functions"""
     
-    def safe_get_tensor_id(self):
-        """Get tensor ID for mycelya tensors"""
-        return mycelya_torch._C._get_tensor_id(self)
+    def safe_get_metadata_hash(self):
+        """Get metadata hash for mycelya tensors"""
+        return mycelya_torch._C._get_metadata_hash(self)
     
-    # Add methods to torch.Tensor class
-    torch.Tensor.get_tensor_id = safe_get_tensor_id
+    # Add method to torch.Tensor class
+    torch.Tensor.get_metadata_hash = safe_get_metadata_hash
     
-    # Add convenient property for tensor.id syntax
-    torch.Tensor.id = property(lambda self: self.get_tensor_id())
+    # Add convenient property
+    torch.Tensor.metadata_hash = property(lambda self: self.get_metadata_hash())
     
-    print("✅ Added tensor ID methods via monkey patching torch.Tensor")
+    print("✅ Added metadata hash method via monkey patching torch.Tensor")
     return True
 
 # Add tensor methods after importing _C, but only if we're not currently importing
