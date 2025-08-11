@@ -650,37 +650,36 @@ def create_modal_app_for_gpu(
 
         def _create_tensor_view_impl(
             self,
-            tensor_id: int,
-            base_storage_id: int,
+            new_tensor_id: int,
+            base_tensor_id: int,
             shape: List[int],
             stride: List[int],
             offset: int,
-            dtype: str,
         ) -> None:
-            """Create a tensor view from existing storage."""
+            """Create a tensor view from existing tensor using as_strided."""
             import torch
 
             tensor_registry = self._get_tensor_registry()
 
-            if tensor_id in tensor_registry:
-                raise ValueError(f"Tensor ID {tensor_id} already exists")
+            if new_tensor_id in tensor_registry:
+                raise ValueError(f"New tensor ID {new_tensor_id} already exists")
 
-            base_tensor = self._find_tensor_by_storage(base_storage_id)
-            if base_tensor is None:
-                raise ValueError(f"No base tensor found for storage {base_storage_id}")
+            if base_tensor_id not in tensor_registry:
+                raise ValueError(f"Base tensor ID {base_tensor_id} does not exist")
 
-            torch_dtype = getattr(torch, dtype.replace("torch.", ""))
-            view_tensor = torch.empty(0, dtype=torch_dtype, device=base_tensor.device).set_(
-                base_tensor.untyped_storage(), offset, shape, stride
-            )
-            tensor_registry[tensor_id] = view_tensor
+            base_tensor = tensor_registry[base_tensor_id]
 
-            log.info(f"✅ Created tensor view {tensor_id} from storage {base_storage_id}")
+            # Create view using as_strided directly on the base tensor
+            view_tensor = torch.as_strided(base_tensor, shape, stride, offset)
+
+            tensor_registry[new_tensor_id] = view_tensor
+
+            log.info(f"✅ Created tensor view {new_tensor_id} from tensor {base_tensor_id}")
 
         @modal.method()
-        def create_tensor_view(self, tensor_id: int, base_storage_id: int, shape: List[int], stride: List[int], offset: int, dtype: str) -> None:
-            """Create a tensor view from existing storage."""
-            return self._create_tensor_view_impl(tensor_id, base_storage_id, shape, stride, offset, dtype)
+        def create_tensor_view(self, new_tensor_id: int, base_tensor_id: int, shape: List[int], stride: List[int], offset: int) -> None:
+            """Create a tensor view from existing tensor using as_strided."""
+            return self._create_tensor_view_impl(new_tensor_id, base_tensor_id, shape, stride, offset)
 
         def _update_tensor_impl(self, tensor_id: int, raw_data: bytes) -> None:
             """Update an existing tensor with new data."""

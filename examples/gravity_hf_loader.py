@@ -8,7 +8,6 @@ import torch
 from transformers import AutoTokenizer
 
 import mycelya_torch
-import mycelya_torch.huggingface as mhf
 
 
 def main():
@@ -19,10 +18,11 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Create remote machine and load model with new HuggingFace integration
+    # Create remote machine and load model with HuggingFace integration
     machine = mycelya_torch.create_modal_machine("T4")
-    model = mhf.load_model_remote(
-        "HuggingFaceTB/SmolLM2-135M-Instruct", machine, torch_dtype=torch.float32
+    machine.start()
+    model = mycelya_torch.load_huggingface_model(
+        "HuggingFaceTB/SmolLM2-135M-Instruct", machine, torch_dtype="float32"
     )
 
     # Prepare input

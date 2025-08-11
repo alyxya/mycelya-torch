@@ -335,23 +335,21 @@ class ModalClient(ClientInterface):
 
     def create_tensor_view(
         self,
-        tensor_id: int,
-        base_storage_id: int,
+        new_tensor_id: int,
+        base_tensor_id: int,
         shape: List[int],
         stride: List[int],
         offset: int,
-        dtype: str,
     ) -> None:
         """
-        Create a tensor view on the remote machine from an existing storage.
+        Create a tensor view on the remote machine from an existing tensor using as_strided.
 
         Args:
-            tensor_id: Unique tensor ID (metadata hash)
-            base_storage_id: Storage ID of the base tensor to create view from
+            new_tensor_id: Unique tensor ID (metadata hash) for the new view
+            base_tensor_id: Tensor ID of the base tensor to create view from
             shape: Shape of the view
             stride: Stride of the view
             offset: Storage offset of the view
-            dtype: Data type of the view
 
         Returns:
             None
@@ -366,12 +364,12 @@ class ModalClient(ClientInterface):
             self._queue_rpc(
                 method_name="create_tensor_view",
                 call_type="spawn",
-                args=(tensor_id, base_storage_id, shape, stride, offset, dtype),
+                args=(new_tensor_id, base_tensor_id, shape, stride, offset),
                 kwargs={},
             )
-            log.info(f"Queued creation of tensor view {tensor_id} from storage {base_storage_id}")
+            log.info(f"Queued creation of tensor view {new_tensor_id} from tensor {base_tensor_id}")
         except Exception as e:
-            raise RuntimeError(f"Failed to create tensor view {tensor_id}: {e}") from e
+            raise RuntimeError(f"Failed to create tensor view {new_tensor_id}: {e}") from e
 
     def update_tensor(self, tensor_id: int, tensor: torch.Tensor) -> None:
         """
@@ -687,15 +685,18 @@ class ModalClient(ClientInterface):
                 dtype=str(tensor.dtype).replace("torch.", "")  # Remove torch. prefix
             )
         else:
-            # Additional tensor for existing storage - create as view
-            log.info(f"Creating view tensor {tensor_id} for existing storage {storage_id}")
+            # Additional tensor for existing storage - create as view from the first tensor
+            existing_tensor_ids = self._storage_to_tensor_ids[storage_id]
+            # Get the first tensor ID (excluding the current one) as the base
+            base_tensor_id = next(iter(existing_tensor_ids - {tensor_id}))
+            
+            log.info(f"Creating view tensor {tensor_id} from base tensor {base_tensor_id}")
             self.create_tensor_view(
-                tensor_id=tensor_id,
-                base_storage_id=storage_id,
+                new_tensor_id=tensor_id,
+                base_tensor_id=base_tensor_id,
                 shape=list(tensor.shape),
                 stride=list(tensor.stride()),
                 offset=tensor.storage_offset(),
-                dtype=str(tensor.dtype).replace("torch.", "")  # Remove torch. prefix
             )
         
         return tensor_id
