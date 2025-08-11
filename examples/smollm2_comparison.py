@@ -64,8 +64,8 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
     
     # Create remote machine
-    machine = mycelya_torch.create_modal_machine("T4")
-    # machine = mycelya_torch.create_mock_machine("T4")  # For testing
+    machine = mycelya_torch.RemoteMachine("modal", "T4")
+    # machine = mycelya_torch.RemoteMachine("mock")  # For testing
     
     print(f"🚀 Starting remote machine: {machine.machine_id}")
     machine.start()

@@ -89,7 +89,7 @@ def get_all_machines() -> list[RemoteMachine]:
 
     Example:
         >>> machine1 = RemoteMachine("modal", "T4")
-        >>> machine2 = RemoteMachine("modal", "A100-40GB")
+        >>> machine2 = RemoteMachine("mock")
         >>> machines = get_all_machines()
         >>> print(f"Created {len(machines)} machines")
         Created 2 machines

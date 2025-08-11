@@ -64,7 +64,7 @@ class RemoteMachine:
     def __init__(
         self,
         provider: Union[str, CloudProvider],
-        gpu_type: Union[str, GPUType],
+        gpu_type: Union[str, GPUType, None] = None,
         timeout: int = 300,
         retries: int = None,
         start: bool = True,
@@ -74,7 +74,8 @@ class RemoteMachine:
 
         Args:
             provider: The cloud provider (e.g., "modal" or CloudProvider.MODAL)
-            gpu_type: The GPU type (e.g., "A100-40GB" or GPUType.A100_40GB)
+            gpu_type: The GPU type (e.g., "A100-40GB" or GPUType.A100_40GB). 
+                     Required for modal provider, ignored for mock provider.
             timeout: Function timeout in seconds (default: 300)
             retries: Number of retries on failure (default: 1 for modal, 0 for mock)
             start: Whether to start the client immediately (default: True)
@@ -89,15 +90,25 @@ class RemoteMachine:
         else:
             self.provider = provider
         
-        # Handle string GPU types
-        if isinstance(gpu_type, str):
-            try:
-                self.gpu_type = GPUType(gpu_type)
-            except ValueError:
-                valid_gpus = [g.value for g in GPUType]
-                raise ValueError(f'Invalid GPU type "{gpu_type}". Valid types: {valid_gpus}')
+        # Handle GPU type validation based on provider
+        if self.provider == CloudProvider.MODAL:
+            # Modal provider requires GPU type
+            if gpu_type is None:
+                raise ValueError("Modal provider requires gpu_type to be specified")
+            
+            if isinstance(gpu_type, str):
+                try:
+                    self.gpu_type = GPUType(gpu_type)
+                except ValueError:
+                    valid_gpus = [g.value for g in GPUType]
+                    raise ValueError(f'Invalid GPU type "{gpu_type}". Valid types: {valid_gpus}')
+            else:
+                self.gpu_type = gpu_type
         else:
-            self.gpu_type = gpu_type
+            # Mock provider doesn't need GPU type, use a default
+            self.gpu_type = GPUType.T4 if gpu_type is None else (
+                GPUType(gpu_type) if isinstance(gpu_type, str) else gpu_type
+            )
         self.timeout = timeout
         
         # Set default retries based on provider
@@ -281,9 +292,14 @@ class RemoteMachine:
             torch.device: A PyTorch device object with type "mycelya" and the device's index
 
         Example:
+            >>> # Modal machine (GPU required)
             >>> machine = RemoteMachine("modal", "A100-40GB")
             >>> torch_device = machine.device()
             >>> tensor = torch.randn(3, 3, device=torch_device)
+            >>> 
+            >>> # Mock machine (GPU optional)
+            >>> machine = RemoteMachine("mock")
+            >>> torch_device = machine.device()
         """
         remote_index = self.remote_index
         if remote_index is None:
