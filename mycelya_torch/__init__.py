@@ -219,7 +219,7 @@ from ._logging import (  # noqa: E402
     reset_logging,
     set_logging_level,
 )
-from .device import (  # noqa: E402
+from ._device import (  # noqa: E402
     CloudProvider,
     GPUType,
     RemoteMachine,

@@ -57,7 +57,7 @@ class DeviceRegistry:
     def get_device_count(self) -> int:
         """Return number of devices"""
         # Get actual device count from the device registry
-        from mycelya_torch.device import get_device_registry
+        from mycelya_torch._device import get_device_registry
 
         registry = get_device_registry()
         return len(registry._devices)

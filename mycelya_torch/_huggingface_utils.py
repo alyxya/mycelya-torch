@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 from ._logging import get_logger
-from .device import RemoteMachine
+from ._device import RemoteMachine
 
 log = get_logger(__name__)
 

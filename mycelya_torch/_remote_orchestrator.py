@@ -20,7 +20,7 @@ from ._logging import get_logger
 from ._storage import get_machine_for_storage
 from ._tensor_utils import MycelyaTensorMetadata
 from .backends.client_interface import ClientInterface
-from .device import RemoteMachine
+from ._device import RemoteMachine
 
 log = get_logger(__name__)
 
@@ -264,7 +264,7 @@ class RemoteOrchestrator:
         Raises:
             RuntimeError: If device or client not available
         """
-        from .device import get_device_registry
+        from ._device import get_device_registry
 
         registry = get_device_registry()
         machine = registry.get_device_by_index(device_index)
@@ -527,7 +527,7 @@ class RemoteOrchestrator:
             )
 
         # Get device registry to find the machine
-        from .device import get_device_registry
+        from ._device import get_device_registry
 
         registry = get_device_registry()
         machine = registry.get_device_by_index(remote_tensor.device.index)

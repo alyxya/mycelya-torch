@@ -441,7 +441,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         raise ValueError("copy_from_device requires a remote tensor")
 
     # Use remote execution to get the tensor data
-    from .device import get_device_registry
+    from ._device import get_device_registry
 
     # Get the device backend
     registry = get_device_registry()
@@ -481,7 +481,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
     # Use remote execution to send the tensor data
-    from .device import get_device_registry
+    from ._device import get_device_registry
 
     # Get the device backend
     registry = get_device_registry()
@@ -556,7 +556,7 @@ def _copy_from(
             result = _remote_kernel_fallback(op, to_, from_)
         else:
             # Different remote devices - blocked (TODO: support in future)
-            from mycelya_torch.device import get_device_registry
+            from mycelya_torch._device import get_device_registry
 
             device_registry = get_device_registry()
             from_device = device_registry.get_device_by_index(from_.device.index)
@@ -614,7 +614,7 @@ def _local_scalar_dense(self: torch.Tensor):
     )
 
     # Get remote machine using device registry
-    from .device import get_device_registry
+    from ._device import get_device_registry
 
     registry = get_device_registry()
     machine = registry.get_device_by_index(self.device.index)
