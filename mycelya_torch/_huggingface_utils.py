@@ -180,6 +180,10 @@ def create_huggingface_model_from_remote(
         from ._storage import _storage_registry
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
+        
+        # CRITICAL: Register the tensor in the client's tensor ID mapping
+        # This ensures the tensor is properly tracked and linked to remote tensors
+        client._ensure_tensor_exists(remote_tensor)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)
@@ -214,6 +218,10 @@ def create_huggingface_model_from_remote(
         from ._storage import _storage_registry
 
         _storage_registry.storage_id_to_device[local_storage_id] = device_index
+        
+        # CRITICAL: Register the tensor in the client's tensor ID mapping
+        # This ensures the tensor is properly tracked and linked to remote tensors
+        client._ensure_tensor_exists(remote_tensor)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)
