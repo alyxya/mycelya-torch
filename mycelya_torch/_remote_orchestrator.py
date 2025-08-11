@@ -20,7 +20,7 @@ from ._logging import get_logger
 from ._storage import get_machine_for_storage
 from ._tensor_utils import MycelyaTensorMetadata
 from .backends.client_interface import ClientInterface
-from ._device import RemoteMachine
+from ._machine import RemoteMachine
 
 log = get_logger(__name__)
 

@@ -17,7 +17,8 @@ from typing import Dict, List, Optional, Set
 
 from ._logging import get_logger
 from ._tensor_utils import MycelyaTensorMetadata
-from ._device import RemoteMachine, get_device_registry
+from ._device import get_device_registry
+from ._machine import RemoteMachine
 
 log = get_logger(__name__)
 
