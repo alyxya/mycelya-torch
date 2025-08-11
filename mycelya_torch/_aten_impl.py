@@ -178,7 +178,7 @@ def _create_output_tensors(
 def _execute_view_operation(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> torch.Tensor:
-    """Handle view operations by propagating to remote side with tensor IDs."""
+    """Handle view operations as local-only operations that share storage."""
     op_name = op.overloadpacket._qualified_op_name
 
     # Get the base tensor (first argument for most view operations)
@@ -195,26 +195,7 @@ def _execute_view_operation(
         meta_result.storage_offset(),
     )
 
-    # Now propagate the view operation to the remote side for tensor ID mapping
-    # Generate metadata for input tensors
-    processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(args, kwargs)
-    )
-
-    # Get output storage ID
-    output_storage_id = view_tensor.untyped_storage().data_ptr()
-
-    # Send view operation to remote side for tensor caching
-    orchestrator = _get_remote_orchestrator()
-    orchestrator.execute_aten_operation(
-        op_name,
-        input_metadata,
-        [output_storage_id],
-        processed_args,
-        processed_kwargs,
-    )
-
-    log.debug(f"View operation {op_name} propagated to remote")
+    log.debug(f"View operation {op_name} executed locally only (no remote propagation)")
     return view_tensor
 
 
