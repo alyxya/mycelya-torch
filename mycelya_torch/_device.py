@@ -95,3 +95,15 @@ def get_all_machines() -> list[RemoteMachine]:
         Created 2 machines
     """
     return _device_registry.get_all_machines()
+
+
+# Public API for this module  
+__all__ = [
+    # Core classes and enums (re-exported from _machine)
+    "CloudProvider",
+    "GPUType", 
+    "RemoteMachine",
+    
+    # Device registry functions  
+    "get_all_machines",
+]

@@ -136,3 +136,15 @@ def enable_info_logging() -> None:
 def reset_logging() -> None:
     """Reset logging to default level (WARNING)."""
     set_logging_level(DEFAULT_LEVEL)
+
+
+# Public API for this module
+__all__ = [
+    "enable_debug_logging",
+    "enable_info_logging", 
+    "disable_logging",
+    "get_logging_level",
+    "set_logging_level", 
+    "reset_logging",
+    "get_logger",  # Also useful for external modules
+]

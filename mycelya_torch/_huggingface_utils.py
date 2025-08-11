@@ -443,3 +443,10 @@ def load_huggingface_model(
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
     )
+
+
+# Public API for this module
+__all__ = [
+    "create_huggingface_model_from_remote",
+    "load_huggingface_model",
+]

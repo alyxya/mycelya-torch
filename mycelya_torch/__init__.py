@@ -280,5 +280,29 @@ except Exception as e:
     # Continue loading without tensor methods for now
 
 
+# Define the public API
+__all__ = [
+    # Core machine and device classes
+    "RemoteMachine",
+    "CloudProvider", 
+    "GPUType",
+    
+    # HuggingFace model loading
+    "load_huggingface_model",
+    "create_huggingface_model_from_remote",
+    
+    # Logging utilities
+    "enable_debug_logging",
+    "enable_info_logging", 
+    "disable_logging",
+    "get_logging_level",
+    "set_logging_level", 
+    "reset_logging",
+    
+    # Device management utilities
+    "get_all_machines",
+]
+
+
 
 
