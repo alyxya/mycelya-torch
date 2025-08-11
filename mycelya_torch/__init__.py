@@ -39,38 +39,38 @@ import mycelya_torch._C  # noqa: E402
 
 
 def _create_module() -> types.ModuleType:
-    """Create the remote device module for PyTorch backend registration.
+    """Create the mycelya device module for PyTorch backend registration.
 
     This function creates a module that implements the PyTorch accelerator
-    backend interface for remote devices. It provides device context
+    backend interface for mycelya devices. It provides device context
     management, RNG state handling, and other core device operations.
 
     Returns:
-        Module implementing the remote device backend interface
+        Module implementing the mycelya device backend interface
     """
-    module = types.ModuleType("_RemoteMod")
+    module = types.ModuleType("_MycelyaMod")
 
     def device_count() -> int:
-        """Get the number of available remote devices.
+        """Get the number of available mycelya devices.
 
         Returns:
-            Number of remote devices available
+            Number of mycelya devices available
         """
         return driver.device_count()
 
     def is_available() -> bool:
-        """Check if remote device support is available.
+        """Check if mycelya device support is available.
 
         Returns:
-            True if remote devices are available, False otherwise
+            True if mycelya devices are available, False otherwise
         """
         return True
 
     def get_rng_state(device: Union[int, torch.device]) -> torch.Tensor:
-        """Get the random number generator state for a remote device.
+        """Get the random number generator state for a mycelya device.
 
         Args:
-            device: Remote device index or torch.device to get RNG state from
+            device: Mycelya device index or torch.device to get RNG state from
 
         Returns:
             Tensor containing the RNG state
@@ -79,7 +79,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -90,17 +90,17 @@ def _create_module() -> types.ModuleType:
     def set_rng_state(
         new_state: torch.Tensor, device: Union[int, torch.device]
     ) -> None:
-        """Set the random number generator state for a remote device.
+        """Set the random number generator state for a mycelya device.
 
         Args:
             new_state: Tensor containing the new RNG state
-            device: Remote device index or torch.device to set RNG state for
+            device: Mycelya device index or torch.device to set RNG state for
         """
         if isinstance(device, int):
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -109,10 +109,10 @@ def _create_module() -> types.ModuleType:
         default_generator.set_state(new_state)
 
     def initial_seed(device: Union[int, torch.device]) -> int:
-        """Get the initial seed for a remote device.
+        """Get the initial seed for a mycelya device.
 
         Args:
-            device: Remote device index or torch.device to get initial seed from
+            device: Mycelya device index or torch.device to get initial seed from
 
         Returns:
             Initial seed value
@@ -122,7 +122,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -131,11 +131,11 @@ def _create_module() -> types.ModuleType:
         return default_generator.initial_seed()
 
     def manual_seed(seed: int, device: Union[int, torch.device]) -> None:
-        """Set the random seed for a remote device.
+        """Set the random seed for a mycelya device.
 
         Args:
             seed: Random seed value
-            device: Remote device index or torch.device to set seed for
+            device: Mycelya device index or torch.device to set seed for
         """
         seed = int(seed)
 
@@ -143,7 +143,7 @@ def _create_module() -> types.ModuleType:
             idx = device
         elif isinstance(device, torch.device):
             if device.index is None:
-                raise ValueError("Device index must be specified for remote devices")
+                raise ValueError("Device index must be specified for mycelya devices")
             idx = device.index
         else:
             raise TypeError("Device must be int index or torch.device with index")
@@ -152,7 +152,7 @@ def _create_module() -> types.ModuleType:
         default_generator.manual_seed(seed)
 
     def manual_seed_all(seed: int) -> None:
-        """Set the random seed for all remote devices.
+        """Set the random seed for all mycelya devices.
 
         Args:
             seed: Random seed value
