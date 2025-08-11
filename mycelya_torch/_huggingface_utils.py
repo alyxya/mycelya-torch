@@ -50,17 +50,31 @@ def create_remote_tensor_stub(
     dtype_name = dtype.replace("torch.", "")
     torch_dtype = getattr(torch, dtype_name)
 
-    # Create an empty tensor on the remote device
-    # The storage will be linked to the remote storage ID
-    remote_tensor = torch.empty(shape, dtype=torch_dtype, device=device)
-
-    # Apply stride if different from default
-    if remote_tensor.stride() != tuple(stride):
-        remote_tensor = torch.as_strided(
-            remote_tensor,
-            shape,
-            stride,
-            storage_offset,
+    # Calculate the storage size needed for the stride pattern
+    # This accounts for HuggingFace tensors being views of larger storage
+    max_offset = sum(s * (d - 1) for s, d in zip(stride, shape)) + storage_offset
+    storage_elements_needed = max_offset + 1
+    
+    # Create tensor with sufficient underlying storage first
+    # Use a 1D tensor with enough elements, then as_strided to the desired view
+    base_tensor = torch.empty(storage_elements_needed, dtype=torch_dtype, device=device)
+    
+    # Use as_strided to create the exact tensor view that matches the HF parameter
+    # Note: as_strided preserves the device and creates a proper mycelya tensor
+    remote_tensor = torch.as_strided(
+        base_tensor,
+        shape,
+        stride,
+        storage_offset,
+    )
+    
+    # Verify that the tensor has the expected storage size
+    expected_storage_bytes = storage_elements_needed * remote_tensor.element_size()
+    actual_storage_bytes = remote_tensor.untyped_storage().nbytes()
+    if actual_storage_bytes < expected_storage_bytes:
+        log.warning(
+            f"Storage size mismatch: expected {expected_storage_bytes} bytes, "
+            f"got {actual_storage_bytes} bytes for shape {shape} with strides {stride}"
         )
 
     # Set gradient requirement
@@ -157,6 +171,9 @@ def create_huggingface_model_from_remote(
     # Track storage IDs and parameter names for linking
     local_storage_ids = []
     parameter_names = []
+    
+    # Track storage sharing: remote_storage_id -> local_base_tensor
+    shared_storage_map = {}
 
     for name, param_metadata in state_dict_metadata.items():
         log.debug(f"Creating remote tensor stub for parameter: {name}")

@@ -162,18 +162,34 @@ at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "as_strided_mycelya expects a mycelya tensor");
 
-  // Use the CPU implementation directly to avoid infinite recursion
-  // This creates a view tensor that shares storage without triggering mycelya
-  // calls
-  return at::cpu::as_strided(self, size, stride, storage_offset);
+  // Create a new mycelya tensor with the same storage but different view parameters
+  // This preserves the custom MycelyaTensorImpl unlike the CPU fallback
+  auto result = at::detail::make_tensor<MycelyaTensorImpl>(
+    self.storage(),
+    self.dtype());
+  
+  // Set the new sizes and strides for the view
+  int64_t offset = storage_offset.value_or(0);
+  auto* impl = result.unsafeGetTensorImpl();
+  impl->set_sizes_and_strides(size, stride, offset);
+  
+  return result;
 }
 
 // C++ implementation of set_ for tensor metadata operations
 at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
                        int64_t storage_offset, at::IntArrayRef size,
                        at::IntArrayRef stride) {
-  // Use the CPU implementation directly to avoid infinite recursion
-  return at::cpu::set_(result, storage, storage_offset, size, stride);
+  
+  TORCH_CHECK(result.device().type() == c10::DeviceType::PrivateUse1,
+              "set_mycelya expects a mycelya tensor");
+  
+  // Update the tensor's storage and metadata while preserving custom TensorImpl
+  auto* impl = result.unsafeGetTensorImpl();
+  impl->set_storage_and_dtype(storage, result.dtype());
+  impl->set_sizes_and_strides(size, stride, storage_offset);
+  
+  return result;
 }
 
 // C++ implementation of resize_ that explicitly calls storage resize hooks
