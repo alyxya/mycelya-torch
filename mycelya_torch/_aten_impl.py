@@ -8,7 +8,6 @@ from torch.utils._pytree import tree_map
 
 # Simple operation dispatch - no complex patterns needed
 from ._logging import get_logger
-from ._tensor_utils import MycelyaTensorMetadata
 
 log = get_logger(__name__)
 
@@ -53,19 +52,18 @@ def _validate_cross_device_operation(
     return remote_device
 
 
-def args_to_metadata_with_placeholders(
+def args_to_tensors_with_placeholders(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[MycelyaTensorMetadata]]:
-    """Convert args/kwargs, replacing remote tensors with placeholders and collecting metadata."""
-    metadata_list: List[MycelyaTensorMetadata] = []
+) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[torch.Tensor]]:
+    """Convert args/kwargs, replacing remote tensors with placeholders and collecting tensors."""
+    tensor_list: List[torch.Tensor] = []
 
     def replace_remote_tensor_with_placeholder(obj):
-        """Replace remote tensors with placeholders and collect metadata."""
+        """Replace remote tensors with placeholders and collect tensors."""
         if isinstance(obj, torch.Tensor):
-            metadata = MycelyaTensorMetadata.from_mycelya_tensor(obj)
-            tensor_index = len(metadata_list)
-            metadata_list.append(metadata)
+            tensor_index = len(tensor_list)
+            tensor_list.append(obj)
             return f"__TENSOR_{tensor_index}"
         return obj
 
@@ -74,7 +72,7 @@ def args_to_metadata_with_placeholders(
         replace_remote_tensor_with_placeholder, (args, kwargs)
     )
 
-    return processed_args, processed_kwargs, metadata_list
+    return processed_args, processed_kwargs, tensor_list
 
 
 def _execute_meta_operation(
@@ -152,7 +150,7 @@ def _create_output_tensors(
             # Include tensor ID for reused tensors to track all modifications
             tensor_id = tensor.get_metadata_hash()
             output_tensor_ids.append(tensor_id)
-            
+
             # Ensure tensor ID is registered with device tracking system
             from ._storage import register_tensor_id
             device_index = remote_device.index
@@ -176,7 +174,7 @@ def _create_output_tensors(
             # Get tensor ID from the newly created tensor
             tensor_id = str(new_tensor.get_metadata_hash())
             output_tensor_ids.append(tensor_id)
-            
+
             # Register tensor ID with device tracking system
             from ._storage import register_tensor_id
             device_index = remote_device.index
@@ -251,14 +249,14 @@ def _execute_with_static_outputs(
         output_tensors, output_tensor_ids = [], []
 
     # Step 4: Execute remotely
-    processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(args, kwargs)
+    processed_args, processed_kwargs, input_tensors = (
+        args_to_tensors_with_placeholders(args, kwargs)
     )
 
     orchestrator = _get_remote_orchestrator()
     orchestrator.execute_aten_operation(
         op_name,
-        input_metadata,
+        input_tensors,
         output_tensor_ids,
         processed_args,
         processed_kwargs,
@@ -321,14 +319,14 @@ def _execute_with_dynamic_outputs(
         register_tensor_id(output_tensor_ids[0], device_index)
 
     # Step 3: Execute remotely and request metadata return
-    processed_args, processed_kwargs, input_metadata = (
-        args_to_metadata_with_placeholders(args, kwargs)
+    processed_args, processed_kwargs, input_tensors = (
+        args_to_tensors_with_placeholders(args, kwargs)
     )
 
     orchestrator = _get_remote_orchestrator()
     result_metadata = orchestrator.execute_aten_operation(
         op_name,
-        input_metadata,
+        input_tensors,
         output_tensor_ids,
         processed_args,
         processed_kwargs,

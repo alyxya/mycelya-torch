@@ -260,16 +260,16 @@ def _add_mycelya_tensor_methods():
     def safe_get_metadata_hash(self):
         """Get metadata hash for mycelya tensors and ensure tensor ID is registered"""
         tensor_id_int = mycelya_torch._C._get_metadata_hash(self)
-        
+
         # Auto-register tensor ID when first accessed (using int for storage registry)
         if self.device.type == "mycelya":
-            from ._storage import register_tensor_id, get_tensor_device
-            
+            from ._storage import get_tensor_device, register_tensor_id
+
             # Check if not already registered (using int)
             if get_tensor_device(tensor_id_int) is None:
                 device_index = self.device.index
                 register_tensor_id(tensor_id_int, device_index)
-        
+
         return tensor_id_int  # Return int for backward compatibility
 
     # Add method to torch.Tensor class

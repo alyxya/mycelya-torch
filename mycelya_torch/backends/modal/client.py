@@ -237,10 +237,13 @@ class ModalClient(ClientInterface):
         """
         # Get raw data
         raw_bytes = self.get_tensor_data(tensor_id)
-        
+
         # Convert raw bytes to tensor with specified view
-        from ..._tensor_utils import storage_bytes_to_cpu_tensor
-        return storage_bytes_to_cpu_tensor(raw_bytes, shape, stride, storage_offset, dtype)
+        torch_dtype = getattr(torch, dtype.replace("torch.", ""))
+        untyped_storage = torch.UntypedStorage.from_buffer(raw_bytes, dtype=torch.uint8)
+        tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
+        tensor.set_(untyped_storage, storage_offset, shape, stride)
+        return tensor
 
     def get_tensor_data(self, tensor_id: int) -> bytes:
         """

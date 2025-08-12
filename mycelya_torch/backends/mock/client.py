@@ -139,9 +139,7 @@ class MockClient(ClientInterface):
             )
 
         # Serialize storage tensor using numpy approach (same as Modal client)
-        from ..._tensor_utils import cpu_tensor_to_numpy_bytes
-
-        numpy_bytes = cpu_tensor_to_numpy_bytes(storage_tensor)
+        numpy_bytes = storage_tensor.numpy().tobytes()
 
         # Invalidate cache immediately since this modifies storage
         self.invalidate_storage_cache(storage_id)
@@ -211,9 +209,7 @@ class MockClient(ClientInterface):
             )
 
         # Create 1D uint8 tensor directly from raw bytes for caching
-        from ..._tensor_utils import numpy_bytes_to_cpu_tensor
-
-        return numpy_bytes_to_cpu_tensor(raw_bytes, (len(raw_bytes),), torch.uint8)
+        return torch.frombuffer(bytearray(raw_bytes), dtype=torch.uint8).reshape((len(raw_bytes),))
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """
@@ -420,7 +416,7 @@ class MockClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute using .local() instead of remote call  
+        # Execute using .local() instead of remote call
         raw_bytes = self._server_instance.get_tensor_by_id.local(tensor_id)
 
         if raw_bytes is None:
@@ -429,36 +425,31 @@ class MockClient(ClientInterface):
             )
 
         # Reconstruct tensor from raw bytes
-        from ..._tensor_utils import storage_bytes_to_cpu_tensor
-        return storage_bytes_to_cpu_tensor(raw_bytes, shape, stride, storage_offset, dtype)
+        torch_dtype = getattr(torch, dtype.replace("torch.", ""))
+        untyped_storage = torch.UntypedStorage.from_buffer(raw_bytes, dtype=torch.uint8)
+        tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
+        tensor.set_(untyped_storage, storage_offset, shape, stride)
+        return tensor
 
     def update_tensor(
         self,
         tensor_id: str,
-        storage_tensor: torch.Tensor,
+        raw_data: bytes,
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
         source_dtype: str,
-        target_shape: List[int],
-        target_stride: List[int],
-        target_storage_offset: int,
-        target_dtype: str,
     ) -> None:
         """
         Update tensor data by tensor ID with raw data and tensor metadata using mock execution.
 
         Args:
             tensor_id: Tensor ID to update
-            storage_tensor: CPU tensor wrapping the storage data
+            raw_data: Raw bytes of the tensor data
             source_shape: Shape of the source data
             source_stride: Stride of the source data
             source_storage_offset: Storage offset of the source data
             source_dtype: Data type of the source data
-            target_shape: Shape of the target view
-            target_stride: Stride of the target view
-            target_storage_offset: Storage offset of the target view
-            target_dtype: Data type of the target view
 
         Returns:
             None
@@ -468,10 +459,6 @@ class MockClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Convert storage tensor to raw bytes
-        from ..._tensor_utils import cpu_tensor_to_numpy_bytes
-        raw_data = cpu_tensor_to_numpy_bytes(storage_tensor)
-
         # Execute using .local() instead of remote call
         self._server_instance.update_tensor.local(
             tensor_id,
@@ -480,10 +467,6 @@ class MockClient(ClientInterface):
             source_stride,
             source_storage_offset,
             source_dtype,
-            target_shape,
-            target_stride,
-            target_storage_offset,
-            target_dtype,
         )
 
     def create_empty_tensor(
@@ -500,7 +483,7 @@ class MockClient(ClientInterface):
         Args:
             tensor_id: Tensor ID for the new tensor
             shape: Tensor shape
-            stride: Tensor stride 
+            stride: Tensor stride
             storage_offset: Storage offset
             dtype: Tensor data type
 

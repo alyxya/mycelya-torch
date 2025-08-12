@@ -19,7 +19,6 @@ from ._batching import BatchProcessor
 from ._logging import get_logger
 from ._machine import RemoteMachine
 from ._storage import get_machine_for_storage
-from ._tensor_utils import MycelyaTensorMetadata
 from .backends.client_interface import ClientInterface
 
 log = get_logger(__name__)
@@ -472,9 +471,8 @@ class RemoteOrchestrator:
         """
         client = self._get_client_for_tensor_id(tensor_id)
         # Convert storage tensor to raw bytes for tensor-only interface
-        from ._tensor_utils import cpu_tensor_to_numpy_bytes
-        raw_data = cpu_tensor_to_numpy_bytes(storage_tensor)
-        
+        raw_data = storage_tensor.numpy().tobytes()
+
         client.update_tensor(
             tensor_id,
             raw_data,
@@ -507,9 +505,7 @@ class RemoteOrchestrator:
         raw_bytes = client.get_tensor_data(tensor_id)
 
         # Reconstruct CPU tensor from raw bytes
-        from ._tensor_utils import numpy_bytes_to_cpu_tensor
-
-        result = numpy_bytes_to_cpu_tensor(raw_bytes, tensor.shape, tensor.dtype)
+        result = torch.frombuffer(bytearray(raw_bytes), dtype=tensor.dtype).reshape(tensor.shape)
 
         log.info(f"✅ ORCHESTRATOR: Retrieved tensor data for tensor {tensor_id}")
         return result
@@ -517,21 +513,17 @@ class RemoteOrchestrator:
     def execute_aten_operation(
         self,
         op_name: str,
-        input_metadata: List[MycelyaTensorMetadata],
+        input_tensors: List[torch.Tensor],
         output_tensor_ids: List[Optional[int]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
-        """Execute remote operation with pure metadata (early conversion boundary).
-
-        This method represents the clean boundary where all tensors have been
-        converted to metadata at the PyTorch integration layer. No raw tensors
-        should be passed to this method.
+        """Execute remote operation with tensor objects passed directly.
 
         Args:
             op_name: Name of the operation to execute
-            input_metadata: Metadata for remote input tensors (always have tensor_id)
+            input_tensors: List of input mycelya tensors
             output_tensor_ids: Tensor IDs for all output tensors (both new and reused)
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
@@ -541,27 +533,31 @@ class RemoteOrchestrator:
             None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
         """
         log.info(
-            f"🎯 ORCHESTRATOR: Executing {op_name} with separated input/output interface"
+            f"🎯 ORCHESTRATOR: Executing {op_name} with tensor objects"
         )
 
-        # Convert input metadata to serializable dictionaries
+        # Convert tensors to metadata dicts for client interface
         input_tensor_metadata_dicts = []
-        for metadata in input_metadata:
-            meta_dict = metadata.to_dict()
-            input_tensor_metadata_dicts.append(meta_dict)
+        for tensor in input_tensors:
+            metadata_dict = {
+                "shape": list(tensor.shape),
+                "stride": list(tensor.stride()),
+                "storage_offset": tensor.storage_offset(),
+                "dtype": str(tensor.dtype).split(".")[-1],
+                "tensor_id": tensor.get_metadata_hash(),
+            }
+            input_tensor_metadata_dicts.append(metadata_dict)
 
-        # output_tensor_ids is now passed directly from _create_output_tensors
-        # Contains tensor_id for all output tensors (both new and reused)
-
-        # Validate that we have input metadata
-        if not input_metadata:
-            raise RuntimeError(f"No input metadata provided for operation {op_name}")
+        # Validate that we have input tensors
+        if not input_tensors:
+            raise RuntimeError(f"No input tensors provided for operation {op_name}")
 
         # Collect all tensor IDs for cross-device validation
         all_tensor_ids = []
-        for metadata in input_metadata:
-            if metadata.tensor_id is not None:
-                all_tensor_ids.append(metadata.tensor_id)
+        for tensor in input_tensors:
+            tensor_id = tensor.get_metadata_hash()
+            if tensor_id is not None:
+                all_tensor_ids.append(tensor_id)
         for tensor_id in output_tensor_ids:
             if tensor_id is not None:
                 all_tensor_ids.append(tensor_id)
@@ -573,7 +569,7 @@ class RemoteOrchestrator:
             validate_cross_device_operation_tensor_ids(all_tensor_ids)
 
         # Get the client using the first input tensor's tensor ID
-        tensor_id = input_metadata[0].tensor_id
+        tensor_id = input_tensors[0].get_metadata_hash()
         client = self._get_client_for_tensor_id(tensor_id)
 
         # Execute with separated input/output interface
@@ -617,16 +613,13 @@ class RemoteOrchestrator:
         # Get tensor data using storage ID with internal client resolution
         storage_id = remote_tensor.untyped_storage().data_ptr()
 
-        # Create metadata for the remote tensor
-        metadata = MycelyaTensorMetadata.from_mycelya_tensor(remote_tensor)
-
         # Get tensor data from remote storage using new interface
         return self.get_storage_tensor(
             storage_id,
-            shape=list(metadata.shape),
-            stride=list(metadata.stride),
-            storage_offset=metadata.storage_offset,
-            dtype=str(metadata.dtype),
+            shape=list(remote_tensor.shape),
+            stride=list(remote_tensor.stride()),
+            storage_offset=remote_tensor.storage_offset(),
+            dtype=str(remote_tensor.dtype),
         )
 
     def remove_tensor_from_remote(

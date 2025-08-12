@@ -37,7 +37,7 @@ class StorageRegistry:
     def __init__(self) -> None:
         # Storage ID tracking - maps storage to device
         self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
-        
+
         # Tensor ID tracking - maps tensor ID to device
         self.tensor_id_to_device: Dict[int, int] = {}  # tensor_id -> device_index
 

@@ -30,16 +30,16 @@ def shared_devices():
         "t4": mycelya_torch.RemoteMachine("modal", "T4"),
         "l4": mycelya_torch.RemoteMachine("modal", "L4"),
     }
-    
+
     # Start the machines for testing
     for device in devices.values():
         try:
             device.start()
         except Exception as e:
             log.warning(f"Failed to start device {device.machine_id}: {e}")
-    
+
     yield devices
-    
+
     # Cleanup - stop machines
     for device in devices.values():
         try:
