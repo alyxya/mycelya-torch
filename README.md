@@ -1,13 +1,13 @@
 # Mycelya - PyTorch Remote Execution
 
-A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. Features sequential tensor IDs, custom PyTorch integration, and RPC batching for efficient distributed computing.
+A PyTorch extension that enables transparent remote execution of tensor operations on cloud GPU infrastructure. Features metadata hash IDs, custom PyTorch integration, and RPC batching for efficient distributed computing.
 
 ## Overview
 
-Mycelya is a PyTorch extension that uses a sequential tensor ID architecture with custom PyTorch integration to run operations on remote cloud GPUs. Each mycelya tensor has a unique incremental ID accessible via `tensor.id` property, enabling efficient debugging and monitoring.
+Mycelya is a PyTorch extension that uses a metadata hash architecture with custom PyTorch integration to run operations on remote cloud GPUs. Each mycelya tensor has a unique hash-based ID accessible via `tensor.metadata_hash` property, enabling efficient debugging and monitoring.
 
 **Key Features:**
-- **Sequential tensor IDs** - Each tensor has unique incremental ID (1, 2, 3...) via `tensor.id` property
+- **Metadata hash IDs** - Each tensor has unique hash-based ID via `tensor.metadata_hash` property
 - **Custom PyTorch integration** - Complete TensorImpl/StorageImpl following pytorch-npu patterns
 - **RPC batching** - Background thread processing reduces network overhead
 - **Zero local memory** - Only tensor metadata stored locally, actual data stays on remote GPUs
@@ -42,12 +42,12 @@ machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
 x = torch.randn(1000, 1000, device=machine.device())
 y = torch.randn(1000, 1000, device=machine.device())
 
-# Each tensor has a unique sequential ID for debugging
-print(f"Tensor x ID: {x.id}")  # 1
-print(f"Tensor y ID: {y.id}")  # 2
+# Each tensor has a unique metadata hash for debugging
+print(f"Tensor x hash: {x.metadata_hash}")  # e.g., 14695981039346656037
+print(f"Tensor y hash: {y.metadata_hash}")  # e.g., 17823946012847563829
 
 result = x @ y  # Matrix multiplication happens on remote A100
-print(f"Result tensor ID: {result.id}")  # 3
+print(f"Result hash: {result.metadata_hash}")  # e.g., 9384756281047392847
 
 # Transfer result back when needed
 result_cpu = result.cpu()
@@ -90,8 +90,8 @@ optimizer = torch.optim.Adam(model.parameters())
 for batch_idx, (data, target) in enumerate(dataloader):
     data, target = data.to(device), target.to(device)
     
-    # Debug tensor IDs for monitoring
-    print(f"Batch {batch_idx}: Data ID {data.id}, Target ID {target.id}")
+    # Debug tensor hashes for monitoring
+    print(f"Batch {batch_idx}: Data hash {data.metadata_hash}, Target hash {target.metadata_hash}")
 
     optimizer.zero_grad()
     output = model(data)
@@ -136,9 +136,9 @@ model = mycelya_torch.load_huggingface_model(
     torch_dtype=torch.float16
 )
 
-# All parameters are already on remote GPU with unique IDs
+# All parameters are already on remote GPU with unique hashes
 for name, param in model.named_parameters():
-    print(f"{name}: tensor ID {param.id}, device {param.device}")
+    print(f"{name}: hash {param.metadata_hash}, device {param.device}")
 ```
 
 ### Mock Provider for Development
@@ -151,21 +151,21 @@ device = machine.device()
 # Same API, but executes locally using Modal's .local() calls
 x = torch.randn(100, 100, device=device)
 result = x @ x.T  # Executed locally
-print(f"Local execution result ID: {result.id}")
+print(f"Local execution result hash: {result.metadata_hash}")
 ```
 
 ## Architecture
 
 Mycelya uses a three-layer architecture with custom PyTorch integration:
 
-1. **C++ Layer** - Custom TensorImpl, StorageImpl, and Allocator with sequential tensor IDs
+1. **C++ Layer** - Custom TensorImpl, StorageImpl, and Allocator with metadata hash computation
 2. **Python Coordination** - RPC batching, metadata management, and operation dispatch
 3. **Remote Execution** - Multi-provider system (Modal, Mock, extensible)
 
 ### Memory Efficiency
 
 - **Zero local storage** for remote tensor data with custom TensorImpl/StorageImpl
-- **Sequential tensor IDs** (1, 2, 3...) stored in TensorImpl for debugging
+- **Metadata hash IDs** computed from tensor properties for debugging
 - **RPC batching** reduces network calls with background thread processing
 - **Dual storage architecture** supports lazy allocation and realized storage
 - **Meta tensor integration** for shape inference without data transfer

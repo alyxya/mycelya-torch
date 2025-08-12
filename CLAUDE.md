@@ -4,7 +4,7 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 
 ## Architecture Overview
 
-- **Sequential Tensor ID System**: Remote tensors have unique incremental IDs (1, 2, 3...) with `tensor.id` property
+- **Metadata Hash System**: Remote tensors have unique metadata-based hash IDs with `tensor.metadata_hash` property
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns
 - **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution
 - **Multi-GPU Support**: 9 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
@@ -59,7 +59,7 @@ To run type checking:
 ## Key Components
 
 ### Core Modules
-- `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration with tensor ID monkey patching
+- `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration with metadata hash monkey patching
 - `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with meta tensor inference and view handling
 - `mycelya_torch/_remote_orchestrator.py` - Remote execution orchestration with RPC batching integration
 - `mycelya_torch/_device_daemon.py` - Device registry and storage operations with centralized logging
@@ -86,7 +86,7 @@ To run type checking:
 
 ### C++ Backend Integration
 - `mycelya_torch/csrc/Mycelya.h` - Core header definitions and declarations
-- `mycelya_torch/csrc/MycelyaTensorImpl.cpp/.h` - Custom tensor implementation with unique sequential IDs
+- `mycelya_torch/csrc/MycelyaTensorImpl.cpp/.h` - Custom tensor implementation with metadata hash computation
 - `mycelya_torch/csrc/MycelyaStorageImpl.cpp/.h` - Custom storage implementation with storage ID tracking
 - `mycelya_torch/csrc/MycelyaAllocator.cpp/.h` - Enhanced allocator with storage ID management
 - `mycelya_torch/csrc/MycelyaHooks.cpp` - PyTorch PrivateUse1 backend hooks with custom implementations
@@ -96,7 +96,7 @@ To run type checking:
 ## Current Architecture (2025-08-10)
 
 ### Key Design Principles
-- **Sequential Tensor ID System**: Incremental unique IDs (1, 2, 3...) with `tensor.id` property for debugging
+- **Metadata Hash System**: Unique metadata-based hash IDs with `tensor.metadata_hash` property for debugging
 - **Custom PyTorch Integration**: Complete TensorImpl/StorageImpl following pytorch-npu architecture patterns
 - **Clean Input/Output Separation**: Efficient data transfer with clear boundaries
 - **Zero Local Memory**: No tensor data stored locally for remote tensors
@@ -173,10 +173,10 @@ for name, param in model.named_parameters():
 
 ### Tensor ID System
 - **Sequential incremental IDs** (1, 2, 3...) generated for each mycelya tensor
-- **Python API integration**: `tensor.id` property and `tensor.get_tensor_id()` method
-- **Thread-safe implementation**: Uses `std::atomic<uint64_t>` counter in C++
-- **Custom TensorImpl integration**: Tensor IDs stored as member variable in MycelyaTensorImpl
-- **Zero memory overhead**: Efficient storage without additional allocations
+- **Python API integration**: `tensor.metadata_hash` property and `tensor.get_metadata_hash()` method
+- **Hash-based identification**: Uses FNV-1a hash of shape/stride/dtype/offset/storage_id
+- **Custom TensorImpl integration**: Metadata hash computation in MycelyaTensorImpl
+- **Zero memory overhead**: Hash computed on-demand without additional allocations
 - **Debugging support**: Unique identification for complex tensor flows
 
 ### Error Handling
@@ -213,12 +213,12 @@ for name, param in model.named_parameters():
 - **All source files must maintain AGPL license headers**
 - New files require: Copyright (C) 2025 alyxya, SPDX-License-Identifier: AGPL-3.0-or-later
 
-#### Tensor ID Architecture Rules
+#### Metadata Hash Architecture Rules
 - **Never store tensor data locally** for remote tensors - only metadata
-- **Sequential tensor IDs** (1, 2, 3...) stored in custom TensorImpl
-- **Clean separation** between tensor IDs (debugging) and storage IDs (memory management)
+- **Metadata-based hash IDs** computed from tensor properties in custom TensorImpl
+- **Clean separation** between metadata hashes (debugging) and storage IDs (memory management)
 - **Custom PyTorch integration** following pytorch-npu implementation patterns
-- **Thread-safe ID generation** using atomic counters
+- **Deterministic hash generation** based on tensor metadata
 
 #### Provider Implementation Patterns  
 - Follow Modal implementation pattern in `_mycelya_torch_modal/`
@@ -244,10 +244,10 @@ for name, param in model.named_parameters():
 
 #### Custom TensorImpl Integration (2025-08-10)
 - **Complete custom tensor stack**: MycelyaTensorImpl, MycelyaStorageImpl, MycelyaAllocator
-- **Sequential tensor IDs**: Unique incremental IDs (1, 2, 3...) with `tensor.id` property
+- **Metadata hash IDs**: Unique hash-based IDs with `tensor.metadata_hash` property
 - **pytorch-npu compliance**: Following established integration patterns for production readiness
 - **Python API enhancement**: Monkey patching torch.Tensor with mycelya-specific methods
-- **Thread-safe implementation**: Atomic counter for collision-free ID generation
+- **FNV-1a hash algorithm**: Fast, deterministic hash of shape/stride/dtype/offset/storage_id
 - **Zero memory overhead**: Custom implementations maintain existing efficiency
 - **Diagnostic capabilities**: Testing functions to verify custom implementation usage
 
@@ -304,7 +304,7 @@ for name, param in model.named_parameters():
 
 #### Current Status
 - **Production-ready architecture** with custom PyTorch integration following pytorch-npu patterns
-- **Sequential tensor ID system** with `tensor.id` property for enhanced debugging
+- **Metadata hash system** with `tensor.metadata_hash` property for enhanced debugging
 - **RPC batching optimization** reducing network overhead with background thread processing
 - **Multi-provider support** with Modal (production) and Mock (development) implementations
 - **HuggingFace integration** enabling direct remote model loading and parameter linking
