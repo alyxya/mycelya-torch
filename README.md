@@ -25,8 +25,9 @@ pip install -e .
 
 **Requirements:**
 - Python 3.8+
-- PyTorch 2.0+
+- PyTorch 2.1+
 - Modal account and API key for cloud GPU access
+- C++ compiler for extension building
 
 ## Quick Start
 
@@ -35,7 +36,7 @@ import torch
 import mycelya_torch
 
 # Create a remote machine with an A100 GPU
-machine = mycelya_torch.create_modal_machine("A100-40GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
 
 # Operations automatically execute on the remote A100
 x = torch.randn(1000, 1000, device=machine.device())
@@ -65,7 +66,7 @@ gpu_types = [
     "L40S", "H100", "H200", "B200"
 ]
 
-machine = mycelya_torch.create_modal_machine("H100")
+machine = mycelya_torch.RemoteMachine("modal", "H100")
 ```
 
 ## Advanced Usage
@@ -78,7 +79,7 @@ import torch.nn as nn
 import mycelya_torch
 
 # Create remote machine
-machine = mycelya_torch.create_modal_machine("A100-40GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
 device = machine.device()
 
 # Define model and move to remote device
@@ -105,7 +106,7 @@ for batch_idx, (data, target) in enumerate(dataloader):
 import torch
 import mycelya_torch
 
-machine = mycelya_torch.create_modal_machine("T4")
+machine = mycelya_torch.RemoteMachine("modal", "T4")
 device = machine.device()
 
 # Create tensors on different devices
@@ -125,13 +126,11 @@ result = local_on_remote @ remote_tensor  # Both on remote GPU
 ```python
 import torch
 import mycelya_torch
-import mycelya_torch.huggingface as mhf
-
 # Create remote machine
-machine = mycelya_torch.create_modal_machine("T4")
+machine = mycelya_torch.RemoteMachine("modal", "T4")
 
 # Load model directly on remote GPU (no data transfer)
-model = mhf.load_model_remote(
+model = mycelya_torch.load_huggingface_model(
     "microsoft/DialoGPT-medium", 
     machine, 
     torch_dtype=torch.float16
@@ -146,7 +145,7 @@ for name, param in model.named_parameters():
 
 ```python
 # Use local execution for development/testing
-machine = mycelya_torch.create_mock_machine()
+machine = mycelya_torch.RemoteMachine("mock", "T4")
 device = machine.device()
 
 # Same API, but executes locally using Modal's .local() calls
@@ -243,7 +242,7 @@ This project is licensed under AGPL-3.0. All contributions must maintain the AGP
 1. Clone the repository
 2. Install in development mode: `pip install -e .`
 3. Run critical regression tests: `pytest tests/test_regression.py::TestCriticalRegression -v`
-4. Use Mock provider for local development: `mycelya_torch.create_mock_machine()`
+4. Use Mock provider for local development: `mycelya_torch.RemoteMachine("mock", "T4")`
 5. Follow existing code style and patterns with ruff formatting
 
 ## License

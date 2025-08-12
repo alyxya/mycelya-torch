@@ -42,6 +42,20 @@ To run type checking:
 # Consider adding: mypy
 ```
 
+## Build Configuration
+
+### Modern Python Packaging
+- **`pyproject.toml`**: Modern build system using setuptools with PyTorch C++ extensions
+- **`setup.py`**: C++ extension compilation with platform-specific compiler flags
+- **Dependencies**: torch>=2.1.0, modal>=1.0.0, numpy
+- **License**: AGPL-3.0-or-later
+- **Python Support**: 3.8+
+
+### Code Quality Configuration
+- **Ruff**: Line length 88, comprehensive rule selection (E, W, F, I, B, C4, UP)
+- **Pytest**: Configuration in `pytest.ini` with custom markers
+- **Build artifacts**: Compiled extensions in `build/` directory
+
 ## Key Components
 
 ### Core Modules
@@ -49,7 +63,8 @@ To run type checking:
 - `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with meta tensor inference and view handling
 - `mycelya_torch/_remote_orchestrator.py` - Remote execution orchestration with RPC batching integration
 - `mycelya_torch/_device_daemon.py` - Device registry and storage operations with centralized logging
-- `mycelya_torch/device.py` - RemoteMachine abstraction supporting Modal and Mock providers
+- `mycelya_torch/_device.py` - Device registry management with thread-safe device registration
+- `mycelya_torch/_machine.py` - RemoteMachine abstraction supporting Modal and Mock providers
 
 ### Utility and Support Modules
 - `mycelya_torch/_tensor_utils.py` - Clean metadata classes and serialization utilities
@@ -70,10 +85,12 @@ To run type checking:
 - `_mycelya_torch_modal/modal_app.py` - Modal cloud GPU integration with multi-GPU support
 
 ### C++ Backend Integration
-- `mycelya_torch/csrc/MycelyaTensorImpl.cpp` - Custom tensor implementation with unique sequential IDs
-- `mycelya_torch/csrc/MycelyaStorageImpl.cpp` - Custom storage implementation with storage ID tracking
-- `mycelya_torch/csrc/MycelyaAllocator.cpp` - Enhanced allocator with storage ID management
+- `mycelya_torch/csrc/Mycelya.h` - Core header definitions and declarations
+- `mycelya_torch/csrc/MycelyaTensorImpl.cpp/.h` - Custom tensor implementation with unique sequential IDs
+- `mycelya_torch/csrc/MycelyaStorageImpl.cpp/.h` - Custom storage implementation with storage ID tracking
+- `mycelya_torch/csrc/MycelyaAllocator.cpp/.h` - Enhanced allocator with storage ID management
 - `mycelya_torch/csrc/MycelyaHooks.cpp` - PyTorch PrivateUse1 backend hooks with custom implementations
+- `mycelya_torch/csrc/MycelyaMem.cpp` - Memory management utilities
 - `mycelya_torch/csrc/mycelya_extension.cpp` - Python bindings and extensions
 
 ## Current Architecture (2025-08-10)
@@ -111,7 +128,7 @@ import torch
 import mycelya_torch
 
 # Create remote machine
-machine = mycelya_torch.create_modal_machine("T4")
+machine = mycelya_torch.RemoteMachine("modal", "T4")
 
 # Operations automatically execute on remote GPU
 x = torch.randn(1000, 1000, device=machine.device())
@@ -138,10 +155,10 @@ for data, target in dataloader:
 ### HuggingFace Integration
 ```python
 # Direct remote model loading
-import mycelya_torch.huggingface as mhf
+import mycelya_torch
 
-machine = mycelya_torch.create_modal_machine("T4")
-model = mhf.load_model_remote(
+machine = mycelya_torch.RemoteMachine("modal", "T4")
+model = mycelya_torch.load_huggingface_model(
     "microsoft/DialoGPT-medium", 
     machine, 
     torch_dtype=torch.float16
@@ -297,4 +314,17 @@ for name, param in model.named_parameters():
 - **Clean error handling** with descriptive messages and proper error propagation
 - **Extensible architecture** ready for additional cloud providers
 
-Last updated: 2025-08-10
+#### Public API Updates (2025-08-12)
+- **Simplified machine creation**: Use `RemoteMachine(provider, gpu_type)` instead of factory functions
+- **Updated public API**: Proper `__all__` exports with clean module organization
+- **HuggingFace API**: Direct import from main module (`mycelya_torch.load_huggingface_model`)
+- **Logging utilities**: Comprehensive logging control functions exported in public API
+- **Device management**: `get_all_machines()` utility for enumerating registered devices
+
+#### Documentation and Examples (2025-08-12)
+- **Usage examples**: Updated to reflect current API patterns
+- **Example scripts**: 4 example files demonstrating HuggingFace integration and performance comparisons
+- **Build documentation**: Added comprehensive build configuration details
+- **File structure**: Complete mapping of all source files and their purposes
+
+Last updated: 2025-08-12
