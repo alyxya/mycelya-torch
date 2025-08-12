@@ -196,6 +196,27 @@ class RemoteOrchestrator:
                 f"Failed to resolve client for storage {storage_id}: {e}"
             ) from e
 
+    def _get_client_for_tensor_id(self, tensor_id: int) -> ClientInterface:
+        """Get the client for a specific tensor ID with validation.
+
+        Args:
+            tensor_id: Tensor ID to resolve to client
+
+        Returns:
+            ClientInterface: The client managing this tensor
+
+        Raises:
+            RuntimeError: If tensor, machine, or client not found/available
+        """
+        try:
+            from ._storage import get_machine_for_tensor_id
+            machine = get_machine_for_tensor_id(tensor_id)
+            return self._get_validated_client(machine)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to resolve client for tensor {tensor_id}: {e}"
+            ) from e
+
     def _get_client_for_machine(self, machine: RemoteMachine) -> ClientInterface:
         """Get the client for a specific machine with validation.
 
@@ -359,6 +380,38 @@ class RemoteOrchestrator:
         log.info(f"✅ ORCHESTRATOR: Retrieved tensor for storage {storage_id}")
         return result
 
+    def get_tensor_by_id(
+        self,
+        tensor_id: int,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str,
+    ) -> "torch.Tensor":
+        """Get tensor data by tensor ID with specified view parameters.
+
+        This method retrieves tensor data using tensor IDs instead of storage IDs.
+
+        Args:
+            tensor_id: The tensor ID to retrieve
+            shape: Tensor shape for view
+            stride: Tensor stride for view
+            storage_offset: Storage offset for view
+            dtype: Tensor data type
+
+        Returns:
+            CPU tensor reconstructed from tensor data with specified view
+
+        Raises:
+            RuntimeError: If tensor or client not available
+        """
+        client = self._get_client_for_tensor_id(tensor_id)
+        result = client.get_tensor_by_id(
+            tensor_id, shape, stride, storage_offset, dtype
+        )
+        log.info(f"✅ ORCHESTRATOR: Retrieved tensor for tensor ID {tensor_id}")
+        return result
+
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage to accommodate new byte size.
 
@@ -391,20 +444,45 @@ class RemoteOrchestrator:
         log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id}")
 
     # New tensor-based methods for the refactored architecture
-    def update_tensor(self, tensor_id: int, tensor: torch.Tensor) -> None:
-        """Update a tensor with new data using tensor-based approach.
+    def update_tensor(
+        self,
+        tensor_id: int,
+        storage_tensor: torch.Tensor,
+        source_shape: List[int],
+        source_stride: List[int],
+        source_storage_offset: int,
+        source_dtype: str,
+    ) -> None:
+        """Update tensor data by tensor ID with raw data and tensor metadata.
 
         Args:
-            tensor_id: The tensor ID (metadata hash)
-            tensor: CPU tensor containing the data to upload
+            tensor_id: Tensor ID to update
+            storage_tensor: CPU tensor wrapping the storage data
+            source_shape: Shape of the source data
+            source_stride: Stride of the source data
+            source_storage_offset: Storage offset of the source data
+            source_dtype: Data type of the source data
+            target_shape: Shape of the target view
+            target_stride: Stride of the target view
+            target_storage_offset: Storage offset of the target view
+            target_dtype: Data type of the target view
 
         Raises:
             RuntimeError: If tensor or client not available
         """
-        # Get client by first finding the storage ID for the tensor
-        storage_id = tensor.untyped_storage().data_ptr()
-        client = self._get_client_for_storage(storage_id)
-        client.update_tensor(tensor_id, tensor)
+        client = self._get_client_for_tensor_id(tensor_id)
+        # Convert storage tensor to raw bytes for tensor-only interface
+        from ._tensor_utils import cpu_tensor_to_numpy_bytes
+        raw_data = cpu_tensor_to_numpy_bytes(storage_tensor)
+        
+        client.update_tensor(
+            tensor_id,
+            raw_data,
+            source_shape,
+            source_stride,
+            source_storage_offset,
+            source_dtype,
+        )
 
         log.info(f"✅ ORCHESTRATOR: Updated tensor {tensor_id}")
 
@@ -440,7 +518,7 @@ class RemoteOrchestrator:
         self,
         op_name: str,
         input_metadata: List[MycelyaTensorMetadata],
-        output_storage_ids: List[Optional[int]],
+        output_tensor_ids: List[Optional[int]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         return_metadata: bool = False,
@@ -453,8 +531,8 @@ class RemoteOrchestrator:
 
         Args:
             op_name: Name of the operation to execute
-            input_metadata: Metadata for remote input tensors (always have storage_id)
-            output_storage_ids: Storage IDs for all output tensors (both new and reused)
+            input_metadata: Metadata for remote input tensors (always have tensor_id)
+            output_tensor_ids: Tensor IDs for all output tensors (both new and reused)
             args: Processed args with tensor placeholders
             kwargs: Processed kwargs with tensor placeholders
             return_metadata: If True, return output tensor metadata instead of None
@@ -472,37 +550,37 @@ class RemoteOrchestrator:
             meta_dict = metadata.to_dict()
             input_tensor_metadata_dicts.append(meta_dict)
 
-        # output_storage_ids is now passed directly from _create_output_tensors
-        # Contains storage_id for all output tensors (both new and reused)
+        # output_tensor_ids is now passed directly from _create_output_tensors
+        # Contains tensor_id for all output tensors (both new and reused)
 
         # Validate that we have input metadata
         if not input_metadata:
             raise RuntimeError(f"No input metadata provided for operation {op_name}")
 
-        # Collect all storage IDs for cross-device validation
-        all_storage_ids = []
+        # Collect all tensor IDs for cross-device validation
+        all_tensor_ids = []
         for metadata in input_metadata:
-            if metadata.storage_id is not None:
-                all_storage_ids.append(metadata.storage_id)
-        for storage_id in output_storage_ids:
-            if storage_id is not None:
-                all_storage_ids.append(storage_id)
+            if metadata.tensor_id is not None:
+                all_tensor_ids.append(metadata.tensor_id)
+        for tensor_id in output_tensor_ids:
+            if tensor_id is not None:
+                all_tensor_ids.append(tensor_id)
 
-        # Validate all storage IDs are on the same device
-        if all_storage_ids:
-            from ._storage import validate_cross_device_operation
+        # Validate all tensor IDs are on the same device
+        if all_tensor_ids:
+            from ._storage import validate_cross_device_operation_tensor_ids
 
-            validate_cross_device_operation(all_storage_ids)
+            validate_cross_device_operation_tensor_ids(all_tensor_ids)
 
-        # Get the client using the first input tensor's storage ID
-        storage_id = input_metadata[0].storage_id
-        client = self._get_client_for_storage(storage_id)
+        # Get the client using the first input tensor's tensor ID
+        tensor_id = input_metadata[0].tensor_id
+        client = self._get_client_for_tensor_id(tensor_id)
 
         # Execute with separated input/output interface
         result = client.execute_aten_operation(
             op_name,
             input_tensor_metadata_dicts,
-            output_storage_ids,
+            output_tensor_ids,
             args,
             kwargs,
             return_metadata,

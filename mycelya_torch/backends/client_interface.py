@@ -35,8 +35,8 @@ class ClientInterface(ABC):
         self.gpu_type = gpu_type
         self.machine_id = machine_id
 
-        # Storage cache: storage_id -> underlying 1D uint8 CPU tensor
-        self._storage_cache: Dict[int, torch.Tensor] = {}
+        # Tensor cache: tensor_id -> CPU tensor
+        self._tensor_cache: Dict[int, torch.Tensor] = {}
 
         # Track cache statistics for debugging
         self._cache_hits = 0
@@ -107,15 +107,25 @@ class ClientInterface(ABC):
         except Exception:
             return False
 
-    # Storage management methods
+    # Tensor management methods
     @abstractmethod
-    def create_storage(self, storage_id: int, nbytes: int) -> None:
+    def create_empty_tensor(
+        self,
+        tensor_id: int,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str
+    ) -> None:
         """
-        Create a storage on the remote machine.
+        Create an empty tensor on the remote machine with proper storage layout.
 
         Args:
-            storage_id: Specific ID to use for the storage (required)
-            nbytes: Number of bytes to allocate for the storage
+            tensor_id: Unique tensor ID (metadata hash)
+            shape: Shape of the tensor
+            stride: Stride of the tensor
+            storage_offset: Storage offset for the tensor
+            dtype: Data type of the tensor (e.g., "float32", "int64")
 
         Returns:
             None
@@ -123,36 +133,49 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def update_storage(
+    def create_tensor_view(
         self,
-        storage_id: int,
-        storage_tensor: torch.Tensor,
+        new_tensor_id: int,
+        base_tensor_id: int,
+        shape: List[int],
+        stride: List[int],
+        offset: int,
+    ) -> None:
+        """
+        Create a tensor view from an existing tensor.
+
+        Args:
+            new_tensor_id: Tensor ID for the new view
+            base_tensor_id: Tensor ID of the base tensor
+            shape: Shape of the view
+            stride: Stride of the view
+            offset: Storage offset of the view
+
+        Returns:
+            None
+        """
+        pass
+
+    @abstractmethod
+    def update_tensor(
+        self,
+        tensor_id: int,
+        raw_data: bytes,
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
-        source_dtype: str,
-        target_shape: List[int],
-        target_stride: List[int],
-        target_storage_offset: int,
-        target_dtype: str,
+        source_dtype: str
     ) -> None:
         """
-        Update an existing storage with raw tensor data.
-
-        Supports both full storage replacement and partial in-place updates using
-        dual tensor metadata to specify source data layout and target storage view.
+        Update an existing tensor with new data and source metadata.
 
         Args:
-            storage_id: Storage ID to update
-            storage_tensor: CPU tensor wrapping the storage data (tensor metadata is ignored, only untyped_storage matters)
+            tensor_id: Tensor ID to update
+            raw_data: Raw bytes of the tensor data
             source_shape: Shape of the source data
             source_stride: Stride of the source data
             source_storage_offset: Storage offset of the source data
             source_dtype: Data type of the source data
-            target_shape: Shape of the target view in storage
-            target_stride: Stride of the target view in storage
-            target_storage_offset: Storage offset of the target view in storage
-            target_dtype: Data type of the target view in storage
 
         Returns:
             None
@@ -160,109 +183,25 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def _get_storage_data(
-        self,
-        storage_id: int,
-    ) -> bytes:
+    def get_tensor_data(self, tensor_id: int) -> bytes:
         """
-        Retrieve raw storage data by ID.
-
-        Returns the complete raw untyped storage bytes. The client interface layer
-        will handle tensor reconstruction from metadata and these raw bytes.
-
-        This is a private method used internally by get_storage_tensor().
+        Get raw tensor data by tensor ID.
 
         Args:
-            storage_id: The storage ID to retrieve
+            tensor_id: The tensor ID to retrieve
 
         Returns:
-            Raw untyped storage bytes
+            Raw tensor data as bytes
         """
         pass
 
     @abstractmethod
-    def _get_storage_tensor_for_cache(
-        self,
-        storage_id: int,
-    ) -> torch.Tensor:
+    def remove_tensors(self, tensor_ids: List[int]) -> None:
         """
-        Retrieve storage data as a 1D uint8 CPU tensor for caching.
-
-        This method should return the underlying storage as a 1D uint8 tensor
-        that can be cached and used to create views. Implementations should
-        use torch.save/torch.load for serialization.
+        Remove multiple tensors from the remote machine.
 
         Args:
-            storage_id: The storage ID to retrieve
-
-        Returns:
-            1D uint8 CPU tensor representing the underlying storage
-        """
-        pass
-
-    def get_storage_tensor(
-        self,
-        storage_id: int,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str,
-    ) -> torch.Tensor:
-        """
-        Retrieve storage data as a tensor with specified view parameters.
-
-        This method implements caching by:
-        1. Checking if storage_id is in cache
-        2. If cached, creating view from cached tensor
-        3. If not cached, making RPC and caching result
-
-        Args:
-            storage_id: The storage ID to retrieve
-            shape: Tensor shape for view
-            stride: Tensor stride for view
-            storage_offset: Storage offset for view
-            dtype: Tensor data type
-
-        Returns:
-            CPU tensor reconstructed from storage with specified view
-        """
-        # Check cache first
-        if storage_id in self._storage_cache:
-            self._cache_hits += 1
-
-            # Get cached underlying tensor
-            cached_tensor = self._storage_cache[storage_id]
-
-            # Create view from cached tensor
-            return self._create_view_from_cached_tensor(
-                cached_tensor, shape, stride, storage_offset, dtype
-            )
-
-        # Cache miss - make RPC
-        self._cache_misses += 1
-
-        # Get the actual tensor from the subclass implementation
-        underlying_tensor = self._get_storage_tensor_for_cache(storage_id)
-
-        # Cache the underlying tensor
-        self._storage_cache[storage_id] = underlying_tensor
-
-        # Create view from cached tensor
-        return self._create_view_from_cached_tensor(
-            underlying_tensor, shape, stride, storage_offset, dtype
-        )
-
-    @abstractmethod
-    def resize_storage(self, storage_id: int, nbytes: int) -> None:
-        """
-        Resize a storage to accommodate new byte size.
-
-        This handles the case where resize_ needs more storage space than currently allocated.
-        Only resizes if nbytes > current storage size.
-
-        Args:
-            storage_id: The storage ID to resize
-            nbytes: The number of bytes needed for the new storage size
+            tensor_ids: List of tensor IDs to remove
 
         Returns:
             None
@@ -270,17 +209,19 @@ class ClientInterface(ABC):
         pass
 
     @abstractmethod
-    def remove_storage(self, storage_id: int) -> None:
+    def resize_tensor_storage(self, tensor_id: int, nbytes: int) -> None:
         """
-        Remove a storage from the remote machine.
+        Resize the underlying storage for a tensor.
 
         Args:
-            storage_id: The storage ID to remove
+            tensor_id: Tensor ID whose storage to resize
+            nbytes: New size in bytes
 
         Returns:
             None
         """
         pass
+
 
     # Operation execution methods
     @abstractmethod
@@ -288,7 +229,7 @@ class ClientInterface(ABC):
         self,
         op_name: str,
         input_tensor_metadata: List[Dict[str, Any]],
-        output_storage_ids: List[Union[int, None]],
+        output_tensor_ids: List[Union[int, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
         return_metadata: bool = False,
@@ -298,8 +239,8 @@ class ClientInterface(ABC):
 
         Args:
             op_name: The aten operation name to execute
-            input_tensor_metadata: Metadata for reconstructing input tensors only
-            output_storage_ids: List of storage IDs to update with results (all output tensors)
+            input_tensor_metadata: Metadata for reconstructing input tensors (including tensor_id)
+            output_tensor_ids: List of tensor IDs to store results (all output tensors)
             args: Operation arguments (may contain tensor placeholders)
             kwargs: Operation keyword arguments (may contain tensor placeholders)
             return_metadata: If True, return output tensor metadata instead of None
@@ -340,64 +281,30 @@ class ClientInterface(ABC):
     @abstractmethod
     def link_model_tensors(
         self,
-        local_storage_ids: List[int],
+        local_tensor_ids: List[int],
         parameter_names: List[str],
     ) -> None:
         """
-        Link local mycelya tensor storage IDs to remote model parameter tensors.
+        Link local mycelya tensor IDs to remote model parameter tensors.
 
         This method is used after HuggingFace model loading to connect the locally
         created mycelya tensors to the corresponding remote model parameter tensors.
 
         Args:
-            local_storage_ids: List of local storage IDs from created mycelya tensors
-            parameter_names: List of parameter names corresponding to each storage ID
+            local_tensor_ids: List of local tensor IDs from created mycelya tensors
+            parameter_names: List of parameter names corresponding to each tensor ID
 
         Returns:
             None
 
         Example:
             # After model preparation and local tensor creation
-            local_storage_ids = [tensor.untyped_storage().data_ptr() for tensor in model.parameters()]
+            local_tensor_ids = [tensor.get_metadata_hash() for tensor in model.parameters()]
             parameter_names = ["model.embed_tokens.weight", "layer.0.weight", ...]
-            client.link_model_tensors(local_storage_ids, parameter_names)
+            client.link_model_tensors(local_tensor_ids, parameter_names)
         """
         pass
 
-    def _create_view_from_cached_tensor(
-        self,
-        cached_tensor: torch.Tensor,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str,
-    ) -> torch.Tensor:
-        """
-        Create a tensor copy from a cached underlying tensor.
-
-        This method creates a copy of the data (not a view) to protect
-        the cached tensor from accidental mutations.
-
-        Args:
-            cached_tensor: The cached 1D uint8 underlying tensor
-            shape: Desired tensor shape
-            stride: Desired tensor stride
-            storage_offset: Desired storage offset
-            dtype: Desired tensor data type
-
-        Returns:
-            CPU tensor copy with specified parameters
-        """
-        # Convert dtype string to torch.dtype
-        dtype_name = dtype.replace("torch.", "")
-        torch_dtype = getattr(torch, dtype_name)
-
-        # Create temporary view from cached tensor to get the data
-        temp_tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
-        temp_tensor.set_(cached_tensor.untyped_storage(), storage_offset, shape, stride)
-
-        # Return a copy to protect the cache from mutations
-        return temp_tensor.clone()
 
     # RPC batching helper methods
     def _queue_rpc(
@@ -407,7 +314,7 @@ class ClientInterface(ABC):
         args: tuple,
         kwargs: dict,
         return_future: bool = False,
-        invalidate_storage_ids: Optional[List[int]] = None,
+        invalidate_tensor_ids: Optional[List[int]] = None,
     ) -> Optional[Any]:
         """
         Helper method to queue an RPC for batching.
@@ -418,16 +325,16 @@ class ClientInterface(ABC):
             args: Arguments for the RPC method
             kwargs: Keyword arguments for the RPC method
             return_future: Whether to return a Future for this call
-            invalidate_storage_ids: Storage IDs to invalidate immediately (at queue time)
+            invalidate_tensor_ids: Tensor IDs to invalidate immediately (at queue time)
 
         Returns:
             Future object if return_future=True or call_type="remote", None otherwise
         """
-        # Invalidate cache immediately for storage-modifying operations
-        if invalidate_storage_ids:
-            for storage_id in invalidate_storage_ids:
-                if storage_id in self._storage_cache:
-                    del self._storage_cache[storage_id]
+        # Invalidate cache immediately for tensor-modifying operations
+        if invalidate_tensor_ids:
+            for tensor_id in invalidate_tensor_ids:
+                if tensor_id in self._tensor_cache:
+                    del self._tensor_cache[tensor_id]
 
         # Queue the RPC for batching
         future = self._batch_queue.enqueue_call(
@@ -463,33 +370,33 @@ class ClientInterface(ABC):
             self._registered_for_batching = False
 
     # Cache invalidation methods (updated for batching timing)
-    def invalidate_storage_cache(self, storage_id: int) -> None:
+    def invalidate_tensor_cache(self, tensor_id: int) -> None:
         """
-        Invalidate cache entry for a specific storage ID.
+        Invalidate cache entry for a specific tensor ID.
 
-        This method should be called whenever a storage has been modified
+        This method should be called whenever a tensor has been modified
         on the remote side to ensure cache consistency. With batching,
         invalidation happens at queue time to maintain correct semantics.
 
         Args:
-            storage_id: Storage ID to invalidate
+            tensor_id: Tensor ID to invalidate
         """
-        if storage_id in self._storage_cache:
-            del self._storage_cache[storage_id]
+        if tensor_id in self._tensor_cache:
+            del self._tensor_cache[tensor_id]
 
-    def invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> None:
+    def invalidate_multiple_tensor_caches(self, tensor_ids: List[int]) -> None:
         """
-        Invalidate cache entries for multiple storage IDs.
+        Invalidate cache entries for multiple tensor IDs.
 
         This method provides efficient batch invalidation for operations
-        that modify multiple storages.
+        that modify multiple tensors.
 
         Args:
-            storage_ids: List of storage IDs to invalidate
+            tensor_ids: List of tensor IDs to invalidate
         """
-        for storage_id in storage_ids:
-            if storage_id in self._storage_cache:
-                del self._storage_cache[storage_id]
+        for tensor_id in tensor_ids:
+            if tensor_id in self._tensor_cache:
+                del self._tensor_cache[tensor_id]
 
     def clear_storage_cache(self) -> None:
         """
@@ -497,7 +404,7 @@ class ClientInterface(ABC):
 
         This method can be used for cleanup or when the client is stopped.
         """
-        self._storage_cache.clear()
+        self._tensor_cache.clear()
 
     def get_cache_stats(self) -> Dict[str, int]:
         """
@@ -510,7 +417,7 @@ class ClientInterface(ABC):
         hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0.0
 
         return {
-            "cache_size": len(self._storage_cache),
+            "cache_size": len(self._tensor_cache),
             "cache_hits": self._cache_hits,
             "cache_misses": self._cache_misses,
             "hit_rate": hit_rate,

@@ -37,6 +37,9 @@ class StorageRegistry:
     def __init__(self) -> None:
         # Storage ID tracking - maps storage to device
         self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
+        
+        # Tensor ID tracking - maps tensor ID to device
+        self.tensor_id_to_device: Dict[int, int] = {}  # tensor_id -> device_index
 
         # Thread-safe counter for generating incremental storage IDs
         self._storage_id_counter = 1
@@ -65,22 +68,11 @@ class StorageRegistry:
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
 
-        # Register the storage with the orchestrator for centralized client management
-        try:
-            from ._remote_orchestrator import remote_orchestrator
-
-            # Use orchestrator to create storage with device routing
-            remote_orchestrator.create_storage(storage_id, nbytes, device_index)
-            log.info(
-                f"Registered storage {storage_id} via orchestrator ({nbytes} bytes)"
-            )
-        except Exception as e:
-            log.warning(
-                f"Failed to register storage {storage_id} via orchestrator: {e}"
-            )
-            # Clean up the failed storage ID
-            self.storage_id_to_device.pop(storage_id, None)
-            return 0
+        # Storage is now managed locally only - remote side uses tensor IDs exclusively
+        # No need to register with orchestrator as tensors will be created on-demand
+        log.info(
+            f"Created local storage ID {storage_id} for device {device_index} ({nbytes} bytes)"
+        )
 
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return storage_id
@@ -89,6 +81,21 @@ class StorageRegistry:
         """Get device index for a storage ID"""
         storage_id = int(storage_id)
         return self.storage_id_to_device.get(storage_id)
+
+    def register_tensor_id(self, tensor_id: int, device_index: int) -> None:
+        """Register a tensor ID with its device."""
+        self.tensor_id_to_device[tensor_id] = device_index
+        log.debug(f"Registered tensor ID {tensor_id} on device {device_index}")
+
+    def get_tensor_device(self, tensor_id: int) -> Optional[int]:
+        """Get device index for a tensor ID"""
+        return self.tensor_id_to_device.get(tensor_id)
+
+    def unregister_tensor_id(self, tensor_id: int) -> None:
+        """Unregister a tensor ID."""
+        if tensor_id in self.tensor_id_to_device:
+            device_idx = self.tensor_id_to_device.pop(tensor_id)
+            log.debug(f"Unregistered tensor ID {tensor_id} from device {device_idx}")
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID and perform remote cleanup"""
@@ -238,6 +245,21 @@ def get_storage_device(storage_id: int) -> Optional[int]:
     return _storage_registry.get_storage_device(storage_id)
 
 
+def register_tensor_id(tensor_id: int, device_index: int) -> None:
+    """Register a tensor ID with its device."""
+    return _storage_registry.register_tensor_id(tensor_id, device_index)
+
+
+def get_tensor_device(tensor_id: int) -> Optional[int]:
+    """Get device index for a tensor ID"""
+    return _storage_registry.get_tensor_device(tensor_id)
+
+
+def unregister_tensor_id(tensor_id: int) -> None:
+    """Unregister a tensor ID."""
+    return _storage_registry.unregister_tensor_id(tensor_id)
+
+
 def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:
     """Resize remote storage by storage ID."""
     return _storage_registry.resize_storage_by_id(storage_id, nbytes)
@@ -269,6 +291,32 @@ def get_machine_for_storage(storage_id: int) -> RemoteMachine:
     return machine
 
 
+def get_machine_for_tensor_id(tensor_id: int) -> RemoteMachine:
+    """Get the machine that owns a specific tensor ID.
+
+    Args:
+        tensor_id: Tensor ID to resolve
+
+    Returns:
+        RemoteMachine that owns the tensor
+
+    Raises:
+        RuntimeError: If no device or machine found for tensor
+    """
+    # Get device index for this tensor ID
+    device_idx = get_tensor_device(tensor_id)
+    if device_idx is None:
+        raise RuntimeError(f"No device found for tensor {tensor_id}")
+
+    # Get machine for device index
+    registry = get_device_registry()
+    machine = registry.get_device_by_index(device_idx)
+    if machine is None:
+        raise RuntimeError(f"No machine found for device index {device_idx}")
+
+    return machine
+
+
 def validate_storage_exists(storage_id: int) -> bool:
     """Validate that a storage ID exists and is accessible.
 
@@ -285,6 +333,35 @@ def validate_storage_exists(storage_id: int) -> bool:
         log.warning(f"Failed to validate storage {storage_id}: {e}")
         return False
 
+
+def validate_cross_device_operation_tensor_ids(tensor_ids: List[int]) -> None:
+    """Validate that all tensor IDs belong to the same device.
+
+    Args:
+        tensor_ids: List of tensor IDs to validate
+
+    Raises:
+        RuntimeError: If tensors are on different devices
+    """
+    if not tensor_ids:
+        return
+
+    # Get the first machine as reference
+    first_machine = get_machine_for_tensor_id(tensor_ids[0])
+    first_device_name = f"{first_machine.provider.value}-{first_machine.gpu_type.value}"
+
+    # Validate all other tensors are on the same machine
+    for tensor_id in tensor_ids[1:]:
+        machine = get_machine_for_tensor_id(tensor_id)
+        current_device_name = f"{machine.provider.value}-{machine.gpu_type.value}"
+
+        if machine.machine_id != first_machine.machine_id:
+            raise RuntimeError(
+                f"Cannot perform operations between tensors on different remote devices. "
+                f"Tensors are on different devices: "
+                f'"{first_device_name}" and "{current_device_name}". '
+                f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"
+            )
 
 def validate_cross_device_operation(storage_ids: List[int]) -> None:
     """Validate that all storage IDs belong to the same device.

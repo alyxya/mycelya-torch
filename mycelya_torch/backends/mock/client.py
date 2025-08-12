@@ -263,7 +263,7 @@ class MockClient(ClientInterface):
         self,
         op_name: str,
         input_tensor_metadata: List[Dict[str, Any]],
-        output_storage_ids: List[Union[int, None]],
+        output_tensor_ids: List[Union[str, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
         return_metadata: bool = False,
@@ -274,7 +274,7 @@ class MockClient(ClientInterface):
         Args:
             op_name: The aten operation name
             input_tensor_metadata: Metadata for reconstructing input tensors only
-            output_storage_ids: List of storage IDs to update with results
+            output_tensor_ids: List of tensor IDs to update with results
             args: Operation arguments
             kwargs: Operation keyword arguments
             return_metadata: If True, return output tensor metadata instead of None
@@ -287,21 +287,17 @@ class MockClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        input_storage_ids = [
-            metadata["storage_id"] for metadata in input_tensor_metadata
+        input_tensor_ids = [
+            metadata["tensor_id"] for metadata in input_tensor_metadata
         ]
-        log.info(f"📡 Mock Client sending Input Storage IDs: {input_storage_ids}")
-        log.info(f"📡 Mock Client sending Output Storage IDs: {output_storage_ids}")
-
-        # Invalidate cache immediately for storage IDs that will be modified
-        modified_storage_ids = [sid for sid in output_storage_ids if sid is not None]
-        self.invalidate_multiple_storage_caches(modified_storage_ids)
+        log.info(f"📡 Mock Client sending Input Tensor IDs: {input_tensor_ids}")
+        log.info(f"📡 Mock Client sending Output Tensor IDs: {output_tensor_ids}")
 
         # Execute using .local() instead of remote call
         result = self._server_instance.execute_aten_operation.local(
             op_name,
             input_tensor_metadata,
-            output_storage_ids,
+            output_tensor_ids,
             args,
             kwargs,
             return_metadata,
@@ -345,15 +341,15 @@ class MockClient(ClientInterface):
 
     def link_model_tensors(
         self,
-        local_storage_ids: List[int],
+        local_tensor_ids: List[str],
         parameter_names: List[str],
     ) -> None:
         """
-        Link local mycelya tensor storage IDs to remote model parameter tensors using mock execution.
+        Link local mycelya tensor IDs to remote model parameter tensors using mock execution.
 
         Args:
-            local_storage_ids: List of local storage IDs from created mycelya tensors
-            parameter_names: List of parameter names corresponding to each storage ID
+            local_tensor_ids: List of local tensor IDs from created mycelya tensors
+            parameter_names: List of parameter names corresponding to each tensor ID
         """
         if not self.is_running():
             raise RuntimeError(
@@ -361,12 +357,12 @@ class MockClient(ClientInterface):
             )
 
         log.info(
-            f"📡 Mock Client linking {len(local_storage_ids)} local tensors to remote model parameters"
+            f"📡 Mock Client linking {len(local_tensor_ids)} local tensors to remote model parameters"
         )
 
         # Execute using .local() instead of remote call
         self._server_instance.link_model_tensors.local(
-            local_storage_ids, parameter_names
+            local_tensor_ids, parameter_names
         )
 
         log.info("✅ Mock Client completed model tensor linking")
@@ -396,6 +392,130 @@ class MockClient(ClientInterface):
             f"Mock client received unexpected RPC: {method_name}. Consider using direct method calls."
         )
         return None
+
+    # Tensor-based operations (tensor ID only)
+    def get_tensor_by_id(
+        self,
+        tensor_id: str,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str,
+    ) -> torch.Tensor:
+        """
+        Retrieve tensor data by tensor ID with specified view parameters using mock execution.
+
+        Args:
+            tensor_id: The tensor ID to retrieve
+            shape: Tensor shape for view
+            stride: Tensor stride for view
+            storage_offset: Storage offset for view
+            dtype: Tensor data type
+
+        Returns:
+            CPU tensor reconstructed from tensor data with specified view
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Execute using .local() instead of remote call  
+        raw_bytes = self._server_instance.get_tensor_by_id.local(tensor_id)
+
+        if raw_bytes is None:
+            raise RuntimeError(
+                f"Failed to retrieve tensor data for tensor {tensor_id}"
+            )
+
+        # Reconstruct tensor from raw bytes
+        from ..._tensor_utils import storage_bytes_to_cpu_tensor
+        return storage_bytes_to_cpu_tensor(raw_bytes, shape, stride, storage_offset, dtype)
+
+    def update_tensor(
+        self,
+        tensor_id: str,
+        storage_tensor: torch.Tensor,
+        source_shape: List[int],
+        source_stride: List[int],
+        source_storage_offset: int,
+        source_dtype: str,
+        target_shape: List[int],
+        target_stride: List[int],
+        target_storage_offset: int,
+        target_dtype: str,
+    ) -> None:
+        """
+        Update tensor data by tensor ID with raw data and tensor metadata using mock execution.
+
+        Args:
+            tensor_id: Tensor ID to update
+            storage_tensor: CPU tensor wrapping the storage data
+            source_shape: Shape of the source data
+            source_stride: Stride of the source data
+            source_storage_offset: Storage offset of the source data
+            source_dtype: Data type of the source data
+            target_shape: Shape of the target view
+            target_stride: Stride of the target view
+            target_storage_offset: Storage offset of the target view
+            target_dtype: Data type of the target view
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Convert storage tensor to raw bytes
+        from ..._tensor_utils import cpu_tensor_to_numpy_bytes
+        raw_data = cpu_tensor_to_numpy_bytes(storage_tensor)
+
+        # Execute using .local() instead of remote call
+        self._server_instance.update_tensor.local(
+            tensor_id,
+            raw_data,
+            source_shape,
+            source_stride,
+            source_storage_offset,
+            source_dtype,
+            target_shape,
+            target_stride,
+            target_storage_offset,
+            target_dtype,
+        )
+
+    def create_empty_tensor(
+        self,
+        tensor_id: str,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str,
+    ) -> None:
+        """
+        Create empty tensor with proper underlying storage, stride and storage offset using mock execution.
+
+        Args:
+            tensor_id: Tensor ID for the new tensor
+            shape: Tensor shape
+            stride: Tensor stride 
+            storage_offset: Storage offset
+            dtype: Tensor data type
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Execute using .local() instead of remote call
+        self._server_instance.create_empty_tensor.local(
+            tensor_id, shape, stride, storage_offset, dtype
+        )
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

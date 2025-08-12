@@ -5,15 +5,15 @@
 Tensor utilities for metadata handling, serialization, and device transfers.
 
 This module provides a clean, type-safe API for tensor conversions:
-- LocalTensorMetadata for CPU/meta tensors (no storage_id)
-- MycelyaTensorMetadata for remote tensors (always has storage_id)
+- LocalTensorMetadata for CPU/meta tensors (no tensor_id)
+- MycelyaTensorMetadata for remote tensors (always has tensor_id)
 - Methods for converting between CPU, remote, and meta tensors
 - Serialization utilities for data transfer
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 
@@ -96,9 +96,9 @@ class LocalTensorMetadata(BaseTensorMetadata):
 
 @dataclass
 class MycelyaTensorMetadata(BaseTensorMetadata):
-    """Metadata for remote tensors - always has storage_id."""
+    """Metadata for remote tensors - tensor_id only, no storage concept."""
 
-    storage_id: int
+    tensor_id: Optional[int] = None  # Int from C++ metadata hash
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -106,7 +106,7 @@ class MycelyaTensorMetadata(BaseTensorMetadata):
             "stride": list(self.stride),
             "storage_offset": self.storage_offset,
             "dtype": str(self.dtype).split(".")[-1],
-            "storage_id": self.storage_id,
+            "tensor_id": self.tensor_id,
         }
 
     def is_remote(self) -> bool:
@@ -117,20 +117,20 @@ class MycelyaTensorMetadata(BaseTensorMetadata):
         """Create metadata from a mycelya tensor."""
         if tensor.device.type != "mycelya":
             raise ValueError(f"Expected mycelya tensor, got device: {tensor.device}")
-        storage_id = tensor.untyped_storage().data_ptr()
+        tensor_id = tensor.get_metadata_hash()  # Keep as int from C++ layer
         return cls(
             shape=tuple(tensor.shape),
             stride=tuple(tensor.stride()),
             storage_offset=tensor.storage_offset(),
             dtype=tensor.dtype,
-            storage_id=storage_id,
+            tensor_id=tensor_id,
         )
 
     def __repr__(self) -> str:
         return (
             f"MycelyaTensorMetadata(shape={self.shape}, stride={self.stride}, "
             f"storage_offset={self.storage_offset}, dtype={self.dtype}, "
-            f"storage_id={self.storage_id})"
+            f"tensor_id={self.tensor_id})"
         )
 
 

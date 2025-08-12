@@ -137,21 +137,26 @@ def _create_output_tensors(
     """Create output tensors based on meta execution results.
 
     Returns:
-        tuple: (output_tensors, output_storage_ids)
+        tuple: (output_tensors, output_tensor_ids)
             - output_tensors: List of created/reused tensors
-            - output_storage_ids: List of storage IDs for all output tensors (both new and reused)
+            - output_tensor_ids: List of tensor IDs for all output tensors (both new and reused)
     """
     output_tensors = []
-    output_storage_ids = []
+    output_tensor_ids = []
 
     for meta_output in meta_outputs:
         if meta_output in original_tensors:
             # Reuse original tensor (in-place operation)
             tensor = original_tensors[meta_output]
             output_tensors.append(tensor)
-            # Include storage ID for reused tensors to track all modifications
-            storage_id = tensor.untyped_storage().data_ptr()
-            output_storage_ids.append(storage_id)
+            # Include tensor ID for reused tensors to track all modifications
+            tensor_id = tensor.get_metadata_hash()
+            output_tensor_ids.append(tensor_id)
+            
+            # Ensure tensor ID is registered with device tracking system
+            from ._storage import register_tensor_id
+            device_index = remote_device.index
+            register_tensor_id(tensor_id, device_index)
         else:
             # Create new tensor
             new_tensor = torch.empty(
@@ -168,11 +173,16 @@ def _create_output_tensors(
                 )
 
             output_tensors.append(new_tensor)
-            # Get storage ID from the newly created tensor
-            storage_id = new_tensor.untyped_storage().data_ptr()
-            output_storage_ids.append(storage_id)
+            # Get tensor ID from the newly created tensor
+            tensor_id = str(new_tensor.get_metadata_hash())
+            output_tensor_ids.append(tensor_id)
+            
+            # Register tensor ID with device tracking system
+            from ._storage import register_tensor_id
+            device_index = remote_device.index
+            register_tensor_id(tensor_id, device_index)
 
-    return output_tensors, output_storage_ids
+    return output_tensors, output_tensor_ids
 
 
 def _execute_view_operation(
@@ -234,11 +244,11 @@ def _execute_with_static_outputs(
 
     # Step 3: Create output tensors (empty list for non-tensor results)
     if meta_outputs:
-        output_tensors, output_storage_ids = _create_output_tensors(
+        output_tensors, output_tensor_ids = _create_output_tensors(
             meta_outputs, original_tensors, remote_device
         )
     else:
-        output_tensors, output_storage_ids = [], []
+        output_tensors, output_tensor_ids = [], []
 
     # Step 4: Execute remotely
     processed_args, processed_kwargs, input_metadata = (
@@ -249,7 +259,7 @@ def _execute_with_static_outputs(
     orchestrator.execute_aten_operation(
         op_name,
         input_metadata,
-        output_storage_ids,
+        output_tensor_ids,
         processed_args,
         processed_kwargs,
     )
@@ -289,10 +299,13 @@ def _execute_with_dynamic_outputs(
     if has_out_kwarg:
         log.debug(f"Operation {op_name} has 'out' kwarg, using existing tensor")
         output_tensor = out_tensor
-        # For out tensors, we need to get the storage ID for remote execution
-        output_storage_ids = [output_tensor.untyped_storage().data_ptr()]
+        # For out tensors, we need to get the tensor ID for remote execution
+        output_tensor_ids = [output_tensor.get_metadata_hash()]
 
-        # Note: No tensor ID generation needed with metadata-based caching
+        # Ensure tensor ID is registered with device tracking system
+        from ._storage import register_tensor_id
+        device_index = remote_device.index
+        register_tensor_id(output_tensor_ids[0], device_index)
     else:
         # Step 1: Infer output dtype based on operation type
         output_dtype = torch.int64 if op_name == "aten::nonzero" else args[0].dtype
@@ -300,9 +313,12 @@ def _execute_with_dynamic_outputs(
 
         # Step 2: Create minimal placeholder tensor with 0 bytes
         output_tensor = torch.empty(0, dtype=output_dtype, device=remote_device)
-        output_storage_ids = [output_tensor.untyped_storage().data_ptr()]
+        output_tensor_ids = [output_tensor.get_metadata_hash()]
 
-        # Note: No tensor ID generation needed with metadata-based caching
+        # Register tensor ID with device tracking system
+        from ._storage import register_tensor_id
+        device_index = remote_device.index
+        register_tensor_id(output_tensor_ids[0], device_index)
 
     # Step 3: Execute remotely and request metadata return
     processed_args, processed_kwargs, input_metadata = (
@@ -313,7 +329,7 @@ def _execute_with_dynamic_outputs(
     result_metadata = orchestrator.execute_aten_operation(
         op_name,
         input_metadata,
-        output_storage_ids,
+        output_tensor_ids,
         processed_args,
         processed_kwargs,
         return_metadata=True,
@@ -452,15 +468,15 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
             f"No RemoteMachine found for remote device index {from_.device.index}"
         )
 
-    # Get storage data using orchestrator for centralized client management
-    storage_id = from_.untyped_storage().data_ptr()
-    log.info(f"Copying storage ID {storage_id} from remote to CPU")
+    # Get tensor data using orchestrator for centralized client management
+    tensor_id = from_.get_metadata_hash()
+    log.info(f"Copying tensor ID {tensor_id} from remote to CPU")
 
     # Use orchestrator to get tensor data with automatic client routing
     from ._remote_orchestrator import remote_orchestrator
 
-    result = remote_orchestrator.get_storage_tensor(
-        storage_id,
+    result = remote_orchestrator.get_tensor_by_id(
+        tensor_id,
         shape=list(from_.shape),
         stride=list(from_.stride()),
         storage_offset=from_.storage_offset(),
@@ -468,7 +484,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     )
 
     log.info(
-        f"Successfully copied contiguous tensor data for storage ID {storage_id} to CPU"
+        f"Successfully copied contiguous tensor data for tensor ID {tensor_id} to CPU"
     )
     return result
 
@@ -492,30 +508,25 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
             f"No RemoteMachine found for remote device index {to_.device.index}"
         )
 
-    # For now, fall back to the legacy storage-based approach since the tensor-based
-    # approach needs more integration work. We'll use the old update_storage method.
-    storage_id = to_.untyped_storage().data_ptr()
-    log.info(f"Copying CPU tensor to remote storage ID {storage_id}")
+    # Use tensor-based approach with tensor IDs
+    tensor_id = to_.get_metadata_hash()
+    log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
 
     # Pass CPU tensor directly to orchestrator without conversion
     from ._remote_orchestrator import remote_orchestrator
 
     # Use orchestrator to update tensor with automatic client routing
-    # Pass source and target metadata for proper handling of partial updates
-    remote_orchestrator.update_storage(
-        storage_id,
+    # Pass tensor ID and raw data with tensor metadata for reconstruction
+    remote_orchestrator.update_tensor(
+        tensor_id,
         from_,  # Pass storage tensor directly
         source_shape=list(from_.shape),
         source_stride=list(from_.stride()),
         source_storage_offset=from_.storage_offset(),
         source_dtype=str(from_.dtype),
-        target_shape=list(to_.shape),
-        target_stride=list(to_.stride()),
-        target_storage_offset=to_.storage_offset(),
-        target_dtype=str(to_.dtype),
     )
 
-    log.info(f"Successfully updated remote tensor with storage ID {storage_id}")
+    log.info(f"Successfully updated remote tensor with tensor ID {tensor_id}")
     return to_
 
 
@@ -624,14 +635,14 @@ def _local_scalar_dense(self: torch.Tensor):
             f"No RemoteMachine found for remote device index {self.device.index}"
         )
 
-    # Get storage ID and tensor data using legacy approach
-    storage_id = self.untyped_storage().data_ptr()
+    # Get tensor ID and tensor data using tensor-based approach
+    tensor_id = self.get_metadata_hash()
 
     # Get tensor data for this scalar using orchestrator
     from ._remote_orchestrator import remote_orchestrator
 
-    cpu_tensor = remote_orchestrator.get_storage_tensor(
-        storage_id,
+    cpu_tensor = remote_orchestrator.get_tensor_by_id(
+        tensor_id,
         shape=list(self.shape),
         stride=list(self.stride()),
         storage_offset=self.storage_offset(),
