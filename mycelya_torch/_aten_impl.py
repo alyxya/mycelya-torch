@@ -153,6 +153,7 @@ def _create_output_tensors(
 
             # Ensure tensor ID is registered with device tracking system
             from ._storage import register_tensor_id
+
             device_index = remote_device.index
             register_tensor_id(tensor_id, device_index)
         else:
@@ -177,6 +178,7 @@ def _create_output_tensors(
 
             # Register tensor ID with device tracking system
             from ._storage import register_tensor_id
+
             device_index = remote_device.index
             register_tensor_id(tensor_id, device_index)
 
@@ -249,8 +251,8 @@ def _execute_with_static_outputs(
         output_tensors, output_tensor_ids = [], []
 
     # Step 4: Execute remotely
-    processed_args, processed_kwargs, input_tensors = (
-        args_to_tensors_with_placeholders(args, kwargs)
+    processed_args, processed_kwargs, input_tensors = args_to_tensors_with_placeholders(
+        args, kwargs
     )
 
     orchestrator = _get_remote_orchestrator()
@@ -302,6 +304,7 @@ def _execute_with_dynamic_outputs(
 
         # Ensure tensor ID is registered with device tracking system
         from ._storage import register_tensor_id
+
         device_index = remote_device.index
         register_tensor_id(output_tensor_ids[0], device_index)
     else:
@@ -315,12 +318,13 @@ def _execute_with_dynamic_outputs(
 
         # Register tensor ID with device tracking system
         from ._storage import register_tensor_id
+
         device_index = remote_device.index
         register_tensor_id(output_tensor_ids[0], device_index)
 
     # Step 3: Execute remotely and request metadata return
-    processed_args, processed_kwargs, input_tensors = (
-        args_to_tensors_with_placeholders(args, kwargs)
+    processed_args, processed_kwargs, input_tensors = args_to_tensors_with_placeholders(
+        args, kwargs
     )
 
     orchestrator = _get_remote_orchestrator()

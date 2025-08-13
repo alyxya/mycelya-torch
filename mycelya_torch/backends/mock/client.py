@@ -141,8 +141,7 @@ class MockClient(ClientInterface):
         # Serialize storage tensor using numpy approach (same as Modal client)
         numpy_bytes = storage_tensor.numpy().tobytes()
 
-        # Invalidate cache immediately since this modifies storage
-        self.invalidate_storage_cache(storage_id)
+        # Note: Cache invalidation now handled at orchestrator level
 
         # Execute using .local() instead of queuing for remote execution
         self._server_instance.update_storage.local(
@@ -182,34 +181,7 @@ class MockClient(ClientInterface):
         # Return raw bytes directly - no deserialization needed
         return raw_bytes
 
-    def _get_storage_tensor_for_cache(
-        self,
-        storage_id: int,
-    ) -> torch.Tensor:
-        """
-        Get storage data as a 1D uint8 CPU tensor for caching.
-
-        Args:
-            storage_id: The storage ID
-
-        Returns:
-            1D uint8 CPU tensor representing the underlying storage
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
-        # Execute using .local() instead of remote call
-        raw_bytes = self._server_instance.get_storage_data.local(storage_id)
-
-        if raw_bytes is None:
-            raise RuntimeError(
-                f"Failed to retrieve storage data for storage {storage_id}"
-            )
-
-        # Create 1D uint8 tensor directly from raw bytes for caching
-        return torch.frombuffer(bytearray(raw_bytes), dtype=torch.uint8).reshape((len(raw_bytes),))
+    # Note: _get_storage_tensor_for_cache method removed - caching now handled at orchestrator level
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """
@@ -227,8 +199,7 @@ class MockClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Invalidate cache immediately since this modifies storage
-        self.invalidate_storage_cache(storage_id)
+        # Note: Cache invalidation now handled at orchestrator level
 
         # Execute using .local() instead of remote call
         self._server_instance.resize_storage.local(storage_id, nbytes)
@@ -248,8 +219,7 @@ class MockClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Invalidate cache immediately since this removes storage
-        self.invalidate_storage_cache(storage_id)
+        # Note: Cache invalidation now handled at orchestrator level
 
         # Execute using .local() instead of remote call
         self._server_instance.remove_storage.local(storage_id)
@@ -283,9 +253,7 @@ class MockClient(ClientInterface):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        input_tensor_ids = [
-            metadata["tensor_id"] for metadata in input_tensor_metadata
-        ]
+        input_tensor_ids = [metadata["tensor_id"] for metadata in input_tensor_metadata]
         log.info(f"📡 Mock Client sending Input Tensor IDs: {input_tensor_ids}")
         log.info(f"📡 Mock Client sending Output Tensor IDs: {output_tensor_ids}")
 
@@ -378,9 +346,7 @@ class MockClient(ClientInterface):
         This should not be called in the mock client since we execute directly,
         but we provide it for compatibility.
         """
-        # Invalidate cache immediately for storage-modifying operations
-        if invalidate_storage_ids:
-            self.invalidate_multiple_storage_caches(invalidate_storage_ids)
+        # Note: Cache invalidation now handled at orchestrator level
 
         # For mock client, we should not queue calls, but execute directly
         # This method is mainly for compatibility with the base class
@@ -420,9 +386,7 @@ class MockClient(ClientInterface):
         raw_bytes = self._server_instance.get_tensor_by_id.local(tensor_id)
 
         if raw_bytes is None:
-            raise RuntimeError(
-                f"Failed to retrieve tensor data for tensor {tensor_id}"
-            )
+            raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
 
         # Reconstruct tensor from raw bytes
         torch_dtype = getattr(torch, dtype.replace("torch.", ""))

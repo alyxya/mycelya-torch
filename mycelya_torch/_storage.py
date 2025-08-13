@@ -363,6 +363,7 @@ def validate_cross_device_operation_tensor_ids(tensor_ids: List[int]) -> None:
                 f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"
             )
 
+
 def validate_cross_device_operation(storage_ids: List[int]) -> None:
     """Validate that all storage IDs belong to the same device.
 

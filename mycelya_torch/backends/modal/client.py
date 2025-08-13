@@ -93,7 +93,7 @@ class ModalClient(ClientInterface):
         shape: List[int],
         stride: List[int],
         storage_offset: int,
-        dtype: str
+        dtype: str,
     ) -> None:
         """
         Create an empty tensor on the remote machine with proper storage layout.
@@ -176,7 +176,7 @@ class ModalClient(ClientInterface):
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
-        source_dtype: str
+        source_dtype: str,
     ) -> None:
         """
         Update an existing tensor with new data and source metadata.
@@ -207,7 +207,7 @@ class ModalClient(ClientInterface):
                 source_shape,
                 source_stride,
                 source_storage_offset,
-                source_dtype
+                source_dtype,
             ),
             kwargs={},
             invalidate_tensor_ids=[tensor_id],

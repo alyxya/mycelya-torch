@@ -93,7 +93,9 @@ def create_modal_app_for_gpu(
 
             return self._model_registry
 
-        def _find_base_tensor_with_same_storage(self, tensor: torch.Tensor) -> Optional[int]:
+        def _find_base_tensor_with_same_storage(
+            self, tensor: torch.Tensor
+        ) -> Optional[int]:
             """Find a tensor ID that shares the same underlying storage."""
             tensor_registry = self._get_tensor_registry()
             target_storage_ptr = tensor.untyped_storage().data_ptr()
@@ -111,7 +113,7 @@ def create_modal_app_for_gpu(
             shape: List[int],
             stride: List[int],
             storage_offset: int,
-            dtype: str
+            dtype: str,
         ) -> None:
             """Create an empty tensor with given tensor_id and proper storage layout."""
             import torch
@@ -126,23 +128,26 @@ def create_modal_app_for_gpu(
 
             # Calculate the required storage size based on shape, stride and offset
             # The storage size needs to accommodate the maximum element accessed
-            numel = sum((s-1) * st for s, st in zip(shape, stride)) + storage_offset + 1
+            numel = (
+                sum((s - 1) * st for s, st in zip(shape, stride)) + storage_offset + 1
+            )
             storage_nbytes = numel * torch.empty(0, dtype=torch_dtype).element_size()
 
             # Create a storage tensor that can hold the data
-            storage_tensor = torch.empty(storage_nbytes, dtype=torch.uint8, device=device)
+            storage_tensor = torch.empty(
+                storage_nbytes, dtype=torch.uint8, device=device
+            )
 
             # Create the tensor view with the specified layout
             tensor = torch.empty(0, dtype=torch_dtype, device=device).set_(
-                storage_tensor.untyped_storage(),
-                storage_offset,
-                shape,
-                stride
+                storage_tensor.untyped_storage(), storage_offset, shape, stride
             )
 
             tensor_registry[tensor_id] = tensor
 
-            log.info(f"✅ Created empty tensor {tensor_id} with shape {shape}, stride {stride}, offset {storage_offset}")
+            log.info(
+                f"✅ Created empty tensor {tensor_id} with shape {shape}, stride {stride}, offset {storage_offset}"
+            )
 
         @modal.method()
         def create_empty_tensor(
@@ -151,10 +156,12 @@ def create_modal_app_for_gpu(
             shape: List[int],
             stride: List[int],
             storage_offset: int,
-            dtype: str
+            dtype: str,
         ) -> None:
             """Create an empty tensor on the remote machine with proper storage layout."""
-            return self._create_empty_tensor_impl(tensor_id, shape, stride, storage_offset, dtype)
+            return self._create_empty_tensor_impl(
+                tensor_id, shape, stride, storage_offset, dtype
+            )
 
         def _create_tensor_view_impl(
             self,
@@ -207,7 +214,7 @@ def create_modal_app_for_gpu(
             source_shape: List[int],
             source_stride: List[int],
             source_storage_offset: int,
-            source_dtype: str
+            source_dtype: str,
         ) -> None:
             """Update an existing tensor with new data and source metadata."""
             import torch
@@ -255,12 +262,16 @@ def create_modal_app_for_gpu(
             source_shape: List[int],
             source_stride: List[int],
             source_storage_offset: int,
-            source_dtype: str
+            source_dtype: str,
         ) -> None:
             """Update an existing tensor with new data and source metadata."""
             return self._update_tensor_impl(
-                tensor_id, raw_data, source_shape, source_stride,
-                source_storage_offset, source_dtype
+                tensor_id,
+                raw_data,
+                source_shape,
+                source_stride,
+                source_storage_offset,
+                source_dtype,
             )
 
         def _get_tensor_data_impl(self, tensor_id: int) -> bytes:
@@ -465,7 +476,6 @@ def create_modal_app_for_gpu(
                 "checkpoint": checkpoint,
             }
 
-
         @modal.method()
         def prepare_huggingface_model(
             self,
@@ -578,9 +588,7 @@ def create_modal_app_for_gpu(
                 # Link the local tensor ID to the remote tensor in the registry
                 tensor_registry[local_tensor_id] = remote_tensor
 
-                log.debug(
-                    f"Linked tensor {local_tensor_id} to parameter {param_name}"
-                )
+                log.debug(f"Linked tensor {local_tensor_id} to parameter {param_name}")
 
                 linked_count += 1
 
@@ -645,7 +653,9 @@ def create_modal_app_for_gpu(
                     tensor = tensor_registry[tensor_id]
                 else:
                     # Create tensor if it doesn't exist (shouldn't happen in normal flow)
-                    raise ValueError(f"Input tensor ID {tensor_id} not found in registry")
+                    raise ValueError(
+                        f"Input tensor ID {tensor_id} not found in registry"
+                    )
 
                 input_tensors.append(tensor)
 
@@ -706,7 +716,9 @@ def create_modal_app_for_gpu(
                     tensor_registry[tensor_id] = result_tensor
                     log.debug(f"💾 Stored output tensor {tensor_id} in registry")
 
-            log.debug(f"📦 Updated {len([t for t in output_tensor_ids if t is not None])} output tensors in registry")
+            log.debug(
+                f"📦 Updated {len([t for t in output_tensor_ids if t is not None])} output tensors in registry"
+            )
 
             # Return metadata if requested
             if return_metadata:

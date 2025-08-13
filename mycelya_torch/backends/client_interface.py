@@ -11,8 +11,6 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
-import torch
-
 from .._batching import RPCBatchQueue
 
 
@@ -35,12 +33,7 @@ class ClientInterface(ABC):
         self.gpu_type = gpu_type
         self.machine_id = machine_id
 
-        # Tensor cache: tensor_id -> CPU tensor
-        self._tensor_cache: Dict[int, torch.Tensor] = {}
-
-        # Track cache statistics for debugging
-        self._cache_hits = 0
-        self._cache_misses = 0
+        # Note: Tensor cache moved to orchestrator level for centralized management
 
         # RPC batching queue
         self._batch_queue = RPCBatchQueue(client_id=machine_id)
@@ -115,7 +108,7 @@ class ClientInterface(ABC):
         shape: List[int],
         stride: List[int],
         storage_offset: int,
-        dtype: str
+        dtype: str,
     ) -> None:
         """
         Create an empty tensor on the remote machine with proper storage layout.
@@ -164,7 +157,7 @@ class ClientInterface(ABC):
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
-        source_dtype: str
+        source_dtype: str,
     ) -> None:
         """
         Update an existing tensor with new data and source metadata.
@@ -221,7 +214,6 @@ class ClientInterface(ABC):
             None
         """
         pass
-
 
     # Operation execution methods
     @abstractmethod
@@ -305,7 +297,6 @@ class ClientInterface(ABC):
         """
         pass
 
-
     # RPC batching helper methods
     def _queue_rpc(
         self,
@@ -330,11 +321,7 @@ class ClientInterface(ABC):
         Returns:
             Future object if return_future=True or call_type="remote", None otherwise
         """
-        # Invalidate cache immediately for tensor-modifying operations
-        if invalidate_tensor_ids:
-            for tensor_id in invalidate_tensor_ids:
-                if tensor_id in self._tensor_cache:
-                    del self._tensor_cache[tensor_id]
+        # Note: Cache invalidation now handled at orchestrator level
 
         # Queue the RPC for batching
         future = self._batch_queue.enqueue_call(
@@ -369,60 +356,7 @@ class ClientInterface(ABC):
             remote_orchestrator.unregister_client_for_batching(self)
             self._registered_for_batching = False
 
-    # Cache invalidation methods (updated for batching timing)
-    def invalidate_tensor_cache(self, tensor_id: int) -> None:
-        """
-        Invalidate cache entry for a specific tensor ID.
-
-        This method should be called whenever a tensor has been modified
-        on the remote side to ensure cache consistency. With batching,
-        invalidation happens at queue time to maintain correct semantics.
-
-        Args:
-            tensor_id: Tensor ID to invalidate
-        """
-        if tensor_id in self._tensor_cache:
-            del self._tensor_cache[tensor_id]
-
-    def invalidate_multiple_tensor_caches(self, tensor_ids: List[int]) -> None:
-        """
-        Invalidate cache entries for multiple tensor IDs.
-
-        This method provides efficient batch invalidation for operations
-        that modify multiple tensors.
-
-        Args:
-            tensor_ids: List of tensor IDs to invalidate
-        """
-        for tensor_id in tensor_ids:
-            if tensor_id in self._tensor_cache:
-                del self._tensor_cache[tensor_id]
-
-    def clear_storage_cache(self) -> None:
-        """
-        Clear all cached storage data.
-
-        This method can be used for cleanup or when the client is stopped.
-        """
-        self._tensor_cache.clear()
-
-    def get_cache_stats(self) -> Dict[str, int]:
-        """
-        Get cache statistics for debugging and monitoring.
-
-        Returns:
-            Dictionary with cache statistics
-        """
-        total_requests = self._cache_hits + self._cache_misses
-        hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0.0
-
-        return {
-            "cache_size": len(self._tensor_cache),
-            "cache_hits": self._cache_hits,
-            "cache_misses": self._cache_misses,
-            "hit_rate": hit_rate,
-            "total_requests": total_requests,
-        }
+    # Note: Cache methods removed - caching now handled at orchestrator level
 
     # Context manager methods (optional to override, but provide default behavior)
     def __enter__(self):
@@ -433,7 +367,7 @@ class ClientInterface(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - stops the machine."""
         self.stop()
-        self.clear_storage_cache()
+        # Note: Cache cleanup removed - handled at orchestrator level
         self._unregister_for_batching()
 
     @abstractmethod
