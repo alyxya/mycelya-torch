@@ -735,6 +735,57 @@ class Orchestrator:
             log.warning(f"Failed to remove storage {storage_id}: {e}")
             return False
 
+    # HuggingFace integration methods
+    def prepare_huggingface_model(self, machine: "RemoteMachine", checkpoint: str, torch_dtype: str = None, trust_remote_code: bool = False) -> dict:
+        """Prepare a HuggingFace model on remote machine."""
+        client = self._get_validated_client(machine)
+        return client.prepare_huggingface_model(
+            checkpoint=checkpoint,
+            torch_dtype=torch_dtype,
+            trust_remote_code=trust_remote_code,
+        )
+
+    def ensure_tensor_exists(self, machine: "RemoteMachine", tensor: "torch.Tensor") -> None:
+        """Ensure tensor exists on remote machine."""
+        client = self._get_validated_client(machine)
+        client._ensure_tensor_exists(tensor)
+
+    def link_model_tensors(self, machine: "RemoteMachine", local_storage_ids: list, parameter_names: list) -> None:
+        """Link model tensors on remote machine."""
+        client = self._get_validated_client(machine)
+        client.link_model_tensors(local_storage_ids, parameter_names)
+
+    # Storage cleanup methods
+    def get_tensor_ids_for_storage(self, storage_id: int) -> list:
+        """Get tensor IDs associated with a storage ID."""
+        client = self._get_client_for_storage(storage_id)
+        return client._get_tensor_ids_for_storage(storage_id)
+
+    def remove_tensors(self, machine: "RemoteMachine", tensor_ids: list) -> None:
+        """Remove tensors from remote machine."""
+        client = self._get_validated_client(machine)
+        client.remove_tensors(tensor_ids)
+
+    def remove_tensor_from_storage_mapping(self, machine: "RemoteMachine", storage_id: int, tensor_id: int) -> None:
+        """Remove tensor from storage mapping on remote machine."""
+        client = self._get_validated_client(machine)
+        client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
+
+    def get_tensor_ids_for_storage_by_device(self, device_index: int, storage_id: int) -> list:
+        """Get tensor IDs associated with a storage ID by device index."""
+        client = self.get_client_by_device_index(device_index)
+        return client._get_tensor_ids_for_storage(storage_id)
+
+    def remove_tensors_by_device(self, device_index: int, tensor_ids: list) -> None:
+        """Remove tensors from remote machine by device index."""
+        client = self.get_client_by_device_index(device_index)
+        client.remove_tensors(tensor_ids)
+
+    def remove_tensor_from_storage_mapping_by_device(self, device_index: int, storage_id: int, tensor_id: int) -> None:
+        """Remove tensor from storage mapping by device index."""
+        client = self.get_client_by_device_index(device_index)
+        client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
+
 
 # Global orchestrator instance (Modal provider implementation)
 orchestrator = Orchestrator()

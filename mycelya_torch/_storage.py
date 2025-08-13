@@ -148,23 +148,20 @@ class StorageRegistry:
                 )
                 return
 
-            # Get client and handle tensor cleanup using new tensor-based approach
-            client = device.get_client()
-
-            # Get all tensor IDs associated with this storage
-            tensor_ids = client._get_tensor_ids_for_storage(storage_id)
+            # Get all tensor IDs associated with this storage using orchestrator
+            tensor_ids = orchestrator.get_tensor_ids_for_storage_by_device(device_idx, storage_id)
 
             if tensor_ids:
                 log.info(
                     f"Cleaning up {len(tensor_ids)} tensor IDs for storage {storage_id}"
                 )
 
-                # Remove tensors from remote side
-                client.remove_tensors(list(tensor_ids))
+                # Remove tensors from remote side using orchestrator
+                orchestrator.remove_tensors_by_device(device_idx, list(tensor_ids))
 
-                # Clean up client-side mapping
+                # Clean up client-side mapping using orchestrator
                 for tensor_id in tensor_ids:
-                    client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
+                    orchestrator.remove_tensor_from_storage_mapping_by_device(device_idx, storage_id, tensor_id)
 
                 log.info(
                     f"✅ Successfully cleaned up {len(tensor_ids)} tensors for storage {storage_id} "

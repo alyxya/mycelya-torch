@@ -115,16 +115,21 @@ def create_huggingface_model_from_remote(
         f"Creating HuggingFace model {checkpoint} with remote tensors on {machine.machine_id}"
     )
 
-    # Get the client for this machine
-    client = machine.get_client()
-    if not client.is_running():
+    # Check if machine is running
+    device_index = machine.remote_index
+    if device_index is None:
+        raise RuntimeError(f"Machine {machine.machine_id} not registered")
+
+    from ._orchestrator import orchestrator
+    if not orchestrator.is_client_running(device_index):
         raise RuntimeError(
             f"Machine {machine.machine_id} is not running. Call machine.start() first."
         )
 
     # Step 1: Prepare model on remote machine
     log.info(f"Preparing model {checkpoint} on remote machine...")
-    remote_data = client.prepare_huggingface_model(
+    remote_data = orchestrator.prepare_huggingface_model(
+        machine=machine,
         checkpoint=checkpoint,
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
@@ -199,7 +204,7 @@ def create_huggingface_model_from_remote(
 
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
-        client._ensure_tensor_exists(remote_tensor)
+        orchestrator.ensure_tensor_exists(machine, remote_tensor)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)
@@ -237,7 +242,7 @@ def create_huggingface_model_from_remote(
 
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
-        client._ensure_tensor_exists(remote_tensor)
+        orchestrator.ensure_tensor_exists(machine, remote_tensor)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)
@@ -259,20 +264,22 @@ def create_huggingface_model_from_remote(
     log.info(
         f"🔗 Queueing linking of {len(local_storage_ids)} local storage IDs to remote model parameters..."
     )
-    client.link_model_tensors(local_storage_ids, parameter_names)
+    orchestrator.link_model_tensors(machine, local_storage_ids, parameter_names)
 
     # Wait for all batched operations (including tensor linking) to complete
     log.info("🚀 Waiting for all storage operations and tensor linking to complete...")
-    if hasattr(client, "_batch_queue") and client._batch_queue:
-        # Wake up the batch processor and wait for completion
-        from ._orchestrator import orchestrator
+    # Check if client has batch queue (get client through orchestrator for checking)
+    device_index = machine.remote_index
+    if device_index is not None:
+        client = orchestrator.get_client_by_device_index(device_index)
+        if hasattr(client, "_batch_queue") and client._batch_queue:
+            # Wake up the batch processor and wait for completion
+            orchestrator.wake_batch_thread_for_blocking_rpc()
 
-        orchestrator.wake_batch_thread_for_blocking_rpc()
+            # Wait a moment for batch processing to complete
+            import time
 
-        # Wait a moment for batch processing to complete
-        import time
-
-        time.sleep(0.5)  # Give time for batch to process
+            time.sleep(0.5)  # Give time for batch to process
 
     log.info("✅ Model tensor linking completed successfully")
 
