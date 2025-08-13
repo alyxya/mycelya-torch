@@ -41,6 +41,10 @@ class Orchestrator:
     def __init__(self):
         # Simple utility-based architecture - no service objects needed
 
+        # Centralized client management by device index
+        self._clients: Dict[int, ClientInterface] = {}  # device_index -> client
+        self._client_lock = threading.RLock()
+
         # RPC Batching System
         self._batch_clients: Set[ClientInterface] = set()
         self._batch_lock = threading.RLock()
@@ -67,9 +71,62 @@ class Orchestrator:
         # Register cleanup on exit
         atexit.register(self._cleanup_batch_thread)
 
-    def _get_device_client(self, machine: "RemoteMachine"):
-        """Get the active client for a specific machine."""
-        return machine._client
+
+    # Client management methods
+    def register_client(self, device_index: int, client: ClientInterface) -> None:
+        """Register a client for a specific device index."""
+        with self._client_lock:
+            if device_index in self._clients:
+                # Stop existing client if it exists
+                existing_client = self._clients[device_index]
+                if existing_client.is_running():
+                    existing_client.stop()
+
+            self._clients[device_index] = client
+            log.info(f"✅ ORCHESTRATOR: Registered client for device index {device_index}")
+
+    def unregister_client(self, device_index: int) -> None:
+        """Unregister a client for a specific device index."""
+        with self._client_lock:
+            if device_index in self._clients:
+                client = self._clients.pop(device_index)
+                if client.is_running():
+                    client.stop()
+                log.info(f"✅ ORCHESTRATOR: Unregistered client for device index {device_index}")
+
+    def get_client_by_device_index(self, device_index: int) -> ClientInterface:
+        """Get client by device index."""
+        with self._client_lock:
+            client = self._clients.get(device_index)
+            if client is None:
+                raise RuntimeError(f"No client registered for device index {device_index}")
+            if not client.is_running():
+                raise RuntimeError(f"Client for device index {device_index} is not running")
+            return client
+
+    def start_client(self, device_index: int) -> None:
+        """Start a client by device index."""
+        with self._client_lock:
+            client = self._clients.get(device_index)
+            if client is None:
+                raise RuntimeError(f"No client registered for device index {device_index}")
+            if not client.is_running():
+                client.start()
+                log.info(f"✅ ORCHESTRATOR: Started client for device index {device_index}")
+
+    def stop_client(self, device_index: int) -> None:
+        """Stop a client by device index."""
+        with self._client_lock:
+            client = self._clients.get(device_index)
+            if client is not None and client.is_running():
+                client.stop()
+                log.info(f"✅ ORCHESTRATOR: Stopped client for device index {device_index}")
+
+    def is_client_running(self, device_index: int) -> bool:
+        """Check if a client is running for a device index."""
+        with self._client_lock:
+            client = self._clients.get(device_index)
+            return client is not None and client.is_running()
 
     # Background thread management for RPC batching
     def _start_batch_thread(self) -> None:
@@ -85,7 +142,19 @@ class Orchestrator:
             log.info("🧵 Started RPC batch processing thread")
 
     def _cleanup_batch_thread(self) -> None:
-        """Clean up the background batch processing thread."""
+        """Clean up the background batch processing thread and all clients."""
+        # Stop all clients first
+        with self._client_lock:
+            for device_index, client in list(self._clients.items()):
+                if client.is_running():
+                    try:
+                        client.stop()
+                        log.info(f"🛑 Stopped client for device index {device_index}")
+                    except Exception as e:
+                        log.warning(f"⚠️ Error stopping client for device index {device_index}: {e}")
+            self._clients.clear()
+
+        # Then stop the batch processing thread
         if self._batch_thread and self._batch_thread.is_alive():
             log.info("🛑 Shutting down RPC batch processing thread")
             self._batch_shutdown.set()
@@ -511,16 +580,11 @@ class Orchestrator:
         Raises:
             RuntimeError: If client is None or not running
         """
-        client = machine._client
-        if client is None:
-            raise RuntimeError(f"No client available for machine {machine.machine_id}")
+        device_index = machine.remote_index
+        if device_index is None:
+            raise RuntimeError(f"Machine {machine.machine_id} not registered with device registry")
 
-        if not client.is_running():
-            raise RuntimeError(
-                f"Client for machine {machine.machine_id} is not running"
-            )
-
-        return client
+        return self.get_client_by_device_index(device_index)
 
     def _ensure_client_running(self, client: ClientInterface) -> None:
         """Ensure a client is running, with basic retry logic.

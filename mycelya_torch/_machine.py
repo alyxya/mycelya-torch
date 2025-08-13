@@ -123,23 +123,22 @@ class RemoteMachine:
         else:
             self.retries = retries
         self.machine_id = self._generate_machine_id()
-        self._client = None
 
         # Validate GPU type is supported by provider
         self._validate_gpu_support()
 
-        # Create the client
-        self._create_client()
-
-        # Start the client if requested
-        if start:
-            self.start()
-
-        # Register with device registry
+        # Register with device registry first to get device index
         from ._device import get_device_registry
 
         registry = get_device_registry()
         registry.register_device(self)
+
+        # Create and register the client with orchestrator
+        self._create_and_register_client()
+
+        # Start the client if requested
+        if start:
+            self.start()
 
         # Register cleanup on exit
         atexit.register(self.stop)
@@ -174,14 +173,15 @@ class RemoteMachine:
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
 
-    def _create_client(self) -> None:
-        """Create the client for this device."""
+    def _create_and_register_client(self) -> None:
+        """Create the client for this device and register it with the orchestrator."""
         try:
+            client = None
             if self.provider == CloudProvider.MODAL:
                 # Import here to avoid circular imports
                 from .backends.modal.client import ModalClient
 
-                self._client = ModalClient(
+                client = ModalClient(
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
@@ -191,7 +191,7 @@ class RemoteMachine:
                 # Import here to avoid circular imports
                 from .backends.mock.client import MockClient
 
-                self._client = MockClient(
+                client = MockClient(
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
@@ -199,38 +199,53 @@ class RemoteMachine:
                 )
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
+
+            # Register client with orchestrator using device index
+            if client is not None:
+                device_index = self.remote_index
+                if device_index is None:
+                    raise RuntimeError("Device not properly registered with device registry")
+
+                from ._orchestrator import orchestrator
+                orchestrator.register_client(device_index, client)
+
         except ImportError as e:
             log.warning(f"Remote execution not available: {e}")
             # Continue without remote execution capability
         except Exception as e:
-            log.error(f"Failed to create client: {e}")
+            log.error(f"Failed to create and register client: {e}")
             # Continue without remote execution capability
 
     def start(self) -> None:
         """Start the client for this device."""
-        if self._client is None:
-            log.warning("Cannot start: client not created")
+        device_index = self.remote_index
+        if device_index is None:
+            log.warning("Cannot start: device not registered")
             return
 
         try:
-            self._client.start()
-            log.info(f"Started client: {self._client}")
+            from ._orchestrator import orchestrator
+            orchestrator.start_client(device_index)
+            log.info(f"Started client for machine: {self.machine_id}")
         except Exception as e:
             log.error(f"Failed to start client: {e}")
             # Continue without remote execution capability
 
     def stop(self) -> None:
         """Stop the client for this device."""
-        if self._client and self._client.is_running():
-            try:
-                self._client.stop()
-                log.info(f"Stopped client: {self.machine_id}")
-            except Exception as e:
-                # Don't log full stack traces during shutdown
-                log.warning(
-                    f"Error stopping client {self.machine_id}: {type(e).__name__}"
-                )
-        self._client = None
+        device_index = self.remote_index
+        if device_index is None:
+            return
+
+        try:
+            from ._orchestrator import orchestrator
+            orchestrator.unregister_client(device_index)
+            log.info(f"Stopped and unregistered client: {self.machine_id}")
+        except Exception as e:
+            # Don't log full stack traces during shutdown
+            log.warning(
+                f"Error stopping client {self.machine_id}: {type(e).__name__}"
+            )
 
     def get_client(self):
         """Get the client for this device.
@@ -241,16 +256,20 @@ class RemoteMachine:
         Raises:
             RuntimeError: If client is not available or not running
         """
-        if self._client is None:
-            raise RuntimeError(f"No client available for machine {self.machine_id}")
-        if not self._client.is_running():
-            raise RuntimeError(f"Client for machine {self.machine_id} is not running")
-        return self._client
+        device_index = self.remote_index
+        if device_index is None:
+            raise RuntimeError(f"Machine {self.machine_id} not registered with device registry")
+
+        from ._orchestrator import orchestrator
+        return orchestrator.get_client_by_device_index(device_index)
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
-        if self._client is None or not self._client.is_running():
-            self.start()
+        device_index = self.remote_index
+        if device_index is not None:
+            from ._orchestrator import orchestrator
+            if not orchestrator.is_client_running(device_index):
+                self.start()
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
