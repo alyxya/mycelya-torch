@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 import torch
 
@@ -12,7 +12,6 @@ from ._logging import get_logger
 from ._storage import (
     create_storage,
     free_storage_with_id,
-    get_storage_device,
     resize_storage_by_id,
 )
 
@@ -187,9 +186,6 @@ class Driver:
     def free_storage_with_id(self, storage_id: int) -> bool:
         return free_storage_with_id(storage_id)
 
-    @register(registry)
-    def get_storage_device(self, storage_id: int) -> Optional[int]:
-        return get_storage_device(storage_id)
 
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:

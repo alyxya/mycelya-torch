@@ -13,7 +13,7 @@ This module manages storage IDs and their lifecycle:
 """
 
 import threading
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from ._device import get_device_registry
 from ._logging import get_logger
@@ -77,10 +77,6 @@ class StorageRegistry:
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return storage_id
 
-    def get_storage_device(self, storage_id: int) -> Optional[int]:
-        """Get device index for a storage ID"""
-        storage_id = int(storage_id)
-        return self.storage_id_to_device.get(storage_id)
 
     def register_tensor_id(self, tensor_id: int, device_index: int) -> None:
         """Register a tensor ID with its device."""
@@ -191,7 +187,7 @@ class StorageRegistry:
             storage_id = int(storage_id)
 
             # Get device index for this storage
-            device_idx = self.get_storage_device(storage_id)
+            device_idx = self.storage_id_to_device.get(storage_id)
             if device_idx is None:
                 log.warning(f"No device found for storage {storage_id}")
                 return False
@@ -231,9 +227,6 @@ def free_storage_with_id(storage_id: int) -> bool:
     return _storage_registry.free_storage_with_id(storage_id)
 
 
-def get_storage_device(storage_id: int) -> Optional[int]:
-    """Get device index for a storage ID."""
-    return _storage_registry.get_storage_device(storage_id)
 
 
 def register_tensor_id(tensor_id: int, device_index: int) -> None:
@@ -266,7 +259,7 @@ def get_machine_for_storage(storage_id: int) -> RemoteMachine:
         RuntimeError: If no device or machine found for storage
     """
     # Get device index for this storage
-    device_idx = get_storage_device(storage_id)
+    device_idx = _storage_registry.storage_id_to_device.get(storage_id)
     if device_idx is None:
         raise RuntimeError(f"No device found for storage {storage_id}")
 

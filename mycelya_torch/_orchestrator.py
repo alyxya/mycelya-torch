@@ -429,9 +429,9 @@ class Orchestrator:
             RuntimeError: If storage, machine, or client not found/available
         """
         try:
-            from ._storage import get_storage_device
+            from ._storage import _storage_registry
 
-            device_index = get_storage_device(storage_id)
+            device_index = _storage_registry.storage_id_to_device.get(storage_id)
             if device_index is None:
                 raise RuntimeError(f"No device found for storage {storage_id}")
 
