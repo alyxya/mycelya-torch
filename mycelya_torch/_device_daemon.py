@@ -228,8 +228,15 @@ class Driver:
     # Event operations (placeholders for now)
     @register(registry)
     def create_event(self, device_idx: int, flag: int) -> int:
-        """Create event - placeholder implementation"""
-        return 1
+        """Create event - returns event ID for mycelya device"""
+        # For mycelya devices, we use simple incremental event IDs
+        # In a real implementation, this might create actual event objects
+        # but for remote execution, we just need unique identifiers
+        import time
+        # Use current time microseconds as unique event ID
+        event_id = int(time.time() * 1000000) % (2**31)  # Keep it positive 32-bit
+        log.debug(f"Created event ID {event_id} on device {device_idx} with flag {flag}")
+        return event_id
 
     @register(registry)
     def destroy_event(self, event: int, device_idx: int) -> None:

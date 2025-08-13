@@ -194,6 +194,13 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
     return c10::Stream(c10::Stream::UNSAFE, s.device(), previous_stream_id);
   }
 
+  void createEvent(void **event, const c10::DeviceIndex device_index,
+                   const c10::EventFlag flag) const {
+    py::gil_scoped_acquire acquire;
+    auto event_id = get_method("create_event")(device_index, (int64_t)flag).cast<int64_t>();
+    *event = reinterpret_cast<void*>(event_id);
+  }
+
   void
   destroyEvent(void *event,
                const c10::DeviceIndex device_index) const noexcept override {
