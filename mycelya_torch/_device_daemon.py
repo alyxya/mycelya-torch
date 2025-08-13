@@ -1,7 +1,6 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import threading
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional
 
@@ -64,9 +63,8 @@ class DeviceRegistry:
             lambda: [0]
         )  # device_idx -> list of stream_ids
 
-        # Event ID generation - thread-safe counter
+        # Event ID generation - simple counter (GIL-protected)
         self._event_id_counter = 1
-        self._event_id_lock = threading.Lock()
 
     def get_device_count(self) -> int:
         """Return number of devices"""
@@ -149,10 +147,9 @@ class DeviceRegistry:
         return previous_stream_id
 
     def get_new_event_id(self) -> int:
-        """Generate a new unique event ID using thread-safe counter"""
-        with self._event_id_lock:
-            event_id = self._event_id_counter
-            self._event_id_counter += 1
+        """Generate a new unique event ID using simple counter (GIL-protected)"""
+        event_id = self._event_id_counter
+        self._event_id_counter += 1
         return event_id
 
 
