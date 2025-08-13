@@ -14,12 +14,12 @@ Future backends may include:
 """
 
 # Import standardized interface components
-from .client_interface import ClientInterface
+from .client_interface import Client
 
 # Import available backends
 try:
     from . import modal
 
-    __all__ = ["ClientInterface", "modal"]
+    __all__ = ["Client", "modal"]
 except ImportError:
-    __all__ = ["ClientInterface"]
+    __all__ = ["Client"]

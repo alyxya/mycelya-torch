@@ -14,11 +14,11 @@ from typing import Any, Dict, List, Optional, Union
 from .._batching import RPCBatchQueue
 
 
-class ClientInterface(ABC):
+class Client(ABC):
     """
     Abstract base class defining the interface for cloud provider clients.
 
-    All cloud provider clients (ModalClient, AWSClient, etc.) must inherit from this
+    All cloud provider clients (ModalClient, MockClient, etc.) must inherit from this
     class and implement all abstract methods to ensure consistent API across providers.
     """
 

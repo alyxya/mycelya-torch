@@ -19,7 +19,7 @@ from ._batching import BatchProcessor
 from ._logging import get_logger
 from ._machine import RemoteMachine
 from ._storage import get_machine_for_storage
-from .backends.client_interface import ClientInterface
+from .backends.client_interface import Client
 
 log = get_logger(__name__)
 
@@ -42,11 +42,11 @@ class Orchestrator:
         # Simple utility-based architecture - no service objects needed
 
         # Centralized client management by device index
-        self._clients: Dict[int, ClientInterface] = {}  # device_index -> client
+        self._clients: Dict[int, Client] = {}  # device_index -> client
         self._client_lock = threading.RLock()
 
         # RPC Batching System
-        self._batch_clients: Set[ClientInterface] = set()
+        self._batch_clients: Set[Client] = set()
         self._batch_lock = threading.RLock()
         self._batch_thread: Optional[threading.Thread] = None
         self._batch_shutdown = threading.Event()
@@ -73,7 +73,7 @@ class Orchestrator:
 
 
     # Client management methods
-    def register_client(self, device_index: int, client: ClientInterface) -> None:
+    def register_client(self, device_index: int, client: Client) -> None:
         """Register a client for a specific device index."""
         with self._client_lock:
             if device_index in self._clients:
@@ -86,7 +86,11 @@ class Orchestrator:
             log.info(f"✅ ORCHESTRATOR: Registered client for device index {device_index}")
 
     def unregister_client(self, device_index: int) -> None:
-        """Unregister a client for a specific device index."""
+        """Unregister a client for a specific device index (stops and removes from registry).
+
+        Note: This should only be used during final cleanup/destruction.
+        For normal operation, use stop_client() to stop without unregistering.
+        """
         with self._client_lock:
             if device_index in self._clients:
                 client = self._clients.pop(device_index)
@@ -94,7 +98,7 @@ class Orchestrator:
                     client.stop()
                 log.info(f"✅ ORCHESTRATOR: Unregistered client for device index {device_index}")
 
-    def get_client_by_device_index(self, device_index: int) -> ClientInterface:
+    def get_client_by_device_index(self, device_index: int) -> Client:
         """Get client by device index."""
         with self._client_lock:
             client = self._clients.get(device_index)
@@ -115,7 +119,7 @@ class Orchestrator:
                 log.info(f"✅ ORCHESTRATOR: Started client for device index {device_index}")
 
     def stop_client(self, device_index: int) -> None:
-        """Stop a client by device index."""
+        """Stop a client by device index (but keep it registered)."""
         with self._client_lock:
             client = self._clients.get(device_index)
             if client is not None and client.is_running():
@@ -190,7 +194,7 @@ class Orchestrator:
 
         log.info("🏁 RPC batch processing loop terminated")
 
-    def _process_client_batch(self, client: ClientInterface) -> None:
+    def _process_client_batch(self, client: Client) -> None:
         """Process a batch of RPCs for a specific client."""
         if not hasattr(client, "_batch_queue"):
             return
@@ -217,13 +221,13 @@ class Orchestrator:
                 if call.future and not call.future.done():
                     call.future.set_exception(e)
 
-    def register_client_for_batching(self, client: ClientInterface) -> None:
+    def register_client_for_batching(self, client: Client) -> None:
         """Register a client for RPC batching."""
         with self._batch_lock:
             self._batch_clients.add(client)
             log.info(f"📝 Registered client for batching: {client}")
 
-    def unregister_client_for_batching(self, client: ClientInterface) -> None:
+    def unregister_client_for_batching(self, client: Client) -> None:
         """Unregister a client from RPC batching."""
         with self._batch_lock:
             self._batch_clients.discard(client)
@@ -235,67 +239,8 @@ class Orchestrator:
             self._batch_wakeup.set()
             log.debug("💨 Signaled batch thread to wake up for blocking RPC")
 
-    def get_batch_stats(self) -> Dict[str, Any]:
-        """Get statistics about RPC batching across all clients."""
-        with self._batch_lock:
-            stats = {
-                "registered_clients": len(self._batch_clients),
-                "batch_interval": self._batch_interval,
-                "thread_alive": self._batch_thread.is_alive()
-                if self._batch_thread
-                else False,
-                "clients": [],
-            }
 
-            for client in self._batch_clients:
-                if hasattr(client, "_batch_queue"):
-                    client_stats = client._batch_queue.get_stats()
-                    stats["clients"].append(client_stats)
 
-            return stats
-
-    def get_cache_stats(self) -> Dict[str, Any]:
-        """Get comprehensive orchestrator cache statistics and diagnostics.
-
-        Returns:
-            Dictionary containing detailed cache statistics including mappings and efficiency metrics
-        """
-        with self._cache_lock:
-            total_requests = self._cache_hits + self._cache_misses
-            hit_rate = self._cache_hits / total_requests if total_requests > 0 else 0.0
-
-            # Calculate total cache memory usage
-            total_bytes = sum(len(data) for data in self._storage_cache.values())
-            cache_entries = len(self._storage_cache)
-
-            return {
-                "cache_entries": cache_entries,
-                "cache_hits": self._cache_hits,
-                "cache_misses": self._cache_misses,
-                "hit_rate_percent": round(hit_rate * 100, 2),
-                "total_requests": total_requests,
-                "total_bytes_cached": total_bytes,
-                "average_bytes_per_entry": round(total_bytes / cache_entries, 2)
-                if cache_entries > 0
-                else 0.0,
-                "tensor_storage_mappings": len(self._tensor_to_storage_map),
-                "storage_tensor_mappings": len(self._storage_to_tensors_map),
-                "mapping_efficiency": round(
-                    len(self._tensor_to_storage_map) / cache_entries, 2
-                )
-                if cache_entries > 0
-                else 0.0,
-            }
-
-    def clear_cache(self) -> None:
-        """Clear orchestrator cache and reset statistics."""
-        with self._cache_lock:
-            self._storage_cache.clear()
-            self._tensor_to_storage_map.clear()
-            self._storage_to_tensors_map.clear()
-            self._cache_hits = 0
-            self._cache_misses = 0
-            log.info("🗑️ Cleared orchestrator storage cache and mappings")
 
     def _invalidate_cache_for_storage(self, storage_id: int) -> None:
         """Invalidate cache entry for a specific storage ID.
@@ -376,16 +321,6 @@ class Orchestrator:
 
         return invalidated_count
 
-    def _get_storage_id_from_tensor(self, tensor: torch.Tensor) -> int:
-        """Extract storage ID from a tensor.
-
-        Args:
-            tensor: The tensor to extract storage ID from
-
-        Returns:
-            The storage ID
-        """
-        return tensor.untyped_storage().data_ptr()
 
     def _reconstruct_tensor_from_cached_storage(
         self,
@@ -453,36 +388,7 @@ class Orchestrator:
         with self._cache_lock:
             return self._tensor_to_storage_map.get(tensor_id)
 
-    def _unregister_tensor_storage_mapping(self, tensor_id: int) -> None:
-        """Remove tensor-storage mapping when tensor is freed.
 
-        Args:
-            tensor_id: The tensor ID to unregister
-        """
-        with self._cache_lock:
-            storage_id = self._tensor_to_storage_map.pop(tensor_id, None)
-            if storage_id is not None:
-                tensor_set = self._storage_to_tensors_map.get(storage_id)
-                if tensor_set is not None:
-                    tensor_set.discard(tensor_id)
-                    # Clean up empty sets
-                    if not tensor_set:
-                        del self._storage_to_tensors_map[storage_id]
-                log.debug(
-                    f"📋 Unregistered mapping: tensor {tensor_id} -> storage {storage_id}"
-                )
-
-    def _get_tensor_ids_for_storage(self, storage_id: int) -> Set[int]:
-        """Get all tensor IDs that map to a specific storage ID.
-
-        Args:
-            storage_id: The storage ID to look up
-
-        Returns:
-            Set of tensor IDs that map to this storage, empty set if none
-        """
-        with self._cache_lock:
-            return self._storage_to_tensors_map.get(storage_id, set()).copy()
 
     def _invalidate_output_tensor_caches(
         self, output_tensor_ids: List[Optional[int]]
@@ -512,14 +418,14 @@ class Orchestrator:
             )
             log.debug(f"🗑️ Invalidated {invalidated_count} output tensor caches")
 
-    def _get_client_for_storage(self, storage_id: int) -> ClientInterface:
+    def _get_client_for_storage(self, storage_id: int) -> Client:
         """Get the client for a specific storage ID with validation.
 
         Args:
             storage_id: Storage ID to resolve to client
 
         Returns:
-            ClientInterface: The client managing this storage
+            Client: The client managing this storage
 
         Raises:
             RuntimeError: If storage, machine, or client not found/available
@@ -532,14 +438,14 @@ class Orchestrator:
                 f"Failed to resolve client for storage {storage_id}: {e}"
             ) from e
 
-    def _get_client_for_tensor_id(self, tensor_id: int) -> ClientInterface:
+    def _get_client_for_tensor_id(self, tensor_id: int) -> Client:
         """Get the client for a specific tensor ID with validation.
 
         Args:
             tensor_id: Tensor ID to resolve to client
 
         Returns:
-            ClientInterface: The client managing this tensor
+            Client: The client managing this tensor
 
         Raises:
             RuntimeError: If tensor, machine, or client not found/available
@@ -554,28 +460,15 @@ class Orchestrator:
                 f"Failed to resolve client for tensor {tensor_id}: {e}"
             ) from e
 
-    def _get_client_for_machine(self, machine: RemoteMachine) -> ClientInterface:
-        """Get the client for a specific machine with validation.
 
-        Args:
-            machine: RemoteMachine to get client for
-
-        Returns:
-            ClientInterface: The validated client for this machine
-
-        Raises:
-            RuntimeError: If client not available or not running
-        """
-        return self._get_validated_client(machine)
-
-    def _get_validated_client(self, machine: RemoteMachine) -> ClientInterface:
+    def _get_validated_client(self, machine: RemoteMachine) -> Client:
         """Get a validated client for a machine, ensuring it's running.
 
         Args:
             machine: RemoteMachine to get client for
 
         Returns:
-            ClientInterface: The validated, running client
+            Client: The validated, running client
 
         Raises:
             RuntimeError: If client is None or not running
@@ -586,152 +479,10 @@ class Orchestrator:
 
         return self.get_client_by_device_index(device_index)
 
-    def _ensure_client_running(self, client: ClientInterface) -> None:
-        """Ensure a client is running, with basic retry logic.
 
-        Args:
-            client: Client to validate
+    # Storage management methods - mirroring Client
 
-        Raises:
-            RuntimeError: If client cannot be started or validated
-        """
-        if not client.is_running():
-            log.warning(f"Client not running, attempting to start: {client}")
-            try:
-                client.start()
-                if not client.is_running():
-                    raise RuntimeError(f"Failed to start client: {client}")
-                log.info(f"Successfully started client: {client}")
-            except Exception as e:
-                raise RuntimeError(f"Failed to start client {client}: {e}") from e
 
-    # Storage management methods - mirroring ClientInterface
-    def create_storage(self, storage_id: int, nbytes: int, device_index: int) -> None:
-        """Create storage on remote machine using device index routing.
-
-        Args:
-            storage_id: Specific ID to use for the storage
-            nbytes: Number of bytes to allocate
-            device_index: Device index to create storage on
-
-        Raises:
-            RuntimeError: If device or client not available
-        """
-        from ._device import get_device_registry
-
-        registry = get_device_registry()
-        machine = registry.get_device_by_index(device_index)
-        if machine is None:
-            raise RuntimeError(f"No machine found for device index {device_index}")
-
-        client = self._get_validated_client(machine)
-        client.create_storage(storage_id, nbytes)
-        log.info(
-            f"✅ ORCHESTRATOR: Created storage {storage_id} on device {device_index}"
-        )
-
-        # Note: No cache invalidation needed for create_storage - new storage has no cached data
-
-    def update_storage(
-        self,
-        storage_id: int,
-        storage_tensor: torch.Tensor,
-        source_shape: List[int],
-        source_stride: List[int],
-        source_storage_offset: int,
-        source_dtype: str,
-        target_shape: List[int],
-        target_stride: List[int],
-        target_storage_offset: int,
-        target_dtype: str,
-    ) -> None:
-        """Update existing storage with storage tensor data.
-
-        Args:
-            storage_id: Storage ID to update
-            storage_tensor: CPU tensor wrapping the storage data (tensor metadata is ignored, only untyped_storage matters)
-            source_shape: Shape of the source data
-            source_stride: Stride of the source data
-            source_storage_offset: Storage offset of the source data
-            source_dtype: Data type of the source data
-            target_shape: Shape of the target view in storage
-            target_stride: Stride of the target view in storage
-            target_storage_offset: Storage offset of the target view in storage
-            target_dtype: Data type of the target view in storage
-
-        Raises:
-            RuntimeError: If storage or client not available
-        """
-        client = self._get_client_for_storage(storage_id)
-        client.update_storage(
-            storage_id,
-            storage_tensor,
-            source_shape,
-            source_stride,
-            source_storage_offset,
-            source_dtype,
-            target_shape,
-            target_stride,
-            target_storage_offset,
-            target_dtype,
-        )
-
-        # Invalidate orchestrator cache for the updated storage
-        self._invalidate_cache_for_storage(storage_id)
-        log.info(f"✅ ORCHESTRATOR: Updated storage {storage_id}")
-
-    def get_storage_tensor(
-        self,
-        storage_id: int,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str,
-    ) -> "torch.Tensor":
-        """Get storage data as a tensor with specified view parameters.
-
-        This is a convenience method that combines _get_storage_data() with tensor
-        reconstruction. Now checks orchestrator cache first.
-
-        Args:
-            storage_id: The storage ID to retrieve
-            shape: Tensor shape for view
-            stride: Tensor stride for view
-            storage_offset: Storage offset for view
-            dtype: Tensor data type
-
-        Returns:
-            CPU tensor reconstructed from storage with specified view
-
-        Raises:
-            RuntimeError: If storage or client not available
-        """
-        # Check orchestrator cache first using helper method
-        cached_bytes = self._get_cached_storage_data(storage_id)
-        if cached_bytes is not None:
-            # Cache hit - reconstruct tensor from cached bytes
-            result = self._reconstruct_tensor_from_cached_storage(
-                cached_bytes, shape, stride, storage_offset, dtype
-            )
-            log.debug(
-                f"✅ ORCHESTRATOR: Retrieved cached tensor for storage {storage_id}"
-            )
-            return result
-
-        # Cache miss - retrieve from client
-        client = self._get_client_for_storage(storage_id)
-        result = client.get_storage_tensor(
-            storage_id, shape, stride, storage_offset, dtype
-        )
-
-        # Cache the result as raw bytes using helper method
-        raw_bytes = result.numpy().tobytes()
-        self._cache_storage_data(storage_id, raw_bytes)
-
-        log.info(
-            f"✅ ORCHESTRATOR: Retrieved and cached tensor for storage {storage_id}"
-        )
-        return result
 
     def get_tensor_by_id(
         self,
@@ -813,21 +564,6 @@ class Orchestrator:
         self._invalidate_cache_for_storage(storage_id)
         log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
 
-    def remove_storage(self, storage_id: int) -> None:
-        """Remove storage from remote machine.
-
-        Args:
-            storage_id: The storage ID to remove
-
-        Raises:
-            RuntimeError: If storage or client not available
-        """
-        client = self._get_client_for_storage(storage_id)
-        client.remove_storage(storage_id)
-
-        # Invalidate orchestrator cache for the removed storage
-        self._invalidate_cache_for_storage(storage_id)
-        log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id}")
 
     # New tensor-based methods for the refactored architecture
     def update_tensor(
@@ -886,33 +622,6 @@ class Orchestrator:
 
         log.info(f"✅ ORCHESTRATOR: Updated tensor {tensor_id}")
 
-    def get_tensor_data(self, tensor_id: int, tensor: torch.Tensor) -> torch.Tensor:
-        """Get tensor data from remote using tensor-based approach.
-
-        Args:
-            tensor_id: The tensor ID (metadata hash)
-            tensor: Reference tensor to get client routing information
-
-        Returns:
-            CPU tensor with the retrieved data
-
-        Raises:
-            RuntimeError: If tensor or client not available
-        """
-        # Get client by first finding the storage ID for the tensor
-        storage_id = tensor.untyped_storage().data_ptr()
-        client = self._get_client_for_storage(storage_id)
-
-        # Get raw bytes from client
-        raw_bytes = client.get_tensor_data(tensor_id)
-
-        # Reconstruct CPU tensor from raw bytes
-        result = torch.frombuffer(bytearray(raw_bytes), dtype=tensor.dtype).reshape(
-            tensor.shape
-        )
-
-        log.info(f"✅ ORCHESTRATOR: Retrieved tensor data for tensor {tensor_id}")
-        return result
 
     def execute_aten_operation(
         self,
@@ -1011,35 +720,6 @@ class Orchestrator:
             log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
             return None
 
-    def _remote_tensor_to_cpu(self, remote_tensor: torch.Tensor) -> torch.Tensor:
-        """Convert remote tensor to CPU tensor by retrieving data from remote GPU."""
-        if remote_tensor.device.type != "mycelya":
-            raise ValueError(
-                f"Expected remote tensor, got device: {remote_tensor.device}"
-            )
-
-        # Get device registry to find the machine
-        from ._device import get_device_registry
-
-        registry = get_device_registry()
-        machine = registry.get_device_by_index(remote_tensor.device.index)
-
-        if machine is None:
-            raise RuntimeError(
-                f"No RemoteMachine found for remote device index {remote_tensor.device.index}"
-            )
-
-        # Get tensor data using storage ID with internal client resolution
-        storage_id = remote_tensor.untyped_storage().data_ptr()
-
-        # Get tensor data from remote storage using new interface
-        return self.get_storage_tensor(
-            storage_id,
-            shape=list(remote_tensor.shape),
-            stride=list(remote_tensor.stride()),
-            storage_offset=remote_tensor.storage_offset(),
-            dtype=str(remote_tensor.dtype),
-        )
 
     def remove_tensor_from_remote(
         self, storage_id: int, machine: "RemoteMachine"

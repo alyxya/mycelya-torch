@@ -239,8 +239,8 @@ class RemoteMachine:
 
         try:
             from ._orchestrator import orchestrator
-            orchestrator.unregister_client(device_index)
-            log.info(f"Stopped and unregistered client: {self.machine_id}")
+            orchestrator.stop_client(device_index)
+            log.info(f"Stopped client: {self.machine_id}")
         except Exception as e:
             # Don't log full stack traces during shutdown
             log.warning(
