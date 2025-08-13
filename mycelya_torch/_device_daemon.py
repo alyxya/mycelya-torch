@@ -1,12 +1,21 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import threading
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional
 
 import torch
 
+from mycelya_torch._device import get_device_registry
+
 from ._logging import get_logger
+from ._storage import (
+    create_storage,
+    free_storage_with_id,
+    get_storage_device,
+    resize_storage_by_id,
+)
 
 log = get_logger(__name__)
 
@@ -40,6 +49,7 @@ class DeviceRegistry:
     - Current device tracking
     - Stream management for each device
     - Device count and validation
+    - Event ID generation
     """
 
     def __init__(self) -> None:
@@ -54,11 +64,13 @@ class DeviceRegistry:
             lambda: [0]
         )  # device_idx -> list of stream_ids
 
+        # Event ID generation - thread-safe counter
+        self._event_id_counter = 1
+        self._event_id_lock = threading.Lock()
+
     def get_device_count(self) -> int:
         """Return number of devices"""
         # Get actual device count from the device registry
-        from mycelya_torch._device import get_device_registry
-
         registry = get_device_registry()
         return len(registry._devices)
 
@@ -136,6 +148,13 @@ class DeviceRegistry:
 
         return previous_stream_id
 
+    def get_new_event_id(self) -> int:
+        """Generate a new unique event ID using thread-safe counter"""
+        with self._event_id_lock:
+            event_id = self._event_id_counter
+            self._event_id_counter += 1
+        return event_id
+
 
 class Driver:
     """Driver that manages device operations with registry-based dispatch"""
@@ -160,8 +179,6 @@ class Driver:
     # Storage operations - delegate to _storage module
     @register(registry)
     def create_storage(self, nbytes: int, device_index: int) -> int:
-        from ._storage import create_storage
-
         storage_id = create_storage(nbytes, device_index)
         if storage_id == 0:
             raise RuntimeError(
@@ -171,20 +188,14 @@ class Driver:
 
     @register(registry)
     def free_storage_with_id(self, storage_id: int) -> bool:
-        from ._storage import free_storage_with_id
-
         return free_storage_with_id(storage_id)
 
     @register(registry)
     def get_storage_device(self, storage_id: int) -> Optional[int]:
-        from ._storage import get_storage_device
-
         return get_storage_device(storage_id)
 
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
-        from ._storage import resize_storage_by_id
-
         return resize_storage_by_id(storage_id, nbytes)
 
     # Device operations
@@ -232,10 +243,10 @@ class Driver:
         # For mycelya devices, we use simple incremental event IDs
         # In a real implementation, this might create actual event objects
         # but for remote execution, we just need unique identifiers
-        import time
-        # Use current time microseconds as unique event ID
-        event_id = int(time.time() * 1000000) % (2**31)  # Keep it positive 32-bit
-        log.debug(f"Created event ID {event_id} on device {device_idx} with flag {flag}")
+        event_id = self.registry_obj.get_new_event_id()
+        log.debug(
+            f"Created event ID {event_id} on device {device_idx} with flag {flag}"
+        )
         return event_id
 
     @register(registry)
