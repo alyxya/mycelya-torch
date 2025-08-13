@@ -40,9 +40,9 @@ def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
     return decorator
 
 
-class DeviceRegistry:
+class MycelyaRuntimeManager:
     """
-    Registry for device and stream management in mycelya-torch.
+    Runtime manager for mycelya-torch backend.
 
     Handles:
     - Current device tracking
@@ -159,7 +159,7 @@ class Driver:
     registry: Dict[str, Callable] = {}
 
     def __init__(self) -> None:
-        self.registry_obj = DeviceRegistry()
+        self.runtime_manager = MycelyaRuntimeManager()
 
     def exec(self, cmd: str, *args: Any) -> Any:
         """Execute a command using the registry pattern"""
@@ -198,40 +198,40 @@ class Driver:
     # Device operations
     @register(registry)
     def device_count(self) -> int:
-        return self.registry_obj.get_device_count()
+        return self.runtime_manager.get_device_count()
 
     @register(registry)
     def get_device(self) -> int:
-        return self.registry_obj.get_device()
+        return self.runtime_manager.get_device()
 
     @register(registry)
     def set_device(self, device_idx: int) -> None:
-        return self.registry_obj.set_device(device_idx)
+        return self.runtime_manager.set_device(device_idx)
 
     @register(registry)
     def unchecked_set_device(self, device_idx: int) -> None:
-        return self.registry_obj.set_device(device_idx)
+        return self.runtime_manager.set_device(device_idx)
 
     @register(registry)
     def exchange_device(self, device_idx: int) -> int:
-        return self.registry_obj.exchange_device(device_idx)
+        return self.runtime_manager.exchange_device(device_idx)
 
     @register(registry)
     def has_primary_context(self, device_idx: int) -> bool:
-        return self.registry_obj.has_primary_context(device_idx)
+        return self.runtime_manager.has_primary_context(device_idx)
 
     # Stream operations
     @register(registry)
     def get_stream(self, device_idx: int) -> int:
-        return self.registry_obj.get_stream(device_idx)
+        return self.runtime_manager.get_stream(device_idx)
 
     @register(registry)
     def get_new_stream(self, device_idx: int, priority: int = 0) -> int:
-        return self.registry_obj.get_new_stream(device_idx, priority)
+        return self.runtime_manager.get_new_stream(device_idx, priority)
 
     @register(registry)
     def exchange_stream(self, stream_id: int, device_idx: int) -> int:
-        return self.registry_obj.exchange_stream(stream_id, device_idx)
+        return self.runtime_manager.exchange_stream(stream_id, device_idx)
 
     # Event operations (placeholders for now)
     @register(registry)
@@ -240,7 +240,7 @@ class Driver:
         # For mycelya devices, we use simple incremental event IDs
         # In a real implementation, this might create actual event objects
         # but for remote execution, we just need unique identifiers
-        event_id = self.registry_obj.get_new_event_id()
+        event_id = self.runtime_manager.get_new_event_id()
         log.debug(
             f"Created event ID {event_id} on device {device_idx} with flag {flag}"
         )
