@@ -11,7 +11,7 @@ Mycelya is a PyTorch extension that uses a metadata hash architecture with custo
 - **Custom PyTorch integration** - Complete TensorImpl/StorageImpl following pytorch-npu patterns
 - **RPC batching** - Background thread processing reduces network overhead
 - **Zero local memory** - Only tensor metadata stored locally, actual data stays on remote GPUs
-- **Multiple GPU support** - T4, L4, A10G, A100, H100, H200, B200 across cloud providers
+- **Multiple GPU support** - 10 GPU types: T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200 across cloud providers
 - **HuggingFace integration** - Direct remote model loading without data transfer
 - **Multi-provider support** - Modal (production), Mock (development), extensible for others
 - **Full autograd support** - Gradients work seamlessly across local/remote boundaries
@@ -204,10 +204,12 @@ ruff format .
 ```
 mycelya_torch/
 ├── __init__.py              # Public API and PyTorch backend registration
-├── device.py               # RemoteMachine and device management
-├── _aten_impl.py            # ATen operation dispatch with meta inference
-├── _remote_orchestrator.py  # Remote execution with RPC batching
-├── _backend_hooks.py        # PyTorch backend hooks and C++ interface bridge
+├── _device.py              # Device registry and RemoteMachine management
+├── _machine.py             # RemoteMachine abstraction
+├── _aten_impl.py           # ATen operation dispatch with meta inference
+├── _orchestrator.py        # Remote execution orchestration with RPC batching
+├── _backend_hooks.py       # PyTorch backend hooks and C++ interface bridge
+├── _storage.py             # Integer-based storage ID system
 ├── _batching.py            # RPC batching system
 ├── _huggingface_utils.py   # HuggingFace model integration
 ├── _logging.py             # Centralized logging system
@@ -230,7 +232,7 @@ _mycelya_torch_modal/
 
 - **Cross-device operations**: Cannot operate between different remote machines directly
 - **Provider dependency**: Modal provider requires Modal account for cloud access
-- **Tensor ID scope**: Tensor IDs are unique within single Python process (not across processes)
+- **Storage ID scope**: Storage IDs are unique within single Python process (not across processes)
 - **Background batching**: RPC batching adds minor latency for individual operations
 
 ## Contributing

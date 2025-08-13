@@ -7,7 +7,7 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 - **Metadata Hash System**: Remote tensors have unique metadata-based hash IDs with `tensor.metadata_hash` property
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns
 - **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution
-- **Multi-GPU Support**: 9 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
+- **Multi-GPU Support**: 10 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
 - **Provider Abstraction**: Pluggable backend system (Modal, Mock providers, extensible for others)
 - **RPC Batching**: Background thread processing for reduced network overhead
 - **HuggingFace Integration**: Direct remote model loading with parameter linking
@@ -67,8 +67,7 @@ To run type checking:
 - `mycelya_torch/_machine.py` - RemoteMachine abstraction supporting Modal and Mock providers
 
 ### Utility and Support Modules
-- `mycelya_torch/_tensor_utils.py` - Clean metadata classes and serialization utilities
-- `mycelya_torch/_storage.py` - Storage ID lifecycle management and cross-device validation
+- `mycelya_torch/_storage.py` - Integer-based storage ID system with thread-safe generation and cross-device validation
 - `mycelya_torch/_batching.py` - RPC batching system with background thread processing
 - `mycelya_torch/_huggingface_utils.py` - Model loading and tensor linking utilities for HuggingFace models
 - `mycelya_torch/_logging.py` - Centralized logging configuration with hierarchical loggers
@@ -109,7 +108,7 @@ To run type checking:
 - **Raw bytes storage**: Direct numpy serialization eliminating torch.save/load overhead
 - **Metadata-based caching**: Shape/stride/offset keys instead of tensor ID parameters
 - **Automatic cache invalidation**: Proper cache semantics with batching operations
-- **Thread-safe tensor ID generation**: Atomic counter for unique sequential IDs
+- **Thread-safe storage ID generation**: Atomic counter for unique sequential storage IDs (1, 2, 3...)
 
 ### Operation Dispatch Flow
 1. **Meta Tensor Inference**: Shape inference using PyTorch's meta device
@@ -171,8 +170,8 @@ for name, param in model.named_parameters():
 
 ## Implementation Details
 
-### Tensor ID System
-- **Sequential incremental IDs** (1, 2, 3...) generated for each mycelya tensor
+### Storage ID System
+- **Sequential incremental storage IDs** (1, 2, 3...) generated for each remote tensor storage
 - **Python API integration**: `tensor.metadata_hash` property and `tensor.get_metadata_hash()` method
 - **Hash-based identification**: Uses FNV-1a hash of shape/stride/dtype/offset/storage_id
 - **Custom TensorImpl integration**: Metadata hash computation in MycelyaTensorImpl
@@ -235,7 +234,7 @@ for name, param in model.named_parameters():
 - **Thorough testing** for all new features
 
 #### Testing Strategy
-- **Critical regression tests**: 12 essential tests covering core functionality (~30 seconds)
+- **Critical regression tests**: 20 essential tests covering core functionality (~30 seconds)
 - **Fast functional tests**: Extended coverage for PR reviews (~2-5 minutes)
 - **Full test suite**: Comprehensive validation for releases (~10-30 minutes)
 - **Test markers**: Use `@pytest.mark.critical` and `@pytest.mark.fast` for categorization
@@ -287,7 +286,7 @@ for name, param in model.named_parameters():
 - Set comprehension syntax improvements
 
 #### Minimal Regression Test Suite (2025-07-22)
-- Created `tests/test_regression.py` with 12 critical tests for every commit
+- Created `tests/test_regression.py` with 20 critical tests for every commit
 - Added pytest markers for test categorization (critical, fast, slow, integration)
 - Regression tests cover: imports, device creation, basic operations, transfers, gradients
 - Target runtime: <30 seconds for critical tests, 2-5 minutes for fast functional tests
@@ -327,4 +326,12 @@ for name, param in model.named_parameters():
 - **Build documentation**: Added comprehensive build configuration details
 - **File structure**: Complete mapping of all source files and their purposes
 
-Last updated: 2025-08-12
+#### Recent Architectural Cleanup (2025-08-13)
+- **Module Reorganization**: Renamed `_device_daemon.py` to `_backend_hooks.py` for better clarity
+- **Simplified Storage Management**: Removed `_tensor_utils.py` and moved to direct integer-based storage ID system
+- **Enhanced Driver Registry**: Cleaned up unused methods and improved command dispatch system
+- **Orchestrator Refinement**: Centralized client management with improved device index mapping
+- **Code Quality**: All ruff linting issues resolved, maintaining zero technical debt
+- **Architecture Stability**: Recent refactoring focused on naming and organization without functional changes
+
+Last updated: 2025-08-13
