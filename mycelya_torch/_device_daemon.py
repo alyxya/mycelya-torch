@@ -189,8 +189,7 @@ class Driver:
 
     # Device operations
     @register(registry)
-    def device_count(self, *args: Any) -> int:
-        assert len(args) == 0
+    def device_count(self) -> int:
         return self.registry_obj.get_device_count()
 
     @register(registry)
