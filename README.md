@@ -207,7 +207,7 @@ mycelya_torch/
 ├── device.py               # RemoteMachine and device management
 ├── _aten_impl.py            # ATen operation dispatch with meta inference
 ├── _remote_orchestrator.py  # Remote execution with RPC batching
-├── _device_daemon.py        # Device registry and storage operations
+├── _backend_hooks.py        # PyTorch backend hooks and C++ interface bridge
 ├── _batching.py            # RPC batching system
 ├── _huggingface_utils.py   # HuggingFace model integration
 ├── _logging.py             # Centralized logging system

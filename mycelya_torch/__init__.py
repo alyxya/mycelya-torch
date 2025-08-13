@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, Optional, Union
 import torch
 
 # Direct driver access for C++ via factory pattern
-from ._device_daemon import driver
+from ._backend_hooks import driver
 
 # Factory pattern for C++ method access with caching
 _IMPL_REGISTRY: Dict[str, Callable] = {}

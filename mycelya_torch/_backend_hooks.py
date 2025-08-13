@@ -40,7 +40,7 @@ def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
     return decorator
 
 
-class MycelyaRuntimeManager:
+class RuntimeManager:
     """
     Runtime manager for mycelya-torch backend.
 
@@ -159,7 +159,7 @@ class Driver:
     registry: Dict[str, Callable] = {}
 
     def __init__(self) -> None:
-        self.runtime_manager = MycelyaRuntimeManager()
+        self.runtime_manager = RuntimeManager()
 
     def exec(self, cmd: str, *args: Any) -> Any:
         """Execute a command using the registry pattern"""

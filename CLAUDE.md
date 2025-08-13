@@ -62,7 +62,7 @@ To run type checking:
 - `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration with metadata hash monkey patching
 - `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with meta tensor inference and view handling
 - `mycelya_torch/_orchestrator.py` - Remote execution orchestration with RPC batching integration
-- `mycelya_torch/_device_daemon.py` - Device registry and storage operations with centralized logging
+- `mycelya_torch/_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge
 - `mycelya_torch/_device.py` - Device registry management with thread-safe device registration
 - `mycelya_torch/_machine.py` - RemoteMachine abstraction supporting Modal and Mock providers
 
