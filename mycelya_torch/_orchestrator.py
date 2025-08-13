@@ -17,8 +17,6 @@ import torch
 
 from ._batching import BatchProcessor
 from ._logging import get_logger
-from ._machine import RemoteMachine
-from ._storage import get_machine_for_storage
 from .backends.client import Client
 
 log = get_logger(__name__)
@@ -431,8 +429,13 @@ class Orchestrator:
             RuntimeError: If storage, machine, or client not found/available
         """
         try:
-            machine = get_machine_for_storage(storage_id)
-            return self._get_validated_client(machine)
+            from ._storage import get_storage_device
+
+            device_index = get_storage_device(storage_id)
+            if device_index is None:
+                raise RuntimeError(f"No device found for storage {storage_id}")
+
+            return self.get_client_by_device_index(device_index)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to resolve client for storage {storage_id}: {e}"
@@ -451,21 +454,24 @@ class Orchestrator:
             RuntimeError: If tensor, machine, or client not found/available
         """
         try:
-            from ._storage import get_machine_for_tensor_id
+            from ._storage import get_tensor_device
 
-            machine = get_machine_for_tensor_id(tensor_id)
-            return self._get_validated_client(machine)
+            device_index = get_tensor_device(tensor_id)
+            if device_index is None:
+                raise RuntimeError(f"No device found for tensor {tensor_id}")
+
+            return self.get_client_by_device_index(device_index)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to resolve client for tensor {tensor_id}: {e}"
             ) from e
 
 
-    def _get_validated_client(self, machine: RemoteMachine) -> Client:
-        """Get a validated client for a machine, ensuring it's running.
+    def _get_validated_client_by_device_index(self, device_index: int) -> Client:
+        """Get a validated client for a device index, ensuring it's running.
 
         Args:
-            machine: RemoteMachine to get client for
+            device_index: Device index to get client for
 
         Returns:
             Client: The validated, running client
@@ -473,10 +479,6 @@ class Orchestrator:
         Raises:
             RuntimeError: If client is None or not running
         """
-        device_index = machine.remote_index
-        if device_index is None:
-            raise RuntimeError(f"Machine {machine.machine_id} not registered with device registry")
-
         return self.get_client_by_device_index(device_index)
 
 
@@ -721,13 +723,17 @@ class Orchestrator:
             return None
 
 
-    def remove_tensor_from_remote(
-        self, storage_id: int, machine: "RemoteMachine"
+    def remove_tensor_from_remote_by_device(
+        self, storage_id: int, device_index: int
     ) -> bool:
-        """Remove a tensor from remote storage."""
+        """Remove a tensor from remote storage by device index."""
         try:
+            if not self.is_client_running(device_index):
+                log.debug(f"Client for device index {device_index} not running, skipping storage removal")
+                return False
+
             # Use internal client resolution for consistent error handling
-            client = self._get_validated_client(machine)
+            client = self._get_validated_client_by_device_index(device_index)
             client.remove_storage(storage_id)
             log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id} from remote")
             return True
@@ -736,23 +742,23 @@ class Orchestrator:
             return False
 
     # HuggingFace integration methods
-    def prepare_huggingface_model(self, machine: "RemoteMachine", checkpoint: str, torch_dtype: str = None, trust_remote_code: bool = False) -> dict:
-        """Prepare a HuggingFace model on remote machine."""
-        client = self._get_validated_client(machine)
+    def prepare_huggingface_model_by_device(self, device_index: int, checkpoint: str, torch_dtype: str = None, trust_remote_code: bool = False) -> dict:
+        """Prepare a HuggingFace model on remote machine by device index."""
+        client = self._get_validated_client_by_device_index(device_index)
         return client.prepare_huggingface_model(
             checkpoint=checkpoint,
             torch_dtype=torch_dtype,
             trust_remote_code=trust_remote_code,
         )
 
-    def ensure_tensor_exists(self, machine: "RemoteMachine", tensor: "torch.Tensor") -> None:
-        """Ensure tensor exists on remote machine."""
-        client = self._get_validated_client(machine)
+    def ensure_tensor_exists_by_device(self, device_index: int, tensor: "torch.Tensor") -> None:
+        """Ensure tensor exists on remote machine by device index."""
+        client = self._get_validated_client_by_device_index(device_index)
         client._ensure_tensor_exists(tensor)
 
-    def link_model_tensors(self, machine: "RemoteMachine", local_storage_ids: list, parameter_names: list) -> None:
-        """Link model tensors on remote machine."""
-        client = self._get_validated_client(machine)
+    def link_model_tensors_by_device(self, device_index: int, local_storage_ids: list, parameter_names: list) -> None:
+        """Link model tensors on remote machine by device index."""
+        client = self._get_validated_client_by_device_index(device_index)
         client.link_model_tensors(local_storage_ids, parameter_names)
 
     # Storage cleanup methods
@@ -761,33 +767,6 @@ class Orchestrator:
         client = self._get_client_for_storage(storage_id)
         return client._get_tensor_ids_for_storage(storage_id)
 
-    def remove_tensors(self, machine: "RemoteMachine", tensor_ids: list) -> None:
-        """Remove tensors from remote machine."""
-        device_index = machine.remote_index
-        if device_index is None:
-            log.debug(f"Machine {machine.machine_id} not registered, skipping tensor removal")
-            return
-
-        if not self.is_client_running(device_index):
-            log.debug(f"Client for machine {machine.machine_id} not running, skipping tensor removal")
-            return
-
-        client = self._get_validated_client(machine)
-        client.remove_tensors(tensor_ids)
-
-    def remove_tensor_from_storage_mapping(self, machine: "RemoteMachine", storage_id: int, tensor_id: int) -> None:
-        """Remove tensor from storage mapping on remote machine."""
-        device_index = machine.remote_index
-        if device_index is None:
-            log.debug(f"Machine {machine.machine_id} not registered, skipping storage mapping removal")
-            return
-
-        if not self.is_client_running(device_index):
-            log.debug(f"Client for machine {machine.machine_id} not running, skipping storage mapping removal")
-            return
-
-        client = self._get_validated_client(machine)
-        client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
 
     def get_tensor_ids_for_storage_by_device(self, device_index: int, storage_id: int) -> list:
         """Get tensor IDs associated with a storage ID by device index."""

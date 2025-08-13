@@ -128,8 +128,8 @@ def create_huggingface_model_from_remote(
 
     # Step 1: Prepare model on remote machine
     log.info(f"Preparing model {checkpoint} on remote machine...")
-    remote_data = orchestrator.prepare_huggingface_model(
-        machine=machine,
+    remote_data = orchestrator.prepare_huggingface_model_by_device(
+        device_index=device_index,
         checkpoint=checkpoint,
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
@@ -204,7 +204,7 @@ def create_huggingface_model_from_remote(
 
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
-        orchestrator.ensure_tensor_exists(machine, remote_tensor)
+        orchestrator.ensure_tensor_exists_by_device(device_index, remote_tensor)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)
@@ -242,7 +242,7 @@ def create_huggingface_model_from_remote(
 
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
-        orchestrator.ensure_tensor_exists(machine, remote_tensor)
+        orchestrator.ensure_tensor_exists_by_device(device_index, remote_tensor)
 
         # Track for linking
         local_storage_ids.append(local_storage_id)
@@ -264,7 +264,7 @@ def create_huggingface_model_from_remote(
     log.info(
         f"🔗 Queueing linking of {len(local_storage_ids)} local storage IDs to remote model parameters..."
     )
-    orchestrator.link_model_tensors(machine, local_storage_ids, parameter_names)
+    orchestrator.link_model_tensors_by_device(device_index, local_storage_ids, parameter_names)
 
     # Wait for all batched operations (including tensor linking) to complete
     log.info("🚀 Waiting for all storage operations and tensor linking to complete...")

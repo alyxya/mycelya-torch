@@ -172,7 +172,7 @@ class StorageRegistry:
                 log.info(
                     f"No tensor IDs found for storage {storage_id}, using legacy cleanup"
                 )
-                success = orchestrator.remove_tensor_from_remote(storage_id, device)
+                success = orchestrator.remove_tensor_from_remote_by_device(storage_id, device_idx)
 
                 if success:
                     log.info(
