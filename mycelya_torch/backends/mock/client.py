@@ -232,6 +232,7 @@ class MockClient(ClientInterface):
         output_tensor_ids: List[Union[str, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
+        tensor_mask: List[bool],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """
@@ -241,8 +242,9 @@ class MockClient(ClientInterface):
             op_name: The aten operation name
             input_tensor_metadata: Metadata for reconstructing input tensors only
             output_tensor_ids: List of tensor IDs to update with results
-            args: Operation arguments
-            kwargs: Operation keyword arguments
+            args: Operation arguments (with tensor IDs replacing tensors)
+            kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
+            tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
             return_metadata: If True, return output tensor metadata instead of None
 
         Returns:
@@ -264,6 +266,7 @@ class MockClient(ClientInterface):
             output_tensor_ids,
             args,
             kwargs,
+            tensor_mask,
             return_metadata,
         )
 

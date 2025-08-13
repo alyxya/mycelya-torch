@@ -4,7 +4,6 @@
 from typing import Any, Dict, List, Tuple
 
 import torch
-from torch.utils._pytree import tree_map
 
 # Simple operation dispatch - no complex patterns needed
 from ._logging import get_logger
@@ -44,7 +43,21 @@ def _validate_cross_device_operation(
                 )
         return obj
 
-    tree_map(check_tensor_device, (args, kwargs))
+    # Iterate over args
+    for arg in args:
+        if isinstance(arg, (list, tuple)):
+            for item in arg:
+                check_tensor_device(item)
+        else:
+            check_tensor_device(arg)
+
+    # Iterate over kwargs values
+    for value in kwargs.values():
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                check_tensor_device(item)
+        else:
+            check_tensor_device(value)
 
     if remote_device is None:
         raise RuntimeError(f'No remote tensors found for operation "{op_name}"')
@@ -52,27 +65,46 @@ def _validate_cross_device_operation(
     return remote_device
 
 
-def args_to_tensors_with_placeholders(
+def args_to_tensors_with_ids_and_mask(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[torch.Tensor]]:
-    """Convert args/kwargs, replacing remote tensors with placeholders and collecting tensors."""
+) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[torch.Tensor], List[bool]]:
+    """Convert args/kwargs, replacing remote tensors with tensor IDs and collecting tensors."""
     tensor_list: List[torch.Tensor] = []
+    tensor_mask: List[bool] = []
 
-    def replace_remote_tensor_with_placeholder(obj):
-        """Replace remote tensors with placeholders and collect tensors."""
+    def replace_remote_tensor_with_id(obj):
+        """Replace remote tensors with tensor IDs and collect tensors."""
         if isinstance(obj, torch.Tensor):
-            tensor_index = len(tensor_list)
             tensor_list.append(obj)
-            return f"__TENSOR_{tensor_index}"
+            tensor_mask.append(True)
+            return obj.get_metadata_hash()  # Replace with tensor ID directly
+        tensor_mask.append(False)
         return obj
 
-    # Use tree_map to handle nested structures automatically
-    processed_args, processed_kwargs = tree_map(
-        replace_remote_tensor_with_placeholder, (args, kwargs)
-    )
+    # Iterate over args
+    processed_args = []
+    for arg in args:
+        if isinstance(arg, (list, tuple)):
+            processed_arg = []
+            for item in arg:
+                processed_arg.append(replace_remote_tensor_with_id(item))
+            processed_args.append(type(arg)(processed_arg))
+        else:
+            processed_args.append(replace_remote_tensor_with_id(arg))
 
-    return processed_args, processed_kwargs, tensor_list
+    # Iterate over kwargs values
+    processed_kwargs = {}
+    for key, value in kwargs.items():
+        if isinstance(value, (list, tuple)):
+            processed_value = []
+            for item in value:
+                processed_value.append(replace_remote_tensor_with_id(item))
+            processed_kwargs[key] = type(value)(processed_value)
+        else:
+            processed_kwargs[key] = replace_remote_tensor_with_id(value)
+
+    return tuple(processed_args), processed_kwargs, tensor_list, tensor_mask
 
 
 def _execute_meta_operation(
@@ -110,7 +142,29 @@ def _execute_meta_operation(
             return meta_tensor
         return obj
 
-    meta_args, meta_kwargs = tree_map(to_meta_tensor, (args, kwargs))
+    # Iterate over args
+    meta_args = []
+    for arg in args:
+        if isinstance(arg, (list, tuple)):
+            meta_arg = []
+            for item in arg:
+                meta_arg.append(to_meta_tensor(item))
+            meta_args.append(type(arg)(meta_arg))
+        else:
+            meta_args.append(to_meta_tensor(arg))
+
+    # Iterate over kwargs values
+    meta_kwargs = {}
+    for key, value in kwargs.items():
+        if isinstance(value, (list, tuple)):
+            meta_value = []
+            for item in value:
+                meta_value.append(to_meta_tensor(item))
+            meta_kwargs[key] = type(value)(meta_value)
+        else:
+            meta_kwargs[key] = to_meta_tensor(value)
+
+    meta_args = tuple(meta_args)
     meta_result = op(*meta_args, **meta_kwargs)
 
     # Special handling for "out" parameter: resize empty output tensors to match meta result
@@ -251,8 +305,8 @@ def _execute_with_static_outputs(
         output_tensors, output_tensor_ids = [], []
 
     # Step 4: Execute remotely
-    processed_args, processed_kwargs, input_tensors = args_to_tensors_with_placeholders(
-        args, kwargs
+    processed_args, processed_kwargs, input_tensors, tensor_mask = (
+        args_to_tensors_with_ids_and_mask(args, kwargs)
     )
 
     orchestrator = _get_remote_orchestrator()
@@ -262,6 +316,7 @@ def _execute_with_static_outputs(
         output_tensor_ids,
         processed_args,
         processed_kwargs,
+        tensor_mask,
     )
 
     # Step 5: Correct output tensor shapes to match meta tensor shapes
@@ -323,8 +378,8 @@ def _execute_with_dynamic_outputs(
         register_tensor_id(output_tensor_ids[0], device_index)
 
     # Step 3: Execute remotely and request metadata return
-    processed_args, processed_kwargs, input_tensors = args_to_tensors_with_placeholders(
-        args, kwargs
+    processed_args, processed_kwargs, input_tensors, tensor_mask = (
+        args_to_tensors_with_ids_and_mask(args, kwargs)
     )
 
     orchestrator = _get_remote_orchestrator()
@@ -334,6 +389,7 @@ def _execute_with_dynamic_outputs(
         output_tensor_ids,
         processed_args,
         processed_kwargs,
+        tensor_mask,
         return_metadata=True,
     )
 

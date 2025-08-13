@@ -624,12 +624,12 @@ def create_modal_app_for_gpu(
             output_tensor_ids: List[Union[int, None]],
             args: List[Any],
             kwargs: Dict[str, Any],
+            tensor_mask: List[bool],
             return_metadata: bool = False,
         ) -> Union[None, List[Dict[str, Any]]]:
             """Implementation of execute_aten_operation without Modal decorators."""
-            # Import torch and tree_map locally to avoid serialization issues
+            # Import torch locally to avoid serialization issues
             import torch
-            from torch.utils._pytree import tree_map
 
             # Extract tensor IDs from input metadata
             input_tensor_ids = [
@@ -661,22 +661,55 @@ def create_modal_app_for_gpu(
 
             log.debug(f"📥 Retrieved {len(input_tensors)} input tensors from registry")
 
-            # Replace tensor placeholders with actual tensors using tree_map
-            def replace_placeholder_with_tensor(obj):
-                if isinstance(obj, str) and obj.startswith("__TENSOR_"):
-                    idx = int(obj.split("_")[-1])
-                    if idx < len(input_tensors):
-                        return input_tensors[idx]
+            # Replace tensor IDs with actual tensors using tensor mask
+            tensor_index = 0
+            mask_index = 0
+
+            def replace_tensor_id_with_tensor(obj):
+                """Replace tensor ID with actual tensor, consuming mask once per call."""
+                nonlocal tensor_index, mask_index
+
+                if mask_index >= len(tensor_mask):
+                    raise IndexError(
+                        f"Mask index {mask_index} out of range (have {len(tensor_mask)} mask entries)"
+                    )
+
+                is_tensor = tensor_mask[mask_index]
+                mask_index += 1
+
+                if is_tensor:
+                    # Expecting a tensor ID (integer), replace with actual tensor
+                    if tensor_index < len(input_tensors):
+                        result = input_tensors[tensor_index]
+                        tensor_index += 1
+                        return result
                     else:
                         raise IndexError(
-                            f"Tensor placeholder index {idx} out of range (have {len(input_tensors)} input tensors)"
+                            f"Tensor index {tensor_index} out of range (have {len(input_tensors)} input tensors)"
                         )
                 return obj
 
-            # Use tree_map to handle nested structure traversal automatically
-            processed_args, processed_kwargs = tree_map(
-                replace_placeholder_with_tensor, (args, kwargs)
-            )
+            # Iterate over args (matching client-side structure exactly)
+            processed_args = []
+            for arg in args:
+                if isinstance(arg, (list, tuple)):
+                    processed_arg = []
+                    for item in arg:
+                        processed_arg.append(replace_tensor_id_with_tensor(item))
+                    processed_args.append(type(arg)(processed_arg))
+                else:
+                    processed_args.append(replace_tensor_id_with_tensor(arg))
+
+            # Iterate over kwargs values (matching client-side structure exactly)
+            processed_kwargs = {}
+            for key, value in kwargs.items():
+                if isinstance(value, (list, tuple)):
+                    processed_value = []
+                    for item in value:
+                        processed_value.append(replace_tensor_id_with_tensor(item))
+                    processed_kwargs[key] = type(value)(processed_value)
+                else:
+                    processed_kwargs[key] = replace_tensor_id_with_tensor(value)
 
             # Get the operation
             op_name_fixed = op_name.replace("::", ".")
@@ -751,6 +784,7 @@ def create_modal_app_for_gpu(
             output_tensor_ids: List[Union[int, None]],
             args: List[Any],
             kwargs: Dict[str, Any],
+            tensor_mask: List[bool],
             return_metadata: bool = False,
         ) -> Union[None, List[Dict[str, Any]]]:
             """
@@ -763,8 +797,9 @@ def create_modal_app_for_gpu(
                 op_name: The operation name to execute
                 input_tensor_metadata: List of metadata for input tensors (including tensor_id)
                 output_tensor_ids: List of tensor IDs to store results (all output tensors)
-                args: Operation arguments (with tensor placeholders)
-                kwargs: Operation keyword arguments (with tensor placeholders)
+                args: Operation arguments (with tensor IDs replacing tensors)
+                kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
+                tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
                 return_metadata: If True, return output tensor metadata instead of None
 
             Returns:
@@ -776,6 +811,7 @@ def create_modal_app_for_gpu(
                 output_tensor_ids,
                 args,
                 kwargs,
+                tensor_mask,
                 return_metadata,
             )
 

@@ -857,6 +857,7 @@ class RemoteOrchestrator:
         output_tensor_ids: List[Optional[int]],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
+        tensor_mask: List[bool],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """Execute remote operation with tensor objects passed directly.
@@ -865,8 +866,9 @@ class RemoteOrchestrator:
             op_name: Name of the operation to execute
             input_tensors: List of input mycelya tensors
             output_tensor_ids: Tensor IDs for all output tensors (both new and reused)
-            args: Processed args with tensor placeholders
-            kwargs: Processed kwargs with tensor placeholders
+            args: Processed args with tensor IDs replacing tensors
+            kwargs: Processed kwargs with tensor IDs replacing tensors
+            tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
             return_metadata: If True, return output tensor metadata instead of None
 
         Returns:
@@ -930,6 +932,7 @@ class RemoteOrchestrator:
             output_tensor_ids,
             args,
             kwargs,
+            tensor_mask,
             return_metadata,
         )
 

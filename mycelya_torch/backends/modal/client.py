@@ -340,6 +340,7 @@ class ModalClient(ClientInterface):
         output_tensor_ids: List[Union[int, None]],
         args: List[Any],
         kwargs: Dict[str, Any],
+        tensor_mask: List[bool],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """
@@ -349,8 +350,9 @@ class ModalClient(ClientInterface):
             op_name: The aten operation name to execute
             input_tensor_metadata: Metadata for reconstructing input tensors (including tensor_id)
             output_tensor_ids: List of tensor IDs to store results (all output tensors)
-            args: Operation arguments (may contain tensor placeholders)
-            kwargs: Operation keyword arguments (may contain tensor placeholders)
+            args: Operation arguments (with tensor IDs replacing tensors)
+            kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
+            tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
             return_metadata: If True, return output tensor metadata instead of None
 
         Returns:
@@ -387,6 +389,7 @@ class ModalClient(ClientInterface):
                 output_tensor_ids,
                 args,
                 kwargs,
+                tensor_mask,
                 return_metadata,
             ),
             kwargs={},
