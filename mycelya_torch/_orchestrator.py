@@ -19,7 +19,7 @@ from ._batching import BatchProcessor
 from ._logging import get_logger
 from ._machine import RemoteMachine
 from ._storage import get_machine_for_storage
-from .backends.client_interface import Client
+from .backends.client import Client
 
 log = get_logger(__name__)
 

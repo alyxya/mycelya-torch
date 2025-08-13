@@ -14,7 +14,7 @@ Future backends may include:
 """
 
 # Import standardized interface components
-from .client_interface import Client
+from .client import Client
 
 # Import available backends
 try:
