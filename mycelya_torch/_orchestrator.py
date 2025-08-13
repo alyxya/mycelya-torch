@@ -763,11 +763,29 @@ class Orchestrator:
 
     def remove_tensors(self, machine: "RemoteMachine", tensor_ids: list) -> None:
         """Remove tensors from remote machine."""
+        device_index = machine.remote_index
+        if device_index is None:
+            log.debug(f"Machine {machine.machine_id} not registered, skipping tensor removal")
+            return
+
+        if not self.is_client_running(device_index):
+            log.debug(f"Client for machine {machine.machine_id} not running, skipping tensor removal")
+            return
+
         client = self._get_validated_client(machine)
         client.remove_tensors(tensor_ids)
 
     def remove_tensor_from_storage_mapping(self, machine: "RemoteMachine", storage_id: int, tensor_id: int) -> None:
         """Remove tensor from storage mapping on remote machine."""
+        device_index = machine.remote_index
+        if device_index is None:
+            log.debug(f"Machine {machine.machine_id} not registered, skipping storage mapping removal")
+            return
+
+        if not self.is_client_running(device_index):
+            log.debug(f"Client for machine {machine.machine_id} not running, skipping storage mapping removal")
+            return
+
         client = self._get_validated_client(machine)
         client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
 
@@ -778,16 +796,27 @@ class Orchestrator:
 
     def remove_tensors_by_device(self, device_index: int, tensor_ids: list) -> None:
         """Remove tensors from remote machine by device index."""
+        if not self.is_client_running(device_index):
+            log.debug(f"Client for device index {device_index} not running, skipping tensor removal")
+            return
+
         client = self.get_client_by_device_index(device_index)
         client.remove_tensors(tensor_ids)
 
     def remove_tensor_from_storage_mapping_by_device(self, device_index: int, storage_id: int, tensor_id: int) -> None:
         """Remove tensor from storage mapping by device index."""
+        if not self.is_client_running(device_index):
+            log.debug(f"Client for device index {device_index} not running, skipping storage mapping removal")
+            return
+
         client = self.get_client_by_device_index(device_index)
         client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
 
     def has_batch_queue(self, device_index: int) -> bool:
         """Check if client has a batch queue by device index."""
+        if not self.is_client_running(device_index):
+            return False
+
         client = self.get_client_by_device_index(device_index)
         return hasattr(client, "_batch_queue") and client._batch_queue
 
