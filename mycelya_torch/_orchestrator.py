@@ -786,6 +786,11 @@ class Orchestrator:
         client = self.get_client_by_device_index(device_index)
         client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
 
+    def has_batch_queue(self, device_index: int) -> bool:
+        """Check if client has a batch queue by device index."""
+        client = self.get_client_by_device_index(device_index)
+        return hasattr(client, "_batch_queue") and client._batch_queue
+
 
 # Global orchestrator instance (Modal provider implementation)
 orchestrator = Orchestrator()
