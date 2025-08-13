@@ -61,7 +61,7 @@ To run type checking:
 ### Core Modules
 - `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration with metadata hash monkey patching
 - `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with meta tensor inference and view handling
-- `mycelya_torch/_remote_orchestrator.py` - Remote execution orchestration with RPC batching integration
+- `mycelya_torch/_orchestrator.py` - Remote execution orchestration with RPC batching integration
 - `mycelya_torch/_device_daemon.py` - Device registry and storage operations with centralized logging
 - `mycelya_torch/_device.py` - Device registry management with thread-safe device registration
 - `mycelya_torch/_machine.py` - RemoteMachine abstraction supporting Modal and Mock providers
@@ -282,7 +282,7 @@ for name, param in model.named_parameters():
 #### Linting Cleanup (2025-07-22)
 - Fixed 22 out of 26 ruff linting errors
 - Remaining 4 E402 errors are intentional for PyTorch backend registration order
-- All parameter name mismatches resolved in `_remote_orchestrator.py`
+- All parameter name mismatches resolved in `_orchestrator.py`
 - Unused variables cleaned up across test files
 - Set comprehension syntax improvements
 

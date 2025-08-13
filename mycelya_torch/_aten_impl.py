@@ -11,11 +11,11 @@ from ._logging import get_logger
 log = get_logger(__name__)
 
 
-def _get_remote_orchestrator():
-    """Get the global remote orchestrator instance."""
-    from ._remote_orchestrator import remote_orchestrator
+def _get_orchestrator():
+    """Get the global orchestrator instance."""
+    from ._orchestrator import orchestrator
 
-    return remote_orchestrator
+    return orchestrator
 
 
 def _validate_cross_device_operation(
@@ -309,7 +309,7 @@ def _execute_with_static_outputs(
         args_to_tensors_with_ids_and_mask(args, kwargs)
     )
 
-    orchestrator = _get_remote_orchestrator()
+    orchestrator = _get_orchestrator()
     orchestrator.execute_aten_operation(
         op_name,
         input_tensors,
@@ -382,7 +382,7 @@ def _execute_with_dynamic_outputs(
         args_to_tensors_with_ids_and_mask(args, kwargs)
     )
 
-    orchestrator = _get_remote_orchestrator()
+    orchestrator = _get_orchestrator()
     result_metadata = orchestrator.execute_aten_operation(
         op_name,
         input_tensors,
@@ -531,9 +531,9 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     log.info(f"Copying tensor ID {tensor_id} from remote to CPU")
 
     # Use orchestrator to get tensor data with automatic client routing
-    from ._remote_orchestrator import remote_orchestrator
+    from ._orchestrator import orchestrator
 
-    result = remote_orchestrator.get_tensor_by_id(
+    result = orchestrator.get_tensor_by_id(
         tensor_id,
         shape=list(from_.shape),
         stride=list(from_.stride()),
@@ -571,11 +571,11 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
     log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
 
     # Pass CPU tensor directly to orchestrator without conversion
-    from ._remote_orchestrator import remote_orchestrator
+    from ._orchestrator import orchestrator
 
     # Use orchestrator to update tensor with automatic client routing
     # Pass tensor ID and raw data with tensor metadata for reconstruction
-    remote_orchestrator.update_tensor(
+    orchestrator.update_tensor(
         tensor_id,
         from_,  # Pass storage tensor directly
         source_shape=list(from_.shape),
@@ -697,9 +697,9 @@ def _local_scalar_dense(self: torch.Tensor):
     tensor_id = self.get_metadata_hash()
 
     # Get tensor data for this scalar using orchestrator
-    from ._remote_orchestrator import remote_orchestrator
+    from ._orchestrator import orchestrator
 
-    cpu_tensor = remote_orchestrator.get_tensor_by_id(
+    cpu_tensor = orchestrator.get_tensor_by_id(
         tensor_id,
         shape=list(self.shape),
         stride=list(self.stride()),

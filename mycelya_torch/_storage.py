@@ -130,13 +130,12 @@ class StorageRegistry:
         """Clean up storage on remote GPU device"""
         try:
             # Import here to avoid circular imports
-            from ._remote_orchestrator import remote_orchestrator
+            from ._orchestrator import orchestrator
 
             # Get the device registry to find the machine
-            orchestrator = remote_orchestrator
             if orchestrator is None:
                 log.warning(
-                    f"No remote orchestrator available for storage {storage_id} cleanup"
+                    f"No orchestrator available for storage {storage_id} cleanup"
                 )
                 return
 
@@ -206,9 +205,9 @@ class StorageRegistry:
                 return False
 
             # Use orchestrator for centralized client management
-            from ._remote_orchestrator import remote_orchestrator
+            from ._orchestrator import orchestrator
 
-            remote_orchestrator.resize_storage(storage_id, nbytes)
+            orchestrator.resize_storage(storage_id, nbytes)
             log.info(
                 f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes via orchestrator"
             )

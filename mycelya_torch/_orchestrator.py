@@ -28,7 +28,7 @@ log = get_logger(__name__)
 # Custom exceptions removed as they were not used elsewhere in the codebase
 
 
-class RemoteOrchestrator:
+class Orchestrator:
     """Orchestrates remote execution of aten operations across remote machines.
 
     This class coordinates operation execution between local tensors and remote
@@ -993,4 +993,4 @@ class RemoteOrchestrator:
 
 
 # Global orchestrator instance (Modal provider implementation)
-remote_orchestrator = RemoteOrchestrator()
+orchestrator = Orchestrator()

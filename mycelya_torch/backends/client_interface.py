@@ -336,26 +336,26 @@ class ClientInterface(ABC):
 
         # Wake up background thread immediately for blocking calls to reduce latency
         if call_type == "remote" or return_future:
-            from .._remote_orchestrator import remote_orchestrator
+            from .._orchestrator import orchestrator
 
-            remote_orchestrator.wake_batch_thread_for_blocking_rpc()
+            orchestrator.wake_batch_thread_for_blocking_rpc()
 
         return future
 
     def _register_for_batching(self) -> None:
         """Register this client with the orchestrator for batching."""
         if not self._registered_for_batching:
-            from .._remote_orchestrator import remote_orchestrator
+            from .._orchestrator import orchestrator
 
-            remote_orchestrator.register_client_for_batching(self)
+            orchestrator.register_client_for_batching(self)
             self._registered_for_batching = True
 
     def _unregister_for_batching(self) -> None:
         """Unregister this client from the orchestrator for batching."""
         if self._registered_for_batching:
-            from .._remote_orchestrator import remote_orchestrator
+            from .._orchestrator import orchestrator
 
-            remote_orchestrator.unregister_client_for_batching(self)
+            orchestrator.unregister_client_for_batching(self)
             self._registered_for_batching = False
 
     # Note: Cache methods removed - caching now handled at orchestrator level

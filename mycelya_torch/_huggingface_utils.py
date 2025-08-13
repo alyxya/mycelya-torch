@@ -265,9 +265,9 @@ def create_huggingface_model_from_remote(
     log.info("🚀 Waiting for all storage operations and tensor linking to complete...")
     if hasattr(client, "_batch_queue") and client._batch_queue:
         # Wake up the batch processor and wait for completion
-        from ._remote_orchestrator import remote_orchestrator
+        from ._orchestrator import orchestrator
 
-        remote_orchestrator.wake_batch_thread_for_blocking_rpc()
+        orchestrator.wake_batch_thread_for_blocking_rpc()
 
         # Wait a moment for batch processing to complete
         import time
