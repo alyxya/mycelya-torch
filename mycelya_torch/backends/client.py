@@ -71,34 +71,6 @@ class Client(ABC):
         """
         pass
 
-    def health_check(self) -> bool:
-        """
-        Perform a health check on the client connection.
-
-        Default implementation delegates to is_running(). Providers can override
-        for more sophisticated health checking.
-
-        Returns:
-            True if client is healthy, False otherwise
-        """
-        return self.is_running()
-
-    def reconnect(self) -> bool:
-        """
-        Attempt to reconnect the client.
-
-        Default implementation stops and starts the client. Providers can override
-        for more sophisticated reconnection logic.
-
-        Returns:
-            True if reconnection succeeded, False otherwise
-        """
-        try:
-            self.stop()
-            self.start()
-            return self.is_running()
-        except Exception:
-            return False
 
     # Tensor management methods
     @abstractmethod
