@@ -265,8 +265,12 @@ def create_modal_app_for_gpu(
         def _get_storage_data_impl(self, tensor_id: int) -> bytes:
             """Get raw storage data by tensor ID."""
             tensor_registry = self._get_tensor_registry()
+            
+            log.debug(f"get_storage_data called for tensor {tensor_id}")
+            log.debug(f"Current registry has {len(tensor_registry)} tensors")
 
             if tensor_id not in tensor_registry:
+                log.error(f"Tensor ID {tensor_id} does not exist in registry")
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             tensor = tensor_registry[tensor_id]
@@ -608,8 +612,8 @@ def create_modal_app_for_gpu(
         def _execute_aten_operation_impl(
             self,
             op_name: str,
-            input_tensor_metadata: List[Dict[str, Any]],
-            output_tensor_ids: List[Union[int, None]],
+            input_tensor_ids: List[int],
+            output_tensor_ids: List[int],
             args: List[Any],
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
@@ -618,11 +622,6 @@ def create_modal_app_for_gpu(
             """Implementation of execute_aten_operation without Modal decorators."""
             # Import torch locally to avoid serialization issues
             import torch
-
-            # Extract tensor IDs from input metadata
-            input_tensor_ids = [
-                metadata["tensor_id"] for metadata in input_tensor_metadata
-            ]
 
             log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
             log.debug(f"Input tensor IDs: {input_tensor_ids}")
@@ -633,14 +632,12 @@ def create_modal_app_for_gpu(
 
             # Reconstruct input tensors from tensor registry
             input_tensors = []
-            for metadata in input_tensor_metadata:
-                tensor_id = metadata["tensor_id"]
-
+            for tensor_id in input_tensor_ids:
                 # Check if tensor exists in registry
                 if tensor_id in tensor_registry:
                     tensor = tensor_registry[tensor_id]
                 else:
-                    # Create tensor if it doesn't exist (shouldn't happen in normal flow)
+                    # Tensor missing from registry - this shouldn't happen with proper orchestrator management
                     raise ValueError(
                         f"Input tensor ID {tensor_id} not found in registry"
                     )
@@ -708,7 +705,7 @@ def create_modal_app_for_gpu(
 
             log.debug(
                 f"Executing operation with {len(processed_args)} args, "
-                f"{len(input_tensors)} inputs, {len([t for t in output_tensor_ids if t is not None])} outputs to update"
+                f"{len(input_tensors)} inputs, {len(output_tensor_ids)} outputs to update"
             )
 
             # Execute the operation on input tensors - this will create result tensors
@@ -733,12 +730,11 @@ def create_modal_app_for_gpu(
 
             # Store result tensors in tensor registry
             for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
-                if tensor_id is not None:
-                    tensor_registry[tensor_id] = result_tensor
-                    log.debug(f"💾 Stored output tensor {tensor_id} in registry")
+                tensor_registry[tensor_id] = result_tensor
+                log.debug(f"Stored output tensor {tensor_id} in registry (shape: {result_tensor.shape}, device: {result_tensor.device})")
 
             log.debug(
-                f"📦 Updated {len([t for t in output_tensor_ids if t is not None])} output tensors in registry"
+                f"📦 Updated {len(output_tensor_ids)} output tensors in registry"
             )
 
             # Return metadata if requested
@@ -768,22 +764,22 @@ def create_modal_app_for_gpu(
         def execute_aten_operation(
             self,
             op_name: str,
-            input_tensor_metadata: List[Dict[str, Any]],
-            output_tensor_ids: List[Union[int, None]],
+            input_tensor_ids: List[int],
+            output_tensor_ids: List[int],
             args: List[Any],
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
             return_metadata: bool = False,
         ) -> Union[None, List[Dict[str, Any]]]:
             """
-            Execute an operation with separated input metadata and output tensor IDs.
+            Execute an operation with input tensor IDs and output tensor IDs.
 
-            This method handles operations where input tensor metadata and output tensor IDs
+            This method handles operations where input tensor IDs and output tensor IDs
             are explicitly separated. Tensors are stored in the tensor registry by their IDs.
 
             Args:
                 op_name: The operation name to execute
-                input_tensor_metadata: List of metadata for input tensors (including tensor_id)
+                input_tensor_ids: List of input tensor IDs
                 output_tensor_ids: List of tensor IDs to store results (all output tensors)
                 args: Operation arguments (with tensor IDs replacing tensors)
                 kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
@@ -795,7 +791,7 @@ def create_modal_app_for_gpu(
             """
             return self._execute_aten_operation_impl(
                 op_name,
-                input_tensor_metadata,
+                input_tensor_ids,
                 output_tensor_ids,
                 args,
                 kwargs,

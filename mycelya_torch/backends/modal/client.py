@@ -8,7 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set
 
 import torch
 
@@ -114,15 +114,18 @@ class ModalClient(Client):
             )
 
         try:
-            # Queue the RPC for batching (fire-and-forget)
-            self._queue_rpc(
+            # Queue the RPC for batching (wait for completion to prevent race conditions)
+            future = self._queue_rpc(
                 method_name="create_empty_tensor",
-                call_type="spawn",
+                call_type="remote",
                 args=(tensor_id, shape, stride, storage_offset, dtype),
                 kwargs={},
             )
+            # Wait for completion to ensure tensor exists before subsequent operations
+            if future:
+                future.result()
             self._remote_tensor_ids.add(tensor_id)
-            log.info(f"Queued creation of empty tensor {tensor_id} with shape {shape}")
+            log.info(f"Created empty tensor {tensor_id} with shape {shape}")
         except Exception as e:
             raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
 
@@ -153,16 +156,19 @@ class ModalClient(Client):
             )
 
         try:
-            # Queue the RPC for batching (fire-and-forget)
-            self._queue_rpc(
+            # Queue the RPC for batching (wait for completion to prevent race conditions)
+            future = self._queue_rpc(
                 method_name="create_tensor_view",
-                call_type="spawn",
+                call_type="remote",
                 args=(new_tensor_id, base_tensor_id, shape, stride, offset),
                 kwargs={},
             )
+            # Wait for completion to ensure tensor view exists before subsequent operations
+            if future:
+                future.result()
             self._remote_tensor_ids.add(new_tensor_id)
             log.info(
-                f"Queued creation of tensor view {new_tensor_id} from tensor {base_tensor_id}"
+                f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
             )
         except Exception as e:
             raise RuntimeError(
@@ -336,20 +342,20 @@ class ModalClient(Client):
     def execute_aten_operation(
         self,
         op_name: str,
-        input_tensor_metadata: List[Dict[str, Any]],
-        output_tensor_ids: List[Union[int, None]],
+        input_tensors: List["torch.Tensor"],
+        output_tensors: List["torch.Tensor"],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """
-        Execute an aten operation on the remote machine with separated input/output specification.
+        Execute an aten operation on the remote machine with input and output tensors.
 
         Args:
             op_name: The aten operation name to execute
-            input_tensor_metadata: Metadata for reconstructing input tensors (including tensor_id)
-            output_tensor_ids: List of tensor IDs to store results (all output tensors)
+            input_tensors: List of input tensors
+            output_tensors: List of output tensors to store results
             args: Operation arguments (with tensor IDs replacing tensors)
             kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
             tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
@@ -363,29 +369,29 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
+        # Extract tensor IDs from tensors
+        input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
+        output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
+
         # Ensure input tensors exist on remote
-        for metadata in input_tensor_metadata:
-            tensor_id = metadata["tensor_id"]
+        for tensor_id in input_tensor_ids:
             if tensor_id not in self._remote_tensor_ids:
-                # Create the tensor on the remote side if it doesn't exist yet
-                self.create_empty_tensor(
-                    tensor_id=tensor_id,
-                    shape=metadata["shape"],
-                    stride=metadata["stride"],
-                    storage_offset=metadata["storage_offset"],
-                    dtype=metadata["dtype"],
-                )
+                # Input tensor should already exist on remote
+                # But for some operations like randn, empty tensors are created and then filled
+                # Log a warning but continue - the server will handle missing tensors appropriately
+                log.warning(f"Input tensor {tensor_id} not found in client registry. Server will attempt to find it.")
 
         # Queue the RPC for batching
-        # Use 'remote' for operations that return metadata, 'spawn' otherwise
-        call_type = "remote" if return_metadata else "spawn"
+        # Always use 'remote' for execute_aten_operation to ensure completion before subsequent operations
+        # This prevents race conditions where .cpu() tries to retrieve tensors before operations complete
+        call_type = "remote"
 
         future = self._queue_rpc(
             method_name="execute_aten_operation",
             call_type=call_type,
             args=(
                 op_name,
-                input_tensor_metadata,
+                input_tensor_ids,
                 output_tensor_ids,
                 args,
                 kwargs,
@@ -397,12 +403,13 @@ class ModalClient(Client):
 
         # Track output tensor IDs
         for tensor_id in output_tensor_ids:
-            if tensor_id is not None:
-                self._remote_tensor_ids.add(tensor_id)
+            self._remote_tensor_ids.add(tensor_id)
 
-        # Return result if requested
-        if return_metadata:
-            return future.result() if future else None
+        # Always wait for completion to prevent race conditions
+        if future:
+            result = future.result()
+            # Return result if metadata was requested, otherwise return None
+            return result if return_metadata else None
         else:
             return None
 

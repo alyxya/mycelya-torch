@@ -273,7 +273,7 @@ def _add_mycelya_tensor_methods():
                 register_tensor_id(tensor_id_int, device_index)
 
             return tensor_id_int  # Return int for backward compatibility
-        return None
+        raise RuntimeError(f"_get_tensor_id() can only be called on mycelya tensors, got {self.device.type}")
 
     def _get_storage_id(self):
         """Internal method to get storage ID from data pointer"""
@@ -281,7 +281,7 @@ def _add_mycelya_tensor_methods():
             # Get storage ID as integer from data pointer
             data_ptr = self.untyped_storage().data_ptr()
             return data_ptr  # data_ptr is the storage ID cast to void*
-        return None
+        raise RuntimeError(f"_get_storage_id() can only be called on mycelya tensors, got {self.device.type}")
 
     # Add methods to torch.Tensor class
     torch.Tensor._get_tensor_id = _get_tensor_id

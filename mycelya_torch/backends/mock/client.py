@@ -8,7 +8,7 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set
 
 import torch
 
@@ -302,19 +302,19 @@ class MockClient(Client):
     def execute_aten_operation(
         self,
         op_name: str,
-        input_tensor_metadata: List[Dict[str, Any]],
-        output_tensor_ids: List[Union[int, None]],
+        input_tensors: List["torch.Tensor"],
+        output_tensors: List["torch.Tensor"],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """
-        Execute an aten operation on the remote machine with separated input/output specification.
+        Execute an aten operation on the remote machine with input tensor IDs.
 
         Args:
             op_name: The aten operation name to execute
-            input_tensor_metadata: Metadata for reconstructing input tensors (including tensor_id)
+            input_tensor_ids: List of input tensor IDs
             output_tensor_ids: List of tensor IDs to store results (all output tensors)
             args: Operation arguments (with tensor IDs replacing tensors)
             kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
@@ -329,26 +329,23 @@ class MockClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Ensure input tensors exist on remote (mirroring ModalClient logic)
-        for metadata in input_tensor_metadata:
-            tensor_id = metadata["tensor_id"]
-            if tensor_id not in self._remote_tensor_ids:
-                # Create the tensor on the remote side if it doesn't exist yet
-                self.create_empty_tensor(
-                    tensor_id=tensor_id,
-                    shape=metadata["shape"],
-                    stride=metadata["stride"],
-                    storage_offset=metadata["storage_offset"],
-                    dtype=metadata["dtype"],
-                )
+        # Extract tensor IDs from tensors
+        input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
+        output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
 
-        input_tensor_ids = [metadata["tensor_id"] for metadata in input_tensor_metadata]
+        # Ensure input tensors exist on remote (mirroring ModalClient logic)
+        for tensor_id in input_tensor_ids:
+            if tensor_id not in self._remote_tensor_ids:
+                # Input tensor should already exist on remote
+                # But for some operations like randn, empty tensors are created and then filled
+                # Log a warning but continue - the server will handle missing tensors appropriately
+                log.warning(f"Input tensor {tensor_id} not found in client registry. Server will attempt to find it.")
         log.info(f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}")
 
         # Execute using .local() instead of remote call (mock behavior)
         result = self._server_instance.execute_aten_operation.local(
             op_name,
-            input_tensor_metadata,
+            input_tensor_ids,
             output_tensor_ids,
             args,
             kwargs,
@@ -358,8 +355,7 @@ class MockClient(Client):
 
         # Track output tensor IDs (mirroring ModalClient logic)
         for tensor_id in output_tensor_ids:
-            if tensor_id is not None:
-                self._remote_tensor_ids.add(tensor_id)
+            self._remote_tensor_ids.add(tensor_id)
 
         # Return result if requested
         if return_metadata:

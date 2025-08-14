@@ -302,7 +302,7 @@ def _execute_with_static_outputs(
             meta_outputs, original_tensors, remote_device
         )
     else:
-        output_tensors, output_tensor_ids = [], []
+        output_tensors = []
 
     # Step 4: Execute remotely
     processed_args, processed_kwargs, input_tensors, tensor_mask = (
@@ -313,7 +313,7 @@ def _execute_with_static_outputs(
     orchestrator.execute_aten_operation(
         op_name,
         input_tensors,
-        output_tensor_ids,
+        output_tensors,
         processed_args,
         processed_kwargs,
         tensor_mask,
@@ -386,7 +386,7 @@ def _execute_with_dynamic_outputs(
     result_metadata = orchestrator.execute_aten_operation(
         op_name,
         input_tensors,
-        output_tensor_ids,
+        [output_tensor],
         processed_args,
         processed_kwargs,
         tensor_mask,
@@ -487,6 +487,7 @@ def _remote_kernel_fallback(
 ) -> Any:
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
     op_name = op.overloadpacket._qualified_op_name
+    
 
     # Validate cross-device operations upfront and get the remote device
     remote_device = _validate_cross_device_operation(op_name, args, kwargs)

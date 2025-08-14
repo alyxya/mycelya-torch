@@ -9,7 +9,10 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    import torch
 
 from .._batching import RPCBatchQueue
 
@@ -192,20 +195,20 @@ class Client(ABC):
     def execute_aten_operation(
         self,
         op_name: str,
-        input_tensor_metadata: List[Dict[str, Any]],
-        output_tensor_ids: List[Union[int, None]],
+        input_tensors: List["torch.Tensor"],
+        output_tensors: List["torch.Tensor"],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """
-        Execute an aten operation on the remote machine with separated input/output specification.
+        Execute an aten operation on the remote machine with input and output tensors.
 
         Args:
             op_name: The aten operation name to execute
-            input_tensor_metadata: Metadata for reconstructing input tensors (including tensor_id)
-            output_tensor_ids: List of tensor IDs to store results (all output tensors)
+            input_tensors: List of input tensors
+            output_tensors: List of output tensors to store results
             args: Operation arguments (with tensor IDs replacing tensors)
             kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
             tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
