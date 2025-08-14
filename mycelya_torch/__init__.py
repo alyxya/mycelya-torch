@@ -208,8 +208,10 @@ from ._device import (  # noqa: E402
     CloudProvider,
     GPUType,
     RemoteMachine,
-    get_all_machines,
     get_device_registry,
+)
+from ._machine import (  # noqa: E402
+    get_all_machines,
 )
 
 # HuggingFace model loading utilities

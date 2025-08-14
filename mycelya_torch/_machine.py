@@ -60,6 +60,9 @@ class RemoteMachine:
         ...     result = x @ x.T
         >>> # Machine automatically stopped when exiting context
     """
+    
+    # Class-level tracking of all machine instances
+    _all_machines: list["RemoteMachine"] = []
 
     def __init__(
         self,
@@ -142,6 +145,9 @@ class RemoteMachine:
 
         # Register cleanup on exit
         atexit.register(self.stop)
+        
+        # Add to class-level tracking
+        RemoteMachine._all_machines.append(self)
 
     def _generate_machine_id(self) -> str:
         """Generate a human-readable machine ID with provider and GPU info."""
@@ -290,6 +296,7 @@ class RemoteMachine:
 
     def __hash__(self) -> int:
         return hash(self.machine_id)
+    
 
     @property
     def device_name(self) -> str:
@@ -332,3 +339,21 @@ class RemoteMachine:
         if remote_index is None:
             raise RuntimeError("Device not registered in device registry")
         return torch.device("mycelya", remote_index)
+
+
+def get_all_machines() -> list[RemoteMachine]:
+    """
+    Get a list of all created machines.
+
+    Returns:
+        List of all RemoteMachine instances that have been created.
+        This maintains strong references to keep machines alive.
+
+    Example:
+        >>> machine1 = RemoteMachine("modal", "T4")
+        >>> machine2 = RemoteMachine("mock")
+        >>> machines = get_all_machines()
+        >>> print(f"Created {len(machines)} machines")
+        Created 2 machines
+    """
+    return list(RemoteMachine._all_machines)

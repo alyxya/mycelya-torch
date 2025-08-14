@@ -78,29 +78,10 @@ def get_device_registry() -> DeviceRegistry:
     return _device_registry
 
 
-def get_all_machines() -> list[RemoteMachine]:
-    """
-    Get a list of all created machines.
-
-    Returns:
-        List of all RemoteMachine instances that have been created
-
-    Example:
-        >>> machine1 = RemoteMachine("modal", "T4")
-        >>> machine2 = RemoteMachine("mock")
-        >>> machines = get_all_machines()
-        >>> print(f"Created {len(machines)} machines")
-        Created 2 machines
-    """
-    return _device_registry.get_all_machines()
-
-
 # Public API for this module
 __all__ = [
     # Core classes and enums (re-exported from _machine)
     "CloudProvider",
     "GPUType",
     "RemoteMachine",
-    # Device registry functions
-    "get_all_machines",
 ]
