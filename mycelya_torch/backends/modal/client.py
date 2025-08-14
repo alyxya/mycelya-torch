@@ -34,7 +34,6 @@ class ModalClient(Client):
         gpu_type: str,
         machine_id: str,
         timeout: int,
-        retries: int,
     ):
         super().__init__(gpu_type, machine_id)
         self._app = None
@@ -43,7 +42,6 @@ class ModalClient(Client):
         self._response_queue = None
         self._app_context = None
         self.timeout = timeout
-        self.retries = retries
 
         # Note: Tensor ID tracking moved to orchestrator
 
@@ -53,7 +51,7 @@ class ModalClient(Client):
     def _initialize(self):
         """Initialize the Modal app and server class."""
         self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
-            self.gpu_type, self.machine_id, self.timeout, self.retries
+            self.gpu_type, self.machine_id, self.timeout
         )
 
     def start(self):
@@ -153,9 +151,7 @@ class ModalClient(Client):
         self._response_queue.get()
 
         # Note: Tensor ID tracking moved to orchestrator
-        log.info(
-            f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
-        )
+        log.info(f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}")
 
     def update_tensor(
         self,

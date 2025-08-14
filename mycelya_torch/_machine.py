@@ -69,7 +69,6 @@ class RemoteMachine:
         provider: Union[str, CloudProvider],
         gpu_type: Union[str, GPUType, None] = None,
         timeout: int = 300,
-        retries: int = None,
         start: bool = True,
     ) -> None:
         """
@@ -80,7 +79,6 @@ class RemoteMachine:
             gpu_type: The GPU type (e.g., "A100-40GB" or GPUType.A100_40GB).
                      Required for modal provider, ignored for mock provider.
             timeout: Function timeout in seconds (default: 300)
-            retries: Number of retries on failure (default: 1 for modal, 0 for mock)
             start: Whether to start the client immediately (default: True)
         """
         # Handle string providers
@@ -120,11 +118,8 @@ class RemoteMachine:
             )
         self.timeout = timeout
 
-        # Set default retries based on provider
-        if retries is None:
-            self.retries = 0 if self.provider == CloudProvider.MOCK else 1
-        else:
-            self.retries = retries
+        # Always use 0 retries
+        self.retries = 0
         self.machine_id = self._generate_machine_id()
 
         # Validate GPU type is supported by provider
@@ -191,7 +186,6 @@ class RemoteMachine:
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
-                    self.retries,
                 )
             elif self.provider == CloudProvider.MOCK:
                 # Import here to avoid circular imports
@@ -201,7 +195,6 @@ class RemoteMachine:
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
-                    self.retries,
                 )
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")

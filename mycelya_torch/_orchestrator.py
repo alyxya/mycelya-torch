@@ -59,9 +59,7 @@ class Orchestrator:
                 existing_client.stop()
 
         self._clients[device_index] = client
-        log.info(
-            f"✅ ORCHESTRATOR: Registered client for device index {device_index}"
-        )
+        log.info(f"✅ ORCHESTRATOR: Registered client for device index {device_index}")
 
     def unregister_client(self, device_index: int) -> None:
         """Unregister a client for a specific device index (stops and removes from registry).
@@ -81,36 +79,26 @@ class Orchestrator:
         """Get client by device index."""
         client = self._clients.get(device_index)
         if client is None:
-            raise RuntimeError(
-                f"No client registered for device index {device_index}"
-            )
+            raise RuntimeError(f"No client registered for device index {device_index}")
         if not client.is_running():
-            raise RuntimeError(
-                f"Client for device index {device_index} is not running"
-            )
+            raise RuntimeError(f"Client for device index {device_index} is not running")
         return client
 
     def start_client(self, device_index: int) -> None:
         """Start a client by device index."""
         client = self._clients.get(device_index)
         if client is None:
-            raise RuntimeError(
-                f"No client registered for device index {device_index}"
-            )
+            raise RuntimeError(f"No client registered for device index {device_index}")
         if not client.is_running():
             client.start()
-            log.info(
-                f"✅ ORCHESTRATOR: Started client for device index {device_index}"
-            )
+            log.info(f"✅ ORCHESTRATOR: Started client for device index {device_index}")
 
     def stop_client(self, device_index: int) -> None:
         """Stop a client by device index (but keep it registered)."""
         client = self._clients.get(device_index)
         if client is not None and client.is_running():
             client.stop()
-            log.info(
-                f"✅ ORCHESTRATOR: Stopped client for device index {device_index}"
-            )
+            log.info(f"✅ ORCHESTRATOR: Stopped client for device index {device_index}")
 
     def is_client_running(self, device_index: int) -> bool:
         """Check if a client is running for a device index."""
@@ -232,9 +220,7 @@ class Orchestrator:
             self._storage_to_tensors_map[storage_id] = set()
         self._storage_to_tensors_map[storage_id].add(tensor_id)
 
-        log.debug(
-            f"📋 Registered mapping: tensor {tensor_id} -> storage {storage_id}"
-        )
+        log.debug(f"📋 Registered mapping: tensor {tensor_id} -> storage {storage_id}")
 
     def _get_storage_id_for_tensor(self, tensor_id: int) -> Optional[int]:
         """Get storage ID for a tensor ID if mapping exists.
@@ -276,9 +262,7 @@ class Orchestrator:
                 return device_index
         raise RuntimeError(f"Client {client} not found in registered clients")
 
-    def _invalidate_output_tensor_caches(
-        self, output_tensor_ids: List[int]
-    ) -> None:
+    def _invalidate_output_tensor_caches(self, output_tensor_ids: List[int]) -> None:
         """Invalidate cache for all output tensors of an operation.
 
         This is the fundamental approach: treat all output tensors as mutated and evict from cache.
@@ -530,7 +514,9 @@ class Orchestrator:
         Returns:
             None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
         """
-        log.info(f"🎯 ORCHESTRATOR: Executing {op_name} with {len(input_tensors)} input tensors and {len(output_tensors)} output tensors")
+        log.info(
+            f"🎯 ORCHESTRATOR: Executing {op_name} with {len(input_tensors)} input tensors and {len(output_tensors)} output tensors"
+        )
         log.debug(f"Input tensor IDs: {[t._get_tensor_id() for t in input_tensors]}")
         log.debug(f"Output tensor IDs: {[t._get_tensor_id() for t in output_tensors]}")
 
@@ -591,7 +577,9 @@ class Orchestrator:
                 existing_storage = self._get_storage_id_for_tensor(tensor_id)
                 if existing_storage != storage_id:
                     self._register_tensor_storage_mapping(tensor_id, storage_id)
-                    log.debug(f"🗺️ Registered output tensor {tensor_id} -> storage {storage_id}")
+                    log.debug(
+                        f"🗺️ Registered output tensor {tensor_id} -> storage {storage_id}"
+                    )
             except Exception as e:
                 log.debug(f"Could not register output tensor-storage mapping: {e}")
 
@@ -660,7 +648,9 @@ class Orchestrator:
         tensor_id = tensor._get_tensor_id()
         storage_id = tensor._get_storage_id()
 
-        log.debug(f"Ensuring tensor {tensor_id} with storage {storage_id} exists on client")
+        log.debug(
+            f"Ensuring tensor {tensor_id} with storage {storage_id} exists on client"
+        )
 
         # Both storage_id and tensor_id should always be valid for mycelya tensors
         # The _get_tensor_id() and _get_storage_id() methods will raise errors for non-mycelya tensors
@@ -682,10 +672,14 @@ class Orchestrator:
             # Storage exists - check if this specific tensor ID exists in orchestrator mapping
             if tensor_id not in self._storage_to_tensors_map[storage_id]:
                 # Need to create a view of an existing tensor
-                log.debug(f"Creating tensor view {tensor_id} from existing storage {storage_id}")
+                log.debug(
+                    f"Creating tensor view {tensor_id} from existing storage {storage_id}"
+                )
                 # Find any existing tensor ID for this storage as the base
                 existing_tensor_ids = self._storage_to_tensors_map[storage_id]
-                base_tensor_id = next(iter(existing_tensor_ids))  # Get any existing tensor
+                base_tensor_id = next(
+                    iter(existing_tensor_ids)
+                )  # Get any existing tensor
                 client.create_tensor_view(
                     new_tensor_id=tensor_id,
                     base_tensor_id=base_tensor_id,

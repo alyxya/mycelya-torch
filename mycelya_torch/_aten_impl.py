@@ -488,7 +488,6 @@ def _remote_kernel_fallback(
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
     op_name = op.overloadpacket._qualified_op_name
 
-
     # Validate cross-device operations upfront and get the remote device
     remote_device = _validate_cross_device_operation(op_name, args, kwargs)
 

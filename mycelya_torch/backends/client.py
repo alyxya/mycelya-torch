@@ -69,7 +69,6 @@ class Client(ABC):
         """
         pass
 
-
     # Tensor management methods
     @abstractmethod
     def create_empty_tensor(

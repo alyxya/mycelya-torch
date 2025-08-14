@@ -17,7 +17,6 @@ import logging
 from typing import Any, Dict, List, Tuple, Union
 
 import modal
-import torch
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +30,6 @@ def create_modal_app_for_gpu(
     gpu_type: str,
     machine_id: str,
     timeout: int,
-    retries: int,
 ) -> Tuple[modal.App, Any, modal.Queue]:
     """
     Create a Modal app and class for a specific GPU type and device.
@@ -40,7 +38,6 @@ def create_modal_app_for_gpu(
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
         timeout: Function timeout in seconds
-        retries: Number of retries on failure
 
     Returns:
         Tuple of (modal_app, server_class, response_queue) for the specified device
@@ -48,58 +45,42 @@ def create_modal_app_for_gpu(
     app = modal.App(f"mycelya-torch-{machine_id}")
 
     # Create a Modal Queue for responses (for external access)
-    response_queue = modal.Queue.from_name(f"responses-{machine_id}", create_if_missing=True)
+    response_queue = modal.Queue.from_name(
+        f"responses-{machine_id}", create_if_missing=True
+    )
 
     @app.cls(
         image=image,
         gpu=gpu_type,
         timeout=timeout,
-        retries=retries,
+        retries=0,
         serialized=True,
         max_containers=1,
         min_containers=1,
     )
     class PytorchServer:
-        def __init__(self):
-            # Create the response queue inside the class to avoid serialization issues
+        @modal.enter()
+        def setup(self):
+            """Initialize the server when container starts."""
+
             import modal
-            self.response_queue = modal.Queue.from_name(f"responses-{machine_id}", create_if_missing=True)
-        def _get_device(self):
-            """Get the appropriate device for tensor operations."""
-            import torch
 
-            # Detect if we're running in local mode by checking if CUDA is available
-            # In local mode, we should use CPU even if CUDA is available
-            try:
-                # Try to check if we're running in Modal's local execution mode
-                # This is a heuristic - if torch.cuda.is_available() is False, we're likely local
-                if torch.cuda.is_available():
-                    return torch.device("cuda")
-                else:
-                    return torch.device("cpu")
-            except Exception:
-                # Fall back to CPU if any issues
-                return torch.device("cpu")
+            # Create the response queue when container starts
+            self.response_queue = modal.Queue.from_name(
+                f"responses-{machine_id}", create_if_missing=True
+            )
 
-        def _get_tensor_registry(self):
-            """Get or create tensor registry for this server instance.
+            # Initialize registries only (device detection done per-method to avoid serialization issues)
+            # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
+            self._tensor_registry = {}
 
-            Maps tensor_id (metadata hash) directly to tensors.
-            """
-            if not hasattr(self, "_tensor_registry"):
-                # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
-                self._tensor_registry: Dict[int, torch.Tensor] = {}
+            # checkpoint -> {model: nn.Module, parameter_tensor_map: Dict[str, int]}
+            self._model_registry = {}
 
-            return self._tensor_registry
-
-        def _get_model_registry(self):
-            """Get or create model registry for this server instance."""
-            if not hasattr(self, "_model_registry"):
-                # checkpoint -> {model: nn.Module, parameter_tensor_map: Dict[str, int]}
-                self._model_registry: Dict[str, Dict[str, Any]] = {}
-
-            return self._model_registry
-
+        @modal.exit()
+        def cleanup(self):
+            """Cleanup when container shuts down (no-op for now)."""
+            pass
 
         # Tensor ID-based methods
         def _create_empty_tensor_impl(
@@ -113,13 +94,21 @@ def create_modal_app_for_gpu(
             """Create an empty tensor with given tensor_id and proper storage layout."""
             import torch
 
-            tensor_registry = self._get_tensor_registry()
+            tensor_registry = self._tensor_registry
 
             if tensor_id in tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} already exists")
 
             torch_dtype = getattr(torch, dtype.replace("torch.", ""))
-            device = self._get_device()
+
+            # Detect device
+            try:
+                if torch.cuda.is_available():
+                    device = torch.device("cuda")
+                else:
+                    device = torch.device("cpu")
+            except Exception:
+                device = torch.device("cpu")
 
             # Calculate the required storage size based on shape, stride and offset
             # The storage size needs to accommodate the maximum element accessed
@@ -171,7 +160,7 @@ def create_modal_app_for_gpu(
             """Create a tensor view from existing tensor using as_strided."""
             import torch
 
-            tensor_registry = self._get_tensor_registry()
+            tensor_registry = self._tensor_registry
 
             if new_tensor_id in tensor_registry:
                 raise ValueError(f"New tensor ID {new_tensor_id} already exists")
@@ -218,7 +207,7 @@ def create_modal_app_for_gpu(
             """Update an existing tensor with new data and source metadata."""
             import torch
 
-            tensor_registry = self._get_tensor_registry()
+            tensor_registry = self._tensor_registry
 
             if tensor_id not in tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
@@ -275,7 +264,7 @@ def create_modal_app_for_gpu(
 
         def _get_storage_data_impl(self, tensor_id: int) -> bytes:
             """Get raw storage data by tensor ID."""
-            tensor_registry = self._get_tensor_registry()
+            tensor_registry = self._tensor_registry
 
             log.debug(f"get_storage_data called for tensor {tensor_id}")
             log.debug(f"Current registry has {len(tensor_registry)} tensors")
@@ -297,7 +286,7 @@ def create_modal_app_for_gpu(
 
         def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
             """Remove multiple tensors from the remote machine."""
-            tensor_registry = self._get_tensor_registry()
+            tensor_registry = self._tensor_registry
 
             removed_count = 0
             for tensor_id in tensor_ids:
@@ -316,7 +305,7 @@ def create_modal_app_for_gpu(
             """Resize the underlying storage for a tensor."""
             import torch
 
-            tensor_registry = self._get_tensor_registry()
+            tensor_registry = self._tensor_registry
 
             if tensor_id not in tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
@@ -363,7 +352,13 @@ def create_modal_app_for_gpu(
                 )
 
             # Get the appropriate device for tensor operations
-            device = self._get_device()
+            try:
+                if torch.cuda.is_available():
+                    device = torch.device("cuda")
+                else:
+                    device = torch.device("cpu")
+            except Exception:
+                device = torch.device("cpu")
             log.info(f"Loading model on device: {device}")
 
             # Handle torch_dtype parameter
@@ -446,7 +441,7 @@ def create_modal_app_for_gpu(
                 )
 
             # Store model and tensor data for later linking
-            model_registry = self._get_model_registry()
+            model_registry = self._model_registry
             model_registry[checkpoint] = {
                 "model": model,
                 "parameter_tensors": {
@@ -514,8 +509,8 @@ def create_modal_app_for_gpu(
                 f"Parameter names to link: {parameter_names[:5]}..."
             )  # Show first 5
 
-            tensor_registry = self._get_tensor_registry()
-            model_registry = self._get_model_registry()
+            tensor_registry = self._tensor_registry
+            model_registry = self._model_registry
 
             log.debug(f"Model registry contains {len(model_registry)} models")
             if not model_registry:
@@ -621,7 +616,6 @@ def create_modal_app_for_gpu(
             return_metadata: bool = False,
         ) -> Union[None, List[Dict[str, Any]]]:
             """Implementation of execute_aten_operation without Modal decorators."""
-            # Import torch locally to avoid serialization issues
             import torch
 
             log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
@@ -629,7 +623,7 @@ def create_modal_app_for_gpu(
             log.debug(f"Output tensor IDs: {output_tensor_ids}")
 
             # Get tensor registry
-            tensor_registry = self._get_tensor_registry()
+            tensor_registry = self._tensor_registry
 
             # Reconstruct input tensors from tensor registry
             input_tensors = []
@@ -732,11 +726,11 @@ def create_modal_app_for_gpu(
             # Store result tensors in tensor registry
             for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
                 tensor_registry[tensor_id] = result_tensor
-                log.debug(f"Stored output tensor {tensor_id} in registry (shape: {result_tensor.shape}, device: {result_tensor.device})")
+                log.debug(
+                    f"Stored output tensor {tensor_id} in registry (shape: {result_tensor.shape}, device: {result_tensor.device})"
+                )
 
-            log.debug(
-                f"📦 Updated {len(output_tensor_ids)} output tensors in registry"
-            )
+            log.debug(f"📦 Updated {len(output_tensor_ids)} output tensors in registry")
 
             # Return metadata if requested
             if return_metadata:

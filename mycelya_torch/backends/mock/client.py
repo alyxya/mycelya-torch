@@ -34,7 +34,6 @@ class MockClient(Client):
         gpu_type: str,
         machine_id: str,
         timeout: int,
-        retries: int,
     ):
         super().__init__(gpu_type, machine_id)
         self._app = None
@@ -43,7 +42,6 @@ class MockClient(Client):
         self._app_context = None
         self._is_running = False
         self.timeout = timeout
-        self.retries = retries
 
         # Note: Tensor ID tracking moved to orchestrator
 
@@ -53,7 +51,7 @@ class MockClient(Client):
     def _initialize(self):
         """Initialize the Modal app and server class."""
         self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
-            self.gpu_type, self.machine_id, self.timeout, self.retries
+            self.gpu_type, self.machine_id, self.timeout
         )
 
     def start(self):
@@ -347,7 +345,9 @@ class MockClient(Client):
         output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
 
         # Note: Input tensor existence checking moved to orchestrator
-        log.info(f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}")
+        log.info(
+            f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}"
+        )
 
         # Execute using .local() with queue handling to mirror ModalClient exactly
         self._server_instance.execute_aten_operation.local(
