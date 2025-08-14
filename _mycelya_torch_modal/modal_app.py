@@ -102,12 +102,9 @@ def create_modal_app_for_gpu(
             torch_dtype = getattr(torch, dtype.replace("torch.", ""))
 
             # Detect device
-            try:
-                if torch.cuda.is_available():
-                    device = torch.device("cuda")
-                else:
-                    device = torch.device("cpu")
-            except Exception:
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+            else:
                 device = torch.device("cpu")
 
             # Calculate the required storage size based on shape, stride and offset
@@ -352,12 +349,9 @@ def create_modal_app_for_gpu(
                 )
 
             # Get the appropriate device for tensor operations
-            try:
-                if torch.cuda.is_available():
-                    device = torch.device("cuda")
-                else:
-                    device = torch.device("cpu")
-            except Exception:
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+            else:
                 device = torch.device("cpu")
             log.info(f"Loading model on device: {device}")
 
