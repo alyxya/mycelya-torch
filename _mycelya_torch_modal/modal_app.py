@@ -14,7 +14,7 @@ Part of: mycelya_torch PyTorch extension
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import modal
 import torch
@@ -93,18 +93,6 @@ def create_modal_app_for_gpu(
 
             return self._model_registry
 
-        def _find_base_tensor_with_same_storage(
-            self, tensor: torch.Tensor
-        ) -> Optional[int]:
-            """Find a tensor ID that shares the same underlying storage."""
-            tensor_registry = self._get_tensor_registry()
-            target_storage_ptr = tensor.untyped_storage().data_ptr()
-
-            for tensor_id, existing_tensor in tensor_registry.items():
-                if existing_tensor.untyped_storage().data_ptr() == target_storage_ptr:
-                    return tensor_id
-
-            return None
 
         # Tensor ID-based methods
         def _create_empty_tensor_impl(
