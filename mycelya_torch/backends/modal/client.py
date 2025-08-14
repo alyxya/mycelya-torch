@@ -236,7 +236,7 @@ class ModalClient(Client):
             CPU tensor reconstructed with specified view
         """
         # Get raw data
-        raw_bytes = self.get_tensor_data(tensor_id)
+        raw_bytes = self.get_storage_data(tensor_id)
 
         # Convert raw bytes to tensor with specified view
         torch_dtype = getattr(torch, dtype.replace("torch.", ""))
@@ -245,15 +245,15 @@ class ModalClient(Client):
         tensor.set_(untyped_storage, storage_offset, shape, stride)
         return tensor
 
-    def get_tensor_data(self, tensor_id: int) -> bytes:
+    def get_storage_data(self, tensor_id: int) -> bytes:
         """
-        Get raw tensor data by tensor ID.
+        Get raw storage data by tensor ID.
 
         Args:
             tensor_id: The tensor ID (metadata hash)
 
         Returns:
-            Raw tensor data as bytes
+            Raw storage data as bytes
         """
         if not self.is_running():
             raise RuntimeError(
@@ -262,7 +262,7 @@ class ModalClient(Client):
 
         # Queue the RPC for batching (blocking call that returns raw bytes)
         future = self._queue_rpc(
-            method_name="get_tensor_data",
+            method_name="get_storage_data",
             call_type="remote",
             args=(tensor_id,),
             kwargs={},
@@ -307,7 +307,7 @@ class ModalClient(Client):
 
         log.info(f"Queued removal of {len(tensor_ids)} tensors")
 
-    def resize_tensor_storage(self, tensor_id: int, nbytes: int) -> None:
+    def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """
         Resize the underlying storage for a tensor.
 
@@ -325,7 +325,7 @@ class ModalClient(Client):
 
         # Queue the RPC for batching (fire-and-forget)
         self._queue_rpc(
-            method_name="resize_tensor_storage",
+            method_name="resize_storage",
             call_type="spawn",
             args=(tensor_id, nbytes),
             kwargs={},

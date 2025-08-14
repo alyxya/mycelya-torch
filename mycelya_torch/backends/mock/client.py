@@ -220,7 +220,7 @@ class MockClient(Client):
             CPU tensor reconstructed with specified view
         """
         # Get raw data
-        raw_bytes = self.get_tensor_data(tensor_id)
+        raw_bytes = self.get_storage_data(tensor_id)
 
         # Convert raw bytes to tensor with specified view
         torch_dtype = getattr(torch, dtype.replace("torch.", ""))
@@ -229,15 +229,15 @@ class MockClient(Client):
         tensor.set_(untyped_storage, storage_offset, shape, stride)
         return tensor
 
-    def get_tensor_data(self, tensor_id: int) -> bytes:
+    def get_storage_data(self, tensor_id: int) -> bytes:
         """
-        Get raw tensor data by tensor ID.
+        Get raw storage data by tensor ID.
 
         Args:
             tensor_id: The tensor ID (metadata hash)
 
         Returns:
-            Raw tensor data as bytes
+            Raw storage data as bytes
         """
         if not self.is_running():
             raise RuntimeError(
@@ -245,7 +245,7 @@ class MockClient(Client):
             )
 
         # Execute using .local() instead of remote call (mock behavior)
-        raw_bytes = self._server_instance.get_tensor_data.local(tensor_id)
+        raw_bytes = self._server_instance.get_storage_data.local(tensor_id)
         if raw_bytes is None:
             raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
 
@@ -278,7 +278,7 @@ class MockClient(Client):
 
         log.info(f"Removed {len(tensor_ids)} tensors (mock)")
 
-    def resize_tensor_storage(self, tensor_id: int, nbytes: int) -> None:
+    def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """
         Resize the underlying storage for a tensor.
 
@@ -295,7 +295,7 @@ class MockClient(Client):
             )
 
         # Execute using .local() instead of queuing for batching (mock behavior)
-        self._server_instance.resize_tensor_storage.local(tensor_id, nbytes)
+        self._server_instance.resize_storage.local(tensor_id, nbytes)
         log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes (mock)")
 
     # Operation execution methods

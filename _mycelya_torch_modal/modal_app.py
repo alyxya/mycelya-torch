@@ -262,21 +262,21 @@ def create_modal_app_for_gpu(
                 source_dtype,
             )
 
-        def _get_tensor_data_impl(self, tensor_id: int) -> bytes:
-            """Get raw tensor data by tensor ID."""
+        def _get_storage_data_impl(self, tensor_id: int) -> bytes:
+            """Get raw storage data by tensor ID."""
             tensor_registry = self._get_tensor_registry()
 
             if tensor_id not in tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             tensor = tensor_registry[tensor_id]
-            log.info(f"📦 Retrieving tensor data for tensor {tensor_id}")
+            log.info(f"📦 Retrieving storage data for tensor {tensor_id}")
             return tensor.cpu().numpy().tobytes()
 
         @modal.method()
-        def get_tensor_data(self, tensor_id: int) -> bytes:
-            """Get raw tensor data by tensor ID."""
-            return self._get_tensor_data_impl(tensor_id)
+        def get_storage_data(self, tensor_id: int) -> bytes:
+            """Get raw storage data by tensor ID."""
+            return self._get_storage_data_impl(tensor_id)
 
         def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
             """Remove multiple tensors from the remote machine."""
@@ -295,7 +295,7 @@ def create_modal_app_for_gpu(
             """Remove multiple tensors from the remote machine."""
             return self._remove_tensors_impl(tensor_ids)
 
-        def _resize_tensor_storage_impl(self, tensor_id: int, nbytes: int) -> None:
+        def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
             """Resize the underlying storage for a tensor."""
             import torch
 
@@ -320,9 +320,9 @@ def create_modal_app_for_gpu(
             log.info(f"🔄 Resized storage for tensor {tensor_id}")
 
         @modal.method()
-        def resize_tensor_storage(self, tensor_id: int, nbytes: int) -> None:
+        def resize_storage(self, tensor_id: int, nbytes: int) -> None:
             """Resize the underlying storage for a tensor."""
-            return self._resize_tensor_storage_impl(tensor_id, nbytes)
+            return self._resize_storage_impl(tensor_id, nbytes)
 
         def _prepare_huggingface_model_impl(
             self,
@@ -850,12 +850,12 @@ def create_modal_app_for_gpu(
                         result = self._create_tensor_view_impl(*args, **kwargs)
                     elif method_name == "update_tensor":
                         result = self._update_tensor_impl(*args, **kwargs)
-                    elif method_name == "get_tensor_data":
-                        result = self._get_tensor_data_impl(*args, **kwargs)
+                    elif method_name == "get_storage_data":
+                        result = self._get_storage_data_impl(*args, **kwargs)
                     elif method_name == "remove_tensors":
                         result = self._remove_tensors_impl(*args, **kwargs)
-                    elif method_name == "resize_tensor_storage":
-                        result = self._resize_tensor_storage_impl(*args, **kwargs)
+                    elif method_name == "resize_storage":
+                        result = self._resize_storage_impl(*args, **kwargs)
                     # Legacy methods
                     elif method_name == "execute_aten_operation":
                         result = self._execute_aten_operation_impl(*args, **kwargs)

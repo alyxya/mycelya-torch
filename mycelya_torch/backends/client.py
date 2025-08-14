@@ -148,15 +148,15 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def get_tensor_data(self, tensor_id: int) -> bytes:
+    def get_storage_data(self, tensor_id: int) -> bytes:
         """
-        Get raw tensor data by tensor ID.
+        Get raw storage data by tensor ID.
 
         Args:
-            tensor_id: The tensor ID to retrieve
+            tensor_id: The tensor ID to retrieve storage data from
 
         Returns:
-            Raw tensor data as bytes
+            Raw storage data as bytes
         """
         pass
 
@@ -174,7 +174,7 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def resize_tensor_storage(self, tensor_id: int, nbytes: int) -> None:
+    def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """
         Resize the underlying storage for a tensor.
 
