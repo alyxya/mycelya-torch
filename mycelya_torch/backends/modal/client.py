@@ -493,7 +493,7 @@ class ModalClient(Client):
             The tensor ID (metadata hash)
         """
         # Get tensor ID as int
-        tensor_id = tensor.get_metadata_hash()
+        tensor_id = tensor._get_tensor_id()
 
         # Check if tensor already exists
         if tensor_id in self._remote_tensor_ids:

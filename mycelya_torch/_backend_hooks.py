@@ -186,7 +186,6 @@ class Driver:
     def free_storage_with_id(self, storage_id: int) -> bool:
         return free_storage_with_id(storage_id)
 
-
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         return resize_storage_by_id(storage_id, nbytes)

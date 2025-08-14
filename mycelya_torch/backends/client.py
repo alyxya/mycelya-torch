@@ -293,7 +293,7 @@ class Client(ABC):
 
         Example:
             # After model preparation and local tensor creation
-            local_tensor_ids = [tensor.get_metadata_hash() for tensor in model.parameters()]
+            local_tensor_ids = [tensor._get_tensor_id() for tensor in model.parameters()]
             parameter_names = ["model.embed_tokens.weight", "layer.0.weight", ...]
             client.link_model_tensors(local_tensor_ids, parameter_names)
         """

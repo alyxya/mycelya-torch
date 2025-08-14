@@ -69,7 +69,6 @@ class Orchestrator:
         # Register cleanup on exit
         atexit.register(self._cleanup_batch_thread)
 
-
     # Client management methods
     def register_client(self, device_index: int, client: Client) -> None:
         """Register a client for a specific device index."""
@@ -81,7 +80,9 @@ class Orchestrator:
                     existing_client.stop()
 
             self._clients[device_index] = client
-            log.info(f"✅ ORCHESTRATOR: Registered client for device index {device_index}")
+            log.info(
+                f"✅ ORCHESTRATOR: Registered client for device index {device_index}"
+            )
 
     def unregister_client(self, device_index: int) -> None:
         """Unregister a client for a specific device index (stops and removes from registry).
@@ -94,16 +95,22 @@ class Orchestrator:
                 client = self._clients.pop(device_index)
                 if client.is_running():
                     client.stop()
-                log.info(f"✅ ORCHESTRATOR: Unregistered client for device index {device_index}")
+                log.info(
+                    f"✅ ORCHESTRATOR: Unregistered client for device index {device_index}"
+                )
 
     def get_client_by_device_index(self, device_index: int) -> Client:
         """Get client by device index."""
         with self._client_lock:
             client = self._clients.get(device_index)
             if client is None:
-                raise RuntimeError(f"No client registered for device index {device_index}")
+                raise RuntimeError(
+                    f"No client registered for device index {device_index}"
+                )
             if not client.is_running():
-                raise RuntimeError(f"Client for device index {device_index} is not running")
+                raise RuntimeError(
+                    f"Client for device index {device_index} is not running"
+                )
             return client
 
     def start_client(self, device_index: int) -> None:
@@ -111,10 +118,14 @@ class Orchestrator:
         with self._client_lock:
             client = self._clients.get(device_index)
             if client is None:
-                raise RuntimeError(f"No client registered for device index {device_index}")
+                raise RuntimeError(
+                    f"No client registered for device index {device_index}"
+                )
             if not client.is_running():
                 client.start()
-                log.info(f"✅ ORCHESTRATOR: Started client for device index {device_index}")
+                log.info(
+                    f"✅ ORCHESTRATOR: Started client for device index {device_index}"
+                )
 
     def stop_client(self, device_index: int) -> None:
         """Stop a client by device index (but keep it registered)."""
@@ -122,7 +133,9 @@ class Orchestrator:
             client = self._clients.get(device_index)
             if client is not None and client.is_running():
                 client.stop()
-                log.info(f"✅ ORCHESTRATOR: Stopped client for device index {device_index}")
+                log.info(
+                    f"✅ ORCHESTRATOR: Stopped client for device index {device_index}"
+                )
 
     def is_client_running(self, device_index: int) -> bool:
         """Check if a client is running for a device index."""
@@ -153,7 +166,9 @@ class Orchestrator:
                         client.stop()
                         log.info(f"🛑 Stopped client for device index {device_index}")
                     except Exception as e:
-                        log.warning(f"⚠️ Error stopping client for device index {device_index}: {e}")
+                        log.warning(
+                            f"⚠️ Error stopping client for device index {device_index}: {e}"
+                        )
             self._clients.clear()
 
         # Then stop the batch processing thread
@@ -237,9 +252,6 @@ class Orchestrator:
             self._batch_wakeup.set()
             log.debug("💨 Signaled batch thread to wake up for blocking RPC")
 
-
-
-
     def _invalidate_cache_for_storage(self, storage_id: int) -> None:
         """Invalidate cache entry for a specific storage ID.
 
@@ -319,7 +331,6 @@ class Orchestrator:
 
         return invalidated_count
 
-
     def _reconstruct_tensor_from_cached_storage(
         self,
         cached_bytes: bytes,
@@ -385,8 +396,6 @@ class Orchestrator:
         """
         with self._cache_lock:
             return self._tensor_to_storage_map.get(tensor_id)
-
-
 
     def _invalidate_output_tensor_caches(
         self, output_tensor_ids: List[Optional[int]]
@@ -466,7 +475,6 @@ class Orchestrator:
                 f"Failed to resolve client for tensor {tensor_id}: {e}"
             ) from e
 
-
     def _get_validated_client_by_device_index(self, device_index: int) -> Client:
         """Get a validated client for a device index, ensuring it's running.
 
@@ -481,10 +489,7 @@ class Orchestrator:
         """
         return self.get_client_by_device_index(device_index)
 
-
     # Storage management methods - mirroring Client
-
-
 
     def get_tensor_by_id(
         self,
@@ -536,7 +541,7 @@ class Orchestrator:
         # Try to establish mapping and cache for future requests
         try:
             # Extract storage_id from reconstructed tensor and cache/map it
-            actual_storage_id = result.untyped_storage().data_ptr()
+            actual_storage_id = result._get_storage_id()
             raw_bytes = result.numpy().tobytes()
             self._cache_storage_data(actual_storage_id, raw_bytes)
             self._register_tensor_storage_mapping(tensor_id, actual_storage_id)
@@ -565,7 +570,6 @@ class Orchestrator:
         # Invalidate orchestrator cache for the resized storage
         self._invalidate_cache_for_storage(storage_id)
         log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
-
 
     # New tensor-based methods for the refactored architecture
     def update_tensor(
@@ -624,7 +628,6 @@ class Orchestrator:
 
         log.info(f"✅ ORCHESTRATOR: Updated tensor {tensor_id}")
 
-
     def execute_aten_operation(
         self,
         op_name: str,
@@ -659,7 +662,7 @@ class Orchestrator:
                 "stride": list(tensor.stride()),
                 "storage_offset": tensor.storage_offset(),
                 "dtype": str(tensor.dtype).split(".")[-1],
-                "tensor_id": tensor.get_metadata_hash(),
+                "tensor_id": tensor._get_tensor_id(),
             }
             input_tensor_metadata_dicts.append(metadata_dict)
 
@@ -670,7 +673,7 @@ class Orchestrator:
         # Collect all tensor IDs for cross-device validation
         all_tensor_ids = []
         for tensor in input_tensors:
-            tensor_id = tensor.get_metadata_hash()
+            tensor_id = tensor._get_tensor_id()
             if tensor_id is not None:
                 all_tensor_ids.append(tensor_id)
         for tensor_id in output_tensor_ids:
@@ -686,8 +689,8 @@ class Orchestrator:
         # Proactive tensor-storage mapping registration for better cache coordination
         for tensor in input_tensors:
             try:
-                tensor_id = tensor.get_metadata_hash()
-                storage_id = tensor.untyped_storage().data_ptr()
+                tensor_id = tensor._get_tensor_id()
+                storage_id = tensor._get_storage_id()
                 if tensor_id is not None and storage_id is not None:
                     # Register mapping if not already known
                     existing_storage = self._get_storage_id_for_tensor(tensor_id)
@@ -697,7 +700,7 @@ class Orchestrator:
                 log.debug(f"Could not register tensor-storage mapping: {e}")
 
         # Get the client using the first input tensor's tensor ID
-        tensor_id = input_tensors[0].get_metadata_hash()
+        tensor_id = input_tensors[0]._get_tensor_id()
         client = self._get_client_for_tensor_id(tensor_id)
 
         # Execute with separated input/output interface
@@ -722,14 +725,15 @@ class Orchestrator:
             log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
             return None
 
-
     def remove_tensor_from_remote_by_device(
         self, storage_id: int, device_index: int
     ) -> bool:
         """Remove a tensor from remote storage by device index."""
         try:
             if not self.is_client_running(device_index):
-                log.debug(f"Client for device index {device_index} not running, skipping storage removal")
+                log.debug(
+                    f"Client for device index {device_index} not running, skipping storage removal"
+                )
                 return False
 
             # Use internal client resolution for consistent error handling
@@ -742,7 +746,13 @@ class Orchestrator:
             return False
 
     # HuggingFace integration methods
-    def prepare_huggingface_model_by_device(self, device_index: int, checkpoint: str, torch_dtype: str = None, trust_remote_code: bool = False) -> dict:
+    def prepare_huggingface_model_by_device(
+        self,
+        device_index: int,
+        checkpoint: str,
+        torch_dtype: str = None,
+        trust_remote_code: bool = False,
+    ) -> dict:
         """Prepare a HuggingFace model on remote machine by device index."""
         client = self._get_validated_client_by_device_index(device_index)
         return client.prepare_huggingface_model(
@@ -751,12 +761,16 @@ class Orchestrator:
             trust_remote_code=trust_remote_code,
         )
 
-    def ensure_tensor_exists_by_device(self, device_index: int, tensor: "torch.Tensor") -> None:
+    def ensure_tensor_exists_by_device(
+        self, device_index: int, tensor: "torch.Tensor"
+    ) -> None:
         """Ensure tensor exists on remote machine by device index."""
         client = self._get_validated_client_by_device_index(device_index)
         client._ensure_tensor_exists(tensor)
 
-    def link_model_tensors_by_device(self, device_index: int, local_storage_ids: list, parameter_names: list) -> None:
+    def link_model_tensors_by_device(
+        self, device_index: int, local_storage_ids: list, parameter_names: list
+    ) -> None:
         """Link model tensors on remote machine by device index."""
         client = self._get_validated_client_by_device_index(device_index)
         client.link_model_tensors(local_storage_ids, parameter_names)
@@ -767,8 +781,9 @@ class Orchestrator:
         client = self._get_client_for_storage(storage_id)
         return client._get_tensor_ids_for_storage(storage_id)
 
-
-    def get_tensor_ids_for_storage_by_device(self, device_index: int, storage_id: int) -> list:
+    def get_tensor_ids_for_storage_by_device(
+        self, device_index: int, storage_id: int
+    ) -> list:
         """Get tensor IDs associated with a storage ID by device index."""
         client = self.get_client_by_device_index(device_index)
         return client._get_tensor_ids_for_storage(storage_id)
@@ -776,16 +791,22 @@ class Orchestrator:
     def remove_tensors_by_device(self, device_index: int, tensor_ids: list) -> None:
         """Remove tensors from remote machine by device index."""
         if not self.is_client_running(device_index):
-            log.debug(f"Client for device index {device_index} not running, skipping tensor removal")
+            log.debug(
+                f"Client for device index {device_index} not running, skipping tensor removal"
+            )
             return
 
         client = self.get_client_by_device_index(device_index)
         client.remove_tensors(tensor_ids)
 
-    def remove_tensor_from_storage_mapping_by_device(self, device_index: int, storage_id: int, tensor_id: int) -> None:
+    def remove_tensor_from_storage_mapping_by_device(
+        self, device_index: int, storage_id: int, tensor_id: int
+    ) -> None:
         """Remove tensor from storage mapping by device index."""
         if not self.is_client_running(device_index):
-            log.debug(f"Client for device index {device_index} not running, skipping storage mapping removal")
+            log.debug(
+                f"Client for device index {device_index} not running, skipping storage mapping removal"
+            )
             return
 
         client = self.get_client_by_device_index(device_index)

@@ -259,12 +259,12 @@ def get_metadata_hash(tensor: torch.Tensor) -> int:
 def _add_mycelya_tensor_methods():
     """Add mycelya-specific methods to torch.Tensor using wrapper functions"""
 
-    def safe_get_metadata_hash(self):
-        """Get metadata hash for mycelya tensors and ensure tensor ID is registered"""
-        tensor_id_int = mycelya_torch._C._get_metadata_hash(self)
-
-        # Auto-register tensor ID when first accessed (using int for storage registry)
+    def _get_tensor_id(self):
+        """Internal method to get tensor metadata hash and ensure tensor ID is registered"""
         if self.device.type == "mycelya":
+            tensor_id_int = mycelya_torch._C._get_metadata_hash(self)
+
+            # Auto-register tensor ID when first accessed (using int for storage registry)
             from ._storage import get_tensor_device, register_tensor_id
 
             # Check if not already registered (using int)
@@ -272,15 +272,21 @@ def _add_mycelya_tensor_methods():
                 device_index = self.device.index
                 register_tensor_id(tensor_id_int, device_index)
 
-        return tensor_id_int  # Return int for backward compatibility
+            return tensor_id_int  # Return int for backward compatibility
+        return None
 
-    # Add method to torch.Tensor class
-    torch.Tensor.get_metadata_hash = safe_get_metadata_hash
+    def _get_storage_id(self):
+        """Internal method to get storage ID from data pointer"""
+        if self.device.type == "mycelya":
+            # Get storage ID as integer from data pointer
+            data_ptr = self.untyped_storage().data_ptr()
+            return data_ptr  # data_ptr is the storage ID cast to void*
+        return None
 
-    # Add convenient property
-    torch.Tensor.metadata_hash = property(lambda self: self.get_metadata_hash())
+    # Add methods to torch.Tensor class
+    torch.Tensor._get_tensor_id = _get_tensor_id
+    torch.Tensor._get_storage_id = _get_storage_id
 
-    print("✅ Added metadata hash method via monkey patching torch.Tensor")
     return True
 
 

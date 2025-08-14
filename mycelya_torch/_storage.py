@@ -77,7 +77,6 @@ class StorageRegistry:
         log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return storage_id
 
-
     def register_tensor_id(self, tensor_id: int, device_index: int) -> None:
         """Register a tensor ID with its device."""
         self.tensor_id_to_device[tensor_id] = device_index
@@ -86,7 +85,6 @@ class StorageRegistry:
     def get_tensor_device(self, tensor_id: int) -> Optional[int]:
         """Get device index for a tensor ID"""
         return self.tensor_id_to_device.get(tensor_id)
-
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID and perform remote cleanup"""
@@ -140,7 +138,9 @@ class StorageRegistry:
                 return
 
             # Get all tensor IDs associated with this storage using orchestrator
-            tensor_ids = orchestrator.get_tensor_ids_for_storage_by_device(device_idx, storage_id)
+            tensor_ids = orchestrator.get_tensor_ids_for_storage_by_device(
+                device_idx, storage_id
+            )
 
             if tensor_ids:
                 log.info(
@@ -152,7 +152,9 @@ class StorageRegistry:
 
                 # Clean up client-side mapping using orchestrator
                 for tensor_id in tensor_ids:
-                    orchestrator.remove_tensor_from_storage_mapping_by_device(device_idx, storage_id, tensor_id)
+                    orchestrator.remove_tensor_from_storage_mapping_by_device(
+                        device_idx, storage_id, tensor_id
+                    )
 
                 log.info(
                     f"✅ Successfully cleaned up {len(tensor_ids)} tensors for storage {storage_id} "
@@ -163,7 +165,9 @@ class StorageRegistry:
                 log.info(
                     f"No tensor IDs found for storage {storage_id}, using legacy cleanup"
                 )
-                success = orchestrator.remove_tensor_from_remote_by_device(storage_id, device_idx)
+                success = orchestrator.remove_tensor_from_remote_by_device(
+                    storage_id, device_idx
+                )
 
                 if success:
                     log.info(
@@ -227,8 +231,6 @@ def free_storage_with_id(storage_id: int) -> bool:
     return _storage_registry.free_storage_with_id(storage_id)
 
 
-
-
 def register_tensor_id(tensor_id: int, device_index: int) -> None:
     """Register a tensor ID with its device."""
     return _storage_registry.register_tensor_id(tensor_id, device_index)
@@ -237,8 +239,6 @@ def register_tensor_id(tensor_id: int, device_index: int) -> None:
 def get_tensor_device(tensor_id: int) -> Optional[int]:
     """Get device index for a tensor ID"""
     return _storage_registry.get_tensor_device(tensor_id)
-
-
 
 
 def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:
@@ -298,8 +298,6 @@ def get_machine_for_tensor_id(tensor_id: int) -> RemoteMachine:
     return machine
 
 
-
-
 def validate_cross_device_operation_tensor_ids(tensor_ids: List[int]) -> None:
     """Validate that all tensor IDs belong to the same device.
 
@@ -328,14 +326,6 @@ def validate_cross_device_operation_tensor_ids(tensor_ids: List[int]) -> None:
                 f'"{first_device_name}" and "{current_device_name}". '
                 f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"
             )
-
-
-
-
-
-
-
-
 
 
 # Tensor ID management removed - using metadata-based caching instead

@@ -60,7 +60,7 @@ class RemoteMachine:
         ...     result = x @ x.T
         >>> # Machine automatically stopped when exiting context
     """
-    
+
     # Class-level tracking of all machine instances
     _all_machines: list["RemoteMachine"] = []
 
@@ -145,7 +145,7 @@ class RemoteMachine:
 
         # Register cleanup on exit
         atexit.register(self.stop)
-        
+
         # Add to class-level tracking
         RemoteMachine._all_machines.append(self)
 
@@ -210,9 +210,12 @@ class RemoteMachine:
             if client is not None:
                 device_index = self.remote_index
                 if device_index is None:
-                    raise RuntimeError("Device not properly registered with device registry")
+                    raise RuntimeError(
+                        "Device not properly registered with device registry"
+                    )
 
                 from ._orchestrator import orchestrator
+
                 orchestrator.register_client(device_index, client)
 
         except ImportError as e:
@@ -231,6 +234,7 @@ class RemoteMachine:
 
         try:
             from ._orchestrator import orchestrator
+
             orchestrator.start_client(device_index)
             log.info(f"Started client for machine: {self.machine_id}")
         except Exception as e:
@@ -245,13 +249,12 @@ class RemoteMachine:
 
         try:
             from ._orchestrator import orchestrator
+
             orchestrator.stop_client(device_index)
             log.info(f"Stopped client: {self.machine_id}")
         except Exception as e:
             # Don't log full stack traces during shutdown
-            log.warning(
-                f"Error stopping client {self.machine_id}: {type(e).__name__}"
-            )
+            log.warning(f"Error stopping client {self.machine_id}: {type(e).__name__}")
 
     def get_client(self):
         """Get the client for this device.
@@ -264,9 +267,12 @@ class RemoteMachine:
         """
         device_index = self.remote_index
         if device_index is None:
-            raise RuntimeError(f"Machine {self.machine_id} not registered with device registry")
+            raise RuntimeError(
+                f"Machine {self.machine_id} not registered with device registry"
+            )
 
         from ._orchestrator import orchestrator
+
         return orchestrator.get_client_by_device_index(device_index)
 
     def __enter__(self) -> "RemoteMachine":
@@ -274,6 +280,7 @@ class RemoteMachine:
         device_index = self.remote_index
         if device_index is not None:
             from ._orchestrator import orchestrator
+
             if not orchestrator.is_client_running(device_index):
                 self.start()
         return self
@@ -296,7 +303,6 @@ class RemoteMachine:
 
     def __hash__(self) -> int:
         return hash(self.machine_id)
-    
 
     @property
     def device_name(self) -> str:
