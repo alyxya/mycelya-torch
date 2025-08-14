@@ -269,18 +269,8 @@ def create_huggingface_model_from_remote(
         device_index, local_storage_ids, parameter_names
     )
 
-    # Wait for all batched operations (including tensor linking) to complete
-    log.info("🚀 Waiting for all storage operations and tensor linking to complete...")
-    # Check if client has batch queue through orchestrator
-    device_index = machine.remote_index
-    if device_index is not None and orchestrator.has_batch_queue(device_index):
-        # Wake up the batch processor and wait for completion
-        orchestrator.wake_batch_thread_for_blocking_rpc()
-
-        # Wait a moment for batch processing to complete
-        import time
-
-        time.sleep(0.5)  # Give time for batch to process
+    # No more batching - operations are immediate
+    log.info("✅ All storage operations and tensor linking completed (no batching)")
 
     log.info("✅ Model tensor linking completed successfully")
 

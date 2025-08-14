@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 if TYPE_CHECKING:
     import torch
 
-from .._batching import RPCBatchQueue
+# Removed batching import since we're using queue-based system now
 
 
 class Client(ABC):
@@ -37,12 +37,7 @@ class Client(ABC):
         self.machine_id = machine_id
 
         # Note: Tensor cache moved to orchestrator level for centralized management
-
-        # RPC batching queue
-        self._batch_queue = RPCBatchQueue(client_id=machine_id)
-
-        # Register with orchestrator for batching (will be done in subclass start())
-        self._registered_for_batching = False
+        # Note: Batching system removed in favor of queue-based system
 
     @abstractmethod
     def start(self) -> None:
@@ -274,65 +269,7 @@ class Client(ABC):
         """
         pass
 
-    # RPC batching helper methods
-    def _queue_rpc(
-        self,
-        method_name: str,
-        call_type: str,
-        args: tuple,
-        kwargs: dict,
-        return_future: bool = False,
-        invalidate_tensor_ids: Optional[List[int]] = None,
-    ) -> Optional[Any]:
-        """
-        Helper method to queue an RPC for batching.
-
-        Args:
-            method_name: Name of the RPC method to call
-            call_type: "spawn" for fire-and-forget, "remote" for blocking
-            args: Arguments for the RPC method
-            kwargs: Keyword arguments for the RPC method
-            return_future: Whether to return a Future for this call
-            invalidate_tensor_ids: Tensor IDs to invalidate immediately (at queue time)
-
-        Returns:
-            Future object if return_future=True or call_type="remote", None otherwise
-        """
-        # Note: Cache invalidation now handled at orchestrator level
-
-        # Queue the RPC for batching
-        future = self._batch_queue.enqueue_call(
-            call_type=call_type,
-            method_name=method_name,
-            args=args,
-            kwargs=kwargs,
-            return_future=return_future,
-        )
-
-        # Wake up background thread immediately for blocking calls to reduce latency
-        if call_type == "remote" or return_future:
-            from .._orchestrator import orchestrator
-
-            orchestrator.wake_batch_thread_for_blocking_rpc()
-
-        return future
-
-    def _register_for_batching(self) -> None:
-        """Register this client with the orchestrator for batching."""
-        if not self._registered_for_batching:
-            from .._orchestrator import orchestrator
-
-            orchestrator.register_client_for_batching(self)
-            self._registered_for_batching = True
-
-    def _unregister_for_batching(self) -> None:
-        """Unregister this client from the orchestrator for batching."""
-        if self._registered_for_batching:
-            from .._orchestrator import orchestrator
-
-            orchestrator.unregister_client_for_batching(self)
-            self._registered_for_batching = False
-
+    # Note: Batching helper methods removed in favor of queue-based system
     # Note: Cache methods removed - caching now handled at orchestrator level
 
     # Context manager methods (optional to override, but provide default behavior)
@@ -345,7 +282,7 @@ class Client(ABC):
         """Context manager exit - stops the machine."""
         self.stop()
         # Note: Cache cleanup removed - handled at orchestrator level
-        self._unregister_for_batching()
+        # Note: Batching unregistration removed with batching system
 
     @abstractmethod
     def __repr__(self) -> str:

@@ -52,7 +52,7 @@ class MockClient(Client):
 
     def _initialize(self):
         """Initialize the Modal app and server class."""
-        self._app, self._server_class = create_modal_app_for_gpu(
+        self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id, self.timeout, self.retries
         )
 
@@ -63,16 +63,10 @@ class MockClient(Client):
             self._server_instance = self._server_class()
             self._is_running = True
 
-            # Register for RPC batching
-            self._register_for_batching()
-
             log.info(f"Started mock client: {self.machine_id}")
 
     def stop(self):
         """Stop the mock execution environment."""
-        # Unregister from RPC batching first
-        self._unregister_for_batching()
-
         if self._is_running:
             self._server_instance = None
             self._is_running = False
@@ -111,7 +105,7 @@ class MockClient(Client):
 
         try:
             # Execute using .local() instead of queuing for batching (mock behavior)
-            self._server_instance.create_empty_tensor.local(
+            self._server_instance.create_empty_tensor_sync.local(
                 tensor_id, shape, stride, storage_offset, dtype
             )
             self._remote_tensor_ids.add(tensor_id)
@@ -147,7 +141,7 @@ class MockClient(Client):
 
         try:
             # Execute using .local() instead of queuing for batching (mock behavior)
-            self._server_instance.create_tensor_view.local(
+            self._server_instance.create_tensor_view_sync.local(
                 new_tensor_id, base_tensor_id, shape, stride, offset
             )
             self._remote_tensor_ids.add(new_tensor_id)
@@ -245,7 +239,7 @@ class MockClient(Client):
             )
 
         # Execute using .local() instead of remote call (mock behavior)
-        raw_bytes = self._server_instance.get_storage_data.local(tensor_id)
+        raw_bytes = self._server_instance.get_storage_data_sync.local(tensor_id)
         if raw_bytes is None:
             raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
 
@@ -463,25 +457,19 @@ class MockClient(Client):
 
         return tensor_id
 
-    # Batch execution support (mirroring ModalClient)
-    def execute_batch(self) -> List[Any]:
-        """
-        Execute all queued RPCs in a single batch.
+    # Removed batch execution support - using direct calls now
 
-        This is called by the orchestrator's batch processing thread.
-        For MockClient, we don't actually queue calls, so this is a no-op.
-
-        Returns:
-            Empty list since MockClient executes calls immediately
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
-        # MockClient executes calls immediately, so no batched calls to execute
-        # But we need to maintain the same interface as ModalClient
+    def _get_tensor_ids_for_storage(self, storage_id: int) -> List[int]:
+        """Get tensor IDs associated with a storage ID."""
+        # For now, return empty list as this is used for cleanup
+        # Could be implemented using storage tracking if needed
         return []
+
+    def remove_storage(self, storage_id: int) -> bool:
+        """Remove storage by ID."""
+        # For now, just return True as this is used for cleanup
+        # Could be implemented properly if needed
+        return True
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

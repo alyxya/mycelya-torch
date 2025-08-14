@@ -32,7 +32,7 @@ def create_modal_app_for_gpu(
     machine_id: str,
     timeout: int,
     retries: int,
-) -> Tuple[modal.App, Any]:
+) -> Tuple[modal.App, Any, modal.Queue]:
     """
     Create a Modal app and class for a specific GPU type and device.
 
@@ -43,9 +43,12 @@ def create_modal_app_for_gpu(
         retries: Number of retries on failure
 
     Returns:
-        Tuple of (modal_app, server_class) for the specified device
+        Tuple of (modal_app, server_class, response_queue) for the specified device
     """
     app = modal.App(f"mycelya-torch-{machine_id}")
+    
+    # Create a Modal Queue for responses
+    response_queue = modal.Queue.from_name(f"responses-{machine_id}", create_if_missing=True)
 
     @app.cls(
         image=image,
@@ -57,6 +60,9 @@ def create_modal_app_for_gpu(
         min_containers=1,
     )
     class PytorchServer:
+        def __init__(self):
+            # Create the response queue in the class
+            self.response_queue = response_queue
         def _get_device(self):
             """Get the appropriate device for tensor operations."""
             import torch
@@ -147,9 +153,11 @@ def create_modal_app_for_gpu(
             dtype: str,
         ) -> None:
             """Create an empty tensor on the remote machine with proper storage layout."""
-            return self._create_empty_tensor_impl(
+            result = self._create_empty_tensor_impl(
                 tensor_id, shape, stride, storage_offset, dtype
             )
+            # Write result to queue instead of returning
+            self.response_queue.put(result)
 
         def _create_tensor_view_impl(
             self,
@@ -191,9 +199,11 @@ def create_modal_app_for_gpu(
             offset: int,
         ) -> None:
             """Create a tensor view from existing tensor using as_strided."""
-            return self._create_tensor_view_impl(
+            result = self._create_tensor_view_impl(
                 new_tensor_id, base_tensor_id, shape, stride, offset
             )
+            # Write result to queue instead of returning
+            self.response_queue.put(result)
 
         def _update_tensor_impl(
             self,
@@ -278,9 +288,11 @@ def create_modal_app_for_gpu(
             return tensor.cpu().numpy().tobytes()
 
         @modal.method()
-        def get_storage_data(self, tensor_id: int) -> bytes:
+        def get_storage_data(self, tensor_id: int) -> None:
             """Get raw storage data by tensor ID."""
-            return self._get_storage_data_impl(tensor_id)
+            result = self._get_storage_data_impl(tensor_id)
+            # Write result to queue instead of returning
+            self.response_queue.put(result)
 
         def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
             """Remove multiple tensors from the remote machine."""
@@ -474,25 +486,13 @@ def create_modal_app_for_gpu(
             checkpoint: str,
             torch_dtype: str = "auto",
             trust_remote_code: bool = False,
-        ) -> Dict[str, Any]:
-            """
-            Download and prepare a HuggingFace model directly on the remote machine.
-
-            This method downloads the model weights directly on the remote GPU,
-            loads them into GPU memory, and returns metadata needed to create
-            local tensor stubs.
-
-            Args:
-                checkpoint: HuggingFace model checkpoint (e.g., "gpt2", "bert-base-uncased")
-                torch_dtype: Data type for model weights ("auto", "float32", "float16", etc.)
-                trust_remote_code: Whether to trust remote code for custom models
-
-            Returns:
-                Dict containing state_dict_metadata, config, and model_type
-            """
-            return self._prepare_huggingface_model_impl(
+        ) -> None:
+            """Download and prepare a HuggingFace model directly on the remote machine."""
+            result = self._prepare_huggingface_model_impl(
                 checkpoint, torch_dtype, trust_remote_code
             )
+            # Write result to queue instead of returning
+            self.response_queue.put(result)
 
         def _link_model_tensors_impl(
             self,
@@ -770,26 +770,9 @@ def create_modal_app_for_gpu(
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
             return_metadata: bool = False,
-        ) -> Union[None, List[Dict[str, Any]]]:
-            """
-            Execute an operation with input tensor IDs and output tensor IDs.
-
-            This method handles operations where input tensor IDs and output tensor IDs
-            are explicitly separated. Tensors are stored in the tensor registry by their IDs.
-
-            Args:
-                op_name: The operation name to execute
-                input_tensor_ids: List of input tensor IDs
-                output_tensor_ids: List of tensor IDs to store results (all output tensors)
-                args: Operation arguments (with tensor IDs replacing tensors)
-                kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
-                tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
-                return_metadata: If True, return output tensor metadata instead of None
-
-            Returns:
-                None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
-            """
-            return self._execute_aten_operation_impl(
+        ) -> None:
+            """Execute an aten operation on the remote machine with input tensor IDs."""
+            result = self._execute_aten_operation_impl(
                 op_name,
                 input_tensor_ids,
                 output_tensor_ids,
@@ -798,6 +781,8 @@ def create_modal_app_for_gpu(
                 tensor_mask,
                 return_metadata,
             )
+            # Write result to queue instead of returning
+            self.response_queue.put(result)
 
         @modal.method()
         def execute_batch(
@@ -881,4 +866,4 @@ def create_modal_app_for_gpu(
 
             return results
 
-    return app, PytorchServer
+    return app, PytorchServer, response_queue

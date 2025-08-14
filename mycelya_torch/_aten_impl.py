@@ -487,7 +487,7 @@ def _remote_kernel_fallback(
 ) -> Any:
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
     op_name = op.overloadpacket._qualified_op_name
-    
+
 
     # Validate cross-device operations upfront and get the remote device
     remote_device = _validate_cross_device_operation(op_name, args, kwargs)
@@ -574,7 +574,12 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
     # Pass CPU tensor directly to orchestrator without conversion
     from ._orchestrator import orchestrator
 
-    # Use orchestrator to update tensor with automatic client routing
+    # First ensure the tensor exists on the remote side
+    # This creates the empty tensor if it doesn't exist
+    client = orchestrator._get_client_for_tensor_id(tensor_id)
+    orchestrator._ensure_tensor_exists_on_client(client, to_)
+
+    # Now update the tensor with data from the CPU tensor
     # Pass tensor ID and raw data with tensor metadata for reconstruction
     orchestrator.update_tensor(
         tensor_id,

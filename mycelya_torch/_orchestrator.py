@@ -9,13 +9,11 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 
-import atexit
-import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 
-from ._batching import BatchProcessor
+# Removed batching imports
 from ._logging import get_logger
 from .backends.client import Client
 
@@ -33,7 +31,7 @@ class Orchestrator:
     machines, handling tensor transfers, device communication, and distributed
     execution flow. Currently supports Modal as the primary provider.
 
-    Also manages background thread for batching RPCs to improve performance.
+    No background threading - all operations are synchronous.
     """
 
     def __init__(self):
@@ -41,21 +39,9 @@ class Orchestrator:
 
         # Centralized client management by device index
         self._clients: Dict[int, Client] = {}  # device_index -> client
-        self._client_lock = threading.RLock()
-
-        # RPC Batching System
-        self._batch_clients: Set[Client] = set()
-        self._batch_lock = threading.RLock()
-        self._batch_thread: Optional[threading.Thread] = None
-        self._batch_shutdown = threading.Event()
-        self._batch_wakeup = (
-            threading.Event()
-        )  # Wake up thread immediately for blocking calls
-        self._batch_interval = 0.1  # Process batches every 100ms
 
         # Orchestrator-level storage cache (storage_id -> raw_bytes)
         self._storage_cache: Dict[int, bytes] = {}
-        self._cache_lock = threading.RLock()  # Dedicated lock for cache operations
         self._cache_hits = 0
         self._cache_misses = 0
 
@@ -63,26 +49,19 @@ class Orchestrator:
         self._tensor_to_storage_map: Dict[int, int] = {}
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
 
-        # Start background thread for batch processing
-        self._start_batch_thread()
-
-        # Register cleanup on exit
-        atexit.register(self._cleanup_batch_thread)
-
     # Client management methods
     def register_client(self, device_index: int, client: Client) -> None:
         """Register a client for a specific device index."""
-        with self._client_lock:
-            if device_index in self._clients:
-                # Stop existing client if it exists
-                existing_client = self._clients[device_index]
-                if existing_client.is_running():
-                    existing_client.stop()
+        if device_index in self._clients:
+            # Stop existing client if it exists
+            existing_client = self._clients[device_index]
+            if existing_client.is_running():
+                existing_client.stop()
 
-            self._clients[device_index] = client
-            log.info(
-                f"✅ ORCHESTRATOR: Registered client for device index {device_index}"
-            )
+        self._clients[device_index] = client
+        log.info(
+            f"✅ ORCHESTRATOR: Registered client for device index {device_index}"
+        )
 
     def unregister_client(self, device_index: int) -> None:
         """Unregister a client for a specific device index (stops and removes from registry).
@@ -90,167 +69,55 @@ class Orchestrator:
         Note: This should only be used during final cleanup/destruction.
         For normal operation, use stop_client() to stop without unregistering.
         """
-        with self._client_lock:
-            if device_index in self._clients:
-                client = self._clients.pop(device_index)
-                if client.is_running():
-                    client.stop()
-                log.info(
-                    f"✅ ORCHESTRATOR: Unregistered client for device index {device_index}"
-                )
+        if device_index in self._clients:
+            client = self._clients.pop(device_index)
+            if client.is_running():
+                client.stop()
+            log.info(
+                f"✅ ORCHESTRATOR: Unregistered client for device index {device_index}"
+            )
 
     def get_client_by_device_index(self, device_index: int) -> Client:
         """Get client by device index."""
-        with self._client_lock:
-            client = self._clients.get(device_index)
-            if client is None:
-                raise RuntimeError(
-                    f"No client registered for device index {device_index}"
-                )
-            if not client.is_running():
-                raise RuntimeError(
-                    f"Client for device index {device_index} is not running"
-                )
-            return client
+        client = self._clients.get(device_index)
+        if client is None:
+            raise RuntimeError(
+                f"No client registered for device index {device_index}"
+            )
+        if not client.is_running():
+            raise RuntimeError(
+                f"Client for device index {device_index} is not running"
+            )
+        return client
 
     def start_client(self, device_index: int) -> None:
         """Start a client by device index."""
-        with self._client_lock:
-            client = self._clients.get(device_index)
-            if client is None:
-                raise RuntimeError(
-                    f"No client registered for device index {device_index}"
-                )
-            if not client.is_running():
-                client.start()
-                log.info(
-                    f"✅ ORCHESTRATOR: Started client for device index {device_index}"
-                )
+        client = self._clients.get(device_index)
+        if client is None:
+            raise RuntimeError(
+                f"No client registered for device index {device_index}"
+            )
+        if not client.is_running():
+            client.start()
+            log.info(
+                f"✅ ORCHESTRATOR: Started client for device index {device_index}"
+            )
 
     def stop_client(self, device_index: int) -> None:
         """Stop a client by device index (but keep it registered)."""
-        with self._client_lock:
-            client = self._clients.get(device_index)
-            if client is not None and client.is_running():
-                client.stop()
-                log.info(
-                    f"✅ ORCHESTRATOR: Stopped client for device index {device_index}"
-                )
+        client = self._clients.get(device_index)
+        if client is not None and client.is_running():
+            client.stop()
+            log.info(
+                f"✅ ORCHESTRATOR: Stopped client for device index {device_index}"
+            )
 
     def is_client_running(self, device_index: int) -> bool:
         """Check if a client is running for a device index."""
-        with self._client_lock:
-            client = self._clients.get(device_index)
-            return client is not None and client.is_running()
+        client = self._clients.get(device_index)
+        return client is not None and client.is_running()
 
-    # Background thread management for RPC batching
-    def _start_batch_thread(self) -> None:
-        """Start the background thread for processing RPC batches."""
-        if self._batch_thread is None or not self._batch_thread.is_alive():
-            self._batch_shutdown.clear()
-            self._batch_thread = threading.Thread(
-                target=self._batch_processing_loop,
-                name="RPCBatchProcessor",
-                daemon=True,
-            )
-            self._batch_thread.start()
-            log.info("🧵 Started RPC batch processing thread")
-
-    def _cleanup_batch_thread(self) -> None:
-        """Clean up the background batch processing thread and all clients."""
-        # Stop all clients first
-        with self._client_lock:
-            for device_index, client in list(self._clients.items()):
-                if client.is_running():
-                    try:
-                        client.stop()
-                        log.info(f"🛑 Stopped client for device index {device_index}")
-                    except Exception as e:
-                        log.warning(
-                            f"⚠️ Error stopping client for device index {device_index}: {e}"
-                        )
-            self._clients.clear()
-
-        # Then stop the batch processing thread
-        if self._batch_thread and self._batch_thread.is_alive():
-            log.info("🛑 Shutting down RPC batch processing thread")
-            self._batch_shutdown.set()
-            self._batch_thread.join(timeout=2.0)
-            if self._batch_thread.is_alive():
-                log.warning("⚠️ Batch processing thread did not shutdown cleanly")
-
-    def _batch_processing_loop(self) -> None:
-        """Main loop for the background batch processing thread."""
-        log.info("🚀 RPC batch processing loop started")
-
-        while not self._batch_shutdown.is_set():
-            try:
-                # Process batches for all registered clients
-                with self._batch_lock:
-                    clients_to_process = list(self._batch_clients)
-
-                for client in clients_to_process:
-                    try:
-                        self._process_client_batch(client)
-                    except Exception as e:
-                        log.error(f"❌ Error processing batch for client {client}: {e}")
-
-                # Wait for next batch interval OR immediate wakeup for blocking calls
-                woken_early = self._batch_wakeup.wait(self._batch_interval)
-                if woken_early:
-                    # Clear the event for next time and process immediately
-                    self._batch_wakeup.clear()
-                    log.debug("🚀 Background thread woken early for blocking RPC")
-
-            except Exception as e:
-                log.error(f"❌ Error in batch processing loop: {e}")
-
-        log.info("🏁 RPC batch processing loop terminated")
-
-    def _process_client_batch(self, client: Client) -> None:
-        """Process a batch of RPCs for a specific client."""
-        if not hasattr(client, "_batch_queue"):
-            return
-
-        batch = client._batch_queue.get_batch()
-        if not batch:
-            return
-
-        try:
-            # Execute the batch
-            result = BatchProcessor.execute_batch(client._server_instance, batch)
-
-            log.debug(
-                f"📊 Batch processed for {client}: "
-                f"{result.success_count} success, {result.error_count} errors, "
-                f"{result.execution_time:.3f}s"
-            )
-
-        except Exception as e:
-            log.error(f"❌ Batch execution failed for client {client}: {e}")
-
-            # Cancel all futures in the batch
-            for call in batch:
-                if call.future and not call.future.done():
-                    call.future.set_exception(e)
-
-    def register_client_for_batching(self, client: Client) -> None:
-        """Register a client for RPC batching."""
-        with self._batch_lock:
-            self._batch_clients.add(client)
-            log.info(f"📝 Registered client for batching: {client}")
-
-    def unregister_client_for_batching(self, client: Client) -> None:
-        """Unregister a client from RPC batching."""
-        with self._batch_lock:
-            self._batch_clients.discard(client)
-            log.info(f"🗑️ Unregistered client from batching: {client}")
-
-    def wake_batch_thread_for_blocking_rpc(self) -> None:
-        """Wake up the background thread immediately for processing blocking RPCs."""
-        if self._batch_thread and self._batch_thread.is_alive():
-            self._batch_wakeup.set()
-            log.debug("💨 Signaled batch thread to wake up for blocking RPC")
+    # Removed all background thread management - no more batching
 
     def _invalidate_cache_for_storage(self, storage_id: int) -> None:
         """Invalidate cache entry for a specific storage ID.
@@ -258,14 +125,13 @@ class Orchestrator:
         Args:
             storage_id: Storage ID to remove from cache
         """
-        with self._cache_lock:
-            if storage_id in self._storage_cache:
-                del self._storage_cache[storage_id]
-                log.debug(f"🗑️ Invalidated orchestrator cache for storage {storage_id}")
+        if storage_id in self._storage_cache:
+            del self._storage_cache[storage_id]
+            log.debug(f"🗑️ Invalidated orchestrator cache for storage {storage_id}")
 
-                # Note: Do NOT remove tensor-storage mappings during cache invalidation
-                # The mappings should only be updated when tensors are actually created/destroyed via RPC
-                # Cache invalidation is separate from tensor existence tracking
+            # Note: Do NOT remove tensor-storage mappings during cache invalidation
+            # The mappings should only be updated when tensors are actually created/destroyed via RPC
+            # Cache invalidation is separate from tensor existence tracking
 
     def _get_cached_storage_data(self, storage_id: int) -> Optional[bytes]:
         """Get cached storage data by storage ID.
@@ -276,15 +142,14 @@ class Orchestrator:
         Returns:
             Raw bytes if cached, None if not in cache
         """
-        with self._cache_lock:
-            if storage_id in self._storage_cache:
-                self._cache_hits += 1
-                log.debug(f"🎯 CACHE HIT for storage {storage_id}")
-                return self._storage_cache[storage_id]
-            else:
-                self._cache_misses += 1
-                log.debug(f"❌ CACHE MISS for storage {storage_id}")
-                return None
+        if storage_id in self._storage_cache:
+            self._cache_hits += 1
+            log.debug(f"🎯 CACHE HIT for storage {storage_id}")
+            return self._storage_cache[storage_id]
+        else:
+            self._cache_misses += 1
+            log.debug(f"❌ CACHE MISS for storage {storage_id}")
+            return None
 
     def _cache_storage_data(self, storage_id: int, data: bytes) -> None:
         """Cache storage data by storage ID.
@@ -293,9 +158,8 @@ class Orchestrator:
             storage_id: The storage ID to cache
             data: Raw bytes to cache
         """
-        with self._cache_lock:
-            self._storage_cache[storage_id] = data
-            log.debug(f"💾 CACHED storage {storage_id} ({len(data)} bytes)")
+        self._storage_cache[storage_id] = data
+        log.debug(f"💾 CACHED storage {storage_id} ({len(data)} bytes)")
 
     def _invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> int:
         """Invalidate cache entries for multiple storage IDs and clean up mappings.
@@ -307,16 +171,15 @@ class Orchestrator:
             Number of cache entries that were actually invalidated
         """
         invalidated_count = 0
-        with self._cache_lock:
-            for storage_id in storage_ids:
-                if storage_id in self._storage_cache:
-                    del self._storage_cache[storage_id]
-                    invalidated_count += 1
-                    log.debug(f"🗑️ INVALIDATED cache for storage {storage_id}")
+        for storage_id in storage_ids:
+            if storage_id in self._storage_cache:
+                del self._storage_cache[storage_id]
+                invalidated_count += 1
+                log.debug(f"🗑️ INVALIDATED cache for storage {storage_id}")
 
-                # Note: Do NOT clean up tensor→storage mappings during cache invalidation
-                # The mappings should only be updated when tensors are actually created/destroyed via RPC
-                # Cache invalidation is separate from tensor existence tracking
+            # Note: Do NOT clean up tensor→storage mappings during cache invalidation
+            # The mappings should only be updated when tensors are actually created/destroyed via RPC
+            # Cache invalidation is separate from tensor existence tracking
 
         return invalidated_count
 
@@ -361,18 +224,17 @@ class Orchestrator:
             tensor_id: The tensor ID (metadata hash)
             storage_id: The storage ID (storage pointer)
         """
-        with self._cache_lock:
-            # Update tensor -> storage mapping
-            self._tensor_to_storage_map[tensor_id] = storage_id
+        # Update tensor -> storage mapping
+        self._tensor_to_storage_map[tensor_id] = storage_id
 
-            # Update storage -> tensors mapping
-            if storage_id not in self._storage_to_tensors_map:
-                self._storage_to_tensors_map[storage_id] = set()
-            self._storage_to_tensors_map[storage_id].add(tensor_id)
+        # Update storage -> tensors mapping
+        if storage_id not in self._storage_to_tensors_map:
+            self._storage_to_tensors_map[storage_id] = set()
+        self._storage_to_tensors_map[storage_id].add(tensor_id)
 
-            log.debug(
-                f"📋 Registered mapping: tensor {tensor_id} -> storage {storage_id}"
-            )
+        log.debug(
+            f"📋 Registered mapping: tensor {tensor_id} -> storage {storage_id}"
+        )
 
     def _get_storage_id_for_tensor(self, tensor_id: int) -> Optional[int]:
         """Get storage ID for a tensor ID if mapping exists.
@@ -383,8 +245,7 @@ class Orchestrator:
         Returns:
             Storage ID if mapping exists, None otherwise
         """
-        with self._cache_lock:
-            return self._tensor_to_storage_map.get(tensor_id)
+        return self._tensor_to_storage_map.get(tensor_id)
 
     def _get_tensor_id_for_storage(self, storage_id: int) -> Optional[int]:
         """Get a tensor ID for a storage ID if mapping exists.
@@ -395,11 +256,10 @@ class Orchestrator:
         Returns:
             Any tensor ID that maps to this storage, None if no mapping exists
         """
-        with self._cache_lock:
-            tensor_set = self._storage_to_tensors_map.get(storage_id)
-            if tensor_set:
-                return next(iter(tensor_set))  # Return any tensor ID from the set
-            return None
+        tensor_set = self._storage_to_tensors_map.get(storage_id)
+        if tensor_set:
+            return next(iter(tensor_set))  # Return any tensor ID from the set
+        return None
 
     def _get_device_index_for_client(self, client) -> int:
         """Get device index for a client.
@@ -883,13 +743,7 @@ class Orchestrator:
         client = self.get_client_by_device_index(device_index)
         client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
 
-    def has_batch_queue(self, device_index: int) -> bool:
-        """Check if client has a batch queue by device index."""
-        if not self.is_client_running(device_index):
-            return False
-
-        client = self.get_client_by_device_index(device_index)
-        return hasattr(client, "_batch_queue") and client._batch_queue
+    # Removed batch queue checking - no more batching
 
 
 # Global orchestrator instance (Modal provider implementation)

@@ -40,6 +40,7 @@ class ModalClient(Client):
         self._app = None
         self._server_class = None
         self._server_instance = None
+        self._response_queue = None
         self._app_context = None
         self.timeout = timeout
         self.retries = retries
@@ -52,7 +53,7 @@ class ModalClient(Client):
 
     def _initialize(self):
         """Initialize the Modal app and server class."""
-        self._app, self._server_class = create_modal_app_for_gpu(
+        self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id, self.timeout, self.retries
         )
 
@@ -64,14 +65,8 @@ class ModalClient(Client):
             # Create server instance when app starts
             self._server_instance = self._server_class()
 
-            # Register for RPC batching
-            self._register_for_batching()
-
     def stop(self):
         """Stop the Modal app context for this machine."""
-        # Unregister from RPC batching first
-        self._unregister_for_batching()
-
         if self._app_context is not None:
             try:
                 self._app_context.__exit__(None, None, None)
@@ -113,21 +108,16 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        try:
-            # Queue the RPC for batching (wait for completion to prevent race conditions)
-            future = self._queue_rpc(
-                method_name="create_empty_tensor",
-                call_type="remote",
-                args=(tensor_id, shape, stride, storage_offset, dtype),
-                kwargs={},
-            )
-            # Wait for completion to ensure tensor exists before subsequent operations
-            if future:
-                future.result()
-            self._remote_tensor_ids.add(tensor_id)
-            log.info(f"Created empty tensor {tensor_id} with shape {shape}")
-        except Exception as e:
-            raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
+        # Call Modal method which will write result to queue
+        self._server_instance.create_empty_tensor.remote(
+            tensor_id, shape, stride, storage_offset, dtype
+        )
+
+        # Poll queue for result
+        self._response_queue.get()
+
+        self._remote_tensor_ids.add(tensor_id)
+        log.info(f"Created empty tensor {tensor_id} with shape {shape}")
 
     def create_tensor_view(
         self,
@@ -155,25 +145,18 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        try:
-            # Queue the RPC for batching (wait for completion to prevent race conditions)
-            future = self._queue_rpc(
-                method_name="create_tensor_view",
-                call_type="remote",
-                args=(new_tensor_id, base_tensor_id, shape, stride, offset),
-                kwargs={},
-            )
-            # Wait for completion to ensure tensor view exists before subsequent operations
-            if future:
-                future.result()
-            self._remote_tensor_ids.add(new_tensor_id)
-            log.info(
-                f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
-            )
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to create tensor view {new_tensor_id}: {e}"
-            ) from e
+        # Call Modal method which will write result to queue
+        self._server_instance.create_tensor_view.remote(
+            new_tensor_id, base_tensor_id, shape, stride, offset
+        )
+
+        # Poll queue for result
+        self._response_queue.get()
+
+        self._remote_tensor_ids.add(new_tensor_id)
+        log.info(
+            f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
+        )
 
     def update_tensor(
         self,
@@ -203,22 +186,16 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC for batching (fire-and-forget)
-        self._queue_rpc(
-            method_name="update_tensor",
-            call_type="spawn",
-            args=(
-                tensor_id,
-                raw_data,
-                source_shape,
-                source_stride,
-                source_storage_offset,
-                source_dtype,
-            ),
-            kwargs={},
-            invalidate_tensor_ids=[tensor_id],
+        # Call Modal method directly (fire-and-forget)
+        self._server_instance.update_tensor.remote(
+            tensor_id,
+            raw_data,
+            source_shape,
+            source_stride,
+            source_storage_offset,
+            source_dtype,
         )
-        log.info(f"Queued update for tensor {tensor_id}")
+        log.info(f"Updated tensor {tensor_id}")
 
     def get_tensor_by_id(
         self,
@@ -266,18 +243,11 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC for batching (blocking call that returns raw bytes)
-        future = self._queue_rpc(
-            method_name="get_storage_data",
-            call_type="remote",
-            args=(tensor_id,),
-            kwargs={},
-        )
+        # Call Modal method which will write result to queue
+        self._server_instance.get_storage_data.remote(tensor_id)
 
-        # Wait for the result from the Future
-        raw_bytes = future.result() if future else None
-        if raw_bytes is None:
-            raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
+        # Poll queue for result
+        raw_bytes = self._response_queue.get()
 
         return raw_bytes
 
@@ -299,19 +269,14 @@ class ModalClient(Client):
         if not tensor_ids:
             return
 
-        # Queue the RPC for batching (fire-and-forget)
-        self._queue_rpc(
-            method_name="remove_tensors",
-            call_type="spawn",
-            args=(tensor_ids,),
-            kwargs={},
-        )
+        # Call Modal method directly (fire-and-forget)
+        self._server_instance.remove_tensors.remote(tensor_ids)
 
         # Remove from tracked tensor IDs
         for tid in tensor_ids:
             self._remote_tensor_ids.discard(tid)
 
-        log.info(f"Queued removal of {len(tensor_ids)} tensors")
+        log.info(f"Removed {len(tensor_ids)} tensors")
 
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """
@@ -329,14 +294,9 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC for batching (fire-and-forget)
-        self._queue_rpc(
-            method_name="resize_storage",
-            call_type="spawn",
-            args=(tensor_id, nbytes),
-            kwargs={},
-        )
-        log.info(f"Queued storage resize for tensor {tensor_id} to {nbytes} bytes")
+        # Call Modal method directly (fire-and-forget)
+        self._server_instance.resize_storage.remote(tensor_id, nbytes)
+        log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes")
 
     # Operation execution methods
     def execute_aten_operation(
@@ -381,37 +341,26 @@ class ModalClient(Client):
                 # Log a warning but continue - the server will handle missing tensors appropriately
                 log.warning(f"Input tensor {tensor_id} not found in client registry. Server will attempt to find it.")
 
-        # Queue the RPC for batching
-        # Always use 'remote' for execute_aten_operation to ensure completion before subsequent operations
-        # This prevents race conditions where .cpu() tries to retrieve tensors before operations complete
-        call_type = "remote"
-
-        future = self._queue_rpc(
-            method_name="execute_aten_operation",
-            call_type=call_type,
-            args=(
-                op_name,
-                input_tensor_ids,
-                output_tensor_ids,
-                args,
-                kwargs,
-                tensor_mask,
-                return_metadata,
-            ),
-            kwargs={},
+        # Call Modal method which will write result to queue
+        self._server_instance.execute_aten_operation.remote(
+            op_name,
+            input_tensor_ids,
+            output_tensor_ids,
+            args,
+            kwargs,
+            tensor_mask,
+            return_metadata,
         )
+
+        # Poll queue for result
+        result = self._response_queue.get()
 
         # Track output tensor IDs
         for tensor_id in output_tensor_ids:
             self._remote_tensor_ids.add(tensor_id)
 
-        # Always wait for completion to prevent race conditions
-        if future:
-            result = future.result()
-            # Return result if metadata was requested, otherwise return None
-            return result if return_metadata else None
-        else:
-            return None
+        # Return result if metadata was requested, otherwise return None
+        return result if return_metadata else None
 
     # HuggingFace model loading methods
     def prepare_huggingface_model(
@@ -436,16 +385,14 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC for batching (blocking call)
-        future = self._queue_rpc(
-            method_name="prepare_huggingface_model",
-            call_type="remote",
-            args=(checkpoint,),
-            kwargs={"torch_dtype": torch_dtype, "trust_remote_code": trust_remote_code},
+        # Call Modal method which will write result to queue
+        self._server_instance.prepare_huggingface_model.remote(
+            checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
 
-        # Wait for the result
-        result = future.result() if future else None
+        # Poll queue for result
+        result = self._response_queue.get()
+
         if result is None:
             raise RuntimeError(f"Failed to prepare model {checkpoint}")
 
@@ -471,12 +418,9 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Queue the RPC for batching (fire-and-forget)
-        self._queue_rpc(
-            method_name="link_model_tensors",
-            call_type="spawn",
-            args=(local_tensor_ids, parameter_names),
-            kwargs={},
+        # Call Modal method directly (fire-and-forget)
+        self._server_instance.link_model_tensors.remote(
+            local_tensor_ids, parameter_names
         )
 
         # Track the linked tensor IDs
@@ -520,35 +464,19 @@ class ModalClient(Client):
 
         return tensor_id
 
-    # Batch execution support
-    def execute_batch(self) -> List[Any]:
-        """
-        Execute all queued RPCs in a single batch.
+    # Removed batch execution support - using direct calls now
 
-        This is called by the orchestrator's batch processing thread.
+    def _get_tensor_ids_for_storage(self, storage_id: int) -> List[int]:
+        """Get tensor IDs associated with a storage ID."""
+        # For now, return empty list as this is used for cleanup
+        # Could be implemented using storage tracking if needed
+        return []
 
-        Returns:
-            List of results from the batched RPCs
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
-        # Get all pending calls from the batch queue
-        batch_calls = self._batch_queue.get_pending_calls()
-
-        if not batch_calls:
-            return []
-
-        # Send batch to Modal server
-        try:
-            results = self._server_instance.execute_batch(batch_calls)
-            return results
-        except Exception as e:
-            log.error(f"Batch execution failed: {e}")
-            # Return None for each call to indicate failure
-            return [None] * len(batch_calls)
+    def remove_storage(self, storage_id: int) -> bool:
+        """Remove storage by ID."""
+        # For now, just return True as this is used for cleanup
+        # Could be implemented properly if needed
+        return True
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
