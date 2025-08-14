@@ -8,7 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import torch
 
@@ -45,8 +45,7 @@ class ModalClient(Client):
         self.timeout = timeout
         self.retries = retries
 
-        # Track which tensor IDs exist on the remote side
-        self._remote_tensor_ids: Set[int] = set()
+        # Note: Tensor ID tracking moved to orchestrator
 
         # Initialize the Modal app and server
         self._initialize()
@@ -116,7 +115,7 @@ class ModalClient(Client):
         # Poll queue for result
         self._response_queue.get()
 
-        self._remote_tensor_ids.add(tensor_id)
+        # Note: Tensor ID tracking moved to orchestrator
         log.info(f"Created empty tensor {tensor_id} with shape {shape}")
 
     def create_tensor_view(
@@ -153,7 +152,7 @@ class ModalClient(Client):
         # Poll queue for result
         self._response_queue.get()
 
-        self._remote_tensor_ids.add(new_tensor_id)
+        # Note: Tensor ID tracking moved to orchestrator
         log.info(
             f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
         )
@@ -272,9 +271,7 @@ class ModalClient(Client):
         # Call Modal method directly (fire-and-forget)
         self._server_instance.remove_tensors.remote(tensor_ids)
 
-        # Remove from tracked tensor IDs
-        for tid in tensor_ids:
-            self._remote_tensor_ids.discard(tid)
+        # Note: Tensor ID tracking moved to orchestrator
 
         log.info(f"Removed {len(tensor_ids)} tensors")
 
@@ -333,13 +330,7 @@ class ModalClient(Client):
         input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
         output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
 
-        # Ensure input tensors exist on remote
-        for tensor_id in input_tensor_ids:
-            if tensor_id not in self._remote_tensor_ids:
-                # Input tensor should already exist on remote
-                # But for some operations like randn, empty tensors are created and then filled
-                # Log a warning but continue - the server will handle missing tensors appropriately
-                log.warning(f"Input tensor {tensor_id} not found in client registry. Server will attempt to find it.")
+        # Note: Input tensor existence checking moved to orchestrator
 
         # Call Modal method which will write result to queue
         self._server_instance.execute_aten_operation.remote(
@@ -355,9 +346,7 @@ class ModalClient(Client):
         # Poll queue for result
         result = self._response_queue.get()
 
-        # Track output tensor IDs
-        for tensor_id in output_tensor_ids:
-            self._remote_tensor_ids.add(tensor_id)
+        # Note: Output tensor ID tracking moved to orchestrator
 
         # Return result if metadata was requested, otherwise return None
         return result if return_metadata else None
@@ -423,46 +412,11 @@ class ModalClient(Client):
             local_tensor_ids, parameter_names
         )
 
-        # Track the linked tensor IDs
-        for tensor_id in local_tensor_ids:
-            self._remote_tensor_ids.add(tensor_id)
+        # Note: Tensor ID tracking moved to orchestrator
 
         log.info(f"Linked {len(local_tensor_ids)} model tensors")
 
-    # Helper method to ensure tensor exists on remote
-    def _ensure_tensor_exists(self, tensor: torch.Tensor) -> int:
-        """
-        Ensure a tensor exists on the remote side, creating it if necessary.
-
-        This method determines whether to create a new empty tensor or a view
-        based on whether other tensors share the same storage.
-
-        Args:
-            tensor: The mycelya tensor to ensure exists remotely
-
-        Returns:
-            The tensor ID (metadata hash)
-        """
-        # Get tensor ID as int
-        tensor_id = tensor._get_tensor_id()
-
-        # Check if tensor already exists
-        if tensor_id in self._remote_tensor_ids:
-            return tensor_id
-
-        # TODO: In future, implement view detection by tracking storage relationships
-        # For now, we'll always create empty tensors
-
-        # Create empty tensor on remote
-        self.create_empty_tensor(
-            tensor_id=tensor_id,
-            shape=list(tensor.shape),
-            stride=list(tensor.stride()),
-            storage_offset=tensor.storage_offset(),
-            dtype=str(tensor.dtype).replace("torch.", ""),
-        )
-
-        return tensor_id
+    # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator
 
     # Removed batch execution support - using direct calls now
 

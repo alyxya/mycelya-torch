@@ -647,7 +647,7 @@ class Orchestrator:
     ) -> None:
         """Ensure tensor exists on remote machine by device index."""
         client = self._get_validated_client_by_device_index(device_index)
-        client._ensure_tensor_exists(tensor)
+        self._ensure_tensor_exists_on_client(client, tensor)
 
     def _ensure_tensor_exists_on_client(self, client, tensor: "torch.Tensor") -> None:
         """Ensure tensor exists on remote client using storage mapping logic.

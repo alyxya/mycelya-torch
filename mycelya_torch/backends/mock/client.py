@@ -8,7 +8,7 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import torch
 
@@ -40,12 +40,12 @@ class MockClient(Client):
         self._app = None
         self._server_class = None
         self._server_instance = None
+        self._app_context = None
         self._is_running = False
         self.timeout = timeout
         self.retries = retries
 
-        # Track which tensor IDs exist on the remote side (mirroring ModalClient)
-        self._remote_tensor_ids: Set[int] = set()
+        # Note: Tensor ID tracking moved to orchestrator
 
         # Initialize the Modal app and server
         self._initialize()
@@ -59,7 +59,10 @@ class MockClient(Client):
     def start(self):
         """Start the mock execution environment."""
         if not self._is_running:
-            # Create server instance for mock execution
+            # Now that queue serialization is fixed, try to start app context like ModalClient
+            self._app_context = self._app.run()
+            self._app_context.__enter__()
+            # Create server instance when app starts
             self._server_instance = self._server_class()
             self._is_running = True
 
@@ -68,8 +71,15 @@ class MockClient(Client):
     def stop(self):
         """Stop the mock execution environment."""
         if self._is_running:
-            self._server_instance = None
-            self._is_running = False
+            try:
+                self._app_context.__exit__(None, None, None)
+            except Exception:
+                # Silently ignore cleanup errors during atexit
+                pass
+            finally:
+                self._app_context = None
+                self._server_instance = None
+                self._is_running = False
             log.info(f"Stopped mock client: {self.machine_id}")
 
     def is_running(self) -> bool:
@@ -104,11 +114,15 @@ class MockClient(Client):
             )
 
         try:
-            # Execute using .local() instead of queuing for batching (mock behavior)
-            self._server_instance.create_empty_tensor_sync.local(
+            # Execute using .local() with queue handling to mirror ModalClient exactly
+            self._server_instance.create_empty_tensor.local(
                 tensor_id, shape, stride, storage_offset, dtype
             )
-            self._remote_tensor_ids.add(tensor_id)
+
+            # Get result from queue like ModalClient does
+            self._response_queue.get()
+
+            # Note: Tensor ID tracking moved to orchestrator
             log.info(f"Created empty tensor {tensor_id} with shape {shape} (mock)")
         except Exception as e:
             raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
@@ -140,11 +154,15 @@ class MockClient(Client):
             )
 
         try:
-            # Execute using .local() instead of queuing for batching (mock behavior)
-            self._server_instance.create_tensor_view_sync.local(
+            # Execute using .local() with queue handling to mirror ModalClient exactly
+            self._server_instance.create_tensor_view.local(
                 new_tensor_id, base_tensor_id, shape, stride, offset
             )
-            self._remote_tensor_ids.add(new_tensor_id)
+
+            # Get result from queue like ModalClient does
+            self._response_queue.get()
+
+            # Note: Tensor ID tracking moved to orchestrator
             log.info(
                 f"Created tensor view {new_tensor_id} from tensor {base_tensor_id} (mock)"
             )
@@ -181,7 +199,7 @@ class MockClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute using .local() instead of queuing for batching (mock behavior)
+        # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.update_tensor.local(
             tensor_id,
             raw_data,
@@ -238,8 +256,11 @@ class MockClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute using .local() instead of remote call (mock behavior)
-        raw_bytes = self._server_instance.get_storage_data_sync.local(tensor_id)
+        # Execute using .local() with queue handling to mirror ModalClient exactly
+        self._server_instance.get_storage_data.local(tensor_id)
+
+        # Get result from queue like ModalClient does
+        raw_bytes = self._response_queue.get()
         if raw_bytes is None:
             raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
 
@@ -263,12 +284,10 @@ class MockClient(Client):
         if not tensor_ids:
             return
 
-        # Execute using .local() instead of queuing for batching (mock behavior)
+        # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.remove_tensors.local(tensor_ids)
 
-        # Remove from tracked tensor IDs
-        for tid in tensor_ids:
-            self._remote_tensor_ids.discard(tid)
+        # Note: Tensor ID tracking moved to orchestrator
 
         log.info(f"Removed {len(tensor_ids)} tensors (mock)")
 
@@ -288,7 +307,7 @@ class MockClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute using .local() instead of queuing for batching (mock behavior)
+        # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.resize_storage.local(tensor_id, nbytes)
         log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes (mock)")
 
@@ -327,17 +346,11 @@ class MockClient(Client):
         input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
         output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
 
-        # Ensure input tensors exist on remote (mirroring ModalClient logic)
-        for tensor_id in input_tensor_ids:
-            if tensor_id not in self._remote_tensor_ids:
-                # Input tensor should already exist on remote
-                # But for some operations like randn, empty tensors are created and then filled
-                # Log a warning but continue - the server will handle missing tensors appropriately
-                log.warning(f"Input tensor {tensor_id} not found in client registry. Server will attempt to find it.")
+        # Note: Input tensor existence checking moved to orchestrator
         log.info(f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}")
 
-        # Execute using .local() instead of remote call (mock behavior)
-        result = self._server_instance.execute_aten_operation.local(
+        # Execute using .local() with queue handling to mirror ModalClient exactly
+        self._server_instance.execute_aten_operation.local(
             op_name,
             input_tensor_ids,
             output_tensor_ids,
@@ -347,9 +360,10 @@ class MockClient(Client):
             return_metadata,
         )
 
-        # Track output tensor IDs (mirroring ModalClient logic)
-        for tensor_id in output_tensor_ids:
-            self._remote_tensor_ids.add(tensor_id)
+        # Get result from queue like ModalClient does
+        result = self._response_queue.get()
+
+        # Note: Output tensor ID tracking moved to orchestrator
 
         # Return result if requested
         if return_metadata:
@@ -380,10 +394,13 @@ class MockClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute using .local() instead of remote call (mock behavior)
-        result = self._server_instance.prepare_huggingface_model.local(
-            checkpoint, torch_dtype, trust_remote_code
+        # Execute using .local() with queue handling to mirror ModalClient exactly
+        self._server_instance.prepare_huggingface_model.local(
+            checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
+
+        # Get result from queue like ModalClient does
+        result = self._response_queue.get()
 
         if result is None:
             raise RuntimeError(f"Failed to prepare model {checkpoint}")
@@ -411,51 +428,16 @@ class MockClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Execute using .local() instead of remote call (mock behavior)
+        # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.link_model_tensors.local(
             local_tensor_ids, parameter_names
         )
 
-        # Track the linked tensor IDs (mirroring ModalClient logic)
-        for tensor_id in local_tensor_ids:
-            self._remote_tensor_ids.add(tensor_id)
+        # Note: Tensor ID tracking moved to orchestrator
 
         log.info(f"Linked {len(local_tensor_ids)} model tensors (mock)")
 
-    # Helper method to ensure tensor exists on remote (mirroring ModalClient)
-    def _ensure_tensor_exists(self, tensor: torch.Tensor) -> int:
-        """
-        Ensure a tensor exists on the remote side, creating it if necessary.
-
-        This method determines whether to create a new empty tensor or a view
-        based on whether other tensors share the same storage.
-
-        Args:
-            tensor: The mycelya tensor to ensure exists remotely
-
-        Returns:
-            The tensor ID (metadata hash)
-        """
-        # Get tensor ID as int
-        tensor_id = tensor._get_tensor_id()
-
-        # Check if tensor already exists
-        if tensor_id in self._remote_tensor_ids:
-            return tensor_id
-
-        # TODO: In future, implement view detection by tracking storage relationships
-        # For now, we'll always create empty tensors
-
-        # Create empty tensor on remote
-        self.create_empty_tensor(
-            tensor_id=tensor_id,
-            shape=list(tensor.shape),
-            stride=list(tensor.stride()),
-            storage_offset=tensor.storage_offset(),
-            dtype=str(tensor.dtype).replace("torch.", ""),
-        )
-
-        return tensor_id
+    # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator
 
     # Removed batch execution support - using direct calls now
 

@@ -46,8 +46,8 @@ def create_modal_app_for_gpu(
         Tuple of (modal_app, server_class, response_queue) for the specified device
     """
     app = modal.App(f"mycelya-torch-{machine_id}")
-    
-    # Create a Modal Queue for responses
+
+    # Create a Modal Queue for responses (for external access)
     response_queue = modal.Queue.from_name(f"responses-{machine_id}", create_if_missing=True)
 
     @app.cls(
@@ -61,8 +61,9 @@ def create_modal_app_for_gpu(
     )
     class PytorchServer:
         def __init__(self):
-            # Create the response queue in the class
-            self.response_queue = response_queue
+            # Create the response queue inside the class to avoid serialization issues
+            import modal
+            self.response_queue = modal.Queue.from_name(f"responses-{machine_id}", create_if_missing=True)
         def _get_device(self):
             """Get the appropriate device for tensor operations."""
             import torch
@@ -275,7 +276,7 @@ def create_modal_app_for_gpu(
         def _get_storage_data_impl(self, tensor_id: int) -> bytes:
             """Get raw storage data by tensor ID."""
             tensor_registry = self._get_tensor_registry()
-            
+
             log.debug(f"get_storage_data called for tensor {tensor_id}")
             log.debug(f"Current registry has {len(tensor_registry)} tensors")
 
