@@ -210,9 +210,6 @@ from ._device import (  # noqa: E402
     RemoteMachine,
     get_device_registry,
 )
-from ._machine import (  # noqa: E402
-    get_all_machines,
-)
 
 # HuggingFace model loading utilities
 from ._huggingface_utils import (  # noqa: E402
@@ -228,6 +225,9 @@ from ._logging import (  # noqa: E402
     get_logging_level,
     reset_logging,
     set_logging_level,
+)
+from ._machine import (  # noqa: E402
+    get_all_machines,
 )
 
 
