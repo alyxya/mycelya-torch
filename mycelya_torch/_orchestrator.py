@@ -15,7 +15,7 @@ import torch
 
 # Removed batching imports
 from ._logging import get_logger
-from .backends.client import Client
+from .backends.client_base import Client
 
 log = get_logger(__name__)
 
