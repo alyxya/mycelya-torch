@@ -20,9 +20,11 @@ import modal
 
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call."""
+
     method_name: str
     args: Tuple[Any, ...]
     kwargs: Dict[str, Any]
+
 
 # Create image with PyTorch, CUDA support, and transformers for HuggingFace models
 image = modal.Image.debian_slim().pip_install(
@@ -107,6 +109,7 @@ def create_modal_app_for_gpu(
             stride: List[int],
             storage_offset: int,
             dtype: str,
+            nbytes: int,
         ):
             """Create an empty tensor with given tensor_id and proper storage layout."""
             import torch
@@ -124,14 +127,11 @@ def create_modal_app_for_gpu(
             else:
                 device = torch.device("cpu")
 
-            # Calculate the required storage size based on shape, stride and offset
-            # The storage size needs to accommodate the maximum element accessed
-            numel = (
-                sum((s - 1) * st for s, st in zip(shape, stride)) + storage_offset + 1
-            )
-            storage_nbytes = numel * torch.empty(0, dtype=torch_dtype).element_size()
+            # Use the exact nbytes provided by the client allocator
+            # The client has already calculated the correct storage size
+            storage_nbytes = nbytes
 
-            # Create a storage tensor that can hold the data
+            # Create a storage tensor that can hold the data with the exact nbytes size
             storage_tensor = torch.empty(
                 storage_nbytes, dtype=torch.uint8, device=device
             )
@@ -153,10 +153,11 @@ def create_modal_app_for_gpu(
             stride: List[int],
             storage_offset: int,
             dtype: str,
+            nbytes: int,
         ):
             """Create an empty tensor on the remote machine with proper storage layout."""
             self._create_empty_tensor_impl(
-                tensor_id, shape, stride, storage_offset, dtype
+                tensor_id, shape, stride, storage_offset, dtype, nbytes
             )
 
         def _create_tensor_view_impl(
@@ -345,7 +346,6 @@ def create_modal_app_for_gpu(
             """Implementation of execute_aten_operation without Modal decorators."""
             import torch
 
-
             # Get tensor registry
             tensor_registry = self._tensor_registry
 
@@ -362,7 +362,6 @@ def create_modal_app_for_gpu(
                     )
 
                 input_tensors.append(tensor)
-
 
             # Replace tensor IDs with actual tensors using tensor mask
             tensor_index = 0
@@ -421,7 +420,6 @@ def create_modal_app_for_gpu(
             for part in op_parts:
                 op = getattr(op, part)
 
-
             # Execute the operation on input tensors - this will create result tensors
             result = op(*processed_args, **processed_kwargs)
 
@@ -445,7 +443,6 @@ def create_modal_app_for_gpu(
             # Store result tensors in tensor registry
             for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
                 tensor_registry[tensor_id] = result_tensor
-
 
             # Return metadata if requested
             if return_metadata:
@@ -498,7 +495,6 @@ def create_modal_app_for_gpu(
         ):
             """Implementation of prepare_huggingface_model without Modal decorators."""
             import torch
-
 
             try:
                 from transformers import AutoModelForCausalLM
@@ -565,7 +561,6 @@ def create_modal_app_for_gpu(
                     "_tensor_data": param.detach().contiguous().to(device),
                 }
 
-
             # Also handle buffers (non-trainable parameters like batch norm running stats)
             buffer_metadata = {}
             for name, buffer in model.named_buffers():
@@ -580,7 +575,6 @@ def create_modal_app_for_gpu(
                     "_tensor_data": buffer.detach().contiguous().to(device),
                 }
 
-
             # Store model and tensor data for later linking
             model_registry = self._model_registry
             model_registry[checkpoint] = {
@@ -594,7 +588,6 @@ def create_modal_app_for_gpu(
                     for name, metadata in buffer_metadata.items()
                 },
             }
-
 
             # Clean metadata for return (remove internal tensor data)
             clean_state_dict = {
@@ -640,7 +633,6 @@ def create_modal_app_for_gpu(
                 raise ValueError(
                     f"Mismatch between tensor IDs ({len(local_tensor_ids)}) and parameter names ({len(parameter_names)})"
                 )
-
 
             tensor_registry = self._tensor_registry
             model_registry = self._model_registry
@@ -693,10 +685,8 @@ def create_modal_app_for_gpu(
                 # Get the actual tensor data
                 remote_tensor = all_tensors[param_name]
 
-
                 # Link the local tensor ID to the remote tensor in the registry
                 tensor_registry[local_tensor_id] = remote_tensor
-
 
                 linked_count += 1
 

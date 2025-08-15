@@ -38,6 +38,9 @@ class StorageRegistry:
         # Storage ID tracking - maps storage to device
         self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
 
+        # Storage ID to nbytes mapping - tracks original nbytes from allocator
+        self.storage_id_to_nbytes: Dict[int, int] = {}  # storage_id -> nbytes
+
         # Tensor ID tracking - maps tensor ID to device
         self.tensor_id_to_device: Dict[int, int] = {}  # tensor_id -> device_index
 
@@ -67,6 +70,9 @@ class StorageRegistry:
 
         # Always track the storage ID for all tensors
         self.storage_id_to_device[storage_id] = device_index
+
+        # Store the original nbytes from the allocator
+        self.storage_id_to_nbytes[storage_id] = nbytes
 
         # Storage is now managed locally only - remote side uses tensor IDs exclusively
         # No need to register with orchestrator as tensors will be created on-demand
@@ -98,6 +104,7 @@ class StorageRegistry:
         if storage_id in self.storage_id_to_device:
             # Clean up storage tracking
             self.storage_id_to_device.pop(storage_id, None)
+            self.storage_id_to_nbytes.pop(storage_id, None)
 
             # Remote cleanup if device information is available
             if device_idx is not None:
@@ -225,6 +232,11 @@ def register_tensor_id(tensor_id: int, device_index: int) -> None:
 def get_tensor_device(tensor_id: int) -> Optional[int]:
     """Get device index for a tensor ID"""
     return _storage_registry.get_tensor_device(tensor_id)
+
+
+def get_storage_nbytes(storage_id: int) -> Optional[int]:
+    """Get the original nbytes for a storage ID from the allocator."""
+    return _storage_registry.storage_id_to_nbytes.get(storage_id)
 
 
 def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:

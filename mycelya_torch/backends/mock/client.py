@@ -92,20 +92,22 @@ class MockClient(Client):
         stride: List[int],
         storage_offset: int,
         dtype: str,
+        nbytes: int,
     ) -> None:
         """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
         try:
             # Execute using .local() (no return value)
             self._server_instance.create_empty_tensor.local(
-                tensor_id, shape, stride, storage_offset, dtype
+                tensor_id, shape, stride, storage_offset, dtype, nbytes
             )
             # No queue polling - this method has no return value
 
             # Note: Tensor ID tracking moved to orchestrator
-            log.info(f"Created empty tensor {tensor_id} with shape {shape} (mock)")
+            log.info(
+                f"Created empty tensor {tensor_id} with shape {shape} and storage {nbytes} bytes (mock)"
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
-
 
     def _create_tensor_view_impl(
         self,
@@ -132,7 +134,6 @@ class MockClient(Client):
                 f"Failed to create tensor view {new_tensor_id}: {e}"
             ) from e
 
-
     def _update_tensor_impl(
         self,
         tensor_id: int,
@@ -153,7 +154,6 @@ class MockClient(Client):
             source_dtype,
         )
         log.info(f"Updated tensor {tensor_id} (mock)")
-
 
     def get_tensor_by_id(
         self,
@@ -198,7 +198,6 @@ class MockClient(Client):
 
         return raw_bytes
 
-
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
         if not tensor_ids:
@@ -211,13 +210,11 @@ class MockClient(Client):
 
         log.info(f"Removed {len(tensor_ids)} tensors (mock)")
 
-
     def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
         # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.resize_storage.local(tensor_id, nbytes)
         log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes (mock)")
-
 
     # Operation execution methods
     def _execute_aten_operation_impl(
@@ -261,7 +258,6 @@ class MockClient(Client):
         else:
             return None
 
-
     # HuggingFace model loading methods
     def _prepare_huggingface_model_impl(
         self,
@@ -284,7 +280,6 @@ class MockClient(Client):
         log.info(f"Prepared HuggingFace model {checkpoint} (mock)")
         return result
 
-
     def _link_model_tensors_impl(
         self,
         local_tensor_ids: List[int],
@@ -300,11 +295,9 @@ class MockClient(Client):
 
         log.info(f"Linked {len(local_tensor_ids)} model tensors (mock)")
 
-
     # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator
 
     # Removed batch execution support - using direct calls now
-
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

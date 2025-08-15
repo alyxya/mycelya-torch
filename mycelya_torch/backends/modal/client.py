@@ -86,17 +86,19 @@ class ModalClient(Client):
         stride: List[int],
         storage_offset: int,
         dtype: str,
+        nbytes: int,
     ) -> None:
         """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
         # Call Modal method (no return value)
         self._server_instance.create_empty_tensor.remote(
-            tensor_id, shape, stride, storage_offset, dtype
+            tensor_id, shape, stride, storage_offset, dtype, nbytes
         )
         # No queue polling - this method has no return value
 
         # Note: Tensor ID tracking moved to orchestrator
-        log.info(f"Created empty tensor {tensor_id} with shape {shape}")
-
+        log.info(
+            f"Created empty tensor {tensor_id} with shape {shape} and storage {nbytes} bytes"
+        )
 
     def _create_tensor_view_impl(
         self,
@@ -115,7 +117,6 @@ class ModalClient(Client):
 
         # Note: Tensor ID tracking moved to orchestrator
         log.info(f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}")
-
 
     def _update_tensor_impl(
         self,
@@ -137,7 +138,6 @@ class ModalClient(Client):
             source_dtype,
         )
         log.info(f"Updated tensor {tensor_id}")
-
 
     def get_tensor_by_id(
         self,
@@ -180,7 +180,6 @@ class ModalClient(Client):
 
         return raw_bytes
 
-
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
         if not tensor_ids:
@@ -193,13 +192,11 @@ class ModalClient(Client):
 
         log.info(f"Removed {len(tensor_ids)} tensors")
 
-
     def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
         # Call Modal method directly (fire-and-forget)
         self._server_instance.resize_storage.remote(tensor_id, nbytes)
         log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes")
-
 
     # Operation execution methods
     def _execute_aten_operation_impl(
@@ -233,7 +230,6 @@ class ModalClient(Client):
         # Return result if metadata was requested, otherwise return None
         return result if return_metadata else None
 
-
     # HuggingFace model loading methods
     def _prepare_huggingface_model_impl(
         self,
@@ -255,7 +251,6 @@ class ModalClient(Client):
 
         return result
 
-
     def _link_model_tensors_impl(
         self,
         local_tensor_ids: List[int],
@@ -271,11 +266,9 @@ class ModalClient(Client):
 
         log.info(f"Linked {len(local_tensor_ids)} model tensors")
 
-
     # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator
 
     # Removed batch execution support - using direct calls now
-
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

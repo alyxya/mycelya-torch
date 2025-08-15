@@ -247,7 +247,9 @@ class Orchestrator:
             return next(iter(tensor_set))  # Return any tensor ID from the set
         return None
 
-    def get_tensor_ids_for_storage_by_device(self, device_index: int, storage_id: int) -> List[int]:
+    def get_tensor_ids_for_storage_by_device(
+        self, device_index: int, storage_id: int
+    ) -> List[int]:
         """Get all tensor IDs associated with a storage ID by device index.
 
         Args:
@@ -609,7 +611,6 @@ class Orchestrator:
             log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
             return None
 
-
     # HuggingFace integration methods
     def prepare_huggingface_model_by_device(
         self,
@@ -655,12 +656,21 @@ class Orchestrator:
         if storage_id not in self._storage_to_tensors_map:
             # Storage doesn't exist - create empty tensor on remote
             log.debug(f"Creating empty tensor {tensor_id} for new storage {storage_id}")
+
+            # Get the original nbytes from the storage registry
+            from ._storage import get_storage_nbytes
+
+            nbytes = get_storage_nbytes(storage_id)
+            if nbytes is None:
+                raise RuntimeError(f"No nbytes found for storage {storage_id}")
+
             client.create_empty_tensor(
                 tensor_id=tensor_id,
                 shape=list(tensor.shape),
                 stride=list(tensor.stride()),
                 storage_offset=tensor.storage_offset(),
                 dtype=str(tensor.dtype).replace("torch.", ""),
+                nbytes=nbytes,
             )
             # Register the mapping in orchestrator
             self._register_tensor_storage_mapping(tensor_id, storage_id)
