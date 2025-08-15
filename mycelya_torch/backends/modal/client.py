@@ -415,17 +415,6 @@ class ModalClient(Client):
 
     # Removed batch execution support - using direct calls now
 
-    def _get_tensor_ids_for_storage(self, storage_id: int) -> List[int]:
-        """Get tensor IDs associated with a storage ID."""
-        # For now, return empty list as this is used for cleanup
-        # Could be implemented using storage tracking if needed
-        return []
-
-    def remove_storage(self, storage_id: int) -> bool:
-        """Remove storage by ID."""
-        # For now, just return True as this is used for cleanup
-        # Could be implemented properly if needed
-        return True
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

@@ -247,6 +247,21 @@ class Orchestrator:
             return next(iter(tensor_set))  # Return any tensor ID from the set
         return None
 
+    def get_tensor_ids_for_storage_by_device(self, device_index: int, storage_id: int) -> List[int]:
+        """Get all tensor IDs associated with a storage ID by device index.
+
+        Args:
+            device_index: Device index (currently not used, maintained for compatibility)
+            storage_id: The storage ID to look up
+
+        Returns:
+            List of tensor IDs that map to this storage, empty list if no mapping exists
+        """
+        tensor_set = self._storage_to_tensors_map.get(storage_id)
+        if tensor_set:
+            return list(tensor_set)
+        return []
+
     def _get_device_index_for_client(self, client) -> int:
         """Get device index for a client.
 
@@ -594,25 +609,6 @@ class Orchestrator:
             log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
             return None
 
-    def remove_tensor_from_remote_by_device(
-        self, storage_id: int, device_index: int
-    ) -> bool:
-        """Remove a tensor from remote storage by device index."""
-        try:
-            if not self.is_client_running(device_index):
-                log.debug(
-                    f"Client for device index {device_index} not running, skipping storage removal"
-                )
-                return False
-
-            # Use internal client resolution for consistent error handling
-            client = self._get_validated_client_by_device_index(device_index)
-            client.remove_storage(storage_id)
-            log.info(f"✅ ORCHESTRATOR: Removed storage {storage_id} from remote")
-            return True
-        except Exception as e:
-            log.warning(f"Failed to remove storage {storage_id}: {e}")
-            return False
 
     # HuggingFace integration methods
     def prepare_huggingface_model_by_device(
@@ -701,17 +697,6 @@ class Orchestrator:
         client.link_model_tensors(local_storage_ids, parameter_names)
 
     # Storage cleanup methods
-    def get_tensor_ids_for_storage(self, storage_id: int) -> list:
-        """Get tensor IDs associated with a storage ID."""
-        client = self._get_client_for_storage(storage_id)
-        return client._get_tensor_ids_for_storage(storage_id)
-
-    def get_tensor_ids_for_storage_by_device(
-        self, device_index: int, storage_id: int
-    ) -> list:
-        """Get tensor IDs associated with a storage ID by device index."""
-        client = self.get_client_by_device_index(device_index)
-        return client._get_tensor_ids_for_storage(storage_id)
 
     def remove_tensors_by_device(self, device_index: int, tensor_ids: list) -> None:
         """Remove tensors from remote machine by device index."""

@@ -8,7 +8,7 @@ This module provides common utility functions for test setup, verification,
 and data generation to reduce code duplication across test files.
 """
 
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from mycelya_torch import RemoteMachine
@@ -66,7 +66,9 @@ class DeviceTestUtils:
         ]
 
     @staticmethod
-    def verify_device_properties(tensor: torch.Tensor, expected_device: "RemoteMachine") -> None:
+    def verify_device_properties(
+        tensor: torch.Tensor, expected_device: "RemoteMachine"
+    ) -> None:
         """Verify that a tensor has expected device properties."""
         assert tensor.device.type == "mycelya"
         assert tensor.device.index == expected_device.remote_index

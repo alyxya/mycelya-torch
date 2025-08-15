@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call.
-    
+
     This TypedDict defines the structure used for batching multiple operations
     into a single RPC call for performance optimization.
     """

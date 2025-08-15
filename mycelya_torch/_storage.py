@@ -161,24 +161,10 @@ class StorageRegistry:
                     f"on device {device_idx}"
                 )
             else:
-                # Fall back to legacy storage cleanup if no tensor IDs found
+                # No tensor IDs found for this storage - it may have already been cleaned up
                 log.info(
-                    f"No tensor IDs found for storage {storage_id}, using legacy cleanup"
+                    f"No tensor IDs found for storage {storage_id} - may already be cleaned up"
                 )
-                success = orchestrator.remove_tensor_from_remote_by_device(
-                    storage_id, device_idx
-                )
-
-                if success:
-                    log.info(
-                        f"✅ Successfully cleaned up remote storage {storage_id} "
-                        f"on device {device_idx} (legacy)"
-                    )
-                else:
-                    log.warning(
-                        f"❌ Legacy cleanup returned false for storage {storage_id} "
-                        f"on device {device_idx}"
-                    )
 
         except Exception as e:
             log.error(
