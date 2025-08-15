@@ -13,12 +13,9 @@ This module handles all Modal-specific functionality including:
 Part of: mycelya_torch PyTorch extension
 """
 
-import logging
 from typing import Any, Dict, List, Tuple
 
 import modal
-
-log = logging.getLogger(__name__)
 
 # Create image with PyTorch, CUDA support, and transformers for HuggingFace models
 image = modal.Image.debian_slim().pip_install(
@@ -139,9 +136,6 @@ def create_modal_app_for_gpu(
 
             tensor_registry[tensor_id] = tensor
 
-            log.info(
-                f"✅ Created empty tensor {tensor_id} with shape {shape}, stride {stride}, offset {storage_offset}"
-            )
             # No queue operation - this method has no return value
 
         @modal.method()
@@ -184,9 +178,6 @@ def create_modal_app_for_gpu(
 
             tensor_registry[new_tensor_id] = view_tensor
 
-            log.info(
-                f"✅ Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
-            )
             # No queue operation - this method has no return value
 
         @modal.method()
@@ -248,7 +239,6 @@ def create_modal_app_for_gpu(
             device_source = source_tensor.to(target_tensor.device)
             target_tensor.copy_(device_source)
 
-            log.info(f"✅ Updated tensor {tensor_id}")
             # No queue operation - this is fire-and-forget
 
         @modal.method()
@@ -275,15 +265,10 @@ def create_modal_app_for_gpu(
             """Get raw storage data by tensor ID."""
             tensor_registry = self._tensor_registry
 
-            log.debug(f"get_storage_data called for tensor {tensor_id}")
-            log.debug(f"Current registry has {len(tensor_registry)} tensors")
-
             if tensor_id not in tensor_registry:
-                log.error(f"Tensor ID {tensor_id} does not exist in registry")
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             tensor = tensor_registry[tensor_id]
-            log.info(f"📦 Retrieving storage data for tensor {tensor_id}")
             result = tensor.cpu().numpy().tobytes()
 
             # Put result in queue
@@ -304,7 +289,6 @@ def create_modal_app_for_gpu(
                     del tensor_registry[tensor_id]
                     removed_count += 1
 
-            log.info(f"🗑️ Removed {removed_count}/{len(tensor_ids)} tensors")
             # No queue operation - this is fire-and-forget
 
         @modal.method()
@@ -334,7 +318,6 @@ def create_modal_app_for_gpu(
             temp_storage_tensor.set_(tensor.untyped_storage(), 0, [current_bytes])
             temp_storage_tensor.resize_([nbytes])
 
-            log.info(f"🔄 Resized storage for tensor {tensor_id}")
             # No queue operation - this is fire-and-forget
 
         @modal.method()
@@ -355,9 +338,6 @@ def create_modal_app_for_gpu(
             """Implementation of execute_aten_operation without Modal decorators."""
             import torch
 
-            log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
-            log.debug(f"Input tensor IDs: {input_tensor_ids}")
-            log.debug(f"Output tensor IDs: {output_tensor_ids}")
 
             # Get tensor registry
             tensor_registry = self._tensor_registry
@@ -376,7 +356,6 @@ def create_modal_app_for_gpu(
 
                 input_tensors.append(tensor)
 
-            log.debug(f"📥 Retrieved {len(input_tensors)} input tensors from registry")
 
             # Replace tensor IDs with actual tensors using tensor mask
             tensor_index = 0
@@ -435,10 +414,6 @@ def create_modal_app_for_gpu(
             for part in op_parts:
                 op = getattr(op, part)
 
-            log.debug(
-                f"Executing operation with {len(processed_args)} args, "
-                f"{len(input_tensors)} inputs, {len(output_tensor_ids)} outputs to update"
-            )
 
             # Execute the operation on input tensors - this will create result tensors
             result = op(*processed_args, **processed_kwargs)
@@ -463,11 +438,7 @@ def create_modal_app_for_gpu(
             # Store result tensors in tensor registry
             for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
                 tensor_registry[tensor_id] = result_tensor
-                log.debug(
-                    f"Stored output tensor {tensor_id} in registry (shape: {result_tensor.shape}, device: {result_tensor.device})"
-                )
 
-            log.debug(f"📦 Updated {len(output_tensor_ids)} output tensors in registry")
 
             # Return metadata if requested
             if return_metadata:
@@ -484,14 +455,11 @@ def create_modal_app_for_gpu(
                         }
                         output_metadata.append(metadata)
 
-                log.info(
-                    f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)"
-                )
                 # Put metadata result in queue
                 self.response_queue.put(output_metadata)
             else:
-                log.info(f"✅ Completed: {op_name}")
                 # No queue operation when not returning metadata
+                pass
 
         @modal.method()
         def execute_aten_operation(
@@ -524,9 +492,6 @@ def create_modal_app_for_gpu(
             """Implementation of prepare_huggingface_model without Modal decorators."""
             import torch
 
-            log.info(
-                f"🤗 Loading HuggingFace model {checkpoint} directly on {gpu_type}"
-            )
 
             try:
                 from transformers import AutoModelForCausalLM
@@ -541,7 +506,6 @@ def create_modal_app_for_gpu(
                 device = torch.device("cuda")
             else:
                 device = torch.device("cpu")
-            log.info(f"Loading model on device: {device}")
 
             # Handle torch_dtype parameter
             if torch_dtype == "auto" or torch_dtype is None:
@@ -559,9 +523,6 @@ def create_modal_app_for_gpu(
                 torch_dtype_obj = getattr(torch, torch_dtype)
 
             # Load model directly to appropriate device
-            log.info(
-                f"Downloading and loading {checkpoint} with dtype {torch_dtype_obj}"
-            )
             if device.type == "cpu":
                 # For CPU/mock execution, don't use device_map (requires accelerate)
                 model = AutoModelForCausalLM.from_pretrained(
@@ -578,16 +539,13 @@ def create_modal_app_for_gpu(
                     device_map={"": device},  # Load directly to our device
                     trust_remote_code=trust_remote_code,
                 )
-            log.info(f"✅ Model {checkpoint} loaded successfully on {device}")
 
             # Extract state dict metadata without transferring data
             state_dict_metadata = {}
             param_count = 0
-            total_params = sum(1 for _ in model.named_parameters())
 
             for name, param in model.named_parameters():
                 param_count += 1
-                log.debug(f"Processing parameter {param_count}/{total_params}: {name}")
 
                 # Collect metadata for client (no storage ID generation here)
                 state_dict_metadata[name] = {
@@ -600,9 +558,6 @@ def create_modal_app_for_gpu(
                     "_tensor_data": param.detach().contiguous().to(device),
                 }
 
-                log.debug(
-                    f"Cached parameter {name}: shape={param.shape}, dtype={param.dtype}"
-                )
 
             # Also handle buffers (non-trainable parameters like batch norm running stats)
             buffer_metadata = {}
@@ -618,9 +573,6 @@ def create_modal_app_for_gpu(
                     "_tensor_data": buffer.detach().contiguous().to(device),
                 }
 
-                log.debug(
-                    f"Cached buffer {name}: shape={buffer.shape}, dtype={buffer.dtype}"
-                )
 
             # Store model and tensor data for later linking
             model_registry = self._model_registry
@@ -636,9 +588,6 @@ def create_modal_app_for_gpu(
                 },
             }
 
-            log.info(
-                f"🎯 Model preparation complete: {len(state_dict_metadata)} parameters, {len(buffer_metadata)} buffers"
-            )
 
             # Clean metadata for return (remove internal tensor data)
             clean_state_dict = {
@@ -685,17 +634,10 @@ def create_modal_app_for_gpu(
                     f"Mismatch between tensor IDs ({len(local_tensor_ids)}) and parameter names ({len(parameter_names)})"
                 )
 
-            log.info(
-                f"🔗 Linking {len(local_tensor_ids)} local tensor IDs to remote model parameters"
-            )
-            log.debug(
-                f"Parameter names to link: {parameter_names[:5]}..."
-            )  # Show first 5
 
             tensor_registry = self._tensor_registry
             model_registry = self._model_registry
 
-            log.debug(f"Model registry contains {len(model_registry)} models")
             if not model_registry:
                 raise RuntimeError(
                     "No models found in registry. Call prepare_huggingface_model first."
@@ -703,7 +645,7 @@ def create_modal_app_for_gpu(
 
             # Find the model that contains these parameters
             model_data = None
-            for checkpoint, model_info in model_registry.items():
+            for _checkpoint, model_info in model_registry.items():
                 # Check if this model has the requested parameters
                 param_tensors = model_info.get("parameter_tensors", {})
                 buffer_tensors = model_info.get("buffer_tensors", {})
@@ -712,12 +654,9 @@ def create_modal_app_for_gpu(
                 missing_params = [p for p in parameter_names if p not in all_tensors]
                 if len(missing_params) == 0:
                     model_data = model_info
-                    log.info(f"Found matching model: {checkpoint}")
                     break
                 else:
-                    log.debug(
-                        f"Model {checkpoint} missing {len(missing_params)} parameters"
-                    )
+                    continue
 
             if model_data is None:
                 available_params = (
@@ -742,30 +681,18 @@ def create_modal_app_for_gpu(
             linked_count = 0
             for local_tensor_id, param_name in zip(local_tensor_ids, parameter_names):
                 if param_name not in all_tensors:
-                    log.warning(f"Parameter {param_name} not found in model tensors")
                     continue
 
                 # Get the actual tensor data
                 remote_tensor = all_tensors[param_name]
 
-                log.debug(
-                    f"Linking local tensor {local_tensor_id} to parameter {param_name}"
-                )
-                log.debug(
-                    f"Remote tensor type: {type(remote_tensor)}, shape: {remote_tensor.shape}"
-                )
-                log.debug(f"Remote tensor dtype: {remote_tensor.dtype}")
 
                 # Link the local tensor ID to the remote tensor in the registry
                 tensor_registry[local_tensor_id] = remote_tensor
 
-                log.debug(f"Linked tensor {local_tensor_id} to parameter {param_name}")
 
                 linked_count += 1
 
-            log.info(
-                f"✅ Model tensor linking complete: {linked_count}/{len(local_tensor_ids)} links successful"
-            )
             # No queue operation - this is fire-and-forget
 
         @modal.method()
@@ -802,20 +729,16 @@ def create_modal_app_for_gpu(
                     - kwargs: Keyword arguments for the method
                     - call_id: Unique identifier for debugging
             """
-            log.info(f"🚀 BATCH EXECUTE: Processing {len(batch_calls)} batched RPCs")
             results = []
 
-            for i, call in enumerate(batch_calls):
-                call_id = call.get("call_id", f"batch_call_{i}")
+            for _i, call in enumerate(batch_calls):
+                # call_id = call.get("call_id", f"batch_call_{i}")  # Unused after logging removal
                 method_name = call["method_name"]
                 call_type = call["call_type"]
                 args = call.get("args", ())
                 kwargs = call.get("kwargs", {})
 
                 try:
-                    log.debug(
-                        f"📞 Executing batched RPC {call_id}: {method_name} ({call_type})"
-                    )
 
                     # Look up the method implementation
                     if method_name not in self._method_map:
@@ -850,13 +773,8 @@ def create_modal_app_for_gpu(
                         results.append(result)
 
                 except Exception as e:
-                    log.error(f"❌ Batched RPC {call_id} failed: {method_name} - {e}")
                     results.append(e)
 
-            log.info(
-                f"✅ BATCH COMPLETE: Processed {len(batch_calls)} calls, "
-                f"{sum(1 for r in results if not isinstance(r, Exception))} successful"
-            )
 
             return results
 
