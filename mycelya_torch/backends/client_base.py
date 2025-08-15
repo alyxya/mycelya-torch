@@ -83,6 +83,17 @@ class Client(ABC):
 
     # Tensor management methods
     @abstractmethod
+    def _create_empty_tensor_impl(
+        self,
+        tensor_id: int,
+        shape: List[int],
+        stride: List[int],
+        storage_offset: int,
+        dtype: str,
+    ) -> None:
+        """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
+        pass
+
     def create_empty_tensor(
         self,
         tensor_id: int,
@@ -104,9 +115,25 @@ class Client(ABC):
         Returns:
             None
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        self._create_empty_tensor_impl(tensor_id, shape, stride, storage_offset, dtype)
 
     @abstractmethod
+    def _create_tensor_view_impl(
+        self,
+        new_tensor_id: int,
+        base_tensor_id: int,
+        shape: List[int],
+        stride: List[int],
+        offset: int,
+    ) -> None:
+        """Implementation: Create a tensor view from an existing tensor."""
+        pass
+
     def create_tensor_view(
         self,
         new_tensor_id: int,
@@ -128,9 +155,26 @@ class Client(ABC):
         Returns:
             None
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        self._create_tensor_view_impl(new_tensor_id, base_tensor_id, shape, stride, offset)
 
     @abstractmethod
+    def _update_tensor_impl(
+        self,
+        tensor_id: int,
+        raw_data: bytes,
+        source_shape: List[int],
+        source_stride: List[int],
+        source_storage_offset: int,
+        source_dtype: str,
+    ) -> None:
+        """Implementation: Update an existing tensor with new data and source metadata."""
+        pass
+
     def update_tensor(
         self,
         tensor_id: int,
@@ -154,9 +198,18 @@ class Client(ABC):
         Returns:
             None
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        self._update_tensor_impl(tensor_id, raw_data, source_shape, source_stride, source_storage_offset, source_dtype)
 
     @abstractmethod
+    def _get_storage_data_impl(self, tensor_id: int) -> bytes:
+        """Implementation: Get raw storage data by tensor ID."""
+        pass
+
     def get_storage_data(self, tensor_id: int) -> bytes:
         """
         Get raw storage data by tensor ID.
@@ -167,9 +220,18 @@ class Client(ABC):
         Returns:
             Raw storage data as bytes
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        return self._get_storage_data_impl(tensor_id)
 
     @abstractmethod
+    def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
+        """Implementation: Remove multiple tensors from the remote machine."""
+        pass
+
     def remove_tensors(self, tensor_ids: List[int]) -> None:
         """
         Remove multiple tensors from the remote machine.
@@ -180,9 +242,18 @@ class Client(ABC):
         Returns:
             None
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        self._remove_tensors_impl(tensor_ids)
 
     @abstractmethod
+    def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
+        """Implementation: Resize the underlying storage for a tensor."""
+        pass
+
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """
         Resize the underlying storage for a tensor.
@@ -194,10 +265,28 @@ class Client(ABC):
         Returns:
             None
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        self._resize_storage_impl(tensor_id, nbytes)
 
     # Operation execution methods
     @abstractmethod
+    def _execute_aten_operation_impl(
+        self,
+        op_name: str,
+        input_tensor_ids: List[int],
+        output_tensor_ids: List[int],
+        args: List[Any],
+        kwargs: Dict[str, Any],
+        tensor_mask: List[bool],
+        return_metadata: bool = False,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
+        pass
+
     def execute_aten_operation(
         self,
         op_name: str,
@@ -223,10 +312,30 @@ class Client(ABC):
         Returns:
             None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Extract tensor IDs from tensors
+        input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
+        output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
+
+        return self._execute_aten_operation_impl(
+            op_name, input_tensor_ids, output_tensor_ids, args, kwargs, tensor_mask, return_metadata
+        )
 
     # HuggingFace model loading methods
     @abstractmethod
+    def _prepare_huggingface_model_impl(
+        self,
+        checkpoint: str,
+        torch_dtype: str = "auto",
+        trust_remote_code: bool = False,
+    ) -> Dict[str, Any]:
+        """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
+        pass
+
     def prepare_huggingface_model(
         self,
         checkpoint: str,
@@ -251,9 +360,22 @@ class Client(ABC):
             - config: Model configuration dictionary
             - model_type: Model class name string
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        return self._prepare_huggingface_model_impl(checkpoint, torch_dtype, trust_remote_code)
 
     @abstractmethod
+    def _link_model_tensors_impl(
+        self,
+        local_tensor_ids: List[int],
+        parameter_names: List[str],
+    ) -> None:
+        """Implementation: Link local mycelya tensor IDs to remote model parameter tensors."""
+        pass
+
     def link_model_tensors(
         self,
         local_tensor_ids: List[int],
@@ -278,7 +400,12 @@ class Client(ABC):
             parameter_names = ["model.embed_tokens.weight", "layer.0.weight", ...]
             client.link_model_tensors(local_tensor_ids, parameter_names)
         """
-        pass
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        self._link_model_tensors_impl(local_tensor_ids, parameter_names)
 
     # Note: Batching helper methods removed in favor of queue-based system
     # Note: Cache methods removed - caching now handled at orchestrator level

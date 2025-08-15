@@ -79,7 +79,7 @@ class ModalClient(Client):
         return self._app_context is not None
 
     # Tensor management methods
-    def create_empty_tensor(
+    def _create_empty_tensor_impl(
         self,
         tensor_id: int,
         shape: List[int],
@@ -87,24 +87,7 @@ class ModalClient(Client):
         storage_offset: int,
         dtype: str,
     ) -> None:
-        """
-        Create an empty tensor on the remote machine with proper storage layout.
-
-        Args:
-            tensor_id: Unique tensor ID (metadata hash)
-            shape: Shape of the tensor
-            stride: Stride of the tensor
-            storage_offset: Storage offset for the tensor
-            dtype: Data type of the tensor (e.g., "float32", "int64")
-
-        Returns:
-            None
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+        """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
         # Call Modal method (no return value)
         self._server_instance.create_empty_tensor.remote(
             tensor_id, shape, stride, storage_offset, dtype
@@ -114,7 +97,8 @@ class ModalClient(Client):
         # Note: Tensor ID tracking moved to orchestrator
         log.info(f"Created empty tensor {tensor_id} with shape {shape}")
 
-    def create_tensor_view(
+
+    def _create_tensor_view_impl(
         self,
         new_tensor_id: int,
         base_tensor_id: int,
@@ -122,24 +106,7 @@ class ModalClient(Client):
         stride: List[int],
         offset: int,
     ) -> None:
-        """
-        Create a tensor view on the remote machine from an existing tensor using as_strided.
-
-        Args:
-            new_tensor_id: Unique tensor ID (metadata hash) for the new view
-            base_tensor_id: Tensor ID of the base tensor to create view from
-            shape: Shape of the view
-            stride: Stride of the view
-            offset: Storage offset of the view
-
-        Returns:
-            None
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+        """Implementation: Create a tensor view on the remote machine from an existing tensor using as_strided."""
         # Call Modal method (no return value)
         self._server_instance.create_tensor_view.remote(
             new_tensor_id, base_tensor_id, shape, stride, offset
@@ -149,7 +116,8 @@ class ModalClient(Client):
         # Note: Tensor ID tracking moved to orchestrator
         log.info(f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}")
 
-    def update_tensor(
+
+    def _update_tensor_impl(
         self,
         tensor_id: int,
         raw_data: bytes,
@@ -158,25 +126,7 @@ class ModalClient(Client):
         source_storage_offset: int,
         source_dtype: str,
     ) -> None:
-        """
-        Update an existing tensor with new data and source metadata.
-
-        Args:
-            tensor_id: Tensor ID to update
-            raw_data: Raw bytes of the tensor data
-            source_shape: Shape of the source data
-            source_stride: Stride of the source data
-            source_storage_offset: Storage offset of the source data
-            source_dtype: Data type of the source data
-
-        Returns:
-            None
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+        """Implementation: Update an existing tensor with new data and source metadata."""
         # Call Modal method directly (fire-and-forget)
         self._server_instance.update_tensor.remote(
             tensor_id,
@@ -187,6 +137,7 @@ class ModalClient(Client):
             source_dtype,
         )
         log.info(f"Updated tensor {tensor_id}")
+
 
     def get_tensor_by_id(
         self,
@@ -219,21 +170,8 @@ class ModalClient(Client):
         tensor.set_(untyped_storage, storage_offset, shape, stride)
         return tensor
 
-    def get_storage_data(self, tensor_id: int) -> bytes:
-        """
-        Get raw storage data by tensor ID.
-
-        Args:
-            tensor_id: The tensor ID (metadata hash)
-
-        Returns:
-            Raw storage data as bytes
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+    def _get_storage_data_impl(self, tensor_id: int) -> bytes:
+        """Implementation: Get raw storage data by tensor ID."""
         # Call Modal method which will write result to queue
         self._server_instance.get_storage_data.remote(tensor_id)
 
@@ -242,21 +180,9 @@ class ModalClient(Client):
 
         return raw_bytes
 
-    def remove_tensors(self, tensor_ids: List[int]) -> None:
-        """
-        Remove multiple tensors from the remote machine.
 
-        Args:
-            tensor_ids: List of tensor IDs to remove
-
-        Returns:
-            None
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+    def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
+        """Implementation: Remove multiple tensors from the remote machine."""
         if not tensor_ids:
             return
 
@@ -267,63 +193,26 @@ class ModalClient(Client):
 
         log.info(f"Removed {len(tensor_ids)} tensors")
 
-    def resize_storage(self, tensor_id: int, nbytes: int) -> None:
-        """
-        Resize the underlying storage for a tensor.
 
-        Args:
-            tensor_id: The tensor ID
-            nbytes: The number of bytes needed for the new storage size
-
-        Returns:
-            None
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+    def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
+        """Implementation: Resize the underlying storage for a tensor."""
         # Call Modal method directly (fire-and-forget)
         self._server_instance.resize_storage.remote(tensor_id, nbytes)
         log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes")
 
+
     # Operation execution methods
-    def execute_aten_operation(
+    def _execute_aten_operation_impl(
         self,
         op_name: str,
-        input_tensors: List["torch.Tensor"],
-        output_tensors: List["torch.Tensor"],
+        input_tensor_ids: List[int],
+        output_tensor_ids: List[int],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
-        """
-        Execute an aten operation on the remote machine with input and output tensors.
-
-        Args:
-            op_name: The aten operation name to execute
-            input_tensors: List of input tensors
-            output_tensors: List of output tensors to store results
-            args: Operation arguments (with tensor IDs replacing tensors)
-            kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
-            tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
-            return_metadata: If True, return output tensor metadata instead of None
-
-        Returns:
-            None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
-        # Extract tensor IDs from tensors
-        input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
-        output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
-
-        # Note: Input tensor existence checking moved to orchestrator
-
+        """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         # Call Modal method
         self._server_instance.execute_aten_operation.remote(
             op_name,
@@ -341,34 +230,18 @@ class ModalClient(Client):
         else:
             result = None
 
-        # Note: Output tensor ID tracking moved to orchestrator
-
         # Return result if metadata was requested, otherwise return None
         return result if return_metadata else None
 
+
     # HuggingFace model loading methods
-    def prepare_huggingface_model(
+    def _prepare_huggingface_model_impl(
         self,
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
     ) -> Dict[str, Any]:
-        """
-        Download and prepare a HuggingFace model directly on the remote machine.
-
-        Args:
-            checkpoint: HuggingFace model checkpoint
-            torch_dtype: Data type for model weights
-            trust_remote_code: Whether to trust remote code
-
-        Returns:
-            Model metadata dictionary
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+        """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
         # Call Modal method which will write result to queue
         self._server_instance.prepare_huggingface_model.remote(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
@@ -382,26 +255,13 @@ class ModalClient(Client):
 
         return result
 
-    def link_model_tensors(
+
+    def _link_model_tensors_impl(
         self,
         local_tensor_ids: List[int],
         parameter_names: List[str],
     ) -> None:
-        """
-        Link local mycelya tensor IDs to remote model parameter tensors.
-
-        Args:
-            local_tensor_ids: List of local tensor IDs from created mycelya tensors
-            parameter_names: List of parameter names corresponding to each tensor ID
-
-        Returns:
-            None
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
+        """Implementation: Link local mycelya tensor IDs to remote model parameter tensors."""
         # Call Modal method directly (fire-and-forget)
         self._server_instance.link_model_tensors.remote(
             local_tensor_ids, parameter_names
@@ -410,6 +270,7 @@ class ModalClient(Client):
         # Note: Tensor ID tracking moved to orchestrator
 
         log.info(f"Linked {len(local_tensor_ids)} model tensors")
+
 
     # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator
 
