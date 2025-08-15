@@ -9,10 +9,22 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypedDict
 
 if TYPE_CHECKING:
     import torch
+
+
+class BatchCall(TypedDict):
+    """Structure for a single batched RPC call.
+    
+    This TypedDict defines the structure used for batching multiple operations
+    into a single RPC call for performance optimization.
+    """
+    method_name: str
+    args: Tuple[Any, ...]
+    kwargs: Dict[str, Any]
+
 
 # Removed batching import since we're using queue-based system now
 
