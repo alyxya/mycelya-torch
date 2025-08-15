@@ -77,6 +77,19 @@ def create_modal_app_for_gpu(
             # checkpoint -> {model: nn.Module, parameter_tensor_map: Dict[str, int]}
             self._model_registry = {}
 
+            # Method mapping for batch execution
+            self._method_map = {
+                "create_empty_tensor": self._create_empty_tensor_impl,
+                "create_tensor_view": self._create_tensor_view_impl,
+                "update_tensor": self._update_tensor_impl,
+                "get_storage_data": self._get_storage_data_impl,
+                "remove_tensors": self._remove_tensors_impl,
+                "resize_storage": self._resize_storage_impl,
+                "execute_aten_operation": self._execute_aten_operation_impl,
+                "prepare_huggingface_model": self._prepare_huggingface_model_impl,
+                "link_model_tensors": self._link_model_tensors_impl,
+            }
+
         @modal.exit()
         def cleanup(self):
             """Cleanup when container shuts down (no-op for now)."""
@@ -804,46 +817,36 @@ def create_modal_app_for_gpu(
                         f"📞 Executing batched RPC {call_id}: {method_name} ({call_type})"
                     )
 
-                    # Call the same underlying implementations that the @modal.method() functions use
-                    if method_name == "create_empty_tensor":
-                        self._create_empty_tensor_impl(*args, **kwargs)
-                        result = None  # No return value
-                    elif method_name == "create_tensor_view":
-                        self._create_tensor_view_impl(*args, **kwargs)
-                        result = None  # No return value
-                    elif method_name == "update_tensor":
-                        self._update_tensor_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no return value
-                    elif method_name == "get_storage_data":
-                        self._get_storage_data_impl(*args, **kwargs)
-                        result = self.response_queue.get()  # Always returns bytes
-                    elif method_name == "remove_tensors":
-                        self._remove_tensors_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no return value
-                    elif method_name == "resize_storage":
-                        self._resize_storage_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no return value
-                    elif method_name == "execute_aten_operation":
-                        self._execute_aten_operation_impl(*args, **kwargs)
-                        # Conditionally get from queue based on return_metadata
-                        return_metadata = kwargs.get("return_metadata", False)
-                        if return_metadata:
-                            result = self.response_queue.get()  # Get metadata
-                        else:
-                            result = None  # No return value
-                    elif method_name == "prepare_huggingface_model":
-                        self._prepare_huggingface_model_impl(*args, **kwargs)
-                        result = self.response_queue.get()  # Always returns model metadata
-                    elif method_name == "link_model_tensors":
-                        self._link_model_tensors_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no return value
-                    else:
+                    # Look up the method implementation
+                    if method_name not in self._method_map:
                         raise AttributeError(f"Unknown method: {method_name}")
+
+                    method_impl = self._method_map[method_name]
+
+                    # Call the implementation - it will handle its own queue operations
+                    method_impl(*args, **kwargs)
 
                     # For spawn calls, we return None
                     if call_type == "spawn":
                         results.append(None)
                     else:
+                        # For remote calls, the result depends on whether the method puts anything in the queue
+                        # Methods that put results in queue: get_storage_data, prepare_huggingface_model, execute_aten_operation (conditional)
+                        # Methods that don't: create_empty_tensor, create_tensor_view, update_tensor, remove_tensors, resize_storage, link_model_tensors
+                        if method_name in ["get_storage_data", "prepare_huggingface_model"]:
+                            # Always returns data
+                            result = self.response_queue.get()
+                        elif method_name == "execute_aten_operation":
+                            # Conditionally returns data
+                            return_metadata = kwargs.get("return_metadata", False)
+                            if return_metadata:
+                                result = self.response_queue.get()
+                            else:
+                                result = None
+                        else:
+                            # Methods with no return value
+                            result = None
+
                         results.append(result)
 
                 except Exception as e:
