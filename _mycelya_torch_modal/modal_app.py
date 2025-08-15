@@ -14,7 +14,7 @@ Part of: mycelya_torch PyTorch extension
 """
 
 import logging
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 import modal
 
@@ -90,7 +90,7 @@ def create_modal_app_for_gpu(
             stride: List[int],
             storage_offset: int,
             dtype: str,
-        ) -> None:
+        ):
             """Create an empty tensor with given tensor_id and proper storage layout."""
             import torch
 
@@ -130,6 +130,9 @@ def create_modal_app_for_gpu(
                 f"✅ Created empty tensor {tensor_id} with shape {shape}, stride {stride}, offset {storage_offset}"
             )
 
+            # Put result in queue
+            self.response_queue.put(None)
+
         @modal.method()
         def create_empty_tensor(
             self,
@@ -138,13 +141,11 @@ def create_modal_app_for_gpu(
             stride: List[int],
             storage_offset: int,
             dtype: str,
-        ) -> None:
+        ):
             """Create an empty tensor on the remote machine with proper storage layout."""
-            result = self._create_empty_tensor_impl(
+            self._create_empty_tensor_impl(
                 tensor_id, shape, stride, storage_offset, dtype
             )
-            # Write result to queue instead of returning
-            self.response_queue.put(result)
 
         def _create_tensor_view_impl(
             self,
@@ -153,7 +154,7 @@ def create_modal_app_for_gpu(
             shape: List[int],
             stride: List[int],
             offset: int,
-        ) -> None:
+        ):
             """Create a tensor view from existing tensor using as_strided."""
             import torch
 
@@ -176,6 +177,9 @@ def create_modal_app_for_gpu(
                 f"✅ Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
             )
 
+            # Put result in queue
+            self.response_queue.put(None)
+
         @modal.method()
         def create_tensor_view(
             self,
@@ -184,13 +188,11 @@ def create_modal_app_for_gpu(
             shape: List[int],
             stride: List[int],
             offset: int,
-        ) -> None:
+        ):
             """Create a tensor view from existing tensor using as_strided."""
-            result = self._create_tensor_view_impl(
+            self._create_tensor_view_impl(
                 new_tensor_id, base_tensor_id, shape, stride, offset
             )
-            # Write result to queue instead of returning
-            self.response_queue.put(result)
 
         def _update_tensor_impl(
             self,
@@ -200,7 +202,7 @@ def create_modal_app_for_gpu(
             source_stride: List[int],
             source_storage_offset: int,
             source_dtype: str,
-        ) -> None:
+        ):
             """Update an existing tensor with new data and source metadata."""
             import torch
 
@@ -238,6 +240,7 @@ def create_modal_app_for_gpu(
             target_tensor.copy_(device_source)
 
             log.info(f"✅ Updated tensor {tensor_id}")
+            # No queue operation - this is fire-and-forget
 
         @modal.method()
         def update_tensor(
@@ -248,9 +251,9 @@ def create_modal_app_for_gpu(
             source_stride: List[int],
             source_storage_offset: int,
             source_dtype: str,
-        ) -> None:
+        ):
             """Update an existing tensor with new data and source metadata."""
-            return self._update_tensor_impl(
+            self._update_tensor_impl(
                 tensor_id,
                 raw_data,
                 source_shape,
@@ -259,7 +262,7 @@ def create_modal_app_for_gpu(
                 source_dtype,
             )
 
-        def _get_storage_data_impl(self, tensor_id: int) -> bytes:
+        def _get_storage_data_impl(self, tensor_id: int):
             """Get raw storage data by tensor ID."""
             tensor_registry = self._tensor_registry
 
@@ -272,16 +275,17 @@ def create_modal_app_for_gpu(
 
             tensor = tensor_registry[tensor_id]
             log.info(f"📦 Retrieving storage data for tensor {tensor_id}")
-            return tensor.cpu().numpy().tobytes()
+            result = tensor.cpu().numpy().tobytes()
 
-        @modal.method()
-        def get_storage_data(self, tensor_id: int) -> None:
-            """Get raw storage data by tensor ID."""
-            result = self._get_storage_data_impl(tensor_id)
-            # Write result to queue instead of returning
+            # Put result in queue
             self.response_queue.put(result)
 
-        def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
+        @modal.method()
+        def get_storage_data(self, tensor_id: int):
+            """Get raw storage data by tensor ID."""
+            self._get_storage_data_impl(tensor_id)
+
+        def _remove_tensors_impl(self, tensor_ids: List[int]):
             """Remove multiple tensors from the remote machine."""
             tensor_registry = self._tensor_registry
 
@@ -292,13 +296,14 @@ def create_modal_app_for_gpu(
                     removed_count += 1
 
             log.info(f"🗑️ Removed {removed_count}/{len(tensor_ids)} tensors")
+            # No queue operation - this is fire-and-forget
 
         @modal.method()
-        def remove_tensors(self, tensor_ids: List[int]) -> None:
+        def remove_tensors(self, tensor_ids: List[int]):
             """Remove multiple tensors from the remote machine."""
-            return self._remove_tensors_impl(tensor_ids)
+            self._remove_tensors_impl(tensor_ids)
 
-        def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
+        def _resize_storage_impl(self, tensor_id: int, nbytes: int):
             """Resize the underlying storage for a tensor."""
             import torch
 
@@ -321,18 +326,19 @@ def create_modal_app_for_gpu(
             temp_storage_tensor.resize_([nbytes])
 
             log.info(f"🔄 Resized storage for tensor {tensor_id}")
+            # No queue operation - this is fire-and-forget
 
         @modal.method()
-        def resize_storage(self, tensor_id: int, nbytes: int) -> None:
+        def resize_storage(self, tensor_id: int, nbytes: int):
             """Resize the underlying storage for a tensor."""
-            return self._resize_storage_impl(tensor_id, nbytes)
+            self._resize_storage_impl(tensor_id, nbytes)
 
         def _prepare_huggingface_model_impl(
             self,
             checkpoint: str,
             torch_dtype: str = "auto",
             trust_remote_code: bool = False,
-        ) -> Dict[str, Any]:
+        ):
             """Implementation of prepare_huggingface_model without Modal decorators."""
             import torch
 
@@ -462,7 +468,7 @@ def create_modal_app_for_gpu(
                 for name, meta in buffer_metadata.items()
             }
 
-            return {
+            result = {
                 "state_dict_metadata": clean_state_dict,
                 "buffer_metadata": clean_buffer_dict,
                 "config": model.config.to_dict(),
@@ -470,25 +476,26 @@ def create_modal_app_for_gpu(
                 "checkpoint": checkpoint,
             }
 
+            # Put result in queue
+            self.response_queue.put(result)
+
         @modal.method()
         def prepare_huggingface_model(
             self,
             checkpoint: str,
             torch_dtype: str = "auto",
             trust_remote_code: bool = False,
-        ) -> None:
+        ):
             """Download and prepare a HuggingFace model directly on the remote machine."""
-            result = self._prepare_huggingface_model_impl(
+            self._prepare_huggingface_model_impl(
                 checkpoint, torch_dtype, trust_remote_code
             )
-            # Write result to queue instead of returning
-            self.response_queue.put(result)
 
         def _link_model_tensors_impl(
             self,
             local_tensor_ids: List[int],
             parameter_names: List[str],
-        ) -> None:
+        ):
             """Implementation of link_model_tensors without Modal decorators."""
 
             if len(local_tensor_ids) != len(parameter_names):
@@ -577,13 +584,14 @@ def create_modal_app_for_gpu(
             log.info(
                 f"✅ Model tensor linking complete: {linked_count}/{len(local_tensor_ids)} links successful"
             )
+            # No queue operation - this is fire-and-forget
 
         @modal.method()
         def link_model_tensors(
             self,
             local_tensor_ids: List[int],
             parameter_names: List[str],
-        ) -> None:
+        ):
             """
             Link local mycelya tensor IDs to remote model parameter tensors.
 
@@ -593,11 +601,8 @@ def create_modal_app_for_gpu(
             Args:
                 local_tensor_ids: List of local tensor IDs from created mycelya tensors
                 parameter_names: List of parameter names corresponding to each tensor ID
-
-            Returns:
-                None
             """
-            return self._link_model_tensors_impl(local_tensor_ids, parameter_names)
+            self._link_model_tensors_impl(local_tensor_ids, parameter_names)
 
         def _execute_aten_operation_impl(
             self,
@@ -608,7 +613,7 @@ def create_modal_app_for_gpu(
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
             return_metadata: bool = False,
-        ) -> Union[None, List[Dict[str, Any]]]:
+        ):
             """Implementation of execute_aten_operation without Modal decorators."""
             import torch
 
@@ -744,10 +749,13 @@ def create_modal_app_for_gpu(
                 log.info(
                     f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)"
                 )
-                return output_metadata
+                result = output_metadata
+            else:
+                log.info(f"✅ Completed: {op_name}")
+                result = None
 
-            log.info(f"✅ Completed: {op_name}")
-            return None
+            # Put result in queue
+            self.response_queue.put(result)
 
         @modal.method()
         def execute_aten_operation(
@@ -759,9 +767,9 @@ def create_modal_app_for_gpu(
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
             return_metadata: bool = False,
-        ) -> None:
+        ):
             """Execute an aten operation on the remote machine with input tensor IDs."""
-            result = self._execute_aten_operation_impl(
+            self._execute_aten_operation_impl(
                 op_name,
                 input_tensor_ids,
                 output_tensor_ids,
@@ -770,13 +778,9 @@ def create_modal_app_for_gpu(
                 tensor_mask,
                 return_metadata,
             )
-            # Write result to queue instead of returning
-            self.response_queue.put(result)
 
         @modal.method()
-        def execute_batch(
-            self, batch_calls: List[Dict[str, Any]]
-        ) -> List[Union[None, Any]]:
+        def execute_batch(self, batch_calls: List[Dict[str, Any]]):
             """
             Execute a batch of RPCs in sequence.
 
@@ -790,12 +794,7 @@ def create_modal_app_for_gpu(
                     - args: Arguments for the method
                     - kwargs: Keyword arguments for the method
                     - call_id: Unique identifier for debugging
-
-            Returns:
-                List of results in the same order as input calls.
-                None for "spawn" calls, actual return value for "remote" calls.
             """
-
             log.info(f"🚀 BATCH EXECUTE: Processing {len(batch_calls)} batched RPCs")
             results = []
 
@@ -811,28 +810,35 @@ def create_modal_app_for_gpu(
                         f"📞 Executing batched RPC {call_id}: {method_name} ({call_type})"
                     )
 
-                    # Call the underlying method implementations directly
-                    # We need to bypass Modal decorators and call the actual Python methods
-                    # Tensor-based methods
+                    # Call the same underlying implementations that the @modal.method() functions use
+                    # For methods that put results in queue, we need to get the result before the queue operation
                     if method_name == "create_empty_tensor":
-                        result = self._create_empty_tensor_impl(*args, **kwargs)
+                        self._create_empty_tensor_impl(*args, **kwargs)
+                        result = self.response_queue.get()  # Get the queued result
                     elif method_name == "create_tensor_view":
-                        result = self._create_tensor_view_impl(*args, **kwargs)
+                        self._create_tensor_view_impl(*args, **kwargs)
+                        result = self.response_queue.get()  # Get the queued result
                     elif method_name == "update_tensor":
-                        result = self._update_tensor_impl(*args, **kwargs)
+                        self._update_tensor_impl(*args, **kwargs)
+                        result = None  # Fire-and-forget, no queue operation
                     elif method_name == "get_storage_data":
-                        result = self._get_storage_data_impl(*args, **kwargs)
+                        self._get_storage_data_impl(*args, **kwargs)
+                        result = self.response_queue.get()  # Get the queued result
                     elif method_name == "remove_tensors":
-                        result = self._remove_tensors_impl(*args, **kwargs)
+                        self._remove_tensors_impl(*args, **kwargs)
+                        result = None  # Fire-and-forget, no queue operation
                     elif method_name == "resize_storage":
-                        result = self._resize_storage_impl(*args, **kwargs)
-                    # Legacy methods
+                        self._resize_storage_impl(*args, **kwargs)
+                        result = None  # Fire-and-forget, no queue operation
                     elif method_name == "execute_aten_operation":
-                        result = self._execute_aten_operation_impl(*args, **kwargs)
+                        self._execute_aten_operation_impl(*args, **kwargs)
+                        result = self.response_queue.get()  # Get the queued result
                     elif method_name == "prepare_huggingface_model":
-                        result = self._prepare_huggingface_model_impl(*args, **kwargs)
+                        self._prepare_huggingface_model_impl(*args, **kwargs)
+                        result = self.response_queue.get()  # Get the queued result
                     elif method_name == "link_model_tensors":
-                        result = self._link_model_tensors_impl(*args, **kwargs)
+                        self._link_model_tensors_impl(*args, **kwargs)
+                        result = None  # Fire-and-forget, no queue operation
                     else:
                         raise AttributeError(f"Unknown method: {method_name}")
 
@@ -844,8 +850,6 @@ def create_modal_app_for_gpu(
 
                 except Exception as e:
                     log.error(f"❌ Batched RPC {call_id} failed: {method_name} - {e}")
-
-                    # Store the exception as the result
                     results.append(e)
 
             log.info(
