@@ -235,17 +235,10 @@ def create_modal_app_for_gpu(
             # Reconstruct source tensor from raw data using provided metadata
             flat_tensor = torch.frombuffer(writable_data, dtype=torch_dtype)
 
-            # Reshape to source shape
-            source_tensor = flat_tensor.reshape(source_shape)
-
-            # Apply custom stride/offset if needed
-            if (
-                list(source_tensor.stride()) != source_stride
-                or source_storage_offset != 0
-            ):
-                source_tensor = source_tensor.as_strided(
-                    source_shape, source_stride, source_storage_offset
-                )
+            # Create source tensor with exact layout using as_strided
+            source_tensor = flat_tensor.as_strided(
+                source_shape, source_stride, source_storage_offset
+            )
 
             # Move to target device and copy
             device_source = source_tensor.to(target_tensor.device)
