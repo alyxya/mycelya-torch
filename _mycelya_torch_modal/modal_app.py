@@ -329,6 +329,179 @@ def create_modal_app_for_gpu(
             """Resize the underlying storage for a tensor."""
             self._resize_storage_impl(tensor_id, nbytes)
 
+        def _execute_aten_operation_impl(
+            self,
+            op_name: str,
+            input_tensor_ids: List[int],
+            output_tensor_ids: List[int],
+            args: List[Any],
+            kwargs: Dict[str, Any],
+            tensor_mask: List[bool],
+            return_metadata: bool = False,
+        ):
+            """Implementation of execute_aten_operation without Modal decorators."""
+            import torch
+
+            log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
+            log.debug(f"Input tensor IDs: {input_tensor_ids}")
+            log.debug(f"Output tensor IDs: {output_tensor_ids}")
+
+            # Get tensor registry
+            tensor_registry = self._tensor_registry
+
+            # Reconstruct input tensors from tensor registry
+            input_tensors = []
+            for tensor_id in input_tensor_ids:
+                # Check if tensor exists in registry
+                if tensor_id in tensor_registry:
+                    tensor = tensor_registry[tensor_id]
+                else:
+                    # Tensor missing from registry - this shouldn't happen with proper orchestrator management
+                    raise ValueError(
+                        f"Input tensor ID {tensor_id} not found in registry"
+                    )
+
+                input_tensors.append(tensor)
+
+            log.debug(f"📥 Retrieved {len(input_tensors)} input tensors from registry")
+
+            # Replace tensor IDs with actual tensors using tensor mask
+            tensor_index = 0
+            mask_index = 0
+
+            def replace_tensor_id_with_tensor(obj):
+                """Replace tensor ID with actual tensor, consuming mask once per call."""
+                nonlocal tensor_index, mask_index
+
+                if mask_index >= len(tensor_mask):
+                    raise IndexError(
+                        f"Mask index {mask_index} out of range (have {len(tensor_mask)} mask entries)"
+                    )
+
+                is_tensor = tensor_mask[mask_index]
+                mask_index += 1
+
+                if is_tensor:
+                    # Expecting a tensor ID (integer), replace with actual tensor
+                    if tensor_index < len(input_tensors):
+                        result = input_tensors[tensor_index]
+                        tensor_index += 1
+                        return result
+                    else:
+                        raise IndexError(
+                            f"Tensor index {tensor_index} out of range (have {len(input_tensors)} input tensors)"
+                        )
+                return obj
+
+            # Iterate over args (matching client-side structure exactly)
+            processed_args = []
+            for arg in args:
+                if isinstance(arg, (list, tuple)):
+                    processed_arg = []
+                    for item in arg:
+                        processed_arg.append(replace_tensor_id_with_tensor(item))
+                    processed_args.append(type(arg)(processed_arg))
+                else:
+                    processed_args.append(replace_tensor_id_with_tensor(arg))
+
+            # Iterate over kwargs values (matching client-side structure exactly)
+            processed_kwargs = {}
+            for key, value in kwargs.items():
+                if isinstance(value, (list, tuple)):
+                    processed_value = []
+                    for item in value:
+                        processed_value.append(replace_tensor_id_with_tensor(item))
+                    processed_kwargs[key] = type(value)(processed_value)
+                else:
+                    processed_kwargs[key] = replace_tensor_id_with_tensor(value)
+
+            # Get the operation
+            op_name_fixed = op_name.replace("::", ".")
+            op_parts = op_name_fixed.split(".")
+            op = torch.ops
+            for part in op_parts:
+                op = getattr(op, part)
+
+            log.debug(
+                f"Executing operation with {len(processed_args)} args, "
+                f"{len(input_tensors)} inputs, {len(output_tensor_ids)} outputs to update"
+            )
+
+            # Execute the operation on input tensors - this will create result tensors
+            result = op(*processed_args, **processed_kwargs)
+
+            # Handle output tensors
+            result_tensors = (
+                [result]
+                if isinstance(result, torch.Tensor)
+                else list(result)
+                if isinstance(result, (list, tuple))
+                else []
+            )
+
+            # Enforce contract: output_tensor_ids and result_tensors must have same length
+            if len(output_tensor_ids) != len(result_tensors):
+                raise RuntimeError(
+                    f"Contract violation in {op_name}: output_tensor_ids length ({len(output_tensor_ids)}) "
+                    f"!= result_tensors length ({len(result_tensors)}). This indicates a bug in the client-side "
+                    f"meta tensor execution or output tensor creation."
+                )
+
+            # Store result tensors in tensor registry
+            for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
+                tensor_registry[tensor_id] = result_tensor
+                log.debug(
+                    f"Stored output tensor {tensor_id} in registry (shape: {result_tensor.shape}, device: {result_tensor.device})"
+                )
+
+            log.debug(f"📦 Updated {len(output_tensor_ids)} output tensors in registry")
+
+            # Return metadata if requested
+            if return_metadata:
+                output_metadata = []
+                for i, result_tensor in enumerate(result_tensors):
+                    if i < len(output_tensor_ids):
+                        metadata = {
+                            "shape": list(result_tensor.shape),
+                            "dtype": str(result_tensor.dtype),
+                            "stride": list(result_tensor.stride()),
+                            "storage_offset": result_tensor.storage_offset(),
+                            "storage_nelements": result_tensor.untyped_storage().nbytes()
+                            // result_tensor.element_size(),
+                        }
+                        output_metadata.append(metadata)
+
+                log.info(
+                    f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)"
+                )
+                # Put metadata result in queue
+                self.response_queue.put(output_metadata)
+            else:
+                log.info(f"✅ Completed: {op_name}")
+                # No queue operation when not returning metadata
+
+        @modal.method()
+        def execute_aten_operation(
+            self,
+            op_name: str,
+            input_tensor_ids: List[int],
+            output_tensor_ids: List[int],
+            args: List[Any],
+            kwargs: Dict[str, Any],
+            tensor_mask: List[bool],
+            return_metadata: bool = False,
+        ):
+            """Execute an aten operation on the remote machine with input tensor IDs."""
+            self._execute_aten_operation_impl(
+                op_name,
+                input_tensor_ids,
+                output_tensor_ids,
+                args,
+                kwargs,
+                tensor_mask,
+                return_metadata,
+            )
+
         def _prepare_huggingface_model_impl(
             self,
             checkpoint: str,
@@ -599,179 +772,6 @@ def create_modal_app_for_gpu(
                 parameter_names: List of parameter names corresponding to each tensor ID
             """
             self._link_model_tensors_impl(local_tensor_ids, parameter_names)
-
-        def _execute_aten_operation_impl(
-            self,
-            op_name: str,
-            input_tensor_ids: List[int],
-            output_tensor_ids: List[int],
-            args: List[Any],
-            kwargs: Dict[str, Any],
-            tensor_mask: List[bool],
-            return_metadata: bool = False,
-        ):
-            """Implementation of execute_aten_operation without Modal decorators."""
-            import torch
-
-            log.info(f"🚀 Modal {gpu_type} executing: {op_name}")
-            log.debug(f"Input tensor IDs: {input_tensor_ids}")
-            log.debug(f"Output tensor IDs: {output_tensor_ids}")
-
-            # Get tensor registry
-            tensor_registry = self._tensor_registry
-
-            # Reconstruct input tensors from tensor registry
-            input_tensors = []
-            for tensor_id in input_tensor_ids:
-                # Check if tensor exists in registry
-                if tensor_id in tensor_registry:
-                    tensor = tensor_registry[tensor_id]
-                else:
-                    # Tensor missing from registry - this shouldn't happen with proper orchestrator management
-                    raise ValueError(
-                        f"Input tensor ID {tensor_id} not found in registry"
-                    )
-
-                input_tensors.append(tensor)
-
-            log.debug(f"📥 Retrieved {len(input_tensors)} input tensors from registry")
-
-            # Replace tensor IDs with actual tensors using tensor mask
-            tensor_index = 0
-            mask_index = 0
-
-            def replace_tensor_id_with_tensor(obj):
-                """Replace tensor ID with actual tensor, consuming mask once per call."""
-                nonlocal tensor_index, mask_index
-
-                if mask_index >= len(tensor_mask):
-                    raise IndexError(
-                        f"Mask index {mask_index} out of range (have {len(tensor_mask)} mask entries)"
-                    )
-
-                is_tensor = tensor_mask[mask_index]
-                mask_index += 1
-
-                if is_tensor:
-                    # Expecting a tensor ID (integer), replace with actual tensor
-                    if tensor_index < len(input_tensors):
-                        result = input_tensors[tensor_index]
-                        tensor_index += 1
-                        return result
-                    else:
-                        raise IndexError(
-                            f"Tensor index {tensor_index} out of range (have {len(input_tensors)} input tensors)"
-                        )
-                return obj
-
-            # Iterate over args (matching client-side structure exactly)
-            processed_args = []
-            for arg in args:
-                if isinstance(arg, (list, tuple)):
-                    processed_arg = []
-                    for item in arg:
-                        processed_arg.append(replace_tensor_id_with_tensor(item))
-                    processed_args.append(type(arg)(processed_arg))
-                else:
-                    processed_args.append(replace_tensor_id_with_tensor(arg))
-
-            # Iterate over kwargs values (matching client-side structure exactly)
-            processed_kwargs = {}
-            for key, value in kwargs.items():
-                if isinstance(value, (list, tuple)):
-                    processed_value = []
-                    for item in value:
-                        processed_value.append(replace_tensor_id_with_tensor(item))
-                    processed_kwargs[key] = type(value)(processed_value)
-                else:
-                    processed_kwargs[key] = replace_tensor_id_with_tensor(value)
-
-            # Get the operation
-            op_name_fixed = op_name.replace("::", ".")
-            op_parts = op_name_fixed.split(".")
-            op = torch.ops
-            for part in op_parts:
-                op = getattr(op, part)
-
-            log.debug(
-                f"Executing operation with {len(processed_args)} args, "
-                f"{len(input_tensors)} inputs, {len(output_tensor_ids)} outputs to update"
-            )
-
-            # Execute the operation on input tensors - this will create result tensors
-            result = op(*processed_args, **processed_kwargs)
-
-            # Handle output tensors
-            result_tensors = (
-                [result]
-                if isinstance(result, torch.Tensor)
-                else list(result)
-                if isinstance(result, (list, tuple))
-                else []
-            )
-
-            # Enforce contract: output_tensor_ids and result_tensors must have same length
-            if len(output_tensor_ids) != len(result_tensors):
-                raise RuntimeError(
-                    f"Contract violation in {op_name}: output_tensor_ids length ({len(output_tensor_ids)}) "
-                    f"!= result_tensors length ({len(result_tensors)}). This indicates a bug in the client-side "
-                    f"meta tensor execution or output tensor creation."
-                )
-
-            # Store result tensors in tensor registry
-            for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
-                tensor_registry[tensor_id] = result_tensor
-                log.debug(
-                    f"Stored output tensor {tensor_id} in registry (shape: {result_tensor.shape}, device: {result_tensor.device})"
-                )
-
-            log.debug(f"📦 Updated {len(output_tensor_ids)} output tensors in registry")
-
-            # Return metadata if requested
-            if return_metadata:
-                output_metadata = []
-                for i, result_tensor in enumerate(result_tensors):
-                    if i < len(output_tensor_ids):
-                        metadata = {
-                            "shape": list(result_tensor.shape),
-                            "dtype": str(result_tensor.dtype),
-                            "stride": list(result_tensor.stride()),
-                            "storage_offset": result_tensor.storage_offset(),
-                            "storage_nelements": result_tensor.untyped_storage().nbytes()
-                            // result_tensor.element_size(),
-                        }
-                        output_metadata.append(metadata)
-
-                log.info(
-                    f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)"
-                )
-                # Put metadata result in queue
-                self.response_queue.put(output_metadata)
-            else:
-                log.info(f"✅ Completed: {op_name}")
-                # No queue operation when not returning metadata
-
-        @modal.method()
-        def execute_aten_operation(
-            self,
-            op_name: str,
-            input_tensor_ids: List[int],
-            output_tensor_ids: List[int],
-            args: List[Any],
-            kwargs: Dict[str, Any],
-            tensor_mask: List[bool],
-            return_metadata: bool = False,
-        ):
-            """Execute an aten operation on the remote machine with input tensor IDs."""
-            self._execute_aten_operation_impl(
-                op_name,
-                input_tensor_ids,
-                output_tensor_ids,
-                args,
-                kwargs,
-                tensor_mask,
-                return_metadata,
-            )
 
         @modal.method()
         def execute_batch(self, batch_calls: List[Dict[str, Any]]):
