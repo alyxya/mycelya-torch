@@ -8,7 +8,10 @@ This module provides common utility functions for test setup, verification,
 and data generation to reduce code duplication across test files.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mycelya_torch import RemoteMachine
 
 import pytest
 import torch
@@ -41,7 +44,7 @@ class DeviceTestUtils:
     @staticmethod
     def create_remote_tensor(
         shape: Tuple[int, ...],
-        shared_devices: Dict[str, Any],
+        shared_devices: Dict[str, "RemoteMachine"],
         device_key: str = "t4",
         requires_grad: bool = False,
         dtype: torch.dtype = torch.float32,
@@ -53,7 +56,7 @@ class DeviceTestUtils:
     @staticmethod
     def create_test_tensors(
         shapes: List[Tuple[int, ...]],
-        shared_devices: Dict[str, Any],
+        shared_devices: Dict[str, "RemoteMachine"],
         device_key: str = "t4",
     ) -> List[torch.Tensor]:
         """Create multiple test tensors on the same remote device."""
@@ -63,7 +66,7 @@ class DeviceTestUtils:
         ]
 
     @staticmethod
-    def verify_device_properties(tensor: torch.Tensor, expected_device: Any) -> None:
+    def verify_device_properties(tensor: torch.Tensor, expected_device: "RemoteMachine") -> None:
         """Verify that a tensor has expected device properties."""
         assert tensor.device.type == "mycelya"
         assert tensor.device.index == expected_device.remote_index
@@ -71,7 +74,7 @@ class DeviceTestUtils:
     @staticmethod
     def create_cpu_and_remote_pair(
         shape: Tuple[int, ...],
-        shared_devices: Dict[str, Any],
+        shared_devices: Dict[str, "RemoteMachine"],
         device_key: str = "t4",
         dtype: torch.dtype = torch.float32,
         requires_grad: bool = False,
@@ -188,7 +191,7 @@ class TestDataGenerator:
     def generate_classification_data(
         batch_size: int = TestConstants.DEFAULT_BATCH_SIZE,
         num_classes: int = TestConstants.DEFAULT_NUM_CLASSES,
-        shared_devices: Optional[Dict[str, Any]] = None,
+        shared_devices: Optional[Dict[str, "RemoteMachine"]] = None,
         device_key: str = "t4",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Generate data for classification tests."""
@@ -284,7 +287,7 @@ class IntegrationTestUtils:
     def create_simple_linear_model(
         input_size: int,
         output_size: int,
-        shared_devices: Dict[str, Any],
+        shared_devices: Dict[str, "RemoteMachine"],
         device_key: str = "t4",
     ) -> torch.nn.Module:
         """Create a simple linear model on a remote device."""

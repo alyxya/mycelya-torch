@@ -13,9 +13,18 @@ This module handles all Modal-specific functionality including:
 Part of: mycelya_torch PyTorch extension
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, TypedDict
 
 import modal
+
+
+class BatchCall(TypedDict):
+    """Structure for a single batched RPC call."""
+    method_name: str
+    call_type: str  # "spawn" or "remote"
+    args: Tuple[Any, ...]
+    kwargs: Dict[str, Any]
+    call_id: str
 
 # Create image with PyTorch, CUDA support, and transformers for HuggingFace models
 image = modal.Image.debian_slim().pip_install(
@@ -714,7 +723,7 @@ def create_modal_app_for_gpu(
             self._link_model_tensors_impl(local_tensor_ids, parameter_names)
 
         @modal.method()
-        def execute_batch(self, batch_calls: List[Dict[str, Any]]):
+        def execute_batch(self, batch_calls: List[BatchCall]):
             """
             Execute a batch of RPCs in sequence.
 
@@ -722,9 +731,9 @@ def create_modal_app_for_gpu(
             RPC, reducing network overhead and improving performance.
 
             Args:
-                batch_calls: List of dictionaries, each containing:
+                batch_calls: List of BatchCall TypedDict objects, each containing:
                     - method_name: Name of the method to call
-                    - call_type: "spawn" or "remote"
+                    - call_type: "spawn" or "remote" 
                     - args: Arguments for the method
                     - kwargs: Keyword arguments for the method
                     - call_id: Unique identifier for debugging
