@@ -148,8 +148,6 @@ def create_modal_app_for_gpu(
 
             tensor_registry[tensor_id] = tensor
 
-            # No queue operation - this method has no return value
-
         @modal.method()
         def create_empty_tensor(
             self,
@@ -190,8 +188,6 @@ def create_modal_app_for_gpu(
             view_tensor = torch.as_strided(base_tensor, shape, stride, offset)
 
             tensor_registry[new_tensor_id] = view_tensor
-
-            # No queue operation - this method has no return value
 
         @modal.method()
         def create_tensor_view(
@@ -244,8 +240,6 @@ def create_modal_app_for_gpu(
             device_source = source_tensor.to(target_tensor.device)
             target_tensor.copy_(device_source)
 
-            # No queue operation - this is fire-and-forget
-
         @modal.method()
         def update_tensor(
             self,
@@ -276,7 +270,6 @@ def create_modal_app_for_gpu(
             tensor = tensor_registry[tensor_id]
             result = tensor.cpu().numpy().tobytes()
 
-            # Put result in queue
             self.response_queue.put(result)
 
         @modal.method()
@@ -291,8 +284,6 @@ def create_modal_app_for_gpu(
             for tensor_id in tensor_ids:
                 if tensor_id in tensor_registry:
                     del tensor_registry[tensor_id]
-
-            # No queue operation - this is fire-and-forget
 
         @modal.method()
         def remove_tensors(self, tensor_ids: List[int]):
@@ -321,7 +312,6 @@ def create_modal_app_for_gpu(
             temp_storage_tensor.set_(tensor.untyped_storage(), 0, [current_bytes])
             temp_storage_tensor.resize_([nbytes])
 
-            # No queue operation - this is fire-and-forget
 
         @modal.method()
         def resize_storage(self, tensor_id: int, nbytes: int):
@@ -454,11 +444,7 @@ def create_modal_app_for_gpu(
                         }
                         output_metadata.append(metadata)
 
-                # Put metadata result in queue
                 self.response_queue.put(output_metadata)
-            else:
-                # No queue operation when not returning metadata
-                pass
 
         @modal.method()
         def execute_aten_operation(
@@ -599,7 +585,6 @@ def create_modal_app_for_gpu(
                 "checkpoint": checkpoint,
             }
 
-            # Put result in queue
             self.response_queue.put(result)
 
         @modal.method()
@@ -679,7 +664,6 @@ def create_modal_app_for_gpu(
                 # Link the local tensor ID to the remote tensor in the registry
                 tensor_registry[local_tensor_id] = remote_tensor
 
-            # No queue operation - this is fire-and-forget
 
         @modal.method()
         def link_model_tensors(

@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 
-# Removed batching imports
 from ._logging import get_logger
 from .backends.client_base import Client
 

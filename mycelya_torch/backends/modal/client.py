@@ -43,8 +43,6 @@ class ModalClient(Client):
         self._app_context = None
         self.timeout = timeout
 
-        # Note: Tensor ID tracking moved to orchestrator
-
         # Initialize the Modal app and server
         self._initialize()
 
@@ -249,9 +247,6 @@ class ModalClient(Client):
         )
         log.info(f"Linked {len(local_tensor_ids)} model tensors")
 
-    # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator
-
-    # Removed batch execution support - using direct calls now
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

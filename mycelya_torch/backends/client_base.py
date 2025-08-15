@@ -27,9 +27,6 @@ class BatchCall(TypedDict):
     kwargs: Dict[str, Any]
 
 
-# Removed batching import since we're using queue-based system now
-
-
 class Client(ABC):
     """
     Abstract base class defining the interface for cloud provider clients.
@@ -49,8 +46,6 @@ class Client(ABC):
         self.gpu_type = gpu_type
         self.machine_id = machine_id
 
-        # Note: Tensor cache moved to orchestrator level for centralized management
-        # Note: Batching system removed in favor of queue-based system
 
     @abstractmethod
     def start(self) -> None:
@@ -430,9 +425,6 @@ class Client(ABC):
 
         self._link_model_tensors_impl(local_tensor_ids, parameter_names)
 
-    # Note: Batching helper methods removed in favor of queue-based system
-    # Note: Cache methods removed - caching now handled at orchestrator level
-
     # Context manager methods (optional to override, but provide default behavior)
     def __enter__(self):
         """Context manager entry - starts the machine."""
@@ -442,8 +434,6 @@ class Client(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - stops the machine."""
         self.stop()
-        # Note: Cache cleanup removed - handled at orchestrator level
-        # Note: Batching unregistration removed with batching system
 
     @abstractmethod
     def __repr__(self) -> str:

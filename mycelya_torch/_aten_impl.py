@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Tuple
 
 import torch
 
-# Simple operation dispatch - no complex patterns needed
 from ._logging import get_logger
 
 log = get_logger(__name__)
@@ -457,7 +456,7 @@ def _has_static_output_shape(
                 if idx is not None
             )
 
-    # TODO: Add more conditional operations here as needed:
+    # Add more conditional operations here as needed:
     # if op_name == "aten::where":
     #     return len(args) != 1  # 1-arg form is dynamic, 3-arg form is static
 

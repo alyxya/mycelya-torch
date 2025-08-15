@@ -43,8 +43,6 @@ class MockClient(Client):
         self._is_running = False
         self.timeout = timeout
 
-        # Note: Tensor ID tracking moved to orchestrator
-
         # Initialize the Modal app and server
         self._initialize()
 
@@ -183,7 +181,6 @@ class MockClient(Client):
         # Execute using .local() with queue handling to mirror ModalClient exactly
         self._server_instance.get_storage_data.local(tensor_id)
 
-        # Get result from queue like ModalClient does
         raw_bytes = self._response_queue.get()
         if raw_bytes is None:
             raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
@@ -215,7 +212,6 @@ class MockClient(Client):
         return_metadata: bool = False,
     ) -> Optional[List[Dict[str, Any]]]:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
-        # Note: Input tensor existence checking moved to orchestrator
         log.info(
             f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}"
         )
@@ -231,7 +227,6 @@ class MockClient(Client):
             return_metadata,
         )
 
-        # Get result from queue only if metadata was requested
         if return_metadata:
             result = self._response_queue.get()
         else:
@@ -255,7 +250,6 @@ class MockClient(Client):
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
 
-        # Get result from queue like ModalClient does
         result = self._response_queue.get()
 
         if result is None:
@@ -275,9 +269,6 @@ class MockClient(Client):
         )
         log.info(f"Linked {len(local_tensor_ids)} model tensors (mock)")
 
-    # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator
-
-    # Removed batch execution support - using direct calls now
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
