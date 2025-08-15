@@ -301,7 +301,7 @@ def _execute_with_static_outputs(
     # Handle both single tensor and tuple results
     if isinstance(meta_result, torch.Tensor):
         meta_outputs = [meta_result]
-    elif isinstance(meta_result, tuple):
+    elif isinstance(meta_result, (tuple, list)):
         meta_outputs = list(meta_result)
     else:
         # Non-tensor result, no output tensors to create
