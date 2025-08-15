@@ -105,13 +105,11 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Call Modal method which will write result to queue
+        # Call Modal method (no return value)
         self._server_instance.create_empty_tensor.remote(
             tensor_id, shape, stride, storage_offset, dtype
         )
-
-        # Poll queue for result
-        self._response_queue.get()
+        # No queue polling - this method has no return value
 
         # Note: Tensor ID tracking moved to orchestrator
         log.info(f"Created empty tensor {tensor_id} with shape {shape}")
@@ -142,13 +140,11 @@ class ModalClient(Client):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Call Modal method which will write result to queue
+        # Call Modal method (no return value)
         self._server_instance.create_tensor_view.remote(
             new_tensor_id, base_tensor_id, shape, stride, offset
         )
-
-        # Poll queue for result
-        self._response_queue.get()
+        # No queue polling - this method has no return value
 
         # Note: Tensor ID tracking moved to orchestrator
         log.info(f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}")
@@ -328,7 +324,7 @@ class ModalClient(Client):
 
         # Note: Input tensor existence checking moved to orchestrator
 
-        # Call Modal method which will write result to queue
+        # Call Modal method
         self._server_instance.execute_aten_operation.remote(
             op_name,
             input_tensor_ids,
@@ -339,8 +335,11 @@ class ModalClient(Client):
             return_metadata,
         )
 
-        # Poll queue for result
-        result = self._response_queue.get()
+        # Poll queue for result only if metadata was requested
+        if return_metadata:
+            result = self._response_queue.get()
+        else:
+            result = None
 
         # Note: Output tensor ID tracking moved to orchestrator
 

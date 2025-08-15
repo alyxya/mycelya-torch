@@ -129,9 +129,7 @@ def create_modal_app_for_gpu(
             log.info(
                 f"✅ Created empty tensor {tensor_id} with shape {shape}, stride {stride}, offset {storage_offset}"
             )
-
-            # Put result in queue
-            self.response_queue.put(None)
+            # No queue operation - this method has no return value
 
         @modal.method()
         def create_empty_tensor(
@@ -176,9 +174,7 @@ def create_modal_app_for_gpu(
             log.info(
                 f"✅ Created tensor view {new_tensor_id} from tensor {base_tensor_id}"
             )
-
-            # Put result in queue
-            self.response_queue.put(None)
+            # No queue operation - this method has no return value
 
         @modal.method()
         def create_tensor_view(
@@ -749,13 +745,11 @@ def create_modal_app_for_gpu(
                 log.info(
                     f"✅ Completed: {op_name} (returning metadata for {len(output_metadata)} outputs)"
                 )
-                result = output_metadata
+                # Put metadata result in queue
+                self.response_queue.put(output_metadata)
             else:
                 log.info(f"✅ Completed: {op_name}")
-                result = None
-
-            # Put result in queue
-            self.response_queue.put(result)
+                # No queue operation when not returning metadata
 
         @modal.method()
         def execute_aten_operation(
@@ -811,34 +805,38 @@ def create_modal_app_for_gpu(
                     )
 
                     # Call the same underlying implementations that the @modal.method() functions use
-                    # For methods that put results in queue, we need to get the result before the queue operation
                     if method_name == "create_empty_tensor":
                         self._create_empty_tensor_impl(*args, **kwargs)
-                        result = self.response_queue.get()  # Get the queued result
+                        result = None  # No return value
                     elif method_name == "create_tensor_view":
                         self._create_tensor_view_impl(*args, **kwargs)
-                        result = self.response_queue.get()  # Get the queued result
+                        result = None  # No return value
                     elif method_name == "update_tensor":
                         self._update_tensor_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no queue operation
+                        result = None  # Fire-and-forget, no return value
                     elif method_name == "get_storage_data":
                         self._get_storage_data_impl(*args, **kwargs)
-                        result = self.response_queue.get()  # Get the queued result
+                        result = self.response_queue.get()  # Always returns bytes
                     elif method_name == "remove_tensors":
                         self._remove_tensors_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no queue operation
+                        result = None  # Fire-and-forget, no return value
                     elif method_name == "resize_storage":
                         self._resize_storage_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no queue operation
+                        result = None  # Fire-and-forget, no return value
                     elif method_name == "execute_aten_operation":
                         self._execute_aten_operation_impl(*args, **kwargs)
-                        result = self.response_queue.get()  # Get the queued result
+                        # Conditionally get from queue based on return_metadata
+                        return_metadata = kwargs.get("return_metadata", False)
+                        if return_metadata:
+                            result = self.response_queue.get()  # Get metadata
+                        else:
+                            result = None  # No return value
                     elif method_name == "prepare_huggingface_model":
                         self._prepare_huggingface_model_impl(*args, **kwargs)
-                        result = self.response_queue.get()  # Get the queued result
+                        result = self.response_queue.get()  # Always returns model metadata
                     elif method_name == "link_model_tensors":
                         self._link_model_tensors_impl(*args, **kwargs)
-                        result = None  # Fire-and-forget, no queue operation
+                        result = None  # Fire-and-forget, no return value
                     else:
                         raise AttributeError(f"Unknown method: {method_name}")
 

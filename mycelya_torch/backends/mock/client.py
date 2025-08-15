@@ -112,13 +112,11 @@ class MockClient(Client):
             )
 
         try:
-            # Execute using .local() with queue handling to mirror ModalClient exactly
+            # Execute using .local() (no return value)
             self._server_instance.create_empty_tensor.local(
                 tensor_id, shape, stride, storage_offset, dtype
             )
-
-            # Get result from queue like ModalClient does
-            self._response_queue.get()
+            # No queue polling - this method has no return value
 
             # Note: Tensor ID tracking moved to orchestrator
             log.info(f"Created empty tensor {tensor_id} with shape {shape} (mock)")
@@ -152,13 +150,11 @@ class MockClient(Client):
             )
 
         try:
-            # Execute using .local() with queue handling to mirror ModalClient exactly
+            # Execute using .local() (no return value)
             self._server_instance.create_tensor_view.local(
                 new_tensor_id, base_tensor_id, shape, stride, offset
             )
-
-            # Get result from queue like ModalClient does
-            self._response_queue.get()
+            # No queue polling - this method has no return value
 
             # Note: Tensor ID tracking moved to orchestrator
             log.info(
@@ -349,7 +345,7 @@ class MockClient(Client):
             f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}"
         )
 
-        # Execute using .local() with queue handling to mirror ModalClient exactly
+        # Execute using .local()
         self._server_instance.execute_aten_operation.local(
             op_name,
             input_tensor_ids,
@@ -360,8 +356,11 @@ class MockClient(Client):
             return_metadata,
         )
 
-        # Get result from queue like ModalClient does
-        result = self._response_queue.get()
+        # Get result from queue only if metadata was requested
+        if return_metadata:
+            result = self._response_queue.get()
+        else:
+            result = None
 
         # Note: Output tensor ID tracking moved to orchestrator
 
