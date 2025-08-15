@@ -18,6 +18,18 @@ def _get_orchestrator():
     return orchestrator
 
 
+def _dtype_to_str(dtype: torch.dtype) -> str:
+    """Convert torch.dtype to string without 'torch.' prefix.
+
+    Args:
+        dtype: PyTorch dtype (e.g., torch.float32)
+
+    Returns:
+        String representation without prefix (e.g., "float32")
+    """
+    return str(dtype).replace("torch.", "")
+
+
 def _validate_cross_device_operation(
     op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
 ) -> torch.device:
@@ -538,7 +550,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         shape=list(from_.shape),
         stride=list(from_.stride()),
         storage_offset=from_.storage_offset(),
-        dtype=str(from_.dtype),
+        dtype=_dtype_to_str(from_.dtype),
     )
 
     log.info(
@@ -586,7 +598,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         source_shape=list(from_.shape),
         source_stride=list(from_.stride()),
         source_storage_offset=from_.storage_offset(),
-        source_dtype=str(from_.dtype),
+        source_dtype=_dtype_to_str(from_.dtype),
     )
 
     log.info(f"Successfully updated remote tensor with tensor ID {tensor_id}")
@@ -709,7 +721,7 @@ def _local_scalar_dense(self: torch.Tensor):
         shape=list(self.shape),
         stride=list(self.stride()),
         storage_offset=self.storage_offset(),
-        dtype=str(self.dtype),
+        dtype=_dtype_to_str(self.dtype),
     )
 
     # Call item() on the CPU tensor to get the Python scalar

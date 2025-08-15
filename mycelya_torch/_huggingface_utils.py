@@ -47,8 +47,7 @@ def create_remote_tensor_stub(
         Remote tensor stub that can be used in local PyTorch operations
     """
     # Convert dtype string to torch.dtype
-    dtype_name = dtype.replace("torch.", "")
-    torch_dtype = getattr(torch, dtype_name)
+    torch_dtype = getattr(torch, dtype)
 
     # Calculate the storage size needed for the stride pattern
     # This accounts for HuggingFace tensors being views of larger storage

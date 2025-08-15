@@ -18,6 +18,11 @@ from typing import Any, Dict, List, Tuple, TypedDict
 import modal
 
 
+def _dtype_to_str(dtype) -> str:
+    """Convert torch.dtype to string without 'torch.' prefix."""
+    return str(dtype).replace("torch.", "")
+
+
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call."""
 
@@ -119,7 +124,7 @@ def create_modal_app_for_gpu(
             if tensor_id in tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} already exists")
 
-            torch_dtype = getattr(torch, dtype.replace("torch.", ""))
+            torch_dtype = getattr(torch, dtype)
 
             # Detect device
             if torch.cuda.is_available():
@@ -221,9 +226,8 @@ def create_modal_app_for_gpu(
 
             target_tensor = tensor_registry[tensor_id]
 
-            # Convert dtype string back to torch.dtype
-            dtype_name = source_dtype.replace("torch.", "")
-            torch_dtype = getattr(torch, dtype_name)
+            # Convert dtype string to torch.dtype
+            torch_dtype = getattr(torch, source_dtype)
 
             # Create writable buffer to avoid PyTorch warnings
             writable_data = bytearray(raw_data)
@@ -451,7 +455,7 @@ def create_modal_app_for_gpu(
                     if i < len(output_tensor_ids):
                         metadata = {
                             "shape": list(result_tensor.shape),
-                            "dtype": str(result_tensor.dtype),
+                            "dtype": _dtype_to_str(result_tensor.dtype),
                             "stride": list(result_tensor.stride()),
                             "storage_offset": result_tensor.storage_offset(),
                             "storage_nelements": result_tensor.untyped_storage().nbytes()
@@ -554,7 +558,7 @@ def create_modal_app_for_gpu(
                 state_dict_metadata[name] = {
                     "shape": list(param.shape),
                     "stride": list(param.stride()),
-                    "dtype": str(param.dtype),
+                    "dtype": _dtype_to_str(param.dtype),
                     "storage_offset": param.storage_offset(),
                     "requires_grad": param.requires_grad,
                     # Store actual tensor data for later linking
@@ -568,7 +572,7 @@ def create_modal_app_for_gpu(
                 buffer_metadata[name] = {
                     "shape": list(buffer.shape),
                     "stride": list(buffer.stride()),
-                    "dtype": str(buffer.dtype),
+                    "dtype": _dtype_to_str(buffer.dtype),
                     "storage_offset": buffer.storage_offset(),
                     "requires_grad": False,  # Buffers don't require gradients
                     # Store actual tensor data for later linking

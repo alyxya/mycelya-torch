@@ -180,7 +180,7 @@ class MockClient(Client):
         raw_bytes = self.get_storage_data(tensor_id)
 
         # Convert raw bytes to tensor with specified view
-        torch_dtype = getattr(torch, dtype.replace("torch.", ""))
+        torch_dtype = getattr(torch, dtype)
         untyped_storage = torch.UntypedStorage.from_buffer(raw_bytes, dtype=torch.uint8)
         tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
         tensor.set_(untyped_storage, storage_offset, shape, stride)
