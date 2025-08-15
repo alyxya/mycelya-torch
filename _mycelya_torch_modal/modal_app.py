@@ -21,10 +21,8 @@ import modal
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call."""
     method_name: str
-    call_type: str  # "spawn" or "remote"
     args: Tuple[Any, ...]
     kwargs: Dict[str, Any]
-    call_id: str
 
 # Create image with PyTorch, CUDA support, and transformers for HuggingFace models
 image = modal.Image.debian_slim().pip_install(
@@ -733,10 +731,8 @@ def create_modal_app_for_gpu(
             Args:
                 batch_calls: List of BatchCall TypedDict objects, each containing:
                     - method_name: Name of the method to call
-                    - call_type: "spawn" or "remote" 
                     - args: Arguments for the method
                     - kwargs: Keyword arguments for the method
-                    - call_id: Unique identifier for debugging
             """
             for call in batch_calls:
                 method_name = call["method_name"]
