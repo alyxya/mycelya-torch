@@ -96,13 +96,9 @@ class MockClient(Client):
     ) -> None:
         """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
         try:
-            # Execute using .local() (no return value)
             self._server_instance.create_empty_tensor.local(
                 tensor_id, shape, stride, storage_offset, dtype, nbytes
             )
-            # No queue polling - this method has no return value
-
-            # Note: Tensor ID tracking moved to orchestrator
             log.info(
                 f"Created empty tensor {tensor_id} with shape {shape} and storage {nbytes} bytes (mock)"
             )
@@ -119,13 +115,9 @@ class MockClient(Client):
     ) -> None:
         """Implementation: Create a tensor view from an existing tensor."""
         try:
-            # Execute using .local() (no return value)
             self._server_instance.create_tensor_view.local(
                 new_tensor_id, base_tensor_id, shape, stride, offset
             )
-            # No queue polling - this method has no return value
-
-            # Note: Tensor ID tracking moved to orchestrator
             log.info(
                 f"Created tensor view {new_tensor_id} from tensor {base_tensor_id} (mock)"
             )
@@ -203,16 +195,11 @@ class MockClient(Client):
         if not tensor_ids:
             return
 
-        # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.remove_tensors.local(tensor_ids)
-
-        # Note: Tensor ID tracking moved to orchestrator
-
         log.info(f"Removed {len(tensor_ids)} tensors (mock)")
 
     def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
-        # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.resize_storage.local(tensor_id, nbytes)
         log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes (mock)")
 
@@ -250,9 +237,6 @@ class MockClient(Client):
         else:
             result = None
 
-        # Note: Output tensor ID tracking moved to orchestrator
-
-        # Return result if requested
         if return_metadata:
             return result
         else:
@@ -286,13 +270,9 @@ class MockClient(Client):
         parameter_names: List[str],
     ) -> None:
         """Implementation: Link local mycelya tensor IDs to remote model parameter tensors."""
-        # Execute using .local() with queue handling to mirror ModalClient exactly (fire-and-forget)
         self._server_instance.link_model_tensors.local(
             local_tensor_ids, parameter_names
         )
-
-        # Note: Tensor ID tracking moved to orchestrator
-
         log.info(f"Linked {len(local_tensor_ids)} model tensors (mock)")
 
     # Note: _ensure_tensor_exists method removed - tensor existence checking moved to orchestrator

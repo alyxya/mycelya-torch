@@ -288,11 +288,9 @@ def create_modal_app_for_gpu(
             """Remove multiple tensors from the remote machine."""
             tensor_registry = self._tensor_registry
 
-            removed_count = 0
             for tensor_id in tensor_ids:
                 if tensor_id in tensor_registry:
                     del tensor_registry[tensor_id]
-                    removed_count += 1
 
             # No queue operation - this is fire-and-forget
 
@@ -542,11 +540,8 @@ def create_modal_app_for_gpu(
 
             # Extract state dict metadata without transferring data
             state_dict_metadata = {}
-            param_count = 0
 
             for name, param in model.named_parameters():
-                param_count += 1
-
                 # Collect metadata for client (no storage ID generation here)
                 state_dict_metadata[name] = {
                     "shape": list(param.shape),
@@ -674,7 +669,6 @@ def create_modal_app_for_gpu(
             buffer_tensors = model_data.get("buffer_tensors", {})
             all_tensors = {**param_tensors, **buffer_tensors}
 
-            linked_count = 0
             for local_tensor_id, param_name in zip(local_tensor_ids, parameter_names):
                 if param_name not in all_tensors:
                     continue
@@ -684,8 +678,6 @@ def create_modal_app_for_gpu(
 
                 # Link the local tensor ID to the remote tensor in the registry
                 tensor_registry[local_tensor_id] = remote_tensor
-
-                linked_count += 1
 
             # No queue operation - this is fire-and-forget
 

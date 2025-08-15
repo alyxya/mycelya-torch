@@ -149,27 +149,20 @@ class Orchestrator:
         self._storage_cache[storage_id] = data
         log.debug(f"💾 CACHED storage {storage_id} ({len(data)} bytes)")
 
-    def _invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> int:
+    def _invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> None:
         """Invalidate cache entries for multiple storage IDs and clean up mappings.
 
         Args:
             storage_ids: List of storage IDs to invalidate
-
-        Returns:
-            Number of cache entries that were actually invalidated
         """
-        invalidated_count = 0
         for storage_id in storage_ids:
             if storage_id in self._storage_cache:
                 del self._storage_cache[storage_id]
-                invalidated_count += 1
                 log.debug(f"🗑️ INVALIDATED cache for storage {storage_id}")
 
             # Note: Do NOT clean up tensor→storage mappings during cache invalidation
             # The mappings should only be updated when tensors are actually created/destroyed via RPC
             # Cache invalidation is separate from tensor existence tracking
-
-        return invalidated_count
 
     def _reconstruct_tensor_from_cached_storage(
         self,
@@ -299,10 +292,7 @@ class Orchestrator:
         # Batch invalidation optimization: remove duplicates and process efficiently
         if storage_ids_to_invalidate:
             unique_storage_ids = list(set(storage_ids_to_invalidate))
-            invalidated_count = self._invalidate_multiple_storage_caches(
-                unique_storage_ids
-            )
-            log.debug(f"🗑️ Invalidated {invalidated_count} output tensor caches")
+            self._invalidate_multiple_storage_caches(unique_storage_ids)
 
     def _get_client_for_storage(self, storage_id: int) -> Client:
         """Get the client for a specific storage ID with validation.
