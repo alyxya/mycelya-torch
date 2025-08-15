@@ -729,53 +729,15 @@ def create_modal_app_for_gpu(
                     - kwargs: Keyword arguments for the method
                     - call_id: Unique identifier for debugging
             """
-            results = []
-
-            for _i, call in enumerate(batch_calls):
-                # call_id = call.get("call_id", f"batch_call_{i}")  # Unused after logging removal
+            for call in batch_calls:
                 method_name = call["method_name"]
-                call_type = call["call_type"]
                 args = call.get("args", ())
                 kwargs = call.get("kwargs", {})
 
-                try:
+                # Look up the method implementation
+                method_impl = self._method_map[method_name]
 
-                    # Look up the method implementation
-                    if method_name not in self._method_map:
-                        raise AttributeError(f"Unknown method: {method_name}")
-
-                    method_impl = self._method_map[method_name]
-
-                    # Call the implementation - it will handle its own queue operations
-                    method_impl(*args, **kwargs)
-
-                    # For spawn calls, we return None
-                    if call_type == "spawn":
-                        results.append(None)
-                    else:
-                        # For remote calls, the result depends on whether the method puts anything in the queue
-                        # Methods that put results in queue: get_storage_data, prepare_huggingface_model, execute_aten_operation (conditional)
-                        # Methods that don't: create_empty_tensor, create_tensor_view, update_tensor, remove_tensors, resize_storage, link_model_tensors
-                        if method_name in ["get_storage_data", "prepare_huggingface_model"]:
-                            # Always returns data
-                            result = self.response_queue.get()
-                        elif method_name == "execute_aten_operation":
-                            # Conditionally returns data
-                            return_metadata = kwargs.get("return_metadata", False)
-                            if return_metadata:
-                                result = self.response_queue.get()
-                            else:
-                                result = None
-                        else:
-                            # Methods with no return value
-                            result = None
-
-                        results.append(result)
-
-                except Exception as e:
-                    results.append(e)
-
-
-            return results
+                # Call the implementation - it will handle its own queue operations
+                method_impl(*args, **kwargs)
 
     return app, PytorchServer, response_queue
