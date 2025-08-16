@@ -36,18 +36,11 @@ class ModalClient(Client):
         timeout: int,
     ):
         super().__init__(gpu_type, machine_id)
-        self._app = None
-        self._server_class = None
         self._server_instance = None
-        self._response_queue = None
         self._app_context = None
         self.timeout = timeout
 
-        # Initialize the Modal app and server
-        self._initialize()
-
-    def _initialize(self):
-        """Initialize the Modal app and server class."""
+        # Initialize the Modal app and server class
         self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id, self.timeout
         )
