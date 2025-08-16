@@ -16,7 +16,7 @@ import torch
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
-from ..client_base import Client
+from ..base_client import Client
 
 log = get_logger(__name__)
 

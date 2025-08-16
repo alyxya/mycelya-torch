@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import torch
 
 from ._logging import get_logger
-from .backends.client_base import Client
+from .backends.base_client import Client
 
 log = get_logger(__name__)
 
