@@ -4,10 +4,10 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 
 ## Overview
 
-Mycelya is a PyTorch extension that uses a metadata hash architecture with custom PyTorch integration to run operations on remote cloud GPUs. Each mycelya tensor has a unique hash-based ID accessible via `tensor.metadata_hash` property, enabling efficient debugging and monitoring.
+Mycelya is a PyTorch extension that uses a metadata hash architecture with custom PyTorch integration to run operations on remote cloud GPUs. Each mycelya tensor has a unique hash-based ID accessible via `mycelya_torch.get_metadata_hash(tensor)`, enabling efficient debugging and monitoring.
 
 **Key Features:**
-- **Metadata hash IDs** - Each tensor has unique hash-based ID via `tensor.metadata_hash` property
+- **Metadata hash IDs** - Each tensor has unique hash-based ID via `mycelya_torch.get_metadata_hash(tensor)`
 - **Custom PyTorch integration** - Complete TensorImpl/StorageImpl following pytorch-npu patterns
 - **RPC batching** - Background thread processing reduces network overhead
 - **Zero local memory** - Only tensor metadata stored locally, actual data stays on remote GPUs
@@ -19,7 +19,7 @@ Mycelya is a PyTorch extension that uses a metadata hash architecture with custo
 ## Installation
 
 ```bash
-pip install torch>=2.0.0 modal>=0.60.0
+pip install torch>=2.1.0 modal>=1.0.0
 pip install -e .
 ```
 
@@ -29,6 +29,9 @@ pip install -e .
 - Modal account and API key for cloud GPU access
 - C++ compiler for extension building
 
+**Optional Dependencies:**
+- RunPod support: `pip install mycelya_torch[runpod]`
+
 ## Quick Start
 
 ```python
@@ -37,17 +40,18 @@ import mycelya_torch
 
 # Create a remote machine with an A100 GPU
 machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
+machine.start()  # Start the remote machine
 
 # Operations automatically execute on the remote A100
 x = torch.randn(1000, 1000, device=machine.device())
 y = torch.randn(1000, 1000, device=machine.device())
 
 # Each tensor has a unique metadata hash for debugging
-print(f"Tensor x hash: {x.metadata_hash}")  # e.g., 14695981039346656037
-print(f"Tensor y hash: {y.metadata_hash}")  # e.g., 17823946012847563829
+print(f"Tensor x hash: {mycelya_torch.get_metadata_hash(x)}")  # e.g., 14695981039346656037
+print(f"Tensor y hash: {mycelya_torch.get_metadata_hash(y)}")  # e.g., 17823946012847563829
 
 result = x @ y  # Matrix multiplication happens on remote A100
-print(f"Result hash: {result.metadata_hash}")  # e.g., 9384756281047392847
+print(f"Result hash: {mycelya_torch.get_metadata_hash(result)}")  # e.g., 9384756281047392847
 
 # Transfer result back when needed
 result_cpu = result.cpu()
@@ -80,6 +84,7 @@ import mycelya_torch
 
 # Create remote machine
 machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
+machine.start()  # Start the remote machine
 device = machine.device()
 
 # Define model and move to remote device
@@ -91,7 +96,7 @@ for batch_idx, (data, target) in enumerate(dataloader):
     data, target = data.to(device), target.to(device)
     
     # Debug tensor hashes for monitoring
-    print(f"Batch {batch_idx}: Data hash {data.metadata_hash}, Target hash {target.metadata_hash}")
+    print(f"Batch {batch_idx}: Data hash {mycelya_torch.get_metadata_hash(data)}, Target hash {mycelya_torch.get_metadata_hash(target)}")
 
     optimizer.zero_grad()
     output = model(data)
@@ -128,6 +133,7 @@ import torch
 import mycelya_torch
 # Create remote machine
 machine = mycelya_torch.RemoteMachine("modal", "T4")
+machine.start()  # Start the remote machine
 
 # Load model directly on remote GPU (no data transfer)
 model = mycelya_torch.load_huggingface_model(
@@ -138,20 +144,20 @@ model = mycelya_torch.load_huggingface_model(
 
 # All parameters are already on remote GPU with unique hashes
 for name, param in model.named_parameters():
-    print(f"{name}: hash {param.metadata_hash}, device {param.device}")
+    print(f"{name}: hash {mycelya_torch.get_metadata_hash(param)}, device {param.device}")
 ```
 
 ### Mock Provider for Development
 
 ```python
 # Use local execution for development/testing
-machine = mycelya_torch.RemoteMachine("mock", "T4")
+machine = mycelya_torch.RemoteMachine("mock")  # Mock provider doesn't require GPU type
 device = machine.device()
 
 # Same API, but executes locally using Modal's .local() calls
 x = torch.randn(100, 100, device=device)
 result = x @ x.T  # Executed locally
-print(f"Local execution result hash: {result.metadata_hash}")
+print(f"Local execution result hash: {mycelya_torch.get_metadata_hash(result)}")
 ```
 
 ## Architecture
@@ -210,11 +216,10 @@ mycelya_torch/
 ├── _orchestrator.py        # Remote execution orchestration with RPC batching
 ├── _backend_hooks.py       # PyTorch backend hooks and C++ interface bridge
 ├── _storage.py             # Integer-based storage ID system
-├── _batching.py            # RPC batching system
 ├── _huggingface_utils.py   # HuggingFace model integration
 ├── _logging.py             # Centralized logging system
 ├── backends/
-│   ├── client_interface.py  # Standardized provider interface
+│   ├── base_client.py      # Standardized provider interface
 │   ├── modal/client.py     # Modal cloud provider
 │   └── mock/client.py      # Mock provider for development
 └── csrc/                   # C++ backend implementation
@@ -244,7 +249,7 @@ This project is licensed under AGPL-3.0. All contributions must maintain the AGP
 1. Clone the repository
 2. Install in development mode: `pip install -e .`
 3. Run critical regression tests: `pytest tests/test_regression.py::TestCriticalRegression -v`
-4. Use Mock provider for local development: `mycelya_torch.RemoteMachine("mock", "T4")`
+4. Use Mock provider for local development: `mycelya_torch.RemoteMachine("mock")`
 5. Follow existing code style and patterns with ruff formatting
 
 ## License

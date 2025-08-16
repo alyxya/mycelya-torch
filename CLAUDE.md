@@ -4,7 +4,7 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 
 ## Architecture Overview
 
-- **Metadata Hash System**: Remote tensors have unique metadata-based hash IDs with `tensor.metadata_hash` property
+- **Metadata Hash System**: Remote tensors have unique metadata-based hash IDs accessible via `mycelya_torch.get_metadata_hash(tensor)`
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns
 - **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution
 - **Multi-GPU Support**: 10 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
@@ -68,7 +68,6 @@ To run type checking:
 
 ### Utility and Support Modules
 - `mycelya_torch/_storage.py` - Integer-based storage ID system with thread-safe generation and cross-device validation
-- `mycelya_torch/_batching.py` - RPC batching system with background thread processing
 - `mycelya_torch/_huggingface_utils.py` - Model loading and tensor linking utilities for HuggingFace models
 - `mycelya_torch/_logging.py` - Centralized logging configuration with hierarchical loggers
 
@@ -76,7 +75,7 @@ To run type checking:
 - Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns
 
 ### Provider Interface
-- `mycelya_torch/backends/client_interface.py` - Standardized provider interface with caching and RPC batching support
+- `mycelya_torch/backends/base_client.py` - Standardized provider interface with caching and RPC batching support
 - `mycelya_torch/backends/modal/client.py` - Modal provider implementation with RPC batching integration
 - `mycelya_torch/backends/mock/client.py` - Local execution provider for development and testing
 
@@ -95,7 +94,7 @@ To run type checking:
 ## Current Architecture (2025-08-10)
 
 ### Key Design Principles
-- **Metadata Hash System**: Unique metadata-based hash IDs with `tensor.metadata_hash` property for debugging
+- **Metadata Hash System**: Unique metadata-based hash IDs accessible via `mycelya_torch.get_metadata_hash(tensor)` for debugging
 - **Custom PyTorch Integration**: Complete TensorImpl/StorageImpl following pytorch-npu architecture patterns
 - **Clean Input/Output Separation**: Efficient data transfer with clear boundaries
 - **Zero Local Memory**: No tensor data stored locally for remote tensors
@@ -144,7 +143,7 @@ optimizer = torch.optim.Adam(model.parameters())
 # Full training loop on remote GPU
 for data, target in dataloader:
     data, target = data.to(machine.device()), target.to(machine.device())
-    print(f"Data tensor ID: {data.id}")  # Unique sequential ID
+    print(f"Data tensor hash: {mycelya_torch.get_metadata_hash(data)}")  # Unique metadata hash
     output = model(data)
     loss = criterion(output, target)
     loss.backward()  # Gradients computed remotely
@@ -165,14 +164,14 @@ model = mycelya_torch.load_huggingface_model(
 
 # Model parameters are already on remote GPU
 for name, param in model.named_parameters():
-    print(f"{name}: tensor ID {param.id}, device {param.device}")
+    print(f"{name}: tensor hash {mycelya_torch.get_metadata_hash(param)}, device {param.device}")
 ```
 
 ## Implementation Details
 
 ### Storage ID System
 - **Sequential incremental storage IDs** (1, 2, 3...) generated for each remote tensor storage
-- **Python API integration**: `tensor.metadata_hash` property and `tensor.get_metadata_hash()` method
+- **Python API integration**: `mycelya_torch.get_metadata_hash(tensor)` function for accessing tensor metadata hashes
 - **Hash-based identification**: Uses FNV-1a hash of shape/stride/dtype/offset/storage_id
 - **Custom TensorImpl integration**: Metadata hash computation in MycelyaTensorImpl
 - **Zero memory overhead**: Hash computed on-demand without additional allocations
@@ -243,9 +242,9 @@ for name, param in model.named_parameters():
 
 #### Custom TensorImpl Integration (2025-08-10)
 - **Complete custom tensor stack**: MycelyaTensorImpl, MycelyaStorageImpl, MycelyaAllocator
-- **Metadata hash IDs**: Unique hash-based IDs with `tensor.metadata_hash` property
+- **Metadata hash IDs**: Unique hash-based IDs accessible via `mycelya_torch.get_metadata_hash(tensor)`
 - **pytorch-npu compliance**: Following established integration patterns for production readiness
-- **Python API enhancement**: Monkey patching torch.Tensor with mycelya-specific methods
+- **Python API enhancement**: Monkey patching torch.Tensor with internal methods `_get_tensor_id()` and `_get_storage_id()`
 - **FNV-1a hash algorithm**: Fast, deterministic hash of shape/stride/dtype/offset/storage_id
 - **Zero memory overhead**: Custom implementations maintain existing efficiency
 - **Diagnostic capabilities**: Testing functions to verify custom implementation usage
@@ -303,7 +302,7 @@ for name, param in model.named_parameters():
 
 #### Current Status
 - **Production-ready architecture** with custom PyTorch integration following pytorch-npu patterns
-- **Metadata hash system** with `tensor.metadata_hash` property for enhanced debugging
+- **Metadata hash system** with `mycelya_torch.get_metadata_hash(tensor)` function for enhanced debugging
 - **RPC batching optimization** reducing network overhead with background thread processing
 - **Multi-provider support** with Modal (production) and Mock (development) implementations
 - **HuggingFace integration** enabling direct remote model loading and parameter linking
@@ -334,4 +333,4 @@ for name, param in model.named_parameters():
 - **Code Quality**: All ruff linting issues resolved, maintaining zero technical debt
 - **Architecture Stability**: Recent refactoring focused on naming and organization without functional changes
 
-Last updated: 2025-08-13
+Last updated: 2025-08-16
