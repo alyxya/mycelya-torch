@@ -6,8 +6,6 @@ from typing import Any, Callable, Dict, List
 
 import torch
 
-from mycelya_torch._device import get_device_registry
-
 from ._logging import get_logger
 from ._storage import (
     create_storage,
@@ -67,10 +65,10 @@ class RuntimeManager:
 
     def get_device_count(self) -> int:
         """Return number of devices"""
-        # Return maximum stable device count to avoid PyTorch autograd engine 
-        # device queue size issues. PyTorch uses this during initialization to 
+        # Return maximum stable device count to avoid PyTorch autograd engine
+        # device queue size issues. PyTorch uses this during initialization to
         # allocate device_ready_queues_, so it must be stable across the session.
-        # 127 is the maximum value (testing shows 128+ fails, likely due to 
+        # 127 is the maximum value (testing shows 128+ fails, likely due to
         # signed 8-bit integer constraints in PyTorch's device management).
         return 127
 

@@ -9,6 +9,7 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 
+import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
@@ -30,7 +31,7 @@ class Orchestrator:
     machines, handling tensor transfers, device communication, and distributed
     execution flow. Currently supports Modal as the primary provider.
 
-    No background threading - all operations are synchronous.
+    Includes background thread for periodic maintenance tasks like resolving futures.
     """
 
     def __init__(self):
@@ -47,6 +48,14 @@ class Orchestrator:
         # Tensor ID to Storage ID mapping for cache coordination
         self._tensor_to_storage_map: Dict[int, int] = {}
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
+
+        # Background thread for periodic maintenance tasks
+        self._stop_event = threading.Event()
+        self._background_thread = threading.Thread(
+            target=self._background_maintenance_loop,
+            daemon=True
+        )
+        self._background_thread.start()
 
     # Client management methods
     def register_client(self, device_index: int, client: Client) -> None:
@@ -733,6 +742,28 @@ class Orchestrator:
 
     # Removed batch queue checking - no more batching
 
+    def _background_maintenance_loop(self):
+        """Background thread for periodic maintenance tasks.
+
+        Currently handles:
+        - Resolving pending futures for all clients
+
+        Future tasks may include:
+        - Cache cleanup
+        - Connection health checks
+        - Metrics collection
+        """
+        while not self._stop_event.is_set():
+            # Resolve futures for all running clients
+            for client in self._clients.values():
+                if client.is_running():
+                    try:
+                        client.resolve_futures()
+                    except Exception as e:
+                        log.error(f"Error resolving futures for client: {e}")
+
+            # Sleep for 0.1 seconds (100ms)
+            self._stop_event.wait(0.1)
 
 # Global orchestrator instance (Modal provider implementation)
 orchestrator = Orchestrator()

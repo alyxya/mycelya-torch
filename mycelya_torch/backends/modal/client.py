@@ -70,6 +70,31 @@ class ModalClient(Client):
         """Check if the machine is currently running."""
         return self._app_context is not None
 
+    def resolve_futures(self) -> None:
+        """Resolve pending futures using Modal's get_many."""
+        if not self.is_running():
+            return
+
+        n_pending = len(self._pending_futures)
+        if n_pending == 0:
+            return
+
+        # Get responses from Modal queue (non-blocking)
+        responses = self._response_queue.get_many(n_pending, block=False)
+
+        # Handle None or empty responses
+        if not responses:
+            return
+
+        # Resolve futures with responses (popleft is atomic)
+        for response in responses:
+            if self._pending_futures:
+                future = self._pending_futures.popleft()
+                if response is not None:
+                    future.set_result(response)
+                else:
+                    future.set_exception(RuntimeError("Received None response from server"))
+
     # Tensor management methods
     def _create_empty_tensor_impl(
         self,
@@ -157,17 +182,13 @@ class ModalClient(Client):
 
     def _get_storage_data_impl(self, tensor_id: int) -> Future[bytes]:
         """Implementation: Get raw storage data by tensor ID."""
-        # Create a future and set its result immediately
         future = Future[bytes]()
 
-        # Call Modal method which will write result to queue
+        # Add future to deque first (atomic append)
+        self._pending_futures.append(future)
+
+        # Then trigger the remote call
         self._server_instance.get_storage_data.remote(tensor_id)
-
-        # Poll queue for result
-        raw_bytes = self._response_queue.get()
-
-        # Set the result in the future
-        future.set_result(raw_bytes)
 
         return future
 
@@ -196,6 +217,11 @@ class ModalClient(Client):
         return_metadata: bool = False,
     ) -> Union[Future[List[Dict[str, Any]]], None]:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
+        # Create future first if metadata is requested
+        if return_metadata:
+            future = Future[List[Dict[str, Any]]]()
+            self._pending_futures.append(future)
+
         # Call Modal method
         self._server_instance.execute_aten_operation.remote(
             op_name,
@@ -207,12 +233,7 @@ class ModalClient(Client):
             return_metadata,
         )
 
-        # Poll queue for result only if metadata was requested
         if return_metadata:
-            result = self._response_queue.get()
-            # Create a future and set its result immediately
-            future = Future[List[Dict[str, Any]]]()
-            future.set_result(result)
             return future
         else:
             return None
@@ -225,22 +246,15 @@ class ModalClient(Client):
         trust_remote_code: bool = False,
     ) -> Future[Dict[str, Any]]:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
-        # Create a future and set its result immediately
         future = Future[Dict[str, Any]]()
 
-        # Call Modal method which will write result to queue
+        # Add future to deque first (atomic append)
+        self._pending_futures.append(future)
+
+        # Then trigger the remote call
         self._server_instance.prepare_huggingface_model.remote(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
-
-        # Poll queue for result
-        result = self._response_queue.get()
-
-        if result is None:
-            raise RuntimeError(f"Failed to prepare model {checkpoint}")
-
-        # Set the result in the future
-        future.set_result(result)
 
         return future
 

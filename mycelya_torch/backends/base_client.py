@@ -9,6 +9,7 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
+from collections import deque
 from concurrent.futures import Future
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple, TypedDict, Union
 
@@ -47,6 +48,9 @@ class Client(ABC):
         self.gpu_type = gpu_type
         self.machine_id = machine_id
 
+        # Deque for storing pending futures that need to be resolved
+        self._pending_futures = deque()
+
     @abstractmethod
     def start(self) -> None:
         """
@@ -74,6 +78,16 @@ class Client(ABC):
 
         Returns:
             True if the machine is running and can accept operations, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def resolve_futures(self) -> None:
+        """
+        Resolve any pending futures by fetching results from the queue.
+
+        Called periodically by orchestrator's background thread to process
+        futures that were created for asynchronous operations.
         """
         pass
 
