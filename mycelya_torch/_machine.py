@@ -70,6 +70,7 @@ class RemoteMachine:
         gpu_type: Union[str, GPUType, None] = None,
         timeout: int = 300,
         start: bool = True,
+        batching: bool = True,
     ) -> None:
         """
         Initialize a remote machine.
@@ -80,6 +81,7 @@ class RemoteMachine:
                      Required for modal provider, ignored for mock provider.
             timeout: Function timeout in seconds (default: 300)
             start: Whether to start the client immediately (default: True)
+            batching: Whether to enable operation batching (default: True)
         """
         # Handle string providers
         if isinstance(provider, str):
@@ -117,6 +119,7 @@ class RemoteMachine:
                 else (GPUType(gpu_type) if isinstance(gpu_type, str) else gpu_type)
             )
         self.timeout = timeout
+        self.batching = batching
 
         # Always use 0 retries
         self.retries = 0
@@ -186,6 +189,7 @@ class RemoteMachine:
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
+                    self.batching,
                 )
             elif self.provider == CloudProvider.MOCK:
                 # Import here to avoid circular imports
@@ -195,6 +199,7 @@ class RemoteMachine:
                     self.gpu_type.value,
                     self.machine_id,
                     self.timeout,
+                    self.batching,
                 )
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")

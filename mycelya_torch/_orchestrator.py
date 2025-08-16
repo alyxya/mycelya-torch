@@ -52,7 +52,7 @@ class Orchestrator:
         # Background thread for periodic maintenance tasks
         self._stop_event = threading.Event()
         self._background_thread = threading.Thread(
-            target=self._background_maintenance_loop,
+            target=self._background_loop,
             daemon=True
         )
         self._background_thread.start()
@@ -742,10 +742,11 @@ class Orchestrator:
 
     # Removed batch queue checking - no more batching
 
-    def _background_maintenance_loop(self):
-        """Background thread for periodic maintenance tasks.
+    def _background_loop(self):
+        """Background thread for batch execution and future resolution.
 
         Currently handles:
+        - Executing pending batch operations for all clients  
         - Resolving pending futures for all clients
 
         Future tasks may include:
@@ -754,13 +755,16 @@ class Orchestrator:
         - Metrics collection
         """
         while not self._stop_event.is_set():
-            # Resolve futures for all running clients
             for client in self._clients.values():
                 if client.is_running():
                     try:
+                        # Execute any pending batched operations first
+                        client.execute_batch()
+                        
+                        # Then resolve any pending futures
                         client.resolve_futures()
                     except Exception as e:
-                        log.error(f"Error resolving futures for client: {e}")
+                        log.error(f"Error in background maintenance for client: {e}")
 
             # Sleep for 0.1 seconds (100ms)
             self._stop_event.wait(0.1)

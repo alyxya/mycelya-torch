@@ -37,19 +37,24 @@ class Client(ABC):
     class and implement all abstract methods to ensure consistent API across providers.
     """
 
-    def __init__(self, gpu_type: str, machine_id: str):
+    def __init__(self, gpu_type: str, machine_id: str, batching: bool = True):
         """
         Initialize the client with GPU type, machine ID, and configuration.
 
         Args:
             gpu_type: The GPU type (e.g., "T4", "A100-40GB")
             machine_id: Unique machine identifier
+            batching: Whether to enable operation batching (default: True)
         """
         self.gpu_type = gpu_type
         self.machine_id = machine_id
+        self.batching = batching
 
         # Deque for storing pending futures that need to be resolved
         self._pending_futures = deque()
+
+        # Deque for storing pending batch calls when batching is enabled
+        self._batch_calls = deque()
 
     @abstractmethod
     def start(self) -> None:
@@ -90,6 +95,34 @@ class Client(ABC):
         futures that were created for asynchronous operations.
         """
         pass
+
+    @abstractmethod
+    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
+        """
+        Implementation: Execute a batch of operations.
+
+        Args:
+            batch_calls: List of BatchCall objects to execute
+        """
+        pass
+
+    def execute_batch(self) -> None:
+        """
+        Execute any pending batch calls.
+
+        Pops all pending calls from the deque to create a batch list,
+        then executes all operations in a single batch.
+        """
+        if not self._batch_calls:
+            return
+
+        # Pop all pending calls from deque to create batch list
+        batch_to_execute = []
+        while self._batch_calls:
+            batch_to_execute.append(self._batch_calls.popleft())
+
+        # Execute the batch
+        self._execute_batch_impl(batch_to_execute)
 
     # Tensor management methods
     @abstractmethod
@@ -133,9 +166,18 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._create_empty_tensor_impl(
-            tensor_id, shape, stride, storage_offset, dtype, nbytes
-        )
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="create_empty_tensor",
+                args=(tensor_id, shape, stride, storage_offset, dtype, nbytes),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._create_empty_tensor_impl(
+                tensor_id, shape, stride, storage_offset, dtype, nbytes
+            )
 
     @abstractmethod
     def _create_tensor_view_impl(
@@ -175,9 +217,18 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._create_tensor_view_impl(
-            new_tensor_id, base_tensor_id, shape, stride, offset
-        )
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="create_tensor_view",
+                args=(new_tensor_id, base_tensor_id, shape, stride, offset),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._create_tensor_view_impl(
+                new_tensor_id, base_tensor_id, shape, stride, offset
+            )
 
     @abstractmethod
     def _update_tensor_impl(
@@ -220,17 +271,26 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._update_tensor_impl(
-            tensor_id,
-            raw_data,
-            source_shape,
-            source_stride,
-            source_storage_offset,
-            source_dtype,
-        )
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="update_tensor",
+                args=(tensor_id, raw_data, source_shape, source_stride, source_storage_offset, source_dtype),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._update_tensor_impl(
+                tensor_id,
+                raw_data,
+                source_shape,
+                source_stride,
+                source_storage_offset,
+                source_dtype,
+            )
 
     @abstractmethod
-    def _get_storage_data_impl(self, tensor_id: int) -> Future[bytes]:
+    def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""
         pass
 
@@ -249,7 +309,23 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        return self._get_storage_data_impl(tensor_id)
+        # Create a Future for the result
+        future = Future()
+        # Add future to pending futures queue
+        self._pending_futures.append(future)
+        
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="get_storage_data",
+                args=(tensor_id,),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._get_storage_data_impl(tensor_id)
+            
+        return future
 
     @abstractmethod
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
@@ -271,7 +347,16 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._remove_tensors_impl(tensor_ids)
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="remove_tensors",
+                args=(tensor_ids,),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._remove_tensors_impl(tensor_ids)
 
     @abstractmethod
     def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
@@ -294,7 +379,16 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._resize_storage_impl(tensor_id, nbytes)
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="resize_storage",
+                args=(tensor_id, nbytes),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._resize_storage_impl(tensor_id, nbytes)
 
     # Operation execution methods
     @abstractmethod
@@ -307,7 +401,7 @@ class Client(ABC):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
-    ) -> Union[Future[List[Dict[str, Any]]], None]:
+    ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         pass
 
@@ -345,15 +439,32 @@ class Client(ABC):
         input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
         output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
 
-        return self._execute_aten_operation_impl(
-            op_name,
-            input_tensor_ids,
-            output_tensor_ids,
-            args,
-            kwargs,
-            tensor_mask,
-            return_metadata,
-        )
+        # Create future if metadata is requested
+        future = None
+        if return_metadata:
+            future = Future()
+            self._pending_futures.append(future)
+
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="execute_aten_operation",
+                args=(op_name, input_tensor_ids, output_tensor_ids, args, kwargs, tensor_mask, return_metadata),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._execute_aten_operation_impl(
+                op_name,
+                input_tensor_ids,
+                output_tensor_ids,
+                args,
+                kwargs,
+                tensor_mask,
+                return_metadata,
+            )
+            
+        return future
 
     # HuggingFace model loading methods
     @abstractmethod
@@ -362,7 +473,7 @@ class Client(ABC):
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
-    ) -> Future[Dict[str, Any]]:
+    ) -> None:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
         pass
 
@@ -395,9 +506,25 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        return self._prepare_huggingface_model_impl(
-            checkpoint, torch_dtype, trust_remote_code
-        )
+        # Create a Future for the result
+        future = Future()
+        # Add future to pending futures queue
+        self._pending_futures.append(future)
+        
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="prepare_huggingface_model",
+                args=(checkpoint, torch_dtype, trust_remote_code),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._prepare_huggingface_model_impl(
+                checkpoint, torch_dtype, trust_remote_code
+            )
+            
+        return future
 
     @abstractmethod
     def _link_model_tensors_impl(
@@ -437,7 +564,16 @@ class Client(ABC):
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        self._link_model_tensors_impl(local_tensor_ids, parameter_names)
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(BatchCall(
+                method_name="link_model_tensors",
+                args=(local_tensor_ids, parameter_names),
+                kwargs={}
+            ))
+        else:
+            # Direct execution (existing behavior)
+            self._link_model_tensors_impl(local_tensor_ids, parameter_names)
 
     # Context manager methods (optional to override, but provide default behavior)
     def __enter__(self):

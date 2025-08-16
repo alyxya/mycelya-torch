@@ -16,7 +16,7 @@ import torch
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
-from ..base_client import Client
+from ..base_client import BatchCall, Client
 
 log = get_logger(__name__)
 
@@ -35,8 +35,9 @@ class MockClient(Client):
         gpu_type: str,
         machine_id: str,
         timeout: int,
+        batching: bool = True,
     ):
-        super().__init__(gpu_type, machine_id)
+        super().__init__(gpu_type, machine_id, batching)
         self._server_instance = None
         self._is_running = False
         self.timeout = timeout
@@ -90,6 +91,21 @@ class MockClient(Client):
                     future.set_result(response)
                 else:
                     future.set_exception(RuntimeError("Received None response from server"))
+
+    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
+        """Execute a batch of operations via Mock."""
+        if not batch_calls:
+            return
+
+        # Use local execution for mock
+        for call in batch_calls:
+            method_name = call["method_name"]
+            args = call.get("args", ())
+            kwargs = call.get("kwargs", {})
+            
+            # Get the implementation method
+            impl_method = getattr(self, f"_{method_name}_impl")
+            impl_method(*args, **kwargs)
 
     # Tensor management methods
     def _create_empty_tensor_impl(
@@ -186,17 +202,10 @@ class MockClient(Client):
         tensor.set_(untyped_storage, storage_offset, shape, stride)
         return tensor
 
-    def _get_storage_data_impl(self, tensor_id: int) -> Future[bytes]:
+    def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""
-        future = Future[bytes]()
-
-        # Add future to deque first (atomic append)
-        self._pending_futures.append(future)
-
-        # Then trigger the local call
+        # Trigger the local call - result will be available via resolve_futures
         self._server_instance.get_storage_data.local(tensor_id)
-
-        return future
 
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
@@ -221,18 +230,13 @@ class MockClient(Client):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
-    ) -> Union[Future[List[Dict[str, Any]]], None]:
+    ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         log.info(
             f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}"
         )
 
-        # Create future first if metadata is requested
-        if return_metadata:
-            future = Future[List[Dict[str, Any]]]()
-            self._pending_futures.append(future)
-
-        # Execute using .local()
+        # Execute using .local() - result will be available via resolve_futures
         self._server_instance.execute_aten_operation.local(
             op_name,
             input_tensor_ids,
@@ -243,30 +247,18 @@ class MockClient(Client):
             return_metadata,
         )
 
-        if return_metadata:
-            return future
-        else:
-            return None
-
     # HuggingFace model loading methods
     def _prepare_huggingface_model_impl(
         self,
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
-    ) -> Future[Dict[str, Any]]:
+    ) -> None:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
-        future = Future[Dict[str, Any]]()
-
-        # Add future to deque first (atomic append)
-        self._pending_futures.append(future)
-
-        # Then trigger the local call
+        # Trigger the local call - result will be available via resolve_futures
         self._server_instance.prepare_huggingface_model.local(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
-
-        return future
 
     def _link_model_tensors_impl(
         self,

@@ -16,7 +16,7 @@ import torch
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
-from ..base_client import Client
+from ..base_client import BatchCall, Client
 
 log = get_logger(__name__)
 
@@ -35,8 +35,9 @@ class ModalClient(Client):
         gpu_type: str,
         machine_id: str,
         timeout: int,
+        batching: bool = True,
     ):
-        super().__init__(gpu_type, machine_id)
+        super().__init__(gpu_type, machine_id, batching)
         self._server_instance = None
         self._app_context = None
         self.timeout = timeout
@@ -95,6 +96,14 @@ class ModalClient(Client):
                 else:
                     future.set_exception(RuntimeError("Received None response from server"))
 
+    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
+        """Execute a batch of operations via Modal."""
+        if not batch_calls:
+            return
+
+        # Use spawn for non-blocking execution
+        self._server_instance.execute_batch.spawn(batch_calls)
+
     # Tensor management methods
     def _create_empty_tensor_impl(
         self,
@@ -106,7 +115,7 @@ class ModalClient(Client):
         nbytes: int,
     ) -> None:
         """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
-        self._server_instance.create_empty_tensor.remote(
+        self._server_instance.create_empty_tensor.spawn(
             tensor_id, shape, stride, storage_offset, dtype, nbytes
         )
         log.info(
@@ -122,7 +131,7 @@ class ModalClient(Client):
         offset: int,
     ) -> None:
         """Implementation: Create a tensor view on the remote machine from an existing tensor using as_strided."""
-        self._server_instance.create_tensor_view.remote(
+        self._server_instance.create_tensor_view.spawn(
             new_tensor_id, base_tensor_id, shape, stride, offset
         )
         log.info(f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}")
@@ -138,7 +147,7 @@ class ModalClient(Client):
     ) -> None:
         """Implementation: Update an existing tensor with new data and source metadata."""
         # Call Modal method directly (fire-and-forget)
-        self._server_instance.update_tensor.remote(
+        self._server_instance.update_tensor.spawn(
             tensor_id,
             raw_data,
             source_shape,
@@ -180,29 +189,22 @@ class ModalClient(Client):
         tensor.set_(untyped_storage, storage_offset, shape, stride)
         return tensor
 
-    def _get_storage_data_impl(self, tensor_id: int) -> Future[bytes]:
+    def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""
-        future = Future[bytes]()
-
-        # Add future to deque first (atomic append)
-        self._pending_futures.append(future)
-
-        # Then trigger the remote call
-        self._server_instance.get_storage_data.remote(tensor_id)
-
-        return future
+        # Trigger the remote call - result will be available via resolve_futures
+        self._server_instance.get_storage_data.spawn(tensor_id)
 
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
         if not tensor_ids:
             return
 
-        self._server_instance.remove_tensors.remote(tensor_ids)
+        self._server_instance.remove_tensors.spawn(tensor_ids)
         log.info(f"Removed {len(tensor_ids)} tensors")
 
     def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
-        self._server_instance.resize_storage.remote(tensor_id, nbytes)
+        self._server_instance.resize_storage.spawn(tensor_id, nbytes)
         log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes")
 
     # Operation execution methods
@@ -215,15 +217,10 @@ class ModalClient(Client):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
-    ) -> Union[Future[List[Dict[str, Any]]], None]:
+    ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
-        # Create future first if metadata is requested
-        if return_metadata:
-            future = Future[List[Dict[str, Any]]]()
-            self._pending_futures.append(future)
-
-        # Call Modal method
-        self._server_instance.execute_aten_operation.remote(
+        # Call Modal method - result will be available via resolve_futures
+        self._server_instance.execute_aten_operation.spawn(
             op_name,
             input_tensor_ids,
             output_tensor_ids,
@@ -233,30 +230,18 @@ class ModalClient(Client):
             return_metadata,
         )
 
-        if return_metadata:
-            return future
-        else:
-            return None
-
     # HuggingFace model loading methods
     def _prepare_huggingface_model_impl(
         self,
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
-    ) -> Future[Dict[str, Any]]:
+    ) -> None:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
-        future = Future[Dict[str, Any]]()
-
-        # Add future to deque first (atomic append)
-        self._pending_futures.append(future)
-
-        # Then trigger the remote call
-        self._server_instance.prepare_huggingface_model.remote(
+        # Trigger the remote call - result will be available via resolve_futures
+        self._server_instance.prepare_huggingface_model.spawn(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
-
-        return future
 
     def _link_model_tensors_impl(
         self,
@@ -264,7 +249,7 @@ class ModalClient(Client):
         parameter_names: List[str],
     ) -> None:
         """Implementation: Link local mycelya tensor IDs to remote model parameter tensors."""
-        self._server_instance.link_model_tensors.remote(
+        self._server_instance.link_model_tensors.spawn(
             local_tensor_ids, parameter_names
         )
         log.info(f"Linked {len(local_tensor_ids)} model tensors")
