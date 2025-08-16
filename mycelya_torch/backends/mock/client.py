@@ -37,7 +37,6 @@ class MockClient(Client):
     ):
         super().__init__(gpu_type, machine_id)
         self._server_instance = None
-        self._app_context = None
         self._is_running = False
         self.timeout = timeout
 
@@ -49,10 +48,7 @@ class MockClient(Client):
     def start(self):
         """Start the mock execution environment."""
         if not self._is_running:
-            # Now that queue serialization is fixed, try to start app context like ModalClient
-            self._app_context = self._app.run()
-            self._app_context.__enter__()
-            # Create server instance when app starts
+            # Create server instance directly without app context
             self._server_instance = self._server_class()
             self._is_running = True
 
@@ -61,15 +57,8 @@ class MockClient(Client):
     def stop(self):
         """Stop the mock execution environment."""
         if self._is_running:
-            try:
-                self._app_context.__exit__(None, None, None)
-            except Exception:
-                # Silently ignore cleanup errors during atexit
-                pass
-            finally:
-                self._app_context = None
-                self._server_instance = None
-                self._is_running = False
+            self._server_instance = None
+            self._is_running = False
             log.info(f"Stopped mock client: {self.machine_id}")
 
     def is_running(self) -> bool:
