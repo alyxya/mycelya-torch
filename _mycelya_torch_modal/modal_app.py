@@ -18,19 +18,6 @@ from typing import Any, Dict, List, Tuple, TypedDict
 import modal
 
 
-def _dtype_to_str(dtype) -> str:
-    """Convert torch.dtype to string without 'torch.' prefix."""
-    return str(dtype).replace("torch.", "")
-
-
-class BatchCall(TypedDict):
-    """Structure for a single batched RPC call."""
-
-    method_name: str
-    args: Tuple[Any, ...]
-    kwargs: Dict[str, Any]
-
-
 # Create image with PyTorch, CUDA support, and transformers for HuggingFace models
 image = modal.Image.debian_slim().pip_install(
     "numpy", "torch", "transformers", "huggingface_hub", "safetensors", "accelerate"
@@ -70,6 +57,17 @@ def create_modal_app_for_gpu(
         min_containers=1,
     )
     class PytorchServer:
+        class BatchCall(TypedDict):
+            """Structure for a single batched RPC call."""
+            method_name: str
+            args: Tuple[Any, ...]
+            kwargs: Dict[str, Any]
+
+        @staticmethod
+        def _dtype_to_str(dtype) -> str:
+            """Convert torch.dtype to string without 'torch.' prefix."""
+            return str(dtype).replace("torch.", "")
+
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
@@ -436,7 +434,7 @@ def create_modal_app_for_gpu(
                     if i < len(output_tensor_ids):
                         metadata = {
                             "shape": list(result_tensor.shape),
-                            "dtype": _dtype_to_str(result_tensor.dtype),
+                            "dtype": self._dtype_to_str(result_tensor.dtype),
                             "stride": list(result_tensor.stride()),
                             "storage_offset": result_tensor.storage_offset(),
                             "storage_nelements": result_tensor.untyped_storage().nbytes()
@@ -532,7 +530,7 @@ def create_modal_app_for_gpu(
                 state_dict_metadata[name] = {
                     "shape": list(param.shape),
                     "stride": list(param.stride()),
-                    "dtype": _dtype_to_str(param.dtype),
+                    "dtype": self._dtype_to_str(param.dtype),
                     "storage_offset": param.storage_offset(),
                     "requires_grad": param.requires_grad,
                     # Store actual tensor data for later linking
@@ -546,7 +544,7 @@ def create_modal_app_for_gpu(
                 buffer_metadata[name] = {
                     "shape": list(buffer.shape),
                     "stride": list(buffer.stride()),
-                    "dtype": _dtype_to_str(buffer.dtype),
+                    "dtype": self._dtype_to_str(buffer.dtype),
                     "storage_offset": buffer.storage_offset(),
                     "requires_grad": False,  # Buffers don't require gradients
                     # Store actual tensor data for later linking
@@ -684,7 +682,7 @@ def create_modal_app_for_gpu(
             self._link_model_tensors_impl(local_tensor_ids, parameter_names)
 
         @modal.method()
-        def execute_batch(self, batch_calls: List[BatchCall]):
+        def execute_batch(self, batch_calls: List["PytorchServer.BatchCall"]):
             """
             Execute a batch of RPCs in sequence.
 
