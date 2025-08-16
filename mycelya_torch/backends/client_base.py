@@ -9,7 +9,8 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypedDict
+from concurrent.futures import Future
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple, TypedDict, Union
 
 if TYPE_CHECKING:
     import torch
@@ -45,7 +46,6 @@ class Client(ABC):
         """
         self.gpu_type = gpu_type
         self.machine_id = machine_id
-
 
     @abstractmethod
     def start(self) -> None:
@@ -216,11 +216,11 @@ class Client(ABC):
         )
 
     @abstractmethod
-    def _get_storage_data_impl(self, tensor_id: int) -> bytes:
+    def _get_storage_data_impl(self, tensor_id: int) -> Future[bytes]:
         """Implementation: Get raw storage data by tensor ID."""
         pass
 
-    def get_storage_data(self, tensor_id: int) -> bytes:
+    def get_storage_data(self, tensor_id: int) -> Future[bytes]:
         """
         Get raw storage data by tensor ID.
 
@@ -228,7 +228,7 @@ class Client(ABC):
             tensor_id: The tensor ID to retrieve storage data from
 
         Returns:
-            Raw storage data as bytes
+            Future that resolves to raw storage data as bytes
         """
         if not self.is_running():
             raise RuntimeError(
@@ -293,7 +293,7 @@ class Client(ABC):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Union[Future[List[Dict[str, Any]]], None]:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         pass
 
@@ -306,7 +306,7 @@ class Client(ABC):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Union[Future[List[Dict[str, Any]]], None]:
         """
         Execute an aten operation on the remote machine with input and output tensors.
 
@@ -320,7 +320,7 @@ class Client(ABC):
             return_metadata: If True, return output tensor metadata instead of None
 
         Returns:
-            None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
+            None for normal operations, or Future[List[Dict]] of output tensor metadata if return_metadata=True
         """
         if not self.is_running():
             raise RuntimeError(
@@ -348,7 +348,7 @@ class Client(ABC):
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Future[Dict[str, Any]]:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
         pass
 
@@ -357,7 +357,7 @@ class Client(ABC):
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Future[Dict[str, Any]]:
         """
         Download and prepare a HuggingFace model directly on the remote machine.
 
@@ -371,7 +371,7 @@ class Client(ABC):
             trust_remote_code: Whether to trust remote code for custom models
 
         Returns:
-            Dict containing:
+            Future that resolves to a Dict containing:
             - state_dict_metadata: Dict[str, Dict] mapping parameter names to tensor metadata
             - config: Model configuration dictionary
             - model_type: Model class name string

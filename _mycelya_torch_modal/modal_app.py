@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Tuple, TypedDict
 
 import modal
 
-
 # Create image with PyTorch, CUDA support, and transformers for HuggingFace models
 image = modal.Image.debian_slim().pip_install(
     "numpy", "torch", "transformers", "huggingface_hub", "safetensors", "accelerate"
@@ -59,6 +58,7 @@ def create_modal_app_for_gpu(
     class PytorchServer:
         class BatchCall(TypedDict):
             """Structure for a single batched RPC call."""
+
             method_name: str
             args: Tuple[Any, ...]
             kwargs: Dict[str, Any]
@@ -309,7 +309,6 @@ def create_modal_app_for_gpu(
             )
             temp_storage_tensor.set_(tensor.untyped_storage(), 0, [current_bytes])
             temp_storage_tensor.resize_([nbytes])
-
 
         @modal.method()
         def resize_storage(self, tensor_id: int, nbytes: int):
@@ -661,7 +660,6 @@ def create_modal_app_for_gpu(
 
                 # Link the local tensor ID to the remote tensor in the registry
                 tensor_registry[local_tensor_id] = remote_tensor
-
 
         @modal.method()
         def link_model_tensors(

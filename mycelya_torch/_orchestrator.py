@@ -564,7 +564,7 @@ class Orchestrator:
             self._ensure_tensor_exists_on_client(client, tensor)
 
         # Execute with separated input/output interface
-        result = client.execute_aten_operation(
+        result_future = client.execute_aten_operation(
             op_name,
             input_tensors,
             output_tensors,
@@ -573,6 +573,9 @@ class Orchestrator:
             tensor_mask,
             return_metadata,
         )
+
+        # Get result from future if one was returned
+        result = result_future.result() if result_future is not None else None
 
         # Register tensor-storage mappings for output tensors
         for output_tensor in output_tensors:
@@ -610,11 +613,12 @@ class Orchestrator:
     ) -> dict:
         """Prepare a HuggingFace model on remote machine by device index."""
         client = self._get_validated_client_by_device_index(device_index)
-        return client.prepare_huggingface_model(
+        future = client.prepare_huggingface_model(
             checkpoint=checkpoint,
             torch_dtype=torch_dtype,
             trust_remote_code=trust_remote_code,
         )
+        return future.result()
 
     def ensure_tensor_exists_by_device(
         self, device_index: int, tensor: "torch.Tensor"

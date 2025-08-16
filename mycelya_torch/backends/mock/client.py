@@ -8,7 +8,8 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
-from typing import Any, Dict, List, Optional
+from concurrent.futures import Future
+from typing import Any, Dict, List, Union
 
 import torch
 
@@ -150,7 +151,8 @@ class MockClient(Client):
             CPU tensor reconstructed with specified view
         """
         # Get raw data
-        raw_bytes = self.get_storage_data(tensor_id)
+        raw_bytes_future = self.get_storage_data(tensor_id)
+        raw_bytes = raw_bytes_future.result()
 
         # Convert raw bytes to tensor with specified view
         torch_dtype = getattr(torch, dtype)
@@ -159,8 +161,11 @@ class MockClient(Client):
         tensor.set_(untyped_storage, storage_offset, shape, stride)
         return tensor
 
-    def _get_storage_data_impl(self, tensor_id: int) -> bytes:
+    def _get_storage_data_impl(self, tensor_id: int) -> Future[bytes]:
         """Implementation: Get raw storage data by tensor ID."""
+        # Create a future and set its result immediately
+        future = Future[bytes]()
+
         # Execute using .local() with queue handling to mirror ModalClient exactly
         self._server_instance.get_storage_data.local(tensor_id)
 
@@ -168,7 +173,10 @@ class MockClient(Client):
         if raw_bytes is None:
             raise RuntimeError(f"Failed to retrieve tensor data for tensor {tensor_id}")
 
-        return raw_bytes
+        # Set the result in the future
+        future.set_result(raw_bytes)
+
+        return future
 
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
@@ -193,7 +201,7 @@ class MockClient(Client):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         return_metadata: bool = False,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Union[Future[List[Dict[str, Any]]], None]:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         log.info(
             f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}"
@@ -212,11 +220,10 @@ class MockClient(Client):
 
         if return_metadata:
             result = self._response_queue.get()
-        else:
-            result = None
-
-        if return_metadata:
-            return result
+            # Create a future and set its result immediately
+            future = Future[List[Dict[str, Any]]]()
+            future.set_result(result)
+            return future
         else:
             return None
 
@@ -226,8 +233,11 @@ class MockClient(Client):
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Future[Dict[str, Any]]:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
+        # Create a future and set its result immediately
+        future = Future[Dict[str, Any]]()
+
         # Execute using .local() with queue handling to mirror ModalClient exactly
         self._server_instance.prepare_huggingface_model.local(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
@@ -238,8 +248,11 @@ class MockClient(Client):
         if result is None:
             raise RuntimeError(f"Failed to prepare model {checkpoint}")
 
+        # Set the result in the future
+        future.set_result(result)
+
         log.info(f"Prepared HuggingFace model {checkpoint} (mock)")
-        return result
+        return future
 
     def _link_model_tensors_impl(
         self,
@@ -251,7 +264,6 @@ class MockClient(Client):
             local_tensor_ids, parameter_names
         )
         log.info(f"Linked {len(local_tensor_ids)} model tensors (mock)")
-
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
