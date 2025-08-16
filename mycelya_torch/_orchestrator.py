@@ -725,8 +725,11 @@ class Orchestrator:
             )
             return
 
-        client = self.get_client_by_device_index(device_index)
-        client._remove_tensor_from_storage_mapping(storage_id, tensor_id)
+        # Note: The client._remove_tensor_from_storage_mapping method was removed
+        # in earlier refactors. This method is now a no-op since tensor-storage
+        # mapping is handled at the orchestrator level, not the client level.
+        log.debug(f"Skipping client-side storage mapping removal for storage {storage_id}, tensor {tensor_id}")
+        pass
 
     # Removed batch queue checking - no more batching
 
