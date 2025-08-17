@@ -55,18 +55,16 @@ class RemoteMachine:
 
     Can be used as a context manager for automatic resource cleanup:
 
-        >>> with RemoteMachine(CloudProvider.MODAL, GPUType.T4) as machine:
+        >>> with RemoteMachine("modal", "T4") as machine:
         ...     x = torch.randn(100, 100, device=machine.device())
         ...     result = x @ x.T
         >>> # Machine automatically stopped when exiting context
 
-    Or used with explicit lifecycle management:
+    Or created directly (starts automatically by default):
 
-        >>> machine = RemoteMachine(CloudProvider.MODAL, GPUType.T4)
-        >>> machine.start()
+        >>> machine = RemoteMachine("modal", "T4")
         >>> x = torch.randn(100, 100, device=machine.device())
         >>> result = x @ x.T
-        >>> machine.stop()  # Clean up resources when done
     """
 
     # Class-level tracking of all machine instances
@@ -84,8 +82,8 @@ class RemoteMachine:
         Initialize a remote machine.
 
         Args:
-            provider: The cloud provider (e.g., "modal" or CloudProvider.MODAL)
-            gpu_type: The GPU type (e.g., "A100-40GB" or GPUType.A100_40GB).
+            provider: The cloud provider (e.g., "modal")
+            gpu_type: The GPU type (e.g., "A100-40GB").
                      Required for modal provider, ignored for mock provider.
             timeout: Function timeout in seconds (default: 300)
             start: Whether to start the client immediately (default: True)
