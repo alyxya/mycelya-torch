@@ -203,12 +203,6 @@ class StorageRegistry:
             return False
 
 
-# TensorIdManager class removed - using metadata-based caching instead
-
-
-# TensorIdManager class completely removed - replaced with metadata-based caching
-
-
 # Global instances
 _storage_registry = StorageRegistry()
 
@@ -324,6 +318,3 @@ def validate_cross_device_operation_tensor_ids(tensor_ids: List[int]) -> None:
                 f'"{first_device_name}" and "{current_device_name}". '
                 f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"
             )
-
-
-# Tensor ID management removed - using metadata-based caching instead

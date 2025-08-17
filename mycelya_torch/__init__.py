@@ -256,10 +256,6 @@ def get_metadata_hash(tensor: torch.Tensor) -> int:
     return mycelya_torch._C._get_metadata_hash(tensor)
 
 
-# Monkeypatching code removed - tensor and storage ID functionality
-# has been moved to _utils.py module for cleaner internal API
-
-
 # Define the public API
 __all__ = [
     # Core machine and device classes

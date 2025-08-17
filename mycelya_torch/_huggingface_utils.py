@@ -257,9 +257,7 @@ def create_huggingface_model_from_remote(
 
     # Step 4.5: Handle weight tying for parameters not in state_dict_metadata
     log.info("Checking for tied weights that need linking...")
-    _handle_tied_weights(
-        model, state_dict_metadata, {}
-    )  # No storage mapping needed in new architecture
+    _handle_tied_weights(model, state_dict_metadata, {})
 
     # Step 5: Link local storage IDs to remote model parameters
     log.info(
@@ -269,8 +267,7 @@ def create_huggingface_model_from_remote(
         device_index, local_storage_ids, parameter_names
     )
 
-    # No more batching - operations are immediate
-    log.info("✅ All storage operations and tensor linking completed (no batching)")
+    log.info("✅ All storage operations and tensor linking completed")
 
     log.info("✅ Model tensor linking completed successfully")
 

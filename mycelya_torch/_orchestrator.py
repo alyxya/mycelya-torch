@@ -22,7 +22,6 @@ log = get_logger(__name__)
 
 
 # Exception handling is done through standard RuntimeError
-# Custom exceptions removed as they were not used elsewhere in the codebase
 
 
 class Orchestrator:
@@ -112,8 +111,6 @@ class Orchestrator:
         """Check if a client is running for a device index."""
         client = self._clients.get(device_index)
         return client is not None and client.is_running()
-
-    # Removed all background thread management - no more batching
 
     def _invalidate_cache_for_storage(self, storage_id: int) -> None:
         """Invalidate cache entry for a specific storage ID.
@@ -448,7 +445,6 @@ class Orchestrator:
         self._invalidate_cache_for_storage(storage_id)
         log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
 
-    # New tensor-based methods for the refactored architecture
     def update_tensor(
         self,
         tensor_id: int,
@@ -734,15 +730,9 @@ class Orchestrator:
             )
             return
 
-        # Note: The client._remove_tensor_from_storage_mapping method was removed
-        # in earlier refactors. This method is now a no-op since tensor-storage
-        # mapping is handled at the orchestrator level, not the client level.
         log.debug(
             f"Skipping client-side storage mapping removal for storage {storage_id}, tensor {tensor_id}"
         )
-        pass
-
-    # Removed batch queue checking - no more batching
 
     def _background_loop(self):
         """Background thread for batch execution and future resolution.

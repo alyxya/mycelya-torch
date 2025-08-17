@@ -90,7 +90,7 @@ def args_to_tensors_with_ids_and_mask(
         if isinstance(obj, torch.Tensor):
             tensor_list.append(obj)
             tensor_mask.append(True)
-            return get_tensor_id(obj)  # Replace with tensor ID directly
+            return get_tensor_id(obj)
         tensor_mask.append(False)
         return obj
 
@@ -641,7 +641,7 @@ def _copy_from(
             op = torch.ops.aten.copy_.default
             result = _remote_kernel_fallback(op, to_, from_)
         else:
-            # Different remote devices - blocked (TODO: support in future)
+            # Different remote devices - not supported
             from mycelya_torch._device import get_device_registry
 
             device_registry = get_device_registry()
