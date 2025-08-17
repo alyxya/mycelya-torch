@@ -8,8 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from concurrent.futures import Future
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 import torch
 
@@ -94,7 +93,9 @@ class ModalClient(Client):
                 if response is not None:
                     future.set_result(response)
                 else:
-                    future.set_exception(RuntimeError("Received None response from server"))
+                    future.set_exception(
+                        RuntimeError("Received None response from server")
+                    )
 
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """Execute a batch of operations via Modal."""

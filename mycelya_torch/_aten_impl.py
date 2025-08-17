@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 import torch
 
 from ._logging import get_logger
+from ._utils import get_tensor_id
 
 log = get_logger(__name__)
 
@@ -89,7 +90,7 @@ def args_to_tensors_with_ids_and_mask(
         if isinstance(obj, torch.Tensor):
             tensor_list.append(obj)
             tensor_mask.append(True)
-            return obj._get_tensor_id()  # Replace with tensor ID directly
+            return get_tensor_id(obj)  # Replace with tensor ID directly
         tensor_mask.append(False)
         return obj
 
@@ -213,7 +214,7 @@ def _create_output_tensors(
             tensor = original_tensors[meta_output]
             output_tensors.append(tensor)
             # Include tensor ID for reused tensors to track all modifications
-            tensor_id = tensor._get_tensor_id()
+            tensor_id = get_tensor_id(tensor)
             output_tensor_ids.append(tensor_id)
 
             # Ensure tensor ID is registered with device tracking system
@@ -238,7 +239,7 @@ def _create_output_tensors(
 
             output_tensors.append(new_tensor)
             # Get tensor ID from the newly created tensor
-            tensor_id = str(new_tensor._get_tensor_id())
+            tensor_id = str(get_tensor_id(new_tensor))
             output_tensor_ids.append(tensor_id)
 
             # Register tensor ID with device tracking system
@@ -366,7 +367,7 @@ def _execute_with_dynamic_outputs(
         log.debug(f"Operation {op_name} has 'out' kwarg, using existing tensor")
         output_tensor = out_tensor
         # For out tensors, we need to get the tensor ID for remote execution
-        output_tensor_ids = [output_tensor._get_tensor_id()]
+        output_tensor_ids = [get_tensor_id(output_tensor)]
 
         # Ensure tensor ID is registered with device tracking system
         from ._storage import register_tensor_id
@@ -380,7 +381,7 @@ def _execute_with_dynamic_outputs(
 
         # Step 2: Create minimal placeholder tensor with 0 bytes
         output_tensor = torch.empty(0, dtype=output_dtype, device=remote_device)
-        output_tensor_ids = [output_tensor._get_tensor_id()]
+        output_tensor_ids = [get_tensor_id(output_tensor)]
 
         # Register tensor ID with device tracking system
         from ._storage import register_tensor_id
@@ -538,7 +539,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         )
 
     # Get tensor data using orchestrator for centralized client management
-    tensor_id = from_._get_tensor_id()
+    tensor_id = get_tensor_id(from_)
     log.info(f"Copying tensor ID {tensor_id} from remote to CPU")
 
     # Use orchestrator to get tensor data with automatic client routing
@@ -578,7 +579,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         )
 
     # Use tensor-based approach with tensor IDs
-    tensor_id = to_._get_tensor_id()
+    tensor_id = get_tensor_id(to_)
     log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
 
     # Pass CPU tensor directly to orchestrator without conversion
@@ -710,7 +711,7 @@ def _local_scalar_dense(self: torch.Tensor):
         )
 
     # Get tensor ID and tensor data using tensor-based approach
-    tensor_id = self._get_tensor_id()
+    tensor_id = get_tensor_id(self)
 
     # Get tensor data for this scalar using orchestrator
     from ._orchestrator import orchestrator

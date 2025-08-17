@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import torch
 
 from ._logging import get_logger
+from ._utils import get_storage_id, get_tensor_id
 from .backends.base_client import Client
 
 log = get_logger(__name__)
@@ -52,8 +53,7 @@ class Orchestrator:
         # Background thread for periodic maintenance tasks
         self._stop_event = threading.Event()
         self._background_thread = threading.Thread(
-            target=self._background_loop,
-            daemon=True
+            target=self._background_loop, daemon=True
         )
         self._background_thread.start()
 
@@ -418,7 +418,7 @@ class Orchestrator:
         # Try to establish mapping and cache for future requests
         try:
             # Extract storage_id from reconstructed tensor and cache/map it
-            actual_storage_id = result._get_storage_id()
+            actual_storage_id = get_storage_id(result)
             raw_bytes = result.numpy().tobytes()
             self._cache_storage_data(actual_storage_id, raw_bytes)
             self._register_tensor_storage_mapping(tensor_id, actual_storage_id)
@@ -532,11 +532,11 @@ class Orchestrator:
         log.info(
             f"🎯 ORCHESTRATOR: Executing {op_name} with {len(input_tensors)} input tensors and {len(output_tensors)} output tensors"
         )
-        log.debug(f"Input tensor IDs: {[t._get_tensor_id() for t in input_tensors]}")
-        log.debug(f"Output tensor IDs: {[t._get_tensor_id() for t in output_tensors]}")
+        log.debug(f"Input tensor IDs: {[get_tensor_id(t) for t in input_tensors]}")
+        log.debug(f"Output tensor IDs: {[get_tensor_id(t) for t in output_tensors]}")
 
         # Extract tensor IDs for validation and cache management
-        output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
+        output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
 
         # Validate that we have input tensors
         if not input_tensors:
@@ -545,10 +545,10 @@ class Orchestrator:
         # Collect all tensor IDs for cross-device validation
         all_tensor_ids = []
         for tensor in input_tensors:
-            tensor_id = tensor._get_tensor_id()
+            tensor_id = get_tensor_id(tensor)
             all_tensor_ids.append(tensor_id)
         for tensor in output_tensors:
-            tensor_id = tensor._get_tensor_id()
+            tensor_id = get_tensor_id(tensor)
             all_tensor_ids.append(tensor_id)
 
         # Validate all tensor IDs are on the same device
@@ -562,13 +562,13 @@ class Orchestrator:
         # to maintain sync between orchestrator mapping and server tensor registry
 
         # Get the client using the first input tensor's tensor ID
-        tensor_id = input_tensors[0]._get_tensor_id()
+        tensor_id = get_tensor_id(input_tensors[0])
         client = self._get_client_for_tensor_id(tensor_id)
 
         # Ensure all input tensors exist on remote before execution
         log.debug(f"Ensuring {len(input_tensors)} input tensors exist on client")
         for tensor in input_tensors:
-            tensor_id = tensor._get_tensor_id()
+            tensor_id = get_tensor_id(tensor)
             log.debug(f"Ensuring tensor {tensor_id} exists on client")
             self._ensure_tensor_exists_on_client(client, tensor)
 
@@ -589,8 +589,8 @@ class Orchestrator:
         # Register tensor-storage mappings for output tensors
         for output_tensor in output_tensors:
             try:
-                tensor_id = output_tensor._get_tensor_id()
-                storage_id = output_tensor._get_storage_id()
+                tensor_id = get_tensor_id(output_tensor)
+                storage_id = get_storage_id(output_tensor)
                 # Register mapping if not already known
                 existing_storage = self._get_storage_id_for_tensor(tensor_id)
                 if existing_storage != storage_id:
@@ -644,8 +644,8 @@ class Orchestrator:
         - If storage ID exists but not tensor ID, call create_tensor_view
         - Otherwise the tensor already exists
         """
-        tensor_id = tensor._get_tensor_id()
-        storage_id = tensor._get_storage_id()
+        tensor_id = get_tensor_id(tensor)
+        storage_id = get_storage_id(tensor)
 
         log.debug(
             f"Ensuring tensor {tensor_id} with storage {storage_id} exists on client"
@@ -737,7 +737,9 @@ class Orchestrator:
         # Note: The client._remove_tensor_from_storage_mapping method was removed
         # in earlier refactors. This method is now a no-op since tensor-storage
         # mapping is handled at the orchestrator level, not the client level.
-        log.debug(f"Skipping client-side storage mapping removal for storage {storage_id}, tensor {tensor_id}")
+        log.debug(
+            f"Skipping client-side storage mapping removal for storage {storage_id}, tensor {tensor_id}"
+        )
         pass
 
     # Removed batch queue checking - no more batching
@@ -746,7 +748,7 @@ class Orchestrator:
         """Background thread for batch execution and future resolution.
 
         Currently handles:
-        - Executing pending batch operations for all clients  
+        - Executing pending batch operations for all clients
         - Resolving pending futures for all clients
 
         Future tasks may include:
@@ -760,7 +762,7 @@ class Orchestrator:
                     try:
                         # Execute any pending batched operations first
                         client.execute_batch()
-                        
+
                         # Then resolve any pending futures
                         client.resolve_futures()
                     except Exception as e:
@@ -768,6 +770,7 @@ class Orchestrator:
 
             # Sleep for 0.1 seconds (100ms)
             self._stop_event.wait(0.1)
+
 
 # Global orchestrator instance (Modal provider implementation)
 orchestrator = Orchestrator()

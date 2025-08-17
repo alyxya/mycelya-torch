@@ -16,6 +16,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple, TypedDict, Union
 if TYPE_CHECKING:
     import torch
 
+# Import utility functions
+from .._utils import get_tensor_id
+
 
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call.
@@ -168,11 +171,13 @@ class Client(ABC):
 
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="create_empty_tensor",
-                args=(tensor_id, shape, stride, storage_offset, dtype, nbytes),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="create_empty_tensor",
+                    args=(tensor_id, shape, stride, storage_offset, dtype, nbytes),
+                    kwargs={},
+                )
+            )
         else:
             # Direct execution (existing behavior)
             self._create_empty_tensor_impl(
@@ -219,11 +224,13 @@ class Client(ABC):
 
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="create_tensor_view",
-                args=(new_tensor_id, base_tensor_id, shape, stride, offset),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="create_tensor_view",
+                    args=(new_tensor_id, base_tensor_id, shape, stride, offset),
+                    kwargs={},
+                )
+            )
         else:
             # Direct execution (existing behavior)
             self._create_tensor_view_impl(
@@ -273,11 +280,20 @@ class Client(ABC):
 
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="update_tensor",
-                args=(tensor_id, raw_data, source_shape, source_stride, source_storage_offset, source_dtype),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="update_tensor",
+                    args=(
+                        tensor_id,
+                        raw_data,
+                        source_shape,
+                        source_stride,
+                        source_storage_offset,
+                        source_dtype,
+                    ),
+                    kwargs={},
+                )
+            )
         else:
             # Direct execution (existing behavior)
             self._update_tensor_impl(
@@ -313,18 +329,16 @@ class Client(ABC):
         future = Future()
         # Add future to pending futures queue
         self._pending_futures.append(future)
-        
+
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="get_storage_data",
-                args=(tensor_id,),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(method_name="get_storage_data", args=(tensor_id,), kwargs={})
+            )
         else:
             # Direct execution (existing behavior)
             self._get_storage_data_impl(tensor_id)
-            
+
         return future
 
     @abstractmethod
@@ -349,11 +363,9 @@ class Client(ABC):
 
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="remove_tensors",
-                args=(tensor_ids,),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(method_name="remove_tensors", args=(tensor_ids,), kwargs={})
+            )
         else:
             # Direct execution (existing behavior)
             self._remove_tensors_impl(tensor_ids)
@@ -381,11 +393,11 @@ class Client(ABC):
 
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="resize_storage",
-                args=(tensor_id, nbytes),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="resize_storage", args=(tensor_id, nbytes), kwargs={}
+                )
+            )
         else:
             # Direct execution (existing behavior)
             self._resize_storage_impl(tensor_id, nbytes)
@@ -436,8 +448,8 @@ class Client(ABC):
             )
 
         # Extract tensor IDs from tensors
-        input_tensor_ids = [tensor._get_tensor_id() for tensor in input_tensors]
-        output_tensor_ids = [tensor._get_tensor_id() for tensor in output_tensors]
+        input_tensor_ids = [get_tensor_id(tensor) for tensor in input_tensors]
+        output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
 
         # Create future if metadata is requested
         future = None
@@ -447,11 +459,21 @@ class Client(ABC):
 
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="execute_aten_operation",
-                args=(op_name, input_tensor_ids, output_tensor_ids, args, kwargs, tensor_mask, return_metadata),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="execute_aten_operation",
+                    args=(
+                        op_name,
+                        input_tensor_ids,
+                        output_tensor_ids,
+                        args,
+                        kwargs,
+                        tensor_mask,
+                        return_metadata,
+                    ),
+                    kwargs={},
+                )
+            )
         else:
             # Direct execution (existing behavior)
             self._execute_aten_operation_impl(
@@ -463,7 +485,7 @@ class Client(ABC):
                 tensor_mask,
                 return_metadata,
             )
-            
+
         return future
 
     # HuggingFace model loading methods
@@ -510,20 +532,22 @@ class Client(ABC):
         future = Future()
         # Add future to pending futures queue
         self._pending_futures.append(future)
-        
+
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="prepare_huggingface_model",
-                args=(checkpoint, torch_dtype, trust_remote_code),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="prepare_huggingface_model",
+                    args=(checkpoint, torch_dtype, trust_remote_code),
+                    kwargs={},
+                )
+            )
         else:
             # Direct execution (existing behavior)
             self._prepare_huggingface_model_impl(
                 checkpoint, torch_dtype, trust_remote_code
             )
-            
+
         return future
 
     @abstractmethod
@@ -555,7 +579,7 @@ class Client(ABC):
 
         Example:
             # After model preparation and local tensor creation
-            local_tensor_ids = [tensor._get_tensor_id() for tensor in model.parameters()]
+            local_tensor_ids = [get_tensor_id(tensor) for tensor in model.parameters()]
             parameter_names = ["model.embed_tokens.weight", "layer.0.weight", ...]
             client.link_model_tensors(local_tensor_ids, parameter_names)
         """
@@ -566,11 +590,13 @@ class Client(ABC):
 
         if self.batching:
             # Add to batch
-            self._batch_calls.append(BatchCall(
-                method_name="link_model_tensors",
-                args=(local_tensor_ids, parameter_names),
-                kwargs={}
-            ))
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="link_model_tensors",
+                    args=(local_tensor_ids, parameter_names),
+                    kwargs={},
+                )
+            )
         else:
             # Direct execution (existing behavior)
             self._link_model_tensors_impl(local_tensor_ids, parameter_names)

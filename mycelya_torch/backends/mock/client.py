@@ -8,8 +8,7 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
-from concurrent.futures import Future
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 import torch
 
@@ -90,7 +89,9 @@ class MockClient(Client):
                 if response is not None:
                     future.set_result(response)
                 else:
-                    future.set_exception(RuntimeError("Received None response from server"))
+                    future.set_exception(
+                        RuntimeError("Received None response from server")
+                    )
 
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """Execute a batch of operations via Mock."""
@@ -102,7 +103,7 @@ class MockClient(Client):
             method_name = call["method_name"]
             args = call.get("args", ())
             kwargs = call.get("kwargs", {})
-            
+
             # Get the implementation method
             impl_method = getattr(self, f"_{method_name}_impl")
             impl_method(*args, **kwargs)
