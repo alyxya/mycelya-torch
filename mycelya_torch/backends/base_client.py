@@ -575,16 +575,6 @@ class Client(ABC):
             # Direct execution (existing behavior)
             self._link_model_tensors_impl(local_tensor_ids, parameter_names)
 
-    # Context manager methods (optional to override, but provide default behavior)
-    def __enter__(self):
-        """Context manager entry - starts the machine."""
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - stops the machine."""
-        self.stop()
-
     @abstractmethod
     def __repr__(self) -> str:
         """

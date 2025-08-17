@@ -59,6 +59,14 @@ class RemoteMachine:
         ...     x = torch.randn(100, 100, device=machine.device())
         ...     result = x @ x.T
         >>> # Machine automatically stopped when exiting context
+
+    Or used with explicit lifecycle management:
+
+        >>> machine = RemoteMachine(CloudProvider.MODAL, GPUType.T4)
+        >>> machine.start()
+        >>> x = torch.randn(100, 100, device=machine.device())
+        >>> result = x @ x.T
+        >>> machine.stop()  # Clean up resources when done
     """
 
     # Class-level tracking of all machine instances
