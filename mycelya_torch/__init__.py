@@ -202,7 +202,7 @@ torch.utils.rename_privateuse1_backend("mycelya")
 torch._register_device_module("mycelya", _create_module())
 
 # Import ATen implementations to ensure PyTorch registrations are executed
-import mycelya_torch._aten_impl  # noqa: E402
+import mycelya_torch.aten  # noqa: E402
 
 from ._device import (  # noqa: E402
     CloudProvider,

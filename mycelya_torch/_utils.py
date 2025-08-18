@@ -68,3 +68,15 @@ def get_storage_id(tensor: torch.Tensor) -> int:
     # Get storage ID as integer from data pointer
     data_ptr = tensor.untyped_storage().data_ptr()
     return data_ptr  # data_ptr is the storage ID cast to void*
+
+
+def dtype_to_str(dtype: torch.dtype) -> str:
+    """Convert torch.dtype to string without 'torch.' prefix.
+
+    Args:
+        dtype: PyTorch dtype (e.g., torch.float32)
+
+    Returns:
+        String representation without prefix (e.g., "float32")
+    """
+    return str(dtype).replace("torch.", "")

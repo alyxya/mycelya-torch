@@ -663,14 +663,14 @@ class Orchestrator:
                 raise RuntimeError(f"No nbytes found for storage {storage_id}")
 
             # Import helper function for dtype conversion
-            from ._aten_impl import _dtype_to_str
+            from ._utils import dtype_to_str
 
             client.create_empty_tensor(
                 tensor_id=tensor_id,
                 shape=list(tensor.shape),
                 stride=list(tensor.stride()),
                 storage_offset=tensor.storage_offset(),
-                dtype=_dtype_to_str(tensor.dtype),
+                dtype=dtype_to_str(tensor.dtype),
                 nbytes=nbytes,
             )
             # Register the mapping in orchestrator
