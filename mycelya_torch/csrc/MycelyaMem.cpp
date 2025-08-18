@@ -9,6 +9,7 @@
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <ATen/ops/as_strided_cpu_dispatch.h>
 #include <ATen/ops/set_cpu_dispatch.h>
+#include <ATen/InferSize.h>
 #include <c10/core/Allocator.h>
 #include <iomanip>
 #include <sstream>
@@ -172,8 +173,24 @@ at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
   int64_t offset = storage_offset.value_or(0);
   auto* impl = result.unsafeGetTensorImpl();
   impl->set_sizes_and_strides(size, stride, offset);
-  
   return result;
+}
+
+// C++ implementation of view for efficient view operations  
+at::Tensor view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "view_mycelya expects a mycelya tensor");
+
+  // Use PyTorch's built-in inference and stride computation (same as native impl)
+  at::DimVector inferred_size = at::infer_size_dv(size, self.numel());
+  auto stride = at::detail::computeStride(self.sizes(), self.strides(), inferred_size);
+  TORCH_CHECK(
+      stride.has_value(),
+      "view size is not compatible with input tensor's size and stride "
+      "(at least one dimension spans across two contiguous subspaces). Use .reshape(...) instead.");
+  
+  // Use as_strided for the actual view creation (same as native impl)
+  return as_strided_mycelya(self, inferred_size, *stride, self.storage_offset());
 }
 
 // C++ implementation of set_ for tensor metadata operations
@@ -188,7 +205,6 @@ at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
   auto* impl = result.unsafeGetTensorImpl();
   impl->set_storage_and_dtype(storage, result.dtype());
   impl->set_sizes_and_strides(size, stride, storage_offset);
-  
   return result;
 }
 
@@ -245,9 +261,8 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("empty.memory_format", empty_mycelya);
   m.impl("empty_strided", empty_strided_mycelya);
 
-  // Register as_strided and set_ like pytorch-openreg-2
-  // All other operations (transpose, squeeze, unsqueeze, view) go through
-  // Python fallback
+  // Register view operations in C++ for better performance
+  m.impl("view", view_mycelya);
   m.impl("as_strided", as_strided_mycelya);
   m.impl("set_.source_Storage_storage_offset", set_mycelya);
 

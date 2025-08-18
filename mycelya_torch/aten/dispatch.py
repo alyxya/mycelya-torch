@@ -31,6 +31,8 @@ def _execute_aten_operation(
             "Use tensor.repeat() or other alternatives instead."
         )
 
+    # Note: aten::view is now handled directly in C++ (view_mycelya) and won't reach this fallback
+
     # Step 1: Check if operation requires dynamic output handling
     has_static_output = _has_static_output_shape(op_name, args, kwargs)
     log.debug(f"🔍 Operation {op_name} has static output shape: {has_static_output}")
@@ -55,6 +57,7 @@ def _remote_kernel_fallback(
     # Check if operation is a view operation using schema alias information
     # View operations alias their input for reading (is_write=False)
     # In-place/out operations also have alias_info but with is_write=True
+    # Note: aten::view is excluded as it's handled directly in C++ (view_mycelya)
     schema = op._schema
     is_view_op = (
         schema.returns
@@ -62,6 +65,7 @@ def _remote_kernel_fallback(
         and hasattr(schema.returns[0], "alias_info")
         and schema.returns[0].alias_info is not None
         and not schema.returns[0].alias_info.is_write
+        and op_name != "aten::view"  # Exclude view - handled in C++
     )
 
     if is_view_op:
