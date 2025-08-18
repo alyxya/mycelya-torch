@@ -739,17 +739,19 @@ def _equal(self: torch.Tensor, other: torch.Tensor) -> bool:
     if self.dtype != other.dtype:
         return False
 
-    # For torch.equal, we'll copy both tensors to CPU and compare locally
-    # This is simpler than modifying the entire remote execution pipeline
-    log.info("📥 Copying tensors to CPU for comparison")
+    # Perform element-wise comparison on remote device, then reduce to scalar
+    log.info("🔄 Executing element-wise comparison on remote device")
 
-    cpu_self = copy_from_device(self)
-    cpu_other = copy_from_device(other)
+    # Do element-wise equality comparison on remote device
+    eq_tensor = torch.eq(self, other)
 
-    # Use PyTorch's native equal on CPU tensors
-    result = torch.equal(cpu_self, cpu_other)
+    # Reduce to single boolean using torch.all() on remote device
+    all_equal_tensor = torch.all(eq_tensor)
 
-    log.info(f"✅ torch.equal completed: {result}")
+    # Get scalar result using .item() which will copy single value to CPU
+    result = all_equal_tensor.item()
+
+    log.info(f"✅ torch.equal completed on remote device: {result}")
     return result
 
 
