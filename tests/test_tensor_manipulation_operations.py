@@ -172,9 +172,6 @@ class TestRepeatAndTileOperations:
         )
 
     @pytest.mark.fast
-    @pytest.mark.skip(
-        reason="PyTorch bug: repeat_interleave with tensor repeats causes incorrect dispatch to single-argument overload"
-    )
     def test_repeat_interleave_with_tensor_repeats(self, shared_devices):
         device = shared_devices["t4"]
 
