@@ -74,9 +74,8 @@ class RemoteMachine:
         self,
         provider: Union[str, CloudProvider],
         gpu_type: Union[str, GPUType, None] = None,
-        timeout: int = 300,
         start: bool = True,
-        batching: bool = True,
+        _batching: bool = True,
     ) -> None:
         """
         Initialize a remote machine.
@@ -85,9 +84,8 @@ class RemoteMachine:
             provider: The cloud provider (e.g., "modal")
             gpu_type: The GPU type (e.g., "A100-40GB").
                      Required for modal provider, ignored for mock provider.
-            timeout: Function timeout in seconds (default: 300)
             start: Whether to start the client immediately (default: True)
-            batching: Whether to enable operation batching (default: True)
+            _batching: Whether to enable operation batching (default: True)
         """
         # Handle string providers
         if isinstance(provider, str):
@@ -124,11 +122,7 @@ class RemoteMachine:
                 if gpu_type is None
                 else (GPUType(gpu_type) if isinstance(gpu_type, str) else gpu_type)
             )
-        self.timeout = timeout
-        self.batching = batching
-
-        # Always use 0 retries
-        self.retries = 0
+        self._batching = _batching
         self.machine_id = self._generate_machine_id()
 
         # Validate GPU type is supported by provider
@@ -194,8 +188,8 @@ class RemoteMachine:
                 client = ModalClient(
                     self.gpu_type.value,
                     self.machine_id,
-                    self.timeout,
-                    self.batching,
+                    300,  # Default timeout in seconds
+                    self._batching,
                 )
             elif self.provider == CloudProvider.MOCK:
                 # Import here to avoid circular imports
@@ -204,8 +198,8 @@ class RemoteMachine:
                 client = MockClient(
                     self.gpu_type.value,
                     self.machine_id,
-                    self.timeout,
-                    self.batching,
+                    300,  # Default timeout in seconds
+                    self._batching,
                 )
             else:
                 raise ValueError(f"Provider {self.provider.value} not implemented yet")
