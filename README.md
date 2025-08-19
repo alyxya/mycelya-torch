@@ -4,7 +4,7 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 
 ## Overview
 
-Mycelya is a PyTorch extension that uses a metadata hash architecture with custom PyTorch integration to run operations on remote cloud GPUs. Each mycelya tensor has a unique hash-based ID accessible via `mycelya_torch.get_metadata_hash(tensor)`, enabling efficient debugging and monitoring.
+Mycelya is a PyTorch extension that uses a metadata hash architecture with custom PyTorch integration to run operations on remote cloud GPUs. Each mycelya tensor has a unique hash-based ID for debugging and monitoring (accessible via internal functions).
 
 **Key Features:**
 - **Metadata hash IDs** - Each tensor has unique hash-based ID via `mycelya_torch.get_metadata_hash(tensor)`
@@ -47,11 +47,12 @@ x = torch.randn(1000, 1000, device=machine.device())
 y = torch.randn(1000, 1000, device=machine.device())
 
 # Each tensor has a unique metadata hash for debugging
-print(f"Tensor x hash: {mycelya_torch.get_metadata_hash(x)}")  # e.g., 14695981039346656037
-print(f"Tensor y hash: {mycelya_torch.get_metadata_hash(y)}")  # e.g., 17823946012847563829
+# (Note: hash access is internal, not part of public API)
+print(f"Tensor x shape: {x.shape}")
+print(f"Tensor y shape: {y.shape}")
 
 result = x @ y  # Matrix multiplication happens on remote A100
-print(f"Result hash: {mycelya_torch.get_metadata_hash(result)}")  # e.g., 9384756281047392847
+print(f"Result shape: {result.shape}")
 
 # Transfer result back when needed
 result_cpu = result.cpu()
@@ -95,8 +96,8 @@ optimizer = torch.optim.Adam(model.parameters())
 for batch_idx, (data, target) in enumerate(dataloader):
     data, target = data.to(device), target.to(device)
     
-    # Debug tensor hashes for monitoring
-    print(f"Batch {batch_idx}: Data hash {mycelya_torch.get_metadata_hash(data)}, Target hash {mycelya_torch.get_metadata_hash(target)}")
+    # Monitor tensor shapes for debugging
+    print(f"Batch {batch_idx}: Data shape {data.shape}, Target shape {target.shape}")
 
     optimizer.zero_grad()
     output = model(data)
@@ -142,9 +143,9 @@ model = mycelya_torch.load_huggingface_model(
     torch_dtype=torch.float16
 )
 
-# All parameters are already on remote GPU with unique hashes
+# All parameters are already on remote GPU
 for name, param in model.named_parameters():
-    print(f"{name}: hash {mycelya_torch.get_metadata_hash(param)}, device {param.device}")
+    print(f"{name}: shape {param.shape}, device {param.device}")
 ```
 
 ### Mock Provider for Development
@@ -157,7 +158,7 @@ device = machine.device()
 # Same API, but executes locally using Modal's .local() calls
 x = torch.randn(100, 100, device=device)
 result = x @ x.T  # Executed locally
-print(f"Local execution result hash: {mycelya_torch.get_metadata_hash(result)}")
+print(f"Local execution result shape: {result.shape}")
 ```
 
 ## Architecture

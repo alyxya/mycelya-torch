@@ -4,7 +4,7 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 
 ## Architecture Overview
 
-- **Metadata Hash System**: Remote tensors have unique metadata-based hash IDs accessible via `mycelya_torch.get_metadata_hash(tensor)`
+- **Metadata Hash System**: Remote tensors have unique metadata-based hash IDs for internal debugging and identification
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns
 - **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution
 - **Multi-GPU Support**: 10 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200)
@@ -59,7 +59,7 @@ To run type checking:
 ## Key Components
 
 ### Core Modules
-- `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration with metadata hash monkey patching
+- `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
 - `mycelya_torch/_orchestrator.py` - Remote execution orchestration with RPC batching integration
 - `mycelya_torch/_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge
 - `mycelya_torch/_device.py` - Device registry management with thread-safe device registration
@@ -153,7 +153,8 @@ optimizer = torch.optim.Adam(model.parameters())
 # Full training loop on remote GPU
 for data, target in dataloader:
     data, target = data.to(machine.device()), target.to(machine.device())
-    print(f"Data tensor hash: {mycelya_torch.get_metadata_hash(data)}")  # Unique metadata hash
+    # Tensors have internal metadata hash IDs for debugging
+    print(f"Data tensor shape: {data.shape}")
     output = model(data)
     loss = criterion(output, target)
     loss.backward()  # Gradients computed remotely
@@ -174,14 +175,14 @@ model = mycelya_torch.load_huggingface_model(
 
 # Model parameters are already on remote GPU
 for name, param in model.named_parameters():
-    print(f"{name}: tensor hash {mycelya_torch.get_metadata_hash(param)}, device {param.device}")
+    print(f"{name}: tensor shape {param.shape}, device {param.device}")
 ```
 
 ## Implementation Details
 
 ### Storage ID System
 - **Sequential incremental storage IDs** (1, 2, 3...) generated for each remote tensor storage
-- **Python API integration**: `mycelya_torch.get_metadata_hash(tensor)` function for accessing tensor metadata hashes
+- **Internal API integration**: Metadata hash computation accessible via internal utility functions
 - **Hash-based identification**: Uses FNV-1a hash of shape/stride/dtype/offset/storage_id
 - **Custom TensorImpl integration**: Metadata hash computation in MycelyaTensorImpl
 - **Zero memory overhead**: Hash computed on-demand without additional allocations
@@ -260,7 +261,7 @@ for name, param in model.named_parameters():
 - **Complete custom tensor stack**: MycelyaTensorImpl, MycelyaStorageImpl, MycelyaAllocator
 - **Metadata hash IDs**: Unique hash-based IDs accessible via `mycelya_torch.get_metadata_hash(tensor)`
 - **pytorch-npu compliance**: Following established integration patterns for production readiness
-- **Python API enhancement**: Monkey patching torch.Tensor with internal methods `_get_tensor_id()` and `_get_storage_id()`
+- **Python API enhancement**: Utility functions for tensor/storage ID access via `_utils.py`
 - **FNV-1a hash algorithm**: Fast, deterministic hash of shape/stride/dtype/offset/storage_id
 - **Zero memory overhead**: Custom implementations maintain existing efficiency
 - **Diagnostic capabilities**: Testing functions to verify custom implementation usage
@@ -318,7 +319,7 @@ for name, param in model.named_parameters():
 
 #### Current Status
 - **Production-ready architecture** with custom PyTorch integration following pytorch-npu patterns
-- **Metadata hash system** with `mycelya_torch.get_metadata_hash(tensor)` function for enhanced debugging
+- **Metadata hash system** with internal hash computation for enhanced debugging
 - **RPC batching optimization** reducing network overhead with background thread processing
 - **Multi-provider support** with Modal (production) and Mock (development) implementations
 - **HuggingFace integration** enabling direct remote model loading and parameter linking
