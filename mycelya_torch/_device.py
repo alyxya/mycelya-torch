@@ -22,7 +22,7 @@ class DeviceRegistry:
     """
 
     def __init__(self) -> None:
-        self._devices: Dict[int, "RemoteMachine"] = {}  # index -> RemoteMachine
+        self._devices: Dict[int, RemoteMachine] = {}  # index -> RemoteMachine
         self._next_index = 0
 
     def register_device(self, machine: "RemoteMachine") -> int:
@@ -76,5 +76,3 @@ _device_registry = DeviceRegistry()
 def get_device_registry() -> DeviceRegistry:
     """Get the global device registry."""
     return _device_registry
-
-
