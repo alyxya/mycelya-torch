@@ -148,7 +148,7 @@ at::Tensor view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
                             self.storage_offset());
 }
 
-// C++ implementation of set_ for tensor metadata operations
+// C++ implementation of set_.source_Storage_storage_offset for tensor metadata operations
 at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
                         int64_t storage_offset, at::IntArrayRef size,
                         at::IntArrayRef stride) {
@@ -160,6 +160,31 @@ at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
   impl->set_storage_and_dtype(storage, result.dtype());
   impl->set_sizes_and_strides(size, stride, storage_offset);
   return result;
+}
+
+// C++ implementation of set_.source_Tensor for tensor aliasing operations
+at::Tensor &set_source_tensor_mycelya(at::Tensor &self, const at::Tensor &source) {
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "set_source_tensor_mycelya expects a mycelya tensor");
+  TORCH_CHECK(source.device().type() == c10::DeviceType::PrivateUse1,
+              "set_source_tensor_mycelya expects a mycelya source tensor");
+
+  // Delegate to the general set_ function with source tensor's metadata
+  return set_mycelya(self, source.storage(), source.storage_offset(), 
+                     source.sizes(), source.strides());
+}
+
+// C++ implementation of set_.source_Storage for storage aliasing operations  
+at::Tensor &set_source_storage_mycelya(at::Tensor &self, at::Storage source) {
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "set_source_storage_mycelya expects a mycelya tensor");
+
+  // Calculate size based on storage bytes and element size
+  size_t element_size = self.dtype().itemsize();
+  int64_t numel = source.nbytes() / element_size;
+  
+  // Delegate to the general set_ function with 1D shape and contiguous stride
+  return set_mycelya(self, source, 0, {numel}, {1});
 }
 
 // C++ implementation of resize_ that explicitly calls storage resize hooks
@@ -217,6 +242,10 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // Register view operations in C++ for better performance
   m.impl("view", view_mycelya);
   m.impl("as_strided", as_strided_mycelya);
+  
+  // Register set_ operations in C++ following OpenReg pattern
+  m.impl("set_.source_Tensor", set_source_tensor_mycelya);
+  m.impl("set_.source_Storage", set_source_storage_mycelya);
   m.impl("set_.source_Storage_storage_offset", set_mycelya);
 
   // Register resize_ following OpenReg pattern - uses default implementation
