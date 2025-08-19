@@ -8,9 +8,10 @@ This module provides the DeviceRegistry for managing RemoteMachine instances
 and their device indices for PyTorch integration.
 """
 
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
-from ._machine import CloudProvider, GPUType, RemoteMachine
+if TYPE_CHECKING:
+    from ._machine import RemoteMachine
 
 
 class DeviceRegistry:
@@ -21,10 +22,10 @@ class DeviceRegistry:
     """
 
     def __init__(self) -> None:
-        self._devices: Dict[int, RemoteMachine] = {}  # index -> RemoteMachine
+        self._devices: Dict[int, "RemoteMachine"] = {}  # index -> RemoteMachine
         self._next_index = 0
 
-    def register_device(self, machine: RemoteMachine) -> int:
+    def register_device(self, machine: "RemoteMachine") -> int:
         """
         Register a device and return its index.
 
@@ -48,18 +49,18 @@ class DeviceRegistry:
 
         return index
 
-    def get_device_by_index(self, index: int) -> Optional[RemoteMachine]:
+    def get_device_by_index(self, index: int) -> Optional["RemoteMachine"]:
         """Get device by its index."""
         return self._devices.get(index)
 
-    def get_device_index(self, machine: RemoteMachine) -> Optional[int]:
+    def get_device_index(self, machine: "RemoteMachine") -> Optional[int]:
         """Get the index of a machine."""
         for index, existing_machine in self._devices.items():
             if existing_machine is machine:
                 return index
         return None
 
-    def get_all_machines(self) -> list[RemoteMachine]:
+    def get_all_machines(self) -> list["RemoteMachine"]:
         """Get a list of all registered machines."""
         return list(self._devices.values())
 
@@ -77,10 +78,3 @@ def get_device_registry() -> DeviceRegistry:
     return _device_registry
 
 
-# Public API for this module
-__all__ = [
-    # Core classes and enums
-    "CloudProvider",
-    "GPUType",
-    "RemoteMachine",
-]
