@@ -139,11 +139,5 @@ bool MycelyaTensorImpl::was_accessed_via_custom_impl() const {
   return accessed_via_custom_impl_;
 }
 
-// Factory functions
-at::Tensor make_mycelya_tensor_with_custom_impl(
-    const c10::Storage& storage, const caffe2::TypeMeta& data_type) {
-  // Create tensor using the custom TensorImpl, following pytorch-npu pattern
-  return at::detail::make_tensor<MycelyaTensorImpl>(storage, data_type);
-}
 
 }  // namespace mycelya

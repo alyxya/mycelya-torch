@@ -292,7 +292,7 @@ for name, param in model.named_parameters():
 - **Dual tensor metadata support**: Storage operations now support source + target metadata for partial updates
 - **Client interface redesign**: get_storage_data() returns raw bytes, update_storage() uses dual metadata
 - **Performance improvements**: Reduced serialization overhead in data transfer operations
-- **Maintained backward compatibility**: Deprecated methods preserved with warnings
+- **Eliminated deprecated methods**: Cleaned up legacy interfaces
 
 #### Linting Cleanup (2025-07-22)
 - Fixed 22 out of 26 ruff linting errors
@@ -313,7 +313,7 @@ for name, param in model.named_parameters():
 - **Dependency Injection**: Added ServiceContainer for managing service dependencies and reducing circular imports
 - **Provider Standardization**: Enhanced client interface with simplified, focused parameters (lazy_allocation for storage)
 - **Clean Boundaries**: Established early conversion boundary where tensors become metadata at PyTorch integration layer
-- **Eliminated Technical Debt**: Removed deprecated fields, circular import workarounds, and large conditional logic blocks
+- **Eliminated Technical Debt**: Removed unused fields, circular import workarounds, and large conditional logic blocks
 - **Simplified Architecture**: Removed over-engineered ConnectionPoolManager in favor of direct machine.get_client() calls
 - **Simplified Error Handling**: Removed custom exception hierarchy in favor of descriptive RuntimeError messages
 

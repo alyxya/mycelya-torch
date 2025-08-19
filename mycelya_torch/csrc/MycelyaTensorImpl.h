@@ -43,8 +43,5 @@ class MycelyaTensorImpl : public c10::TensorImpl {
   mutable bool accessed_via_custom_impl_ = false;
 };
 
-// Factory function to create tensors with custom MycelyaTensorImpl
-at::Tensor make_mycelya_tensor_with_custom_impl(
-    const c10::Storage& storage, const caffe2::TypeMeta& data_type);
 
 }  // namespace mycelya

@@ -145,9 +145,7 @@ class StorageRegistry:
                 return
 
             # Get all tensor IDs associated with this storage using orchestrator
-            tensor_ids = orchestrator.get_tensor_ids_for_storage_by_device(
-                device_idx, storage_id
-            )
+            tensor_ids = orchestrator.get_tensor_ids_for_storage(storage_id)
 
             if tensor_ids:
                 log.info(

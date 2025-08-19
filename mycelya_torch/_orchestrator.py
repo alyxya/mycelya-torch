@@ -245,13 +245,10 @@ class Orchestrator:
             return next(iter(tensor_set))  # Return any tensor ID from the set
         return None
 
-    def get_tensor_ids_for_storage_by_device(
-        self, device_index: int, storage_id: int
-    ) -> List[int]:
-        """Get all tensor IDs associated with a storage ID by device index.
+    def get_tensor_ids_for_storage(self, storage_id: int) -> List[int]:
+        """Get all tensor IDs associated with a storage ID.
 
         Args:
-            device_index: Device index (currently not used, maintained for compatibility)
             storage_id: The storage ID to look up
 
         Returns:

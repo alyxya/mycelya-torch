@@ -38,10 +38,5 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
 // Utility functions for storage ID management
 bool validate_device_index(c10::DeviceIndex device_index);
 
-// Custom TensorImpl factory functions for optional integration
-// These can be used to create tensors with custom MycelyaTensorImpl
-// while preserving backward compatibility with existing tensor creation
-at::Tensor make_mycelya_tensor_with_custom_impl(
-    const c10::Storage& storage, const caffe2::TypeMeta& data_type);
 
 }  // namespace mycelya
