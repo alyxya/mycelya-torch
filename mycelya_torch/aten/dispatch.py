@@ -8,7 +8,6 @@ import torch
 from .._logging import get_logger
 from .meta import _execute_with_dynamic_outputs, _execute_with_static_outputs
 from .utils import _has_static_output_shape, _validate_cross_device_operation
-from .views import _execute_view_operation
 
 log = get_logger(__name__)
 
@@ -54,21 +53,6 @@ def _remote_kernel_fallback(
     # Validate cross-device operations upfront and get the remote device
     remote_device = _validate_cross_device_operation(op_name, args, kwargs)
 
-    # Check if operation is a view operation using schema alias information
-    # View operations alias their input for reading (is_write=False)
-    # In-place/out operations also have alias_info but with is_write=True
-    # Note: aten::view is excluded as it's handled directly in C++ (view_mycelya)
-    schema = op._schema
-    is_view_op = (
-        schema.returns
-        and len(schema.returns) > 0
-        and hasattr(schema.returns[0], "alias_info")
-        and schema.returns[0].alias_info is not None
-        and not schema.returns[0].alias_info.is_write
-        and op_name != "aten::view"  # Exclude view - handled in C++
-    )
-
-    if is_view_op:
-        return _execute_view_operation(op, *args, **kwargs)
-    else:
-        return _execute_aten_operation(op, args, kwargs, remote_device)
+    # All operations go through standard aten dispatch
+    # View operations are now handled by PyTorch's built-in mechanisms
+    return _execute_aten_operation(op, args, kwargs, remote_device)
