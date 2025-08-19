@@ -60,19 +60,29 @@ To run type checking:
 
 ### Core Modules
 - `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration with metadata hash monkey patching
-- `mycelya_torch/_aten_impl.py` - ATen operation dispatch system with meta tensor inference and view handling
 - `mycelya_torch/_orchestrator.py` - Remote execution orchestration with RPC batching integration
 - `mycelya_torch/_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge
 - `mycelya_torch/_device.py` - Device registry management with thread-safe device registration
 - `mycelya_torch/_machine.py` - RemoteMachine abstraction supporting Modal and Mock providers
+
+### ATen Operation System
+- `mycelya_torch/aten/__init__.py` - PyTorch library registrations for ATen operations
+- `mycelya_torch/aten/dispatch.py` - Main operation dispatch with fallback kernel and meta tensor inference
+- `mycelya_torch/aten/copy.py` - Copy and transfer operations between devices
+- `mycelya_torch/aten/meta.py` - Meta tensor inference and shape computation
+- `mycelya_torch/aten/scalar.py` - Scalar operations and local execution
+- `mycelya_torch/aten/utils.py` - Utilities for operation handling and view management
 
 ### Utility and Support Modules
 - `mycelya_torch/_storage.py` - Integer-based storage ID system with thread-safe generation and cross-device validation
 - `mycelya_torch/_huggingface_utils.py` - Model loading and tensor linking utilities for HuggingFace models
 - `mycelya_torch/_logging.py` - Centralized logging configuration with hierarchical loggers
 
-### Simple Operation Dispatch
-- Direct conditional logic in `_aten_impl.py` - Simple if/elif dispatch without complex patterns
+### Modular Operation Dispatch
+- **Organized ATen handlers** in dedicated `aten/` directory with clear separation of concerns
+- **Fallback kernel dispatch** in `aten/dispatch.py` with comprehensive operation coverage
+- **Specialized operation handlers** for copy, meta, scalar, and utility operations
+- **Clean PyTorch integration** with proper library registration and backend hooks
 
 ### Provider Interface
 - `mycelya_torch/backends/base_client.py` - Standardized provider interface with caching and RPC batching support
@@ -204,6 +214,9 @@ for name, param in model.named_parameters():
 - Changing development commands (test, lint, typecheck)
 - Making breaking changes to the public API
 - Adding new important implementation details
+- Reorganizing code structure or ATen operation handling
+- Major C++ implementation changes or performance optimizations
+- Updates to build system or development workflows
 
 ### Development Guidelines
 
@@ -226,11 +239,14 @@ for name, param in model.named_parameters():
 - Integrate with centralized logging system
 
 #### Code Quality Standards
-- **Use ruff for linting and formatting**
-- **Run minimal regression tests on every commit**
-- **Follow existing patterns** for new functionality
-- **Comprehensive error handling** with clear error messages
-- **Thorough testing** for all new features
+- **Use ruff for linting and formatting** with line length 88 and comprehensive rule selection
+- **Run minimal regression tests on every commit** with target runtime <30 seconds
+- **Follow existing patterns** for new functionality, especially in ATen operation handling
+- **Comprehensive error handling** with clear error messages and proper error propagation
+- **Thorough testing** for all new features with appropriate pytest markers
+- **Google C++ style** for all C++ source files with consistent formatting
+- **Modular organization** following the established `aten/` directory structure
+- **Clean separation of concerns** between C++ and Python implementations
 
 #### Testing Strategy
 - **Critical regression tests**: 20 essential tests covering core functionality (~30 seconds)
@@ -333,4 +349,15 @@ for name, param in model.named_parameters():
 - **Code Quality**: All ruff linting issues resolved, maintaining zero technical debt
 - **Architecture Stability**: Recent refactoring focused on naming and organization without functional changes
 
-Last updated: 2025-08-16
+#### Modular ATen Organization (2025-08-19)
+- **ATen Directory Creation**: Organized operation dispatch into dedicated `aten/` directory structure
+- **Operation Handler Separation**: Split functionality into specialized modules (dispatch, copy, meta, scalar, utils)
+- **Enhanced C++ Integration**: Improved C++ implementations for set_.source_Tensor and set_.source_Storage operations
+- **View Operation Optimization**: Removed redundant Python handlers and moved to optimized C++ implementations
+- **Google C++ Style**: Applied consistent formatting across all C++ source files
+- **Dispatch Logic Separation**: Clean separation between dispatch logic and ATen registrations
+- **Fallback Kernel Enhancement**: Comprehensive fallback kernel with improved operation coverage
+- **Performance Improvements**: C++ aten::view implementation for better performance
+- **Code Quality**: Maintained zero technical debt with improved organization and clarity
+
+Last updated: 2025-08-19

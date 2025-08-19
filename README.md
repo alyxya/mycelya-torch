@@ -175,6 +175,16 @@ Mycelya uses a three-layer architecture with custom PyTorch integration:
 - **RPC batching** reduces network calls with background thread processing
 - **Dual storage architecture** supports lazy allocation and realized storage
 - **Meta tensor integration** for shape inference without data transfer
+- **Sequential storage IDs** (1, 2, 3...) for efficient memory management
+- **Raw bytes transfer** eliminating torch.save/load serialization overhead
+
+### Operation Dispatch
+
+- **Modular ATen system** with organized operation handlers in `aten/` directory
+- **Meta tensor inference** for shape computation without data transfer
+- **View operation optimization** with local view creation and remote propagation
+- **Dynamic output support** for operations with data-dependent shapes
+- **Background batching** with queue-based RPC processing
 
 ## Development
 
@@ -212,12 +222,18 @@ mycelya_torch/
 ├── __init__.py              # Public API and PyTorch backend registration
 ├── _device.py              # Device registry and RemoteMachine management
 ├── _machine.py             # RemoteMachine abstraction
-├── _aten_impl.py           # ATen operation dispatch with meta inference
 ├── _orchestrator.py        # Remote execution orchestration with RPC batching
 ├── _backend_hooks.py       # PyTorch backend hooks and C++ interface bridge
 ├── _storage.py             # Integer-based storage ID system
 ├── _huggingface_utils.py   # HuggingFace model integration
 ├── _logging.py             # Centralized logging system
+├── aten/                   # ATen operation system
+│   ├── __init__.py         # PyTorch library registrations
+│   ├── dispatch.py         # Main operation dispatch with fallback kernel
+│   ├── copy.py            # Copy and transfer operations
+│   ├── meta.py            # Meta tensor inference and shape computation
+│   ├── scalar.py          # Scalar operations and local execution
+│   └── utils.py           # Utilities for operation handling
 ├── backends/
 │   ├── base_client.py      # Standardized provider interface
 │   ├── modal/client.py     # Modal cloud provider
@@ -226,12 +242,42 @@ mycelya_torch/
     ├── MycelyaTensorImpl.cpp   # Custom tensor implementation
     ├── MycelyaStorageImpl.cpp  # Custom storage implementation
     ├── MycelyaAllocator.cpp    # Enhanced allocator
-    └── MycelyaHooks.cpp        # PyTorch PrivateUse1 hooks
+    ├── MycelyaHooks.cpp        # PyTorch PrivateUse1 hooks
+    └── mycelya_extension.cpp   # Python bindings and extensions
 
 _mycelya_torch_modal/
-├── modal_app.py            # Modal server with lazy/realized storage
-└── client.py              # Modal client with batching
+└── modal_app.py            # Modal server with lazy/realized storage
+
+examples/
+├── smollm2.py              # Basic SmolLM2 model inference
+├── modal_smollm2_test.py   # Modal-specific testing
+├── smollm2_comparison.py   # Performance comparison scripts
+└── gravity_hf_loader.py    # HuggingFace model loading demonstration
+
+tests/
+├── test_regression.py      # Critical regression tests
+├── test_basic_operations.py # Functional tests
+├── test_autograd_*.py      # Autograd and gradient tests
+└── conftest.py            # Shared test fixtures
 ```
+
+## Recent Updates
+
+### Latest Features (2025-08-19)
+
+- **Modular ATen Organization**: Reorganized operation dispatch into dedicated `aten/` directory with specialized handlers
+- **Enhanced C++ Performance**: Optimized C++ implementations for view operations and tensor management
+- **Google C++ Style**: Applied consistent formatting across all C++ source files
+- **Improved Operation Dispatch**: Simplified and cleaned up PyTorch operation registration system
+- **Better Code Organization**: Clear separation between dispatch logic and ATen registrations
+
+### Core Architecture (2025-08-10)
+
+- **Custom PyTorch Integration**: Complete TensorImpl/StorageImpl following pytorch-npu patterns
+- **Metadata Hash System**: FNV-1a hash computation from tensor properties for unique identification
+- **RPC Batching Optimization**: Background thread processing for reduced network overhead
+- **HuggingFace Integration**: Direct remote model loading without data transfer
+- **Multi-Provider Support**: Extensible backend system (Modal production, Mock development)
 
 ## Limitations
 
