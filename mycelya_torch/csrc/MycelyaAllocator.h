@@ -14,7 +14,7 @@ struct MycelyaAllocator final : at::Allocator {
   MycelyaAllocator() = default;
 
   at::DataPtr allocate(size_t nbytes) override;
-  
+
   static void ReportAndDelete(void* ptr);
 
   at::DeleterFnPtr raw_deleter() const override;
@@ -25,4 +25,4 @@ struct MycelyaAllocator final : at::Allocator {
 // Get the global mycelya allocator instance
 MycelyaAllocator& get_mycelya_allocator();
 
-} // namespace mycelya
+}  // namespace mycelya

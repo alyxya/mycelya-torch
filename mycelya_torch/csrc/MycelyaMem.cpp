@@ -1,26 +1,27 @@
 // Copyright (C) 2025 alyxya
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#include "Mycelya.h"
-#include "MycelyaTensorImpl.h"
-#include "MycelyaStorageImpl.h"
-#include "MycelyaAllocator.h"
-
+#include <ATen/InferSize.h>
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <ATen/ops/as_strided_cpu_dispatch.h>
 #include <ATen/ops/set_cpu_dispatch.h>
-#include <ATen/InferSize.h>
 #include <c10/core/Allocator.h>
+#include <torch/library.h>
+
 #include <iomanip>
 #include <sstream>
-#include <torch/library.h>
+
+#include "Mycelya.h"
+#include "MycelyaAllocator.h"
+#include "MycelyaStorageImpl.h"
+#include "MycelyaTensorImpl.h"
 
 namespace mycelya {
 namespace {
 
 // Always use custom TensorImpl - this is now the default and only option
 
-} // namespace
+}  // namespace
 
 // Validate device index
 bool validate_device_index(c10::DeviceIndex device_index) {
@@ -33,72 +34,75 @@ bool validate_device_index(c10::DeviceIndex device_index) {
   }
 }
 
-// C++ implementation of empty_mycelya using custom TensorImpl (simplified from NPU pattern)
+// C++ implementation of empty_mycelya using custom TensorImpl (simplified from
+// NPU pattern)
 at::Tensor empty_mycelya(at::IntArrayRef size,
-                        c10::optional<at::ScalarType> dtype,
-                        c10::optional<at::Layout> layout,
-                        c10::optional<at::Device> device,
-                        c10::optional<bool> pin_memory,
-                        c10::optional<at::MemoryFormat> memory_format) {
-
+                         c10::optional<at::ScalarType> dtype,
+                         c10::optional<at::Layout> layout,
+                         c10::optional<at::Device> device,
+                         c10::optional<bool> pin_memory,
+                         c10::optional<at::MemoryFormat> memory_format) {
   // Require explicit device - no defaults to avoid masking bugs
-  TORCH_CHECK(device.has_value(), "empty_mycelya requires explicit device specification");
+  TORCH_CHECK(device.has_value(),
+              "empty_mycelya requires explicit device specification");
   c10::Device target_device = *device;
-  TORCH_CHECK(target_device.type() == c10::DeviceType::PrivateUse1,
-              "empty_mycelya expects PrivateUse1 device, got: ", target_device.type());
-  
+  TORCH_CHECK(
+      target_device.type() == c10::DeviceType::PrivateUse1,
+      "empty_mycelya expects PrivateUse1 device, got: ", target_device.type());
+
   const auto resolved_dtype = c10::dtype_or_default(dtype);
   TORCH_CHECK(c10::layout_or_default(layout) == c10::Layout::Strided,
               "Only strided layout is supported");
   TORCH_CHECK(!c10::pinned_memory_or_default(pin_memory),
               "Pin memory is not supported on remote devices");
-  
+
   const c10::DeviceGuard device_guard(target_device);
-  
+
   // Use PyTorch helper for element count calculation
   int64_t nelements = c10::multiply_integers(size);
   auto dtype_meta = c10::scalarTypeToTypeMeta(resolved_dtype);
   int64_t size_bytes = nelements * dtype_meta.itemsize();
-  
+
   // Create custom storage (required for our custom StorageImpl)
   c10::intrusive_ptr<c10::StorageImpl> storage_impl = make_mycelya_storage_impl(
-    c10::StorageImpl::use_byte_size_t(),
-    c10::SymInt(size_bytes),
-    c10::DataPtr(),  // Empty DataPtr - let the factory call our allocator
-    &get_mycelya_allocator(),
-    true);
+      c10::StorageImpl::use_byte_size_t(), c10::SymInt(size_bytes),
+      c10::DataPtr(),  // Empty DataPtr - let the factory call our allocator
+      &get_mycelya_allocator(), true);
 
   // Create tensor using custom MycelyaTensorImpl (required for metadata hash)
   auto tensor = at::detail::make_tensor<MycelyaTensorImpl>(
-    c10::Storage(storage_impl), 
-    dtype_meta);
-  
+      c10::Storage(storage_impl), dtype_meta);
+
   // Use PyTorch helper for contiguous strides, set sizes
   if (size.size() != 1 || size[0] != 0) {
-    tensor.unsafeGetTensorImpl()->set_sizes_and_strides(size, c10::contiguous_strides(size));
+    tensor.unsafeGetTensorImpl()->set_sizes_and_strides(
+        size, c10::contiguous_strides(size));
   }
-  
+
   return tensor;
 }
 
-// C++ implementation of empty_strided_mycelya following NPU pattern (delegate to empty + resize)
+// C++ implementation of empty_strided_mycelya following NPU pattern (delegate
+// to empty + resize)
 at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
-                                c10::optional<at::ScalarType> dtype,
-                                c10::optional<at::Layout> layout,
-                                c10::optional<at::Device> device,
-                                c10::optional<bool> pin_memory) {
-
+                                 c10::optional<at::ScalarType> dtype,
+                                 c10::optional<at::Layout> layout,
+                                 c10::optional<at::Device> device,
+                                 c10::optional<bool> pin_memory) {
   // Require explicit device same as empty_mycelya
-  TORCH_CHECK(device.has_value(), "empty_strided_mycelya requires explicit device specification");
+  TORCH_CHECK(device.has_value(),
+              "empty_strided_mycelya requires explicit device specification");
   c10::Device target_device = *device;
   TORCH_CHECK(target_device.type() == c10::DeviceType::PrivateUse1,
-              "empty_strided_mycelya expects PrivateUse1 device, got: ", target_device.type());
+              "empty_strided_mycelya expects PrivateUse1 device, got: ",
+              target_device.type());
   const c10::DeviceGuard device_guard(target_device);
-  
+
   // Create empty tensor with size {0} first, then set proper size and stride
   c10::optional<c10::MemoryFormat> no_memory_format = c10::nullopt;
-  auto tensor = empty_mycelya({0}, dtype, layout, device, pin_memory, no_memory_format);
-  
+  auto tensor =
+      empty_mycelya({0}, dtype, layout, device, pin_memory, no_memory_format);
+
   // Set the requested size and stride
   tensor.unsafeGetTensorImpl()->set_sizes_and_strides(size, stride);
   return tensor;
@@ -106,62 +110,62 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
 
 // C++ implementation of as_strided for view operations
 at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
-                             at::IntArrayRef stride,
-                             c10::optional<int64_t> storage_offset) {
-
+                              at::IntArrayRef stride,
+                              c10::optional<int64_t> storage_offset) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "as_strided_mycelya expects a mycelya tensor");
 
-  // Create a new mycelya tensor with the same storage but different view parameters
-  // This preserves the custom MycelyaTensorImpl unlike the CPU fallback
-  auto result = at::detail::make_tensor<MycelyaTensorImpl>(
-    self.storage(),
-    self.dtype());
-  
+  // Create a new mycelya tensor with the same storage but different view
+  // parameters This preserves the custom MycelyaTensorImpl unlike the CPU
+  // fallback
+  auto result =
+      at::detail::make_tensor<MycelyaTensorImpl>(self.storage(), self.dtype());
+
   // Set the new sizes and strides for the view
   int64_t offset = storage_offset.value_or(0);
-  auto* impl = result.unsafeGetTensorImpl();
+  auto *impl = result.unsafeGetTensorImpl();
   impl->set_sizes_and_strides(size, stride, offset);
   return result;
 }
 
-// C++ implementation of view for efficient view operations  
+// C++ implementation of view for efficient view operations
 at::Tensor view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "view_mycelya expects a mycelya tensor");
 
-  // Use PyTorch's built-in inference and stride computation (same as native impl)
+  // Use PyTorch's built-in inference and stride computation (same as native
+  // impl)
   at::DimVector inferred_size = at::infer_size_dv(size, self.numel());
-  auto stride = at::detail::computeStride(self.sizes(), self.strides(), inferred_size);
-  TORCH_CHECK(
-      stride.has_value(),
-      "view size is not compatible with input tensor's size and stride "
-      "(at least one dimension spans across two contiguous subspaces). Use .reshape(...) instead.");
-  
+  auto stride =
+      at::detail::computeStride(self.sizes(), self.strides(), inferred_size);
+  TORCH_CHECK(stride.has_value(),
+              "view size is not compatible with input tensor's size and stride "
+              "(at least one dimension spans across two contiguous subspaces). "
+              "Use .reshape(...) instead.");
+
   // Use as_strided for the actual view creation (same as native impl)
-  return as_strided_mycelya(self, inferred_size, *stride, self.storage_offset());
+  return as_strided_mycelya(self, inferred_size, *stride,
+                            self.storage_offset());
 }
 
 // C++ implementation of set_ for tensor metadata operations
 at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
-                       int64_t storage_offset, at::IntArrayRef size,
-                       at::IntArrayRef stride) {
-  
+                        int64_t storage_offset, at::IntArrayRef size,
+                        at::IntArrayRef stride) {
   TORCH_CHECK(result.device().type() == c10::DeviceType::PrivateUse1,
               "set_mycelya expects a mycelya tensor");
-  
+
   // Update the tensor's storage and metadata while preserving custom TensorImpl
-  auto* impl = result.unsafeGetTensorImpl();
+  auto *impl = result.unsafeGetTensorImpl();
   impl->set_storage_and_dtype(storage, result.dtype());
   impl->set_sizes_and_strides(size, stride, storage_offset);
   return result;
 }
 
 // C++ implementation of resize_ that explicitly calls storage resize hooks
-const at::Tensor &
-resize_mycelya_(const at::Tensor &self, at::IntArrayRef size,
-               c10::optional<at::MemoryFormat> memory_format) {
-
+const at::Tensor &resize_mycelya_(
+    const at::Tensor &self, at::IntArrayRef size,
+    c10::optional<at::MemoryFormat> memory_format) {
   // Calculate required storage size for new shape
   int64_t new_numel = 1;
   for (auto s : size) {
@@ -220,4 +224,4 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("resize_", resize_mycelya_);
 }
 
-} // namespace mycelya
+}  // namespace mycelya

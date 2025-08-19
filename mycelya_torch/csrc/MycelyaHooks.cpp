@@ -1,16 +1,15 @@
 // Copyright (C) 2025 alyxya
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#include "Mycelya.h"
-#include "MycelyaStorageImpl.h"
-
 #include <ATen/CPUGeneratorImpl.h>
 #include <ATen/core/GeneratorForPrivateuseone.h>
 #include <ATen/detail/PrivateUse1HooksInterface.h>
-
 #include <c10/core/Allocator.h>
 #include <c10/core/Device.h>
 #include <c10/core/impl/DeviceGuardImplInterface.h>
+
+#include "Mycelya.h"
+#include "MycelyaStorageImpl.h"
 
 namespace mycelya {
 namespace {
@@ -29,7 +28,7 @@ static c10::DeviceIndex current_device_idx() {
 }
 
 class MycelyaGeneratorImpl : public at::CPUGeneratorImpl {
-public:
+ public:
   MycelyaGeneratorImpl(c10::DeviceIndex device_index) {
     device_ = c10::Device(c10::DeviceType::PrivateUse1, device_index);
     key_set_ = c10::DispatchKeySet(c10::DispatchKey::PrivateUse1);
@@ -59,8 +58,8 @@ struct MycelyaHooksInterface : public at::PrivateUse1HooksInterface {
 
   bool isPinnedPtr(const void *data) const override { return false; }
 
-  const at::Generator &
-  getDefaultGenerator(c10::DeviceIndex device_index) const override {
+  const at::Generator &getDefaultGenerator(
+      c10::DeviceIndex device_index) const override {
     static bool flag [[maybe_unused]] = []() {
       auto device_nums = device_count();
       default_generators.resize(device_nums);
@@ -122,12 +121,13 @@ struct MycelyaHooksInterface : public at::PrivateUse1HooksInterface {
 
 static bool register_hook_flag [[maybe_unused]] = []() {
   at::RegisterPrivateUse1HooksInterface(new MycelyaHooksInterface());
-  
+
   // Register custom storage factory function (following pytorch-npu pattern)
   // This enables PyTorch to create custom MycelyaStorageImpl instances
   // when creating storages for PrivateUse1 device
-  c10::SetStorageImplCreate(c10::DeviceType::PrivateUse1, &make_mycelya_storage_impl);
-  
+  c10::SetStorageImplCreate(c10::DeviceType::PrivateUse1,
+                            &make_mycelya_storage_impl);
+
   return true;
 }();
 
@@ -145,7 +145,8 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   c10::Device exchangeDevice(c10::Device d) const override {
     TORCH_INTERNAL_ASSERT(d.is_privateuseone());
     py::gil_scoped_acquire acquire;
-    auto old_device_index = get_method("exchange_device")(d.index()).cast<c10::DeviceIndex>();
+    auto old_device_index =
+        get_method("exchange_device")(d.index()).cast<c10::DeviceIndex>();
     return c10::Device(static_type, old_device_index);
   }
 
@@ -175,35 +176,37 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
     return c10::Stream(c10::Stream::UNSAFE, d, 0);
   }
 
-  c10::Stream
-  getStreamFromGlobalPool(c10::Device d,
-                          bool isHighPriority = false) const override {
+  c10::Stream getStreamFromGlobalPool(
+      c10::Device d, bool isHighPriority = false) const override {
     // Default to stream ID 0 like getDefaultStream
     return c10::Stream(c10::Stream::UNSAFE, d, 0);
   }
 
   c10::Stream getNewStream(c10::Device d, int priority = 0) const override {
     py::gil_scoped_acquire acquire;
-    auto stream_id = get_method("get_new_stream")(d.index(), priority).cast<c10::StreamId>();
+    auto stream_id =
+        get_method("get_new_stream")(d.index(), priority).cast<c10::StreamId>();
     return c10::Stream(c10::Stream::UNSAFE, d, stream_id);
   }
 
   c10::Stream exchangeStream(c10::Stream s) const noexcept override {
     py::gil_scoped_acquire acquire;
-    auto previous_stream_id = get_method("exchange_stream")(s.id(), s.device().index()).cast<c10::StreamId>();
+    auto previous_stream_id =
+        get_method("exchange_stream")(s.id(), s.device().index())
+            .cast<c10::StreamId>();
     return c10::Stream(c10::Stream::UNSAFE, s.device(), previous_stream_id);
   }
 
   void createEvent(void **event, const c10::DeviceIndex device_index,
                    const c10::EventFlag flag) const {
     py::gil_scoped_acquire acquire;
-    auto event_id = get_method("create_event")(device_index, (int64_t)flag).cast<int64_t>();
-    *event = reinterpret_cast<void*>(event_id);
+    auto event_id =
+        get_method("create_event")(device_index, (int64_t)flag).cast<int64_t>();
+    *event = reinterpret_cast<void *>(event_id);
   }
 
-  void
-  destroyEvent(void *event,
-               const c10::DeviceIndex device_index) const noexcept override {
+  void destroyEvent(void *event, const c10::DeviceIndex device_index)
+      const noexcept override {
     py::gil_scoped_acquire acquire;
     get_method("destroy_event")((int64_t)event, device_index);
   }
@@ -257,7 +260,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
                      const c10::DeviceIndex device_index) const override {
     py::gil_scoped_acquire acquire;
     return get_method("elapsed_time")((int64_t)event1, (int64_t)event2,
-                                     device_index)
+                                      device_index)
         .cast<double>();
   }
 };
@@ -265,7 +268,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
 // Register our device guard
 C10_REGISTER_GUARD_IMPL(PrivateUse1, RemoteGuardImpl);
 
-} // namespace
+}  // namespace
 
 // Setter for the python factory function
 void set_impl_factory(PyObject *factory) { py_factory = factory; }
@@ -275,4 +278,4 @@ py::function get_method(const char *name) {
   return factory(name);
 }
 
-} // namespace mycelya
+}  // namespace mycelya

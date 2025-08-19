@@ -2,22 +2,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "MycelyaAllocator.h"
-#include "Mycelya.h"  // For get_method
+
 #include <torch/csrc/utils/pybind.h>
+
+#include "Mycelya.h"  // For get_method
 
 namespace mycelya {
 
 at::DataPtr MycelyaAllocator::allocate(size_t nbytes) {
   pybind11::gil_scoped_acquire acquire;
   auto curr_device_idx = get_method("get_device")().cast<c10::DeviceIndex>();
-  auto curr_device =
-      c10::Device(c10::DeviceType::PrivateUse1, curr_device_idx);
+  auto curr_device = c10::Device(c10::DeviceType::PrivateUse1, curr_device_idx);
   void *data = nullptr;
 
   // Create storage and get the generated storage ID
   // Returns the storage ID on success, or 0 on failure
   storage_id_t storage_id =
-      get_method("create_storage")(nbytes, curr_device_idx).cast<storage_id_t>();
+      get_method("create_storage")(nbytes, curr_device_idx)
+          .cast<storage_id_t>();
 
   TORCH_CHECK(storage_id != 0, "Failed to allocate storage (", nbytes,
               " bytes) on mycelya device ", curr_device_idx);
@@ -57,7 +59,8 @@ at::DeleterFnPtr MycelyaAllocator::raw_deleter() const {
   return &ReportAndDelete;
 }
 
-void MycelyaAllocator::copy_data(void *dest, const void *src, std::size_t count) const {
+void MycelyaAllocator::copy_data(void *dest, const void *src,
+                                 std::size_t count) const {
   // No-op: Mycelya tensors handle data copying through PyTorch operations
   // rather than raw memory copying
 }
@@ -65,11 +68,10 @@ void MycelyaAllocator::copy_data(void *dest, const void *src, std::size_t count)
 // Global allocator instance
 static MycelyaAllocator global_mycelya_alloc;
 
-MycelyaAllocator& get_mycelya_allocator() {
-  return global_mycelya_alloc;
-}
+MycelyaAllocator &get_mycelya_allocator() { return global_mycelya_alloc; }
 
-} // namespace mycelya
+}  // namespace mycelya
 
 // Register the allocator with PyTorch
-REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &mycelya::global_mycelya_alloc);
+REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1,
+                   &mycelya::global_mycelya_alloc);
