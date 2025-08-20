@@ -13,7 +13,6 @@ StorageManager is designed to be used as a property of the Orchestrator class,
 not as a global instance. It does not handle remote cleanup or orchestrator interactions.
 """
 
-import threading
 from typing import Dict, Optional, Tuple
 
 from ._logging import get_logger
@@ -43,9 +42,8 @@ class StorageManager:
         # Storage ID to nbytes mapping - tracks original nbytes from allocator
         self.storage_id_to_nbytes: Dict[int, int] = {}  # storage_id -> nbytes
 
-        # Thread-safe counter for generating incremental storage IDs
+        # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
-        self._storage_id_lock = threading.Lock()
 
         log.info("🚀 Storage manager initialized")
 
@@ -64,10 +62,9 @@ class StorageManager:
         Returns:
             int: The generated storage ID on success, or 0 on failure
         """
-        # Generate incremental storage ID in thread-safe manner
-        with self._storage_id_lock:
-            storage_id = self._storage_id_counter
-            self._storage_id_counter += 1
+        # Generate incremental storage ID (GIL-protected)
+        storage_id = self._storage_id_counter
+        self._storage_id_counter += 1
 
         log.info(f"🆔 GENERATED Storage ID: {storage_id}")
 
