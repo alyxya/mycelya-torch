@@ -10,6 +10,7 @@ Currently supports Modal as the first provider implementation.
 """
 
 import threading
+import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
@@ -59,7 +60,7 @@ class Orchestrator:
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
 
         # Background thread for periodic maintenance tasks
-        self._stop_event = threading.Event()
+        self._main_thread_waiting = threading.Event()
         self._background_thread = threading.Thread(
             target=self._background_loop, daemon=True
         )
@@ -750,7 +751,13 @@ class Orchestrator:
         )
 
         # Get result from future if one was returned
-        result = result_future.result() if result_future is not None else None
+        if result_future is not None:
+            # Signal background thread that main thread is waiting on a future
+            self._main_thread_waiting.set()
+            result = result_future.result()
+            self._main_thread_waiting.clear()
+        else:
+            result = None
 
         # Register tensor-storage mappings for output tensors
         for output_tensor in output_tensors:
@@ -846,6 +853,7 @@ class Orchestrator:
                 log.debug(f"Tensor {tensor_id} already exists in orchestrator mapping")
 
 
+
     def _background_loop(self):
         """Background thread for batch execution and future resolution.
 
@@ -858,7 +866,7 @@ class Orchestrator:
         - Connection health checks
         - Metrics collection
         """
-        while not self._stop_event.is_set():
+        while True:
             for client in self._clients.values():
                 if client.is_running():
                     try:
@@ -870,8 +878,11 @@ class Orchestrator:
                     except Exception as e:
                         log.error(f"Error in background maintenance for client: {e}")
 
-            # Sleep for 0.1 seconds (100ms)
-            self._stop_event.wait(0.1)
+            # Yield to the main thread before waiting
+            time.sleep(0)
+            
+            # Wait up to 0.1 seconds, but wake up immediately if main thread is waiting
+            self._main_thread_waiting.wait(timeout=0.1)
 
 
 # Global orchestrator instance (Modal provider implementation)
