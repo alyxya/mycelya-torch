@@ -528,27 +528,24 @@ class Orchestrator:
         log.debug(f"Input tensor IDs: {[get_tensor_id(t) for t in input_tensors]}")
         log.debug(f"Output tensor IDs: {[get_tensor_id(t) for t in output_tensors]}")
 
-        # Extract tensor IDs for validation and cache management
-        output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
-
         # Validate that we have input tensors
         if not input_tensors:
             raise RuntimeError(f"No input tensors provided for operation {op_name}")
 
-        # Collect all tensor IDs for cross-device validation
-        all_tensor_ids = []
-        for tensor in input_tensors:
-            tensor_id = get_tensor_id(tensor)
-            all_tensor_ids.append(tensor_id)
-        for tensor in output_tensors:
-            tensor_id = get_tensor_id(tensor)
-            all_tensor_ids.append(tensor_id)
+        # Validate all tensors are on the same device using their device attributes
+        all_tensors = input_tensors + output_tensors
+        if len(all_tensors) > 1:
+            first_device = all_tensors[0].device
+            for tensor in all_tensors[1:]:
+                if tensor.device != first_device:
+                    raise RuntimeError(
+                        f"Cannot perform operations between tensors on different devices. "
+                        f"Found tensors on devices: {first_device} and {tensor.device}. "
+                        f"Transfer tensors to the same device first: tensor.to(target_device)"
+                    )
 
-        # Validate all tensor IDs are on the same device
-        if all_tensor_ids:
-            from ._storage import validate_cross_device_operation_tensor_ids
-
-            validate_cross_device_operation_tensor_ids(all_tensor_ids)
+        # Extract tensor IDs for cache management
+        output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
 
         # Note: Do not proactively register tensor mappings here
         # Mappings should only be registered when tensors are actually created via RPC calls
