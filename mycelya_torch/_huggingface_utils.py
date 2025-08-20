@@ -115,11 +115,8 @@ def create_huggingface_model_from_remote(
         f"Creating HuggingFace model {checkpoint} with remote tensors on {machine.machine_id}"
     )
 
-    # Check if machine is running
-    device_index = machine.remote_index
-    if device_index is None:
-        raise RuntimeError(f"Machine {machine.machine_id} not registered")
-
+    # Get device index from machine
+    device_index = machine.device().index
     from ._orchestrator import orchestrator
 
     if not orchestrator.is_client_running(device_index):

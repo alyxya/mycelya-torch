@@ -38,7 +38,6 @@ def test_device_creation_and_properties(shared_devices):
             device = shared_devices[device_key]
             assert device is not None
             assert hasattr(device, "device")
-            assert hasattr(device, "remote_index")
             assert callable(device.device)
 
 
@@ -108,8 +107,8 @@ def test_device_index_consistency(shared_devices):
             )
 
             # Device index should be consistent
-            assert tensor.device.index == device.remote_index
-            assert isinstance(device.remote_index, int)
+            assert tensor.device.index == device.device().index
+            assert isinstance(device.device().index, int)
 
 
 def test_device_type_consistency(shared_devices):

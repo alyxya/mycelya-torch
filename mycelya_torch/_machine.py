@@ -11,7 +11,7 @@ machines with different cloud providers and GPU types.
 import atexit
 import uuid
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import torch
 
@@ -202,11 +202,7 @@ class RemoteMachine:
 
             # Register client with orchestrator using device index
             if client is not None:
-                device_index = self.remote_index
-                if device_index is None:
-                    raise RuntimeError(
-                        "Device not properly registered with device registry"
-                    )
+                device_index = self.device().index
 
                 from ._orchestrator import orchestrator
 
@@ -221,12 +217,8 @@ class RemoteMachine:
 
     def start(self) -> None:
         """Start the client for this device."""
-        device_index = self.remote_index
-        if device_index is None:
-            log.warning("Cannot start: device not registered")
-            return
-
         try:
+            device_index = self.device().index
             from ._orchestrator import orchestrator
 
             orchestrator.start_client(device_index)
@@ -237,11 +229,8 @@ class RemoteMachine:
 
     def stop(self) -> None:
         """Stop the client for this device."""
-        device_index = self.remote_index
-        if device_index is None:
-            return
-
         try:
+            device_index = self.device().index
             from ._orchestrator import orchestrator
 
             orchestrator.stop_client(device_index)
@@ -259,24 +248,22 @@ class RemoteMachine:
         Raises:
             RuntimeError: If client is not available or not running
         """
-        device_index = self.remote_index
-        if device_index is None:
-            raise RuntimeError(
-                f"Machine {self.machine_id} not registered with device registry"
-            )
-
+        device_index = self.device().index
         from ._orchestrator import orchestrator
 
         return orchestrator.get_client_by_device_index(device_index)
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
-        device_index = self.remote_index
-        if device_index is not None:
+        try:
+            device_index = self.device().index
             from ._orchestrator import orchestrator
 
             if not orchestrator.is_client_running(device_index):
                 self.start()
+        except Exception:
+            # Device not registered yet, start will handle it
+            pass
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -310,17 +297,6 @@ class RemoteMachine:
             raise ValueError("modal_gpu_spec only available for Modal provider")
         return self.gpu_type.value
 
-    @property
-    def remote_index(self) -> Optional[int]:
-        """Get the device's index in the device manager."""
-        from ._device import get_device_manager
-
-        manager = get_device_manager()
-        try:
-            device = manager.get_device(self.machine_id, type="cuda", index=0)
-            return device.index
-        except RuntimeError:
-            return None
 
     def device(self) -> torch.device:
         """
@@ -339,10 +315,10 @@ class RemoteMachine:
             >>> machine = RemoteMachine("mock")
             >>> torch_device = machine.device()
         """
-        remote_index = self.remote_index
-        if remote_index is None:
-            raise RuntimeError("Device not registered in device manager")
-        return torch.device("mycelya", remote_index)
+        from ._device import get_device_manager
+
+        manager = get_device_manager()
+        return manager.get_device(self.machine_id, type="cuda", index=0)
 
 
 def get_all_machines() -> list[RemoteMachine]:

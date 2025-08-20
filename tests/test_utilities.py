@@ -71,7 +71,7 @@ class DeviceTestUtils:
     ) -> None:
         """Verify that a tensor has expected device properties."""
         assert tensor.device.type == "mycelya"
-        assert tensor.device.index == expected_device.remote_index
+        assert tensor.device.index == expected_device.device().index
 
     @staticmethod
     def create_cpu_and_remote_pair(
