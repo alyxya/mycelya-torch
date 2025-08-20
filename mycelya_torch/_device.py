@@ -69,9 +69,4 @@ class DeviceManager:
 
 
 # Global device manager
-_device_manager = DeviceManager()
-
-
-def get_device_manager() -> DeviceManager:
-    """Get the global device manager."""
-    return _device_manager
+device_manager = DeviceManager()

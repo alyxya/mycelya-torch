@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 
 import torch
 
-from .._device import get_device_manager
+from .._device import device_manager
 from .._logging import get_logger
 from .._orchestrator import orchestrator
 from .._utils import get_tensor_id
@@ -114,7 +114,6 @@ def _create_output_tensors(
 
             # Ensure tensor ID is registered with device tracking system
             device_index = remote_device.index
-            device_manager = get_device_manager()
             machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
             if machine_id is not None:
@@ -146,7 +145,6 @@ def _create_output_tensors(
 
             # Register tensor ID with device tracking system
             device_index = remote_device.index
-            device_manager = get_device_manager()
             machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
             if machine_id is not None:
@@ -255,7 +253,6 @@ def _execute_with_dynamic_outputs(
 
         # Ensure tensor ID is registered with device tracking system
         device_index = remote_device.index
-        device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
         if machine_id is not None:
@@ -276,7 +273,6 @@ def _execute_with_dynamic_outputs(
 
         # Register tensor ID with device tracking system
         device_index = remote_device.index
-        device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
         if machine_id is not None:

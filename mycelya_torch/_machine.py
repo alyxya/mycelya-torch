@@ -15,7 +15,7 @@ from typing import Any, Optional, Union
 
 import torch
 
-from ._device import get_device_manager
+from ._device import device_manager
 from ._logging import get_logger
 from ._orchestrator import orchestrator
 
@@ -208,7 +208,7 @@ class RemoteMachine:
                 f"{self.provider.value} provider only supports {valid_types}, got '{type}'"
             )
 
-        return get_device_manager().get_device(self.machine_id, type=type, index=index)
+        return device_manager.get_device(self.machine_id, type=type, index=index)
 
 
 def get_all_machines() -> list[RemoteMachine]:

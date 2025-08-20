@@ -12,7 +12,7 @@ import torch
 
 import mycelya_torch._C
 
-from ._device import get_device_manager
+from ._device import device_manager
 
 
 def get_tensor_id(tensor: torch.Tensor) -> int:
@@ -42,7 +42,6 @@ def get_tensor_id(tensor: torch.Tensor) -> int:
 
     if orchestrator.get_machine_info_for_tensor(tensor_id) is None:
         device_index = tensor.device.index
-        device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
         if machine_id is not None:

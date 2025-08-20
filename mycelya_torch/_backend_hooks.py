@@ -171,11 +171,10 @@ class Driver:
     # Storage operations - delegate to orchestrator
     @register(registry)
     def create_storage(self, nbytes: int, device_index: int) -> int:
-        from ._device import get_device_manager
+        from ._device import device_manager
         from ._orchestrator import orchestrator
 
         # Get machine info from device index
-        device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
         if machine_id is None:
             raise RuntimeError(f"No machine ID found for device index {device_index}")
