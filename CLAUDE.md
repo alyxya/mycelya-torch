@@ -62,7 +62,7 @@ To run type checking:
 - `mycelya_torch/__init__.py` - Public API and PyTorch PrivateUse1 backend registration
 - `mycelya_torch/_orchestrator.py` - Remote execution orchestration with RPC batching integration
 - `mycelya_torch/_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge
-- `mycelya_torch/_device.py` - Device registry management with thread-safe device registration
+- `mycelya_torch/_device.py` - DeviceManager for mapping local device indices to remote device info
 - `mycelya_torch/_machine.py` - RemoteMachine abstraction supporting Modal and Mock providers
 
 ### ATen Operation System
@@ -104,7 +104,7 @@ To run type checking:
 ## Current Architecture (2025-08-10)
 
 ### Key Design Principles
-- **Metadata Hash System**: Unique metadata-based hash IDs accessible via `mycelya_torch.get_metadata_hash(tensor)` for debugging
+- **Metadata Hash System**: Unique metadata-based hash IDs for internal debugging and identification
 - **Custom PyTorch Integration**: Complete TensorImpl/StorageImpl following pytorch-npu architecture patterns
 - **Clean Input/Output Separation**: Efficient data transfer with clear boundaries
 - **Zero Local Memory**: No tensor data stored locally for remote tensors
@@ -259,7 +259,7 @@ for name, param in model.named_parameters():
 
 #### Custom TensorImpl Integration (2025-08-10)
 - **Complete custom tensor stack**: MycelyaTensorImpl, MycelyaStorageImpl, MycelyaAllocator
-- **Metadata hash IDs**: Unique hash-based IDs accessible via `mycelya_torch.get_metadata_hash(tensor)`
+- **Metadata hash IDs**: Unique hash-based IDs for internal debugging and identification
 - **pytorch-npu compliance**: Following established integration patterns for production readiness
 - **Python API enhancement**: Utility functions for tensor/storage ID access via `_utils.py`
 - **FNV-1a hash algorithm**: Fast, deterministic hash of shape/stride/dtype/offset/storage_id
@@ -361,4 +361,14 @@ for name, param in model.named_parameters():
 - **Performance Improvements**: C++ aten::view implementation for better performance
 - **Code Quality**: Maintained zero technical debt with improved organization and clarity
 
-Last updated: 2025-08-19
+#### DeviceManager Refactoring (2025-08-20)
+- **DeviceRegistry → DeviceManager**: Renamed and improved device management architecture
+- **Lazy Registration**: Removed explicit register_device() calls in favor of passive get_device() registration
+- **Bidirectional Mapping**: Clean local_to_remote_device and remote_to_local_device mappings
+- **API Cleanup**: Removed get_metadata_hash() from public API - now internal-only
+- **Gradient Fix**: Added .detach() calls before .numpy() for proper gradient tensor handling
+- **Cleaner Architecture**: DeviceManager only manages mappings, doesn't interact with RemoteMachine objects
+- **Better Naming**: Clear separation between local device indices and remote device configurations
+- **Reduced API Surface**: Eliminated unnecessary public methods and simplified device management
+
+Last updated: 2025-08-20

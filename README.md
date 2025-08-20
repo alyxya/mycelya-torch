@@ -7,7 +7,7 @@ A PyTorch extension that enables transparent remote execution of tensor operatio
 Mycelya is a PyTorch extension that uses a metadata hash architecture with custom PyTorch integration to run operations on remote cloud GPUs. Each mycelya tensor has a unique hash-based ID for debugging and monitoring (accessible via internal functions).
 
 **Key Features:**
-- **Metadata hash IDs** - Each tensor has unique hash-based ID via `mycelya_torch.get_metadata_hash(tensor)`
+- **Metadata hash IDs** - Each tensor has unique hash-based ID for internal debugging and identification
 - **Custom PyTorch integration** - Complete TensorImpl/StorageImpl following pytorch-npu patterns
 - **RPC batching** - Background thread processing reduces network overhead
 - **Zero local memory** - Only tensor metadata stored locally, actual data stays on remote GPUs
@@ -40,14 +40,12 @@ import mycelya_torch
 
 # Create a remote machine with an A100 GPU
 machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
-machine.start()  # Start the remote machine
 
 # Operations automatically execute on the remote A100
 x = torch.randn(1000, 1000, device=machine.device())
 y = torch.randn(1000, 1000, device=machine.device())
 
-# Each tensor has a unique metadata hash for debugging
-# (Note: hash access is internal, not part of public API)
+# Each tensor has a unique metadata hash for internal debugging
 print(f"Tensor x shape: {x.shape}")
 print(f"Tensor y shape: {y.shape}")
 
@@ -85,7 +83,6 @@ import mycelya_torch
 
 # Create remote machine
 machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
-machine.start()  # Start the remote machine
 device = machine.device()
 
 # Define model and move to remote device
@@ -134,7 +131,6 @@ import torch
 import mycelya_torch
 # Create remote machine
 machine = mycelya_torch.RemoteMachine("modal", "T4")
-machine.start()  # Start the remote machine
 
 # Load model directly on remote GPU (no data transfer)
 model = mycelya_torch.load_huggingface_model(
@@ -152,7 +148,7 @@ for name, param in model.named_parameters():
 
 ```python
 # Use local execution for development/testing
-machine = mycelya_torch.RemoteMachine("mock")  # Mock provider doesn't require GPU type
+machine = mycelya_torch.RemoteMachine("mock", "T4")  # Mock provider executes locally
 device = machine.device()
 
 # Same API, but executes locally using Modal's .local() calls
@@ -221,7 +217,7 @@ ruff format .
 ```
 mycelya_torch/
 ├── __init__.py              # Public API and PyTorch backend registration
-├── _device.py              # Device registry and RemoteMachine management
+├── _device.py              # DeviceManager for device index mapping
 ├── _machine.py             # RemoteMachine abstraction
 ├── _orchestrator.py        # Remote execution orchestration with RPC batching
 ├── _backend_hooks.py       # PyTorch backend hooks and C++ interface bridge
