@@ -15,6 +15,7 @@ from typing import Any, Union
 
 import torch
 
+from ._device import get_device_manager
 from ._logging import get_logger
 
 log = get_logger(__name__)
@@ -315,8 +316,6 @@ class RemoteMachine:
             >>> machine = RemoteMachine("mock")
             >>> torch_device = machine.device()
         """
-        from ._device import get_device_manager
-
         manager = get_device_manager()
         return manager.get_device(self.machine_id, type="cuda", index=0)
 
