@@ -421,8 +421,8 @@ class Orchestrator:
 
     # Storage management methods
 
-    def create_storage_by_device_index(self, nbytes: int, device_index: int) -> int:
-        """Create storage using device index (for backend hooks).
+    def create_storage(self, nbytes: int, device_index: int) -> int:
+        """Create storage using device index.
 
         Args:
             nbytes: Number of bytes to allocate
@@ -443,24 +443,6 @@ class Orchestrator:
         remote_index = 0
 
         return self.storage.create_storage(nbytes, machine_id, remote_type, remote_index)
-
-    def create_storage(
-        self, nbytes: int, machine_id: str, remote_type: str, remote_index: int
-    ) -> int:
-        """Create storage on a remote machine.
-
-        Args:
-            nbytes: Number of bytes to allocate
-            machine_id: Machine identifier
-            remote_type: Remote device type (e.g., "cuda")
-            remote_index: Remote device index
-
-        Returns:
-            Storage ID on success, 0 on failure
-        """
-        return self.storage.create_storage(
-            nbytes, machine_id, remote_type, remote_index
-        )
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID with remote cleanup.

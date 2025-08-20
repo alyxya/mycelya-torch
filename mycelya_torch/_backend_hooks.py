@@ -173,7 +173,7 @@ class Driver:
     def create_storage(self, nbytes: int, device_index: int) -> int:
         from ._orchestrator import orchestrator
         
-        storage_id = orchestrator.create_storage_by_device_index(nbytes, device_index)
+        storage_id = orchestrator.create_storage(nbytes, device_index)
         return storage_id
 
     @register(registry)
