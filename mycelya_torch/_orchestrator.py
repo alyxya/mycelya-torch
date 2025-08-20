@@ -118,7 +118,6 @@ class Orchestrator:
             gpu_type: GPU type string
             batching: Whether to enable batching
         """
-        client = None
         if provider == "modal":
             from .backends.modal.client import ModalClient
 
@@ -130,42 +129,37 @@ class Orchestrator:
         else:
             raise ValueError(f"Provider {provider} not implemented yet")
 
-        if client is not None:
-            # Store client mapping
-            self._clients[machine_id] = client
-            log.info(
-                f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
-            )
+        # Store client mapping
+        self._clients[machine_id] = client
+        log.info(
+            f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
+        )
 
     def start_client(self, machine_id: str) -> None:
         """Start a client for the given machine."""
-        client = self._clients.get(machine_id)
-        if client is None:
-            raise RuntimeError(f"No client registered for machine {machine_id}")
+        client = self._clients[machine_id]
         if not client.is_running():
             client.start()
             log.info(f"✅ ORCHESTRATOR: Started client for machine {machine_id}")
 
     def stop_client(self, machine_id: str) -> None:
         """Stop a client for the given machine."""
-        client = self._clients.get(machine_id)
-        if client is not None and client.is_running():
+        client = self._clients[machine_id]
+        if client.is_running():
             client.stop()
             log.info(f"✅ ORCHESTRATOR: Stopped client for machine {machine_id}")
 
     def get_client(self, machine_id: str) -> Client:
         """Get client for the given machine."""
-        client = self._clients.get(machine_id)
-        if client is None:
-            raise RuntimeError(f"No client registered for machine {machine_id}")
+        client = self._clients[machine_id]
         if not client.is_running():
             raise RuntimeError(f"Client for machine {machine_id} is not running")
         return client
 
     def is_client_running(self, machine_id: str) -> bool:
         """Check if a client is running for the given machine."""
-        client = self._clients.get(machine_id)
-        return client is not None and client.is_running()
+        client = self._clients[machine_id]
+        return client.is_running()
 
     def _invalidate_cache_for_storage(self, storage_id: int) -> None:
         """Invalidate cache entry for a specific storage ID.
