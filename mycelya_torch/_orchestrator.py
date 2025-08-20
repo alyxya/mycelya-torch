@@ -118,30 +118,24 @@ class Orchestrator:
             gpu_type: GPU type string
             batching: Whether to enable batching
         """
-        try:
-            client = None
-            if provider == "modal":
-                from .backends.modal.client import ModalClient
+        client = None
+        if provider == "modal":
+            from .backends.modal.client import ModalClient
 
-                client = ModalClient(gpu_type, machine_id, 300, batching)
-            elif provider == "mock":
-                from .backends.mock.client import MockClient
+            client = ModalClient(gpu_type, machine_id, 300, batching)
+        elif provider == "mock":
+            from .backends.mock.client import MockClient
 
-                client = MockClient(gpu_type, machine_id, 300, batching)
-            else:
-                raise ValueError(f"Provider {provider} not implemented yet")
+            client = MockClient(gpu_type, machine_id, 300, batching)
+        else:
+            raise ValueError(f"Provider {provider} not implemented yet")
 
-            if client is not None:
-                # Store client mapping
-                self._clients[machine_id] = client
-                log.info(
-                    f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
-                )
-
-        except ImportError as e:
-            log.warning(f"Remote execution not available: {e}")
-        except Exception as e:
-            log.error(f"Failed to create client for machine {machine_id}: {e}")
+        if client is not None:
+            # Store client mapping
+            self._clients[machine_id] = client
+            log.info(
+                f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
+            )
 
     def start_client(self, machine_id: str) -> None:
         """Start a client for the given machine."""
