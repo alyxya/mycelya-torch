@@ -128,11 +128,7 @@ class RemoteMachine:
         # Validate GPU type is supported by provider
         self._validate_gpu_support()
 
-        # Register with device manager first to get device index
-        from ._device import get_device_manager
-
-        manager = get_device_manager()
-        manager.register_device(self.machine_id, "cuda", 0)
+        # Device registration happens lazily when device() is called
 
         # Create and register the client with orchestrator
         self._create_and_register_client()

@@ -29,41 +29,13 @@ class DeviceManager:
         ] = {}  # (machine_id, remote_device, remote_index) -> local_index
         self._next_index = 0
 
-    def register_device(
-        self, machine_id: str, device: str = "cuda", index: int = 0
-    ) -> int:
-        """
-        Register a device and return its index.
-
-        Args:
-            machine_id: The unique machine identifier
-            device: The remote machine's device type (default: "cuda")
-            index: The remote machine's device index (default: 0)
-
-        Returns:
-            The assigned device index
-        """
-        device_tuple = (machine_id, device, index)
-
-        # Check if device is already registered
-        if device_tuple in self._remote_to_local_device:
-            return self._remote_to_local_device[device_tuple]
-
-        # Assign new local index
-        local_index = self._next_index
-        self._next_index += 1
-
-        # Store bidirectional mapping
-        self._local_to_remote_device[local_index] = device_tuple
-        self._remote_to_local_device[device_tuple] = local_index
-
-        return local_index
-
     def get_device(
         self, machine_id: str, device: str = "cuda", index: int = 0
     ) -> torch.device:
         """
         Get a torch.device object for the given machine configuration.
+
+        Creates the mapping if it doesn't exist, otherwise returns the existing one.
 
         Args:
             machine_id: The unique machine identifier
@@ -74,9 +46,20 @@ class DeviceManager:
             torch.device object with type "mycelya" and the mapped index
         """
         device_tuple = (machine_id, device, index)
+
+        # Check if device mapping already exists
         local_index = self._remote_to_local_device.get(device_tuple)
-        if local_index is None:
-            raise RuntimeError(f"Remote device not registered: {device_tuple}")
+        if local_index is not None:
+            return torch.device("mycelya", local_index)
+
+        # Create new mapping
+        local_index = self._next_index
+        self._next_index += 1
+
+        # Store bidirectional mapping
+        self._local_to_remote_device[local_index] = device_tuple
+        self._remote_to_local_device[device_tuple] = local_index
+
         return torch.device("mycelya", local_index)
 
 
