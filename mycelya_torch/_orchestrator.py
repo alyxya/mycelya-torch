@@ -413,7 +413,7 @@ class Orchestrator:
         try:
             # Extract storage_id from reconstructed tensor and cache/map it
             actual_storage_id = get_storage_id(result)
-            raw_bytes = result.numpy().tobytes()
+            raw_bytes = result.detach().numpy().tobytes()
             self._cache_storage_data(actual_storage_id, raw_bytes)
             self._register_tensor_storage_mapping(tensor_id, actual_storage_id)
             log.info(
@@ -470,7 +470,7 @@ class Orchestrator:
         """
         client = self._get_client_for_tensor_id(tensor_id)
         # Convert storage tensor to raw bytes for tensor-only interface
-        raw_data = storage_tensor.numpy().tobytes()
+        raw_data = storage_tensor.detach().numpy().tobytes()
 
         client.update_tensor(
             tensor_id,

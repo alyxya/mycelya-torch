@@ -266,7 +266,7 @@ def create_modal_app_for_gpu(
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             tensor = tensor_registry[tensor_id]
-            result = tensor.cpu().numpy().tobytes()
+            result = tensor.cpu().detach().numpy().tobytes()
 
             self.response_queue.put(result)
 
