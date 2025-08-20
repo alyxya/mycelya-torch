@@ -85,36 +85,23 @@ struct MycelyaHooksInterface : public at::PrivateUse1HooksInterface {
 
   void resizePrivateUse1Bytes(const c10::Storage &storage,
                               size_t new_bytes) const override {
+    py::gil_scoped_acquire acquire;
+
     size_t old_bytes = storage.nbytes();
 
-    // If expanding storage, we need to resize remotely first
+    // If expanding storage, update local storage size first, then notify remote
     if (new_bytes > old_bytes) {
       // Get storage ID from the data pointer
       storage_id_t storage_id =
           reinterpret_cast<storage_id_t>(storage.data_ptr().get());
 
-      try {
-        py::gil_scoped_acquire acquire;
+      // Update the local storage's internal size tracking first
+      const_cast<c10::Storage &>(storage)
+          .unsafeGetStorageImpl()
+          ->set_nbytes(new_bytes);
 
-        // Call Python function to resize remote storage with byte count
-        // directly
-        auto resize_result = get_method("resize_storage_by_id")(
-            storage_id, static_cast<int64_t>(new_bytes));
-        bool success = resize_result.cast<bool>();
-
-        if (success) {
-          // Update the local storage's internal size tracking only on success
-          const_cast<c10::Storage &>(storage)
-              .unsafeGetStorageImpl()
-              ->set_nbytes(new_bytes);
-        } else {
-          TORCH_CHECK(false, "Failed to resize remote storage for storage ID: ",
-                      storage_id);
-        }
-      } catch (const std::exception &e) {
-        TORCH_CHECK(false,
-                    "Exception during remote storage resize: ", e.what());
-      }
+      // Call Python function to resize remote storage with new byte count
+      get_method("resize_storage")(storage_id, static_cast<int64_t>(new_bytes));
     }
   }
 };

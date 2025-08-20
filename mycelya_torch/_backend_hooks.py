@@ -187,6 +187,12 @@ class Driver:
         return orchestrator.free_storage_with_id(storage_id)
 
     @register(registry)
+    def resize_storage(self, storage_id: int, nbytes: int) -> bool:
+        from ._orchestrator import orchestrator
+        
+        return orchestrator.resize_storage_by_id(storage_id, nbytes)
+
+    @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
         from ._orchestrator import orchestrator
         
