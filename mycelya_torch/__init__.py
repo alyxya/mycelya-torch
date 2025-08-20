@@ -226,32 +226,6 @@ from ._machine import (  # noqa: E402
     get_all_machines,
 )
 
-
-def get_metadata_hash(tensor: torch.Tensor) -> int:
-    """Get a metadata hash for a mycelya tensor based on shape, stride, dtype, offset, and storage.
-
-    This creates a unique identifier based on the tensor's metadata:
-    - Shape dimensions
-    - Stride values
-    - Data type
-    - Storage offset
-    - Storage ID
-
-    Tensors with the same metadata AND storage will have the same hash. This makes
-    it useful for caching and detecting when tensor metadata or storage has changed.
-
-    Args:
-        tensor: Mycelya tensor to get metadata hash for
-
-    Returns:
-        64-bit integer hash of the tensor's metadata and storage
-
-    Raises:
-        RuntimeError: If tensor is not a mycelya tensor with custom TensorImpl
-    """
-    return mycelya_torch._C._get_metadata_hash(tensor)
-
-
 # Define the public API
 __all__ = [
     # Core machine and device classes
