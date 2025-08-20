@@ -44,8 +44,12 @@ def shared_devices(provider):
     devices = {}
 
     # Create devices with the parameterized provider
-    devices["t4"] = mycelya_torch.RemoteMachine(provider, "T4")
-    devices["l4"] = mycelya_torch.RemoteMachine(provider, "L4")
+    if provider == "mock":
+        devices["t4"] = mycelya_torch.RemoteMachine(provider)
+        devices["l4"] = mycelya_torch.RemoteMachine(provider)
+    else:
+        devices["t4"] = mycelya_torch.RemoteMachine(provider, "T4")
+        devices["l4"] = mycelya_torch.RemoteMachine(provider, "L4")
 
     # Start the devices
     for device in devices.values():

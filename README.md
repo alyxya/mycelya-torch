@@ -148,7 +148,7 @@ for name, param in model.named_parameters():
 
 ```python
 # Use local execution for development/testing
-machine = mycelya_torch.RemoteMachine("mock", "T4")  # Mock provider executes locally
+machine = mycelya_torch.RemoteMachine("mock")  # Mock provider executes locally
 device = machine.device()
 
 # Same API, but executes locally using Modal's .local() calls
@@ -274,7 +274,7 @@ This project is licensed under AGPL-3.0. All contributions must maintain the AGP
 1. Clone the repository
 2. Install in development mode: `pip install -e .`
 3. Run critical regression tests: `pytest tests/test_regression.py::TestCriticalRegression -v`
-4. Use Mock provider for local development: `mycelya_torch.RemoteMachine("mock", "T4")`
+4. Use Mock provider for local development: `mycelya_torch.RemoteMachine("mock")`
 5. Follow existing code style and patterns with ruff formatting
 
 ## License
