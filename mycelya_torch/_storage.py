@@ -4,57 +4,62 @@
 """
 Storage management for remote tensors.
 
-This module manages storage IDs and their lifecycle:
+This module provides the StorageManager class for managing storage IDs and their lifecycle:
 - Storage ID generation and tracking
 - Storage-to-machine mappings and resolution
-- Cross-device operation validation
-- Remote storage creation and cleanup
 - Storage statistics and information
+
+StorageManager is designed to be used as a property of the Orchestrator class,
+not as a global instance. It does not handle remote cleanup or orchestrator interactions.
 """
 
 import threading
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from ._logging import get_logger
 
 log = get_logger(__name__)
 
 
-class StorageRegistry:
+class StorageManager:
     """
-    Simplified registry to track remote storage IDs only.
+    Manager for remote storage IDs and their machine mappings.
 
     Key concepts:
     - storage_id: Identifies remote memory allocation on clients
     - Uses incremental storage IDs starting from 1 (1, 2, 3, ...)
-    - No local device simulation or memory allocation
-    - Remote operations: Receive storage_id + tensor metadata (shape, stride, offset, storage_id)
-    - Storage cleanup: Handles remote storage cleanup when tensors are freed
+    - Maps storage_id to (machine_id, remote_type, remote_index)
+    - No tensor_id tracking (handled by orchestrator)
+    - No remote cleanup (handled by orchestrator)
+    - Thread-safe storage ID generation
     """
 
     def __init__(self) -> None:
-        # Storage ID tracking - maps storage to device
-        self.storage_id_to_device: Dict[int, int] = {}  # storage_id -> device_index
+        # Storage ID tracking - maps storage to machine info
+        self.storage_id_to_machine_info: Dict[
+            int, Tuple[str, str, int]
+        ] = {}  # storage_id -> (machine_id, remote_type, remote_index)
 
         # Storage ID to nbytes mapping - tracks original nbytes from allocator
         self.storage_id_to_nbytes: Dict[int, int] = {}  # storage_id -> nbytes
-
-        # Tensor ID tracking - maps tensor ID to device
-        self.tensor_id_to_device: Dict[int, int] = {}  # tensor_id -> device_index
 
         # Thread-safe counter for generating incremental storage IDs
         self._storage_id_counter = 1
         self._storage_id_lock = threading.Lock()
 
-        log.info("🚀 Storage registry initialized")
+        log.info("🚀 Storage manager initialized")
 
-    def create_storage(self, nbytes: int, device_index: int) -> int:
+    def create_storage(
+        self, nbytes: int, machine_id: str, remote_type: str, remote_index: int
+    ) -> int:
         """
         Create remote storage with an incremental unique ID.
 
         Args:
             nbytes: Number of bytes to allocate
-            device_index: Device index to create storage on
+            machine_id: Machine identifier for the storage
+            remote_type: Remote device type (e.g., "cuda")
+            remote_index: Remote device index
 
         Returns:
             int: The generated storage ID on success, or 0 on failure
@@ -66,163 +71,62 @@ class StorageRegistry:
 
         log.info(f"🆔 GENERATED Storage ID: {storage_id}")
 
-        # Always track the storage ID for all tensors
-        self.storage_id_to_device[storage_id] = device_index
+        # Track the storage ID with machine info
+        machine_info = (machine_id, remote_type, remote_index)
+        self.storage_id_to_machine_info[storage_id] = machine_info
 
         # Store the original nbytes from the allocator
         self.storage_id_to_nbytes[storage_id] = nbytes
 
-        # Storage is now managed locally only - remote side uses tensor IDs exclusively
-        # No need to register with orchestrator as tensors will be created on-demand
         log.info(
-            f"Created local storage ID {storage_id} for device {device_index} ({nbytes} bytes)"
+            f"Created storage ID {storage_id} for machine {machine_id} ({nbytes} bytes)"
         )
-
-        log.info(f"Registered storage ID {storage_id} on device {device_index}")
         return storage_id
 
-    def register_tensor_id(self, tensor_id: int, device_index: int) -> None:
-        """Register a tensor ID with its device."""
-        self.tensor_id_to_device[tensor_id] = device_index
-        log.debug(f"Registered tensor ID {tensor_id} on device {device_index}")
+    def get_machine_info(self, storage_id: int) -> Optional[Tuple[str, str, int]]:
+        """Get machine info for a storage ID.
 
-    def get_tensor_device(self, tensor_id: int) -> Optional[int]:
-        """Get device index for a tensor ID"""
-        return self.tensor_id_to_device.get(tensor_id)
+        Returns:
+            Tuple of (machine_id, remote_type, remote_index) or None if not found
+        """
+        return self.storage_id_to_machine_info.get(storage_id)
+
+    def get_storage_nbytes(self, storage_id: int) -> Optional[int]:
+        """Get the original nbytes for a storage ID from the allocator."""
+        return self.storage_id_to_nbytes.get(storage_id)
 
     def free_storage_with_id(self, storage_id: int) -> bool:
-        """Free storage by storage ID and perform remote cleanup"""
+        """Free storage by storage ID (local tracking only).
+
+        Note: Remote cleanup is handled by the orchestrator.
+        """
         storage_id = int(storage_id)
         if storage_id == 0:  # Empty storage
             return True
 
-        # Get device information before cleanup
-        device_idx = self.storage_id_to_device.get(storage_id)
-
-        if storage_id in self.storage_id_to_device:
-            # Clean up storage tracking
-            self.storage_id_to_device.pop(storage_id, None)
+        if storage_id in self.storage_id_to_machine_info:
+            # Clean up local tracking
+            self.storage_id_to_machine_info.pop(storage_id, None)
             self.storage_id_to_nbytes.pop(storage_id, None)
 
-            # Remote cleanup if device information is available
-            if device_idx is not None:
-                log.info(f"Storage {storage_id} freed, initiating remote cleanup")
-                self._cleanup_remote_storage(storage_id, device_idx)
-            else:
-                log.debug(
-                    f"No device index found for storage {storage_id}, "
-                    "skipping remote cleanup"
-                )
-
-            log.info(f"Freed storage ID {storage_id}")
+            log.info(f"Freed storage ID {storage_id} from local tracking")
             return True
         else:
             log.warning(f"Attempted to free unknown storage {storage_id}")
             return False
 
-    def _cleanup_remote_storage(self, storage_id: int, device_idx: int) -> None:
-        """Clean up storage on remote GPU device"""
-        try:
-            # Import here to avoid circular imports
-            from ._orchestrator import orchestrator
-
-            # Get the device registry to find the machine
-            if orchestrator is None:
-                log.warning(
-                    f"No orchestrator available for storage {storage_id} cleanup"
-                )
-                return
-
-            # Device validation will be handled by orchestrator
-
-            # Get all tensor IDs associated with this storage using orchestrator
-            tensor_ids = orchestrator.get_tensor_ids_for_storage(storage_id)
-
-            if tensor_ids:
-                log.info(
-                    f"Cleaning up {len(tensor_ids)} tensor IDs for storage {storage_id}"
-                )
-
-                # Remove tensors from remote side using orchestrator
-                orchestrator.remove_tensors_by_device(device_idx, list(tensor_ids))
-
-                # Clean up client-side mapping using orchestrator
-                for tensor_id in tensor_ids:
-                    orchestrator.remove_tensor_from_storage_mapping_by_device(
-                        device_idx, storage_id, tensor_id
-                    )
-
-                log.info(
-                    f"✅ Successfully cleaned up {len(tensor_ids)} tensors for storage {storage_id} "
-                    f"on device {device_idx}"
-                )
-            else:
-                # No tensor IDs found for this storage - it may have already been cleaned up
-                log.info(
-                    f"No tensor IDs found for storage {storage_id} - may already be cleaned up"
-                )
-
-        except Exception as e:
-            log.error(
-                f"Failed remote cleanup for storage {storage_id} on device {device_idx}: {e}"
-            )
-
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
-        """Resize remote storage by storage ID"""
-        try:
-            storage_id = int(storage_id)
+        """Resize storage by storage ID (local tracking only).
 
-            # Get device index for this storage
-            device_idx = self.storage_id_to_device.get(storage_id)
-            if device_idx is None:
-                log.warning(f"No device found for storage {storage_id}")
-                return False
+        Note: Remote resize is handled by the orchestrator.
+        """
+        storage_id = int(storage_id)
 
-            # Use orchestrator for centralized client management
-            from ._orchestrator import orchestrator
-
-            orchestrator.resize_storage(storage_id, nbytes)
-            log.info(
-                f"✅ Successfully resized remote storage {storage_id} to {nbytes} bytes via orchestrator"
-            )
-            return True
-
-        except Exception as e:
-            log.warning(f"Failed to resize remote storage {storage_id}: {e}")
+        if storage_id not in self.storage_id_to_machine_info:
+            log.warning(f"No machine info found for storage {storage_id}")
             return False
 
-
-# Global instances
-_storage_registry = StorageRegistry()
-
-
-# Storage registry access functions
-def create_storage(nbytes: int, device_index: int) -> int:
-    """Create remote storage with a generated unique ID."""
-    return _storage_registry.create_storage(nbytes, device_index)
-
-
-def free_storage_with_id(storage_id: int) -> bool:
-    """Free storage by storage ID."""
-    return _storage_registry.free_storage_with_id(storage_id)
-
-
-def register_tensor_id(tensor_id: int, device_index: int) -> None:
-    """Register a tensor ID with its device."""
-    return _storage_registry.register_tensor_id(tensor_id, device_index)
-
-
-def get_tensor_device(tensor_id: int) -> Optional[int]:
-    """Get device index for a tensor ID"""
-    return _storage_registry.get_tensor_device(tensor_id)
-
-
-def get_storage_nbytes(storage_id: int) -> Optional[int]:
-    """Get the original nbytes for a storage ID from the allocator."""
-    return _storage_registry.storage_id_to_nbytes.get(storage_id)
-
-
-def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:
-    """Resize remote storage by storage ID."""
-    return _storage_registry.resize_storage_by_id(storage_id, nbytes)
-
+        # Update local nbytes tracking
+        self.storage_id_to_nbytes[storage_id] = nbytes
+        log.info(f"Updated local nbytes for storage {storage_id} to {nbytes}")
+        return True

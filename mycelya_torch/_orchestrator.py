@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import torch
 
 from ._logging import get_logger
+from ._storage import StorageManager
 from ._utils import get_storage_id, get_tensor_id
 from .backends.base_client import Client
 
@@ -37,6 +38,9 @@ class Orchestrator:
     def __init__(self):
         # Simple utility-based architecture - no service objects needed
 
+        # Storage management
+        self.storage = StorageManager()
+
         # Centralized client management by machine ID
         self._clients: Dict[str, Client] = {}  # machine_id -> client
 
@@ -44,6 +48,11 @@ class Orchestrator:
         self._storage_cache: Dict[int, bytes] = {}
         self._cache_hits = 0
         self._cache_misses = 0
+
+        # Tensor ID tracking - maps tensor ID to machine info
+        self._tensor_id_to_machine_info: Dict[
+            int, Tuple[str, str, int]
+        ] = {}  # tensor_id -> (machine_id, remote_type, remote_index)
 
         # Tensor ID to Storage ID mapping for cache coordination
         self._tensor_to_storage_map: Dict[int, int] = {}
@@ -361,13 +370,12 @@ class Orchestrator:
             RuntimeError: If storage, machine, or client not found/available
         """
         try:
-            from ._storage import _storage_registry
+            machine_info = self.storage.get_machine_info(storage_id)
+            if machine_info is None:
+                raise RuntimeError(f"No machine info found for storage {storage_id}")
 
-            device_index = _storage_registry.storage_id_to_device.get(storage_id)
-            if device_index is None:
-                raise RuntimeError(f"No device found for storage {storage_id}")
-
-            return self.get_client_by_device_index(device_index)
+            machine_id, remote_type, remote_index = machine_info
+            return self.get_client(machine_id)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to resolve client for storage {storage_id}: {e}"
@@ -386,19 +394,11 @@ class Orchestrator:
             RuntimeError: If tensor, machine, or client not found/available
         """
         try:
-            from ._device import get_device_manager
-            from ._storage import get_tensor_device
+            machine_info = self.get_machine_info_for_tensor(tensor_id)
+            if machine_info is None:
+                raise RuntimeError(f"No machine info found for tensor {tensor_id}")
 
-            device_index = get_tensor_device(tensor_id)
-            if device_index is None:
-                raise RuntimeError(f"No device found for tensor {tensor_id}")
-
-            machine_id = get_device_manager().get_machine_id_for_device_index(
-                device_index
-            )
-            if machine_id is None:
-                raise RuntimeError(f"No machine found for device index {device_index}")
-
+            machine_id, remote_type, remote_index = machine_info
             return self.get_client(machine_id)
         except Exception as e:
             raise RuntimeError(
@@ -419,7 +419,183 @@ class Orchestrator:
         """
         return self.get_client_by_device_index(device_index)
 
-    # Storage management methods - mirroring Client
+    # Storage management methods
+
+    def create_storage(
+        self, nbytes: int, machine_id: str, remote_type: str, remote_index: int
+    ) -> int:
+        """Create storage on a remote machine.
+
+        Args:
+            nbytes: Number of bytes to allocate
+            machine_id: Machine identifier
+            remote_type: Remote device type (e.g., "cuda")
+            remote_index: Remote device index
+
+        Returns:
+            Storage ID on success, 0 on failure
+        """
+        return self.storage.create_storage(
+            nbytes, machine_id, remote_type, remote_index
+        )
+
+    def free_storage_with_id(self, storage_id: int) -> bool:
+        """Free storage by storage ID with remote cleanup.
+
+        Args:
+            storage_id: Storage ID to free
+
+        Returns:
+            True if freed successfully, False otherwise
+        """
+        # Get machine info for remote cleanup
+        machine_info = self.storage.get_machine_info(storage_id)
+
+        # Free from local tracking first
+        success = self.storage.free_storage_with_id(storage_id)
+
+        if success and machine_info:
+            machine_id, remote_type, remote_index = machine_info
+            try:
+                # Perform remote cleanup
+                self._cleanup_remote_storage(storage_id, machine_id)
+            except Exception as e:
+                log.error(f"Failed remote cleanup for storage {storage_id}: {e}")
+
+        return success
+
+    def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
+        """Resize storage by storage ID with remote operation.
+
+        Args:
+            storage_id: Storage ID to resize
+            nbytes: New size in bytes
+
+        Returns:
+            True if resized successfully, False otherwise
+        """
+        machine_info = self.storage.get_machine_info(storage_id)
+        if machine_info is None:
+            log.warning(f"No machine info found for storage {storage_id}")
+            return False
+
+        machine_id, remote_type, remote_index = machine_info
+
+        try:
+            # Perform remote resize
+            client = self.get_client(machine_id)
+            client.resize_storage(storage_id, nbytes)
+
+            # Update local tracking
+            success = self.storage.resize_storage_by_id(storage_id, nbytes)
+
+            # Invalidate orchestrator cache for the resized storage
+            self._invalidate_cache_for_storage(storage_id)
+
+            if success:
+                log.info(
+                    f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes"
+                )
+
+            return success
+        except Exception as e:
+            log.error(f"Failed to resize storage {storage_id}: {e}")
+            return False
+
+    def get_storage_nbytes(self, storage_id: int) -> Optional[int]:
+        """Get the original nbytes for a storage ID.
+
+        Args:
+            storage_id: Storage ID to query
+
+        Returns:
+            Number of bytes or None if not found
+        """
+        return self.storage.get_storage_nbytes(storage_id)
+
+    def get_machine_info_for_storage(
+        self, storage_id: int
+    ) -> Optional[Tuple[str, str, int]]:
+        """Get machine info for a storage ID.
+
+        Args:
+            storage_id: Storage ID to query
+
+        Returns:
+            Tuple of (machine_id, remote_type, remote_index) or None if not found
+        """
+        return self.storage.get_machine_info(storage_id)
+
+    # Tensor management methods
+
+    def register_tensor_id(
+        self, tensor_id: int, machine_id: str, remote_type: str, remote_index: int
+    ) -> None:
+        """Register a tensor ID with its machine info.
+
+        Args:
+            tensor_id: Tensor ID to register
+            machine_id: Machine identifier
+            remote_type: Remote device type (e.g., "cuda")
+            remote_index: Remote device index
+        """
+        machine_info = (machine_id, remote_type, remote_index)
+        self._tensor_id_to_machine_info[tensor_id] = machine_info
+        log.debug(f"Registered tensor ID {tensor_id} with machine {machine_id}")
+
+    def get_machine_info_for_tensor(
+        self, tensor_id: int
+    ) -> Optional[Tuple[str, str, int]]:
+        """Get machine info for a tensor ID.
+
+        Args:
+            tensor_id: Tensor ID to query
+
+        Returns:
+            Tuple of (machine_id, remote_type, remote_index) or None if not found
+        """
+        return self._tensor_id_to_machine_info.get(tensor_id)
+
+    def _cleanup_remote_storage(self, storage_id: int, machine_id: str) -> None:
+        """Clean up storage on remote GPU device.
+
+        Args:
+            storage_id: Storage ID to clean up
+            machine_id: Machine identifier for the storage
+        """
+        try:
+            if not self.is_client_running(machine_id):
+                log.warning(
+                    f"Client for machine {machine_id} not running, skipping cleanup"
+                )
+                return
+
+            # Get all tensor IDs associated with this storage using orchestrator
+            tensor_ids = self.get_tensor_ids_for_storage(storage_id)
+
+            if tensor_ids:
+                log.info(
+                    f"Cleaning up {len(tensor_ids)} tensor IDs for storage {storage_id}"
+                )
+
+                client = self.get_client(machine_id)
+                # Remove tensors from remote side
+                client.remove_tensors(list(tensor_ids))
+
+                log.info(
+                    f"✅ Successfully cleaned up {len(tensor_ids)} tensors for storage {storage_id}"
+                )
+            else:
+                log.info(
+                    f"No tensor IDs found for storage {storage_id} - may already be cleaned up"
+                )
+
+        except Exception as e:
+            log.error(
+                f"Failed remote cleanup for storage {storage_id} on machine {machine_id}: {e}"
+            )
+
+    # Legacy storage methods - mirroring Client
 
     def get_tensor_by_id(
         self,
@@ -543,10 +719,8 @@ class Orchestrator:
         # Try to invalidate cache by finding storage_id for this tensor_id
         # Note: This is best-effort since tensor_id to storage_id mapping may not be available
         try:
-            from ._storage import get_tensor_device
-
-            device_idx = get_tensor_device(tensor_id)
-            if device_idx is not None:
+            machine_info = self.get_machine_info_for_tensor(tensor_id)
+            if machine_info is not None:
                 # We can't easily map tensor_id to storage_id, so we skip cache invalidation
                 # for tensor-based updates. Storage-based updates handle cache invalidation properly.
                 log.debug(
@@ -708,10 +882,8 @@ class Orchestrator:
             # Storage doesn't exist - create empty tensor on remote
             log.debug(f"Creating empty tensor {tensor_id} for new storage {storage_id}")
 
-            # Get the original nbytes from the storage registry
-            from ._storage import get_storage_nbytes
-
-            nbytes = get_storage_nbytes(storage_id)
+            # Get the original nbytes from the storage manager
+            nbytes = self.get_storage_nbytes(storage_id)
             if nbytes is None:
                 raise RuntimeError(f"No nbytes found for storage {storage_id}")
 

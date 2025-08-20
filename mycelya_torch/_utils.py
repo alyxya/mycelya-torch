@@ -36,11 +36,21 @@ def get_tensor_id(tensor: torch.Tensor) -> int:
     tensor_id = mycelya_torch._C._get_metadata_hash(tensor)
 
     # Register tensor ID for device tracking (needed for cross-device validation)
-    from ._storage import get_tensor_device, register_tensor_id
+    from ._device import get_device_manager
+    from ._orchestrator import orchestrator
 
-    if get_tensor_device(tensor_id) is None:
+    if orchestrator.get_machine_info_for_tensor(tensor_id) is None:
         device_index = tensor.device.index
-        register_tensor_id(tensor_id, device_index)
+        device_manager = get_device_manager()
+        machine_id = device_manager.get_machine_id_for_device_index(device_index)
+
+        if machine_id is not None:
+            # For now, assume cuda:0 - this could be made more sophisticated later
+            remote_type = "cuda"
+            remote_index = 0
+            orchestrator.register_tensor_id(
+                tensor_id, machine_id, remote_type, remote_index
+            )
 
     return tensor_id
 

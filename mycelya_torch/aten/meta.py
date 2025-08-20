@@ -111,10 +111,20 @@ def _create_output_tensors(
             output_tensor_ids.append(tensor_id)
 
             # Ensure tensor ID is registered with device tracking system
-            from .._storage import register_tensor_id
+            from .._device import get_device_manager
+            from .._orchestrator import orchestrator
 
             device_index = remote_device.index
-            register_tensor_id(tensor_id, device_index)
+            device_manager = get_device_manager()
+            machine_id = device_manager.get_machine_id_for_device_index(device_index)
+
+            if machine_id is not None:
+                # For now, assume cuda:0 - this could be made more sophisticated later
+                remote_type = "cuda"
+                remote_index = 0
+                orchestrator.register_tensor_id(
+                    tensor_id, machine_id, remote_type, remote_index
+                )
         else:
             # Create new tensor
             new_tensor = torch.empty(
@@ -136,10 +146,20 @@ def _create_output_tensors(
             output_tensor_ids.append(tensor_id)
 
             # Register tensor ID with device tracking system
-            from .._storage import register_tensor_id
+            from .._device import get_device_manager
+            from .._orchestrator import orchestrator
 
             device_index = remote_device.index
-            register_tensor_id(tensor_id, device_index)
+            device_manager = get_device_manager()
+            machine_id = device_manager.get_machine_id_for_device_index(device_index)
+
+            if machine_id is not None:
+                # For now, assume cuda:0 - this could be made more sophisticated later
+                remote_type = "cuda"
+                remote_index = 0
+                orchestrator.register_tensor_id(
+                    tensor_id, machine_id, remote_type, remote_index
+                )
 
     return output_tensors, output_tensor_ids
 
@@ -239,10 +259,20 @@ def _execute_with_dynamic_outputs(
         output_tensor_ids = [get_tensor_id(output_tensor)]
 
         # Ensure tensor ID is registered with device tracking system
-        from .._storage import register_tensor_id
+        from .._device import get_device_manager
+        from .._orchestrator import orchestrator
 
         device_index = remote_device.index
-        register_tensor_id(output_tensor_ids[0], device_index)
+        device_manager = get_device_manager()
+        machine_id = device_manager.get_machine_id_for_device_index(device_index)
+
+        if machine_id is not None:
+            # For now, assume cuda:0 - this could be made more sophisticated later
+            remote_type = "cuda"
+            remote_index = 0
+            orchestrator.register_tensor_id(
+                output_tensor_ids[0], machine_id, remote_type, remote_index
+            )
     else:
         # Step 1: Infer output dtype based on operation type
         output_dtype = torch.int64 if op_name == "aten::nonzero" else args[0].dtype
@@ -253,10 +283,20 @@ def _execute_with_dynamic_outputs(
         output_tensor_ids = [get_tensor_id(output_tensor)]
 
         # Register tensor ID with device tracking system
-        from .._storage import register_tensor_id
+        from .._device import get_device_manager
+        from .._orchestrator import orchestrator
 
         device_index = remote_device.index
-        register_tensor_id(output_tensor_ids[0], device_index)
+        device_manager = get_device_manager()
+        machine_id = device_manager.get_machine_id_for_device_index(device_index)
+
+        if machine_id is not None:
+            # For now, assume cuda:0 - this could be made more sophisticated later
+            remote_type = "cuda"
+            remote_index = 0
+            orchestrator.register_tensor_id(
+                output_tensor_ids[0], machine_id, remote_type, remote_index
+            )
 
     # Step 3: Execute remotely and request metadata return
     processed_args, processed_kwargs, input_tensors, tensor_mask = (

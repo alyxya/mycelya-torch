@@ -7,11 +7,6 @@ from typing import Any, Callable, Dict, List
 import torch
 
 from ._logging import get_logger
-from ._storage import (
-    create_storage,
-    free_storage_with_id,
-    resize_storage_by_id,
-)
 
 log = get_logger(__name__)
 
@@ -173,10 +168,25 @@ class Driver:
         log.info(f"Command {cmd} result: {res}")
         return res
 
-    # Storage operations - delegate to _storage module
+    # Storage operations - delegate to orchestrator
     @register(registry)
     def create_storage(self, nbytes: int, device_index: int) -> int:
-        storage_id = create_storage(nbytes, device_index)
+        from ._device import get_device_manager
+        from ._orchestrator import orchestrator
+
+        # Get machine info from device index
+        device_manager = get_device_manager()
+        machine_id = device_manager.get_machine_id_for_device_index(device_index)
+        if machine_id is None:
+            raise RuntimeError(f"No machine ID found for device index {device_index}")
+
+        # For now, assume cuda:0 - this could be made more sophisticated later
+        remote_type = "cuda"
+        remote_index = 0
+
+        storage_id = orchestrator.create_storage(
+            nbytes, machine_id, remote_type, remote_index
+        )
         if storage_id == 0:
             raise RuntimeError(
                 f"Failed to create storage ({nbytes} bytes) on device {device_index}"
@@ -185,11 +195,15 @@ class Driver:
 
     @register(registry)
     def free_storage_with_id(self, storage_id: int) -> bool:
-        return free_storage_with_id(storage_id)
+        from ._orchestrator import orchestrator
+
+        return orchestrator.free_storage_with_id(storage_id)
 
     @register(registry)
     def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
-        return resize_storage_by_id(storage_id, nbytes)
+        from ._orchestrator import orchestrator
+
+        return orchestrator.resize_storage_by_id(storage_id, nbytes)
 
     # Device operations
     @register(registry)
