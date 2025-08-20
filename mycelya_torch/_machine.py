@@ -128,12 +128,10 @@ class RemoteMachine:
         self._batching = _batching
 
         # Create and register client with orchestrator
-        device_index = self.device().index
         orchestrator.create_client(
             self.machine_id,
             self.provider.value,
             self.gpu_type.value,
-            device_index,
             self._batching,
         )
 

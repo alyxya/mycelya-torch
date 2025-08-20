@@ -39,7 +39,6 @@ class Orchestrator:
 
         # Centralized client management by machine ID
         self._clients: Dict[str, Client] = {}  # machine_id -> client
-        self._machine_to_device: Dict[str, int] = {}  # machine_id -> device_index
 
         # Orchestrator-level storage cache (storage_id -> raw_bytes)
         self._storage_cache: Dict[int, bytes] = {}
@@ -58,98 +57,41 @@ class Orchestrator:
         self._background_thread.start()
 
     # Client management methods
-    def register_client(self, device_index: int, client: Client) -> None:
-        """Register a client for a specific device index (legacy method)."""
-        # Find machine_id for this client
-        machine_id = getattr(client, "machine_id", f"device_{device_index}")
-
-        # Store in new structure
-        if machine_id in self._clients:
-            existing_client = self._clients[machine_id]
-            if existing_client.is_running():
-                existing_client.stop()
-
-        self._clients[machine_id] = client
-        self._machine_to_device[machine_id] = device_index
-        log.info(
-            f"✅ ORCHESTRATOR: Registered client for device index {device_index} (machine {machine_id})"
-        )
 
     def unregister_client(self, device_index: int) -> None:
-        """Unregister a client for a specific device index (stops and removes from registry).
+        """Unregister a client for a specific device index (legacy method - deprecated).
 
-        Note: This should only be used during final cleanup/destruction.
-        For normal operation, use stop_client() to stop without unregistering.
+        This method is deprecated as orchestrator no longer tracks device indices.
+        Use machine-based methods instead.
         """
-        # Find machine_id for this device_index
-        machine_id = None
-        for mid, dev_idx in self._machine_to_device.items():
-            if dev_idx == device_index:
-                machine_id = mid
-                break
-
-        if machine_id and machine_id in self._clients:
-            client = self._clients.pop(machine_id)
-            self._machine_to_device.pop(machine_id, None)
-            if client.is_running():
-                client.stop()
-            log.info(
-                f"✅ ORCHESTRATOR: Unregistered client for device index {device_index} (machine {machine_id})"
-            )
+        log.warning(
+            "unregister_client(device_index) is deprecated - use machine-based methods"
+        )
 
     def get_client_by_device_index(self, device_index: int) -> Client:
-        """Get client by device index (legacy method)."""
-        # Find machine_id for this device_index
-        machine_id = None
-        for mid, dev_idx in self._machine_to_device.items():
-            if dev_idx == device_index:
-                machine_id = mid
-                break
-
-        if machine_id is None:
-            raise RuntimeError(f"No machine found for device index {device_index}")
-
-        return self.get_client(machine_id)
+        """Get client by device index (legacy method - deprecated)."""
+        raise RuntimeError(
+            "get_client_by_device_index is deprecated - use get_client(machine_id) instead"
+        )
 
     def start_client_by_device_index(self, device_index: int) -> None:
-        """Start a client by device index (legacy method)."""
-        # Find machine_id for this device_index
-        machine_id = None
-        for mid, dev_idx in self._machine_to_device.items():
-            if dev_idx == device_index:
-                machine_id = mid
-                break
-
-        if machine_id is None:
-            raise RuntimeError(f"No machine found for device index {device_index}")
-
-        self.start_client(machine_id)
+        """Start a client by device index (legacy method - deprecated)."""
+        raise RuntimeError(
+            "start_client_by_device_index is deprecated - use start_client(machine_id) instead"
+        )
 
     def stop_client_by_device_index(self, device_index: int) -> None:
-        """Stop a client by device index (but keep it registered) (legacy method)."""
-        # Find machine_id for this device_index
-        machine_id = None
-        for mid, dev_idx in self._machine_to_device.items():
-            if dev_idx == device_index:
-                machine_id = mid
-                break
-
-        if machine_id is not None:
-            self.stop_client(machine_id)
+        """Stop a client by device index (legacy method - deprecated)."""
+        raise RuntimeError(
+            "stop_client_by_device_index is deprecated - use stop_client(machine_id) instead"
+        )
 
     def is_client_running_by_device_index(self, device_index: int) -> bool:
-        """Check if a client is running for a device index (legacy method)."""
-        # Find machine_id for this device_index
-        machine_id = None
-        for mid, dev_idx in self._machine_to_device.items():
-            if dev_idx == device_index:
-                machine_id = mid
-                break
-
-        if machine_id is None:
-            return False
-
-        return self.is_client_running(machine_id)
+        """Check if a client is running for a device index (legacy method - deprecated)."""
+        log.warning(
+            "is_client_running_by_device_index is deprecated - use is_client_running(machine_id)"
+        )
+        return False
 
     # Machine-based client management methods
     def create_client(
@@ -157,7 +99,6 @@ class Orchestrator:
         machine_id: str,
         provider: str,
         gpu_type: str,
-        device_index: int,
         batching: bool = True,
     ) -> None:
         """Create and register a client for a machine.
@@ -166,7 +107,6 @@ class Orchestrator:
             machine_id: Unique machine identifier
             provider: Provider type ("modal" or "mock")
             gpu_type: GPU type string
-            device_index: Device index from device manager
             batching: Whether to enable batching
         """
         try:
@@ -183,9 +123,8 @@ class Orchestrator:
                 raise ValueError(f"Provider {provider} not implemented yet")
 
             if client is not None:
-                # Store both mappings
+                # Store client mapping
                 self._clients[machine_id] = client
-                self._machine_to_device[machine_id] = device_index
                 log.info(
                     f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
                 )
@@ -224,13 +163,6 @@ class Orchestrator:
         """Check if a client is running for the given machine."""
         client = self._clients.get(machine_id)
         return client is not None and client.is_running()
-
-    def get_device_index(self, machine_id: str) -> int:
-        """Get device index for the given machine."""
-        device_index = self._machine_to_device.get(machine_id)
-        if device_index is None:
-            raise RuntimeError(f"No device index found for machine {machine_id}")
-        return device_index
 
     def _invalidate_cache_for_storage(self, storage_id: int) -> None:
         """Invalidate cache entry for a specific storage ID.
@@ -454,13 +386,20 @@ class Orchestrator:
             RuntimeError: If tensor, machine, or client not found/available
         """
         try:
+            from ._device import get_device_manager
             from ._storage import get_tensor_device
 
             device_index = get_tensor_device(tensor_id)
             if device_index is None:
                 raise RuntimeError(f"No device found for tensor {tensor_id}")
 
-            return self.get_client_by_device_index(device_index)
+            machine_id = get_device_manager().get_machine_id_for_device_index(
+                device_index
+            )
+            if machine_id is None:
+                raise RuntimeError(f"No machine found for device index {device_index}")
+
+            return self.get_client(machine_id)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to resolve client for tensor {tensor_id}: {e}"

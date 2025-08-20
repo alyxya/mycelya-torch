@@ -8,7 +8,7 @@ This module provides the DeviceManager for managing remote device information
 and their device indices for PyTorch integration.
 """
 
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 
@@ -29,9 +29,7 @@ class DeviceManager:
         ] = {}  # (machine_id, remote_type, remote_index) -> local_index
         self._next_index = 0
 
-    def get_device(
-        self, machine_id: str, type: str, index: int
-    ) -> torch.device:
+    def get_device(self, machine_id: str, type: str, index: int) -> torch.device:
         """
         Get a torch.device object for the given machine configuration.
 
@@ -61,6 +59,13 @@ class DeviceManager:
         self._remote_to_local_device[device_tuple] = local_index
 
         return torch.device("mycelya", local_index)
+
+    def get_machine_id_for_device_index(self, device_index: int) -> Optional[str]:
+        """Get machine_id for a given device index."""
+        device_info = self._local_to_remote_device.get(device_index)
+        if device_info is None:
+            return None
+        return device_info[0]  # machine_id is the first element
 
 
 # Global device manager
