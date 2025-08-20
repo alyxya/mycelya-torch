@@ -66,43 +66,6 @@ class Orchestrator:
         self._background_thread.start()
 
     # Client management methods
-
-    def unregister_client(self, device_index: int) -> None:
-        """Unregister a client for a specific device index (legacy method - deprecated).
-
-        This method is deprecated as orchestrator no longer tracks device indices.
-        Use machine-based methods instead.
-        """
-        log.warning(
-            "unregister_client(device_index) is deprecated - use machine-based methods"
-        )
-
-    def get_client_by_device_index(self, device_index: int) -> Client:
-        """Get client by device index (legacy method - deprecated)."""
-        raise RuntimeError(
-            "get_client_by_device_index is deprecated - use get_client(machine_id) instead"
-        )
-
-    def start_client_by_device_index(self, device_index: int) -> None:
-        """Start a client by device index (legacy method - deprecated)."""
-        raise RuntimeError(
-            "start_client_by_device_index is deprecated - use start_client(machine_id) instead"
-        )
-
-    def stop_client_by_device_index(self, device_index: int) -> None:
-        """Stop a client by device index (legacy method - deprecated)."""
-        raise RuntimeError(
-            "stop_client_by_device_index is deprecated - use stop_client(machine_id) instead"
-        )
-
-    def is_client_running_by_device_index(self, device_index: int) -> bool:
-        """Check if a client is running for a device index (legacy method - deprecated)."""
-        log.warning(
-            "is_client_running_by_device_index is deprecated - use is_client_running(machine_id)"
-        )
-        return False
-
-    # Machine-based client management methods
     def create_client(
         self,
         machine_id: str,
@@ -393,19 +356,6 @@ class Orchestrator:
                 f"Failed to resolve client for tensor {tensor_id}: {e}"
             ) from e
 
-    def _get_validated_client_by_device_index(self, device_index: int) -> Client:
-        """Get a validated client for a device index, ensuring it's running.
-
-        Args:
-            device_index: Device index to get client for
-
-        Returns:
-            Client: The validated, running client
-
-        Raises:
-            RuntimeError: If client is None or not running
-        """
-        return self.get_client_by_device_index(device_index)
 
     # Storage management methods
 
@@ -828,29 +778,6 @@ class Orchestrator:
             log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
             return None
 
-    # HuggingFace integration methods
-    def prepare_huggingface_model_by_device(
-        self,
-        device_index: int,
-        checkpoint: str,
-        torch_dtype: str = None,
-        trust_remote_code: bool = False,
-    ) -> dict:
-        """Prepare a HuggingFace model on remote machine by device index."""
-        client = self._get_validated_client_by_device_index(device_index)
-        future = client.prepare_huggingface_model(
-            checkpoint=checkpoint,
-            torch_dtype=torch_dtype,
-            trust_remote_code=trust_remote_code,
-        )
-        return future.result()
-
-    def ensure_tensor_exists_by_device(
-        self, device_index: int, tensor: "torch.Tensor"
-    ) -> None:
-        """Ensure tensor exists on remote machine by device index."""
-        client = self._get_validated_client_by_device_index(device_index)
-        self._ensure_tensor_exists_on_client(client, tensor)
 
     def _ensure_tensor_exists_on_client(self, client, tensor: "torch.Tensor") -> None:
         """Ensure tensor exists on remote client using storage mapping logic.
@@ -918,39 +845,6 @@ class Orchestrator:
                 # Tensor already exists in orchestrator mapping, assume it exists on server
                 log.debug(f"Tensor {tensor_id} already exists in orchestrator mapping")
 
-    def link_model_tensors_by_device(
-        self, device_index: int, local_storage_ids: list, parameter_names: list
-    ) -> None:
-        """Link model tensors on remote machine by device index."""
-        client = self._get_validated_client_by_device_index(device_index)
-        client.link_model_tensors(local_storage_ids, parameter_names)
-
-    # Storage cleanup methods
-
-    def remove_tensors_by_device(self, device_index: int, tensor_ids: list) -> None:
-        """Remove tensors from remote machine by device index."""
-        if not self.is_client_running(device_index):
-            log.debug(
-                f"Client for device index {device_index} not running, skipping tensor removal"
-            )
-            return
-
-        client = self.get_client_by_device_index(device_index)
-        client.remove_tensors(tensor_ids)
-
-    def remove_tensor_from_storage_mapping_by_device(
-        self, device_index: int, storage_id: int, tensor_id: int
-    ) -> None:
-        """Remove tensor from storage mapping by device index."""
-        if not self.is_client_running(device_index):
-            log.debug(
-                f"Client for device index {device_index} not running, skipping storage mapping removal"
-            )
-            return
-
-        log.debug(
-            f"Skipping client-side storage mapping removal for storage {storage_id}, tensor {tensor_id}"
-        )
 
     def _background_loop(self):
         """Background thread for batch execution and future resolution.
