@@ -11,7 +11,7 @@ machines with different cloud providers and GPU types.
 import atexit
 import uuid
 from enum import Enum
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import torch
 
@@ -299,7 +299,7 @@ class RemoteMachine:
         return self.gpu_type.value
 
 
-    def device(self, type: str = None, index: int = None) -> torch.device:
+    def device(self, type: Optional[str] = None, index: Optional[int] = None) -> torch.device:
         """
         Get a PyTorch device object for this RemoteMachine.
 
@@ -315,7 +315,7 @@ class RemoteMachine:
 
         Raises:
             ValueError: If both index kwarg and type string contain index,
-                       or if type is not supported for the provider.
+                       or if device type is not supported for the provider.
 
         Examples:
             >>> # Modal machine defaults
