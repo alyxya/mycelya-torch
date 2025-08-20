@@ -203,18 +203,6 @@ class RemoteMachine:
     def __hash__(self) -> int:
         return hash(self.machine_id)
 
-    @property
-    def device_name(self) -> str:
-        """Get a human-readable device name."""
-        return f"{self.provider.value.title()} {self.gpu_type.value}"
-
-    @property
-    def modal_gpu_spec(self) -> str:
-        """Get the Modal GPU specification string."""
-        if self.provider != CloudProvider.MODAL:
-            raise ValueError("modal_gpu_spec only available for Modal provider")
-        return self.gpu_type.value
-
     def device(
         self, type: Optional[str] = None, index: Optional[int] = None
     ) -> torch.device:
