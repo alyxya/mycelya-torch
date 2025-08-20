@@ -37,8 +37,9 @@ class Orchestrator:
     def __init__(self):
         # Simple utility-based architecture - no service objects needed
 
-        # Centralized client management by device index
-        self._clients: Dict[int, Client] = {}  # device_index -> client
+        # Centralized client management by machine ID
+        self._clients: Dict[str, Client] = {}  # machine_id -> client
+        self._machine_to_device: Dict[str, int] = {}  # machine_id -> device_index
 
         # Orchestrator-level storage cache (storage_id -> raw_bytes)
         self._storage_cache: Dict[int, bytes] = {}
@@ -58,15 +59,19 @@ class Orchestrator:
 
     # Client management methods
     def register_client(self, device_index: int, client: Client) -> None:
-        """Register a client for a specific device index."""
-        if device_index in self._clients:
-            # Stop existing client if it exists
-            existing_client = self._clients[device_index]
+        """Register a client for a specific device index (legacy method)."""
+        # Find machine_id for this client
+        machine_id = getattr(client, 'machine_id', f"device_{device_index}")
+
+        # Store in new structure
+        if machine_id in self._clients:
+            existing_client = self._clients[machine_id]
             if existing_client.is_running():
                 existing_client.stop()
 
-        self._clients[device_index] = client
-        log.info(f"✅ ORCHESTRATOR: Registered client for device index {device_index}")
+        self._clients[machine_id] = client
+        self._machine_to_device[machine_id] = device_index
+        log.info(f"✅ ORCHESTRATOR: Registered client for device index {device_index} (machine {machine_id})")
 
     def unregister_client(self, device_index: int) -> None:
         """Unregister a client for a specific device index (stops and removes from registry).
@@ -74,43 +79,143 @@ class Orchestrator:
         Note: This should only be used during final cleanup/destruction.
         For normal operation, use stop_client() to stop without unregistering.
         """
-        if device_index in self._clients:
-            client = self._clients.pop(device_index)
+        # Find machine_id for this device_index
+        machine_id = None
+        for mid, dev_idx in self._machine_to_device.items():
+            if dev_idx == device_index:
+                machine_id = mid
+                break
+
+        if machine_id and machine_id in self._clients:
+            client = self._clients.pop(machine_id)
+            self._machine_to_device.pop(machine_id, None)
             if client.is_running():
                 client.stop()
-            log.info(
-                f"✅ ORCHESTRATOR: Unregistered client for device index {device_index}"
-            )
+            log.info(f"✅ ORCHESTRATOR: Unregistered client for device index {device_index} (machine {machine_id})")
 
     def get_client_by_device_index(self, device_index: int) -> Client:
-        """Get client by device index."""
-        client = self._clients.get(device_index)
-        if client is None:
-            raise RuntimeError(f"No client registered for device index {device_index}")
-        if not client.is_running():
-            raise RuntimeError(f"Client for device index {device_index} is not running")
-        return client
+        """Get client by device index (legacy method)."""
+        # Find machine_id for this device_index
+        machine_id = None
+        for mid, dev_idx in self._machine_to_device.items():
+            if dev_idx == device_index:
+                machine_id = mid
+                break
+
+        if machine_id is None:
+            raise RuntimeError(f"No machine found for device index {device_index}")
+
+        return self.get_client_by_machine_id(machine_id)
 
     def start_client(self, device_index: int) -> None:
-        """Start a client by device index."""
-        client = self._clients.get(device_index)
-        if client is None:
-            raise RuntimeError(f"No client registered for device index {device_index}")
-        if not client.is_running():
-            client.start()
-            log.info(f"✅ ORCHESTRATOR: Started client for device index {device_index}")
+        """Start a client by device index (legacy method)."""
+        # Find machine_id for this device_index
+        machine_id = None
+        for mid, dev_idx in self._machine_to_device.items():
+            if dev_idx == device_index:
+                machine_id = mid
+                break
+
+        if machine_id is None:
+            raise RuntimeError(f"No machine found for device index {device_index}")
+
+        self.start_client_by_machine_id(machine_id)
 
     def stop_client(self, device_index: int) -> None:
-        """Stop a client by device index (but keep it registered)."""
-        client = self._clients.get(device_index)
-        if client is not None and client.is_running():
-            client.stop()
-            log.info(f"✅ ORCHESTRATOR: Stopped client for device index {device_index}")
+        """Stop a client by device index (but keep it registered) (legacy method)."""
+        # Find machine_id for this device_index
+        machine_id = None
+        for mid, dev_idx in self._machine_to_device.items():
+            if dev_idx == device_index:
+                machine_id = mid
+                break
+
+        if machine_id is not None:
+            self.stop_client_by_machine_id(machine_id)
 
     def is_client_running(self, device_index: int) -> bool:
-        """Check if a client is running for a device index."""
-        client = self._clients.get(device_index)
+        """Check if a client is running for a device index (legacy method)."""
+        # Find machine_id for this device_index
+        machine_id = None
+        for mid, dev_idx in self._machine_to_device.items():
+            if dev_idx == device_index:
+                machine_id = mid
+                break
+
+        if machine_id is None:
+            return False
+
+        return self.is_client_running_by_machine_id(machine_id)
+
+    # Machine-based client management methods
+    def create_and_register_client(self, machine_id: str, provider: str, gpu_type: str, device_index: int, batching: bool = True) -> None:
+        """Create and register a client for a machine.
+
+        Args:
+            machine_id: Unique machine identifier
+            provider: Provider type ("modal" or "mock")
+            gpu_type: GPU type string
+            device_index: Device index from device manager
+            batching: Whether to enable batching
+        """
+        try:
+            client = None
+            if provider == "modal":
+                from .backends.modal.client import ModalClient
+                client = ModalClient(gpu_type, machine_id, 300, batching)
+            elif provider == "mock":
+                from .backends.mock.client import MockClient
+                client = MockClient(gpu_type, machine_id, 300, batching)
+            else:
+                raise ValueError(f"Provider {provider} not implemented yet")
+
+            if client is not None:
+                # Store both mappings
+                self._clients[machine_id] = client
+                self._machine_to_device[machine_id] = device_index
+                log.info(f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}")
+
+        except ImportError as e:
+            log.warning(f"Remote execution not available: {e}")
+        except Exception as e:
+            log.error(f"Failed to create client for machine {machine_id}: {e}")
+
+    def start_client_by_machine_id(self, machine_id: str) -> None:
+        """Start a client by machine ID."""
+        client = self._clients.get(machine_id)
+        if client is None:
+            raise RuntimeError(f"No client registered for machine {machine_id}")
+        if not client.is_running():
+            client.start()
+            log.info(f"✅ ORCHESTRATOR: Started client for machine {machine_id}")
+
+    def stop_client_by_machine_id(self, machine_id: str) -> None:
+        """Stop a client by machine ID."""
+        client = self._clients.get(machine_id)
+        if client is not None and client.is_running():
+            client.stop()
+            log.info(f"✅ ORCHESTRATOR: Stopped client for machine {machine_id}")
+
+    def get_client_by_machine_id(self, machine_id: str) -> Client:
+        """Get client by machine ID."""
+        client = self._clients.get(machine_id)
+        if client is None:
+            raise RuntimeError(f"No client registered for machine {machine_id}")
+        if not client.is_running():
+            raise RuntimeError(f"Client for machine {machine_id} is not running")
+        return client
+
+    def is_client_running_by_machine_id(self, machine_id: str) -> bool:
+        """Check if a client is running for a machine ID."""
+        client = self._clients.get(machine_id)
         return client is not None and client.is_running()
+
+    def get_device_index_by_machine_id(self, machine_id: str) -> int:
+        """Get device index for a machine ID."""
+        device_index = self._machine_to_device.get(machine_id)
+        if device_index is None:
+            raise RuntimeError(f"No device index found for machine {machine_id}")
+        return device_index
 
     def _invalidate_cache_for_storage(self, storage_id: int) -> None:
         """Invalidate cache entry for a specific storage ID.

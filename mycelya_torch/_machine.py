@@ -132,7 +132,15 @@ class RemoteMachine:
         # Device registration happens lazily when device() is called
 
         # Create and register the client with orchestrator
-        self._create_and_register_client()
+        from ._orchestrator import orchestrator
+        device_index = self.device().index
+        orchestrator.create_and_register_client(
+            self.machine_id,
+            self.provider.value,
+            self.gpu_type.value,
+            device_index,
+            self._batching
+        )
 
         # Start the client if requested
         if start:
@@ -174,55 +182,12 @@ class RemoteMachine:
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
 
-    def _create_and_register_client(self) -> None:
-        """Create the client for this device and register it with the orchestrator."""
-        try:
-            client = None
-            if self.provider == CloudProvider.MODAL:
-                # Import here to avoid circular imports
-                from .backends.modal.client import ModalClient
-
-                client = ModalClient(
-                    self.gpu_type.value,
-                    self.machine_id,
-                    300,  # Default timeout in seconds
-                    self._batching,
-                )
-            elif self.provider == CloudProvider.MOCK:
-                # Import here to avoid circular imports
-                from .backends.mock.client import MockClient
-
-                client = MockClient(
-                    self.gpu_type.value,
-                    self.machine_id,
-                    300,  # Default timeout in seconds
-                    self._batching,
-                )
-            else:
-                raise ValueError(f"Provider {self.provider.value} not implemented yet")
-
-            # Register client with orchestrator using device index
-            if client is not None:
-                device_index = self.device().index
-
-                from ._orchestrator import orchestrator
-
-                orchestrator.register_client(device_index, client)
-
-        except ImportError as e:
-            log.warning(f"Remote execution not available: {e}")
-            # Continue without remote execution capability
-        except Exception as e:
-            log.error(f"Failed to create and register client: {e}")
-            # Continue without remote execution capability
 
     def start(self) -> None:
         """Start the client for this device."""
         try:
-            device_index = self.device().index
             from ._orchestrator import orchestrator
-
-            orchestrator.start_client(device_index)
+            orchestrator.start_client_by_machine_id(self.machine_id)
             log.info(f"Started client for machine: {self.machine_id}")
         except Exception as e:
             log.error(f"Failed to start client: {e}")
@@ -231,10 +196,8 @@ class RemoteMachine:
     def stop(self) -> None:
         """Stop the client for this device."""
         try:
-            device_index = self.device().index
             from ._orchestrator import orchestrator
-
-            orchestrator.stop_client(device_index)
+            orchestrator.stop_client_by_machine_id(self.machine_id)
             log.info(f"Stopped client: {self.machine_id}")
         except Exception as e:
             # Don't log full stack traces during shutdown
@@ -249,21 +212,17 @@ class RemoteMachine:
         Raises:
             RuntimeError: If client is not available or not running
         """
-        device_index = self.device().index
         from ._orchestrator import orchestrator
-
-        return orchestrator.get_client_by_device_index(device_index)
+        return orchestrator.get_client_by_machine_id(self.machine_id)
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
         try:
-            device_index = self.device().index
             from ._orchestrator import orchestrator
-
-            if not orchestrator.is_client_running(device_index):
+            if not orchestrator.is_client_running_by_machine_id(self.machine_id):
                 self.start()
         except Exception:
-            # Device not registered yet, start will handle it
+            # Client not registered yet, start will handle it
             pass
         return self
 
