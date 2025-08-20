@@ -128,11 +128,11 @@ class RemoteMachine:
         # Validate GPU type is supported by provider
         self._validate_gpu_support()
 
-        # Register with device registry first to get device index
-        from ._device import get_device_registry
+        # Register with device manager first to get device index
+        from ._device import get_device_manager
 
-        registry = get_device_registry()
-        registry.register_device(self)
+        manager = get_device_manager()
+        manager.register_device(self.machine_id, "cuda", 0)
 
         # Create and register the client with orchestrator
         self._create_and_register_client()
@@ -316,11 +316,15 @@ class RemoteMachine:
 
     @property
     def remote_index(self) -> Optional[int]:
-        """Get the device's index in the device registry."""
-        from ._device import get_device_registry
+        """Get the device's index in the device manager."""
+        from ._device import get_device_manager
 
-        registry = get_device_registry()
-        return registry.get_device_index(self)
+        manager = get_device_manager()
+        try:
+            device = manager.get_device(self.machine_id, "cuda", 0)
+            return device.index
+        except RuntimeError:
+            return None
 
     def device(self) -> torch.device:
         """
@@ -341,7 +345,7 @@ class RemoteMachine:
         """
         remote_index = self.remote_index
         if remote_index is None:
-            raise RuntimeError("Device not registered in device registry")
+            raise RuntimeError("Device not registered in device manager")
         return torch.device("mycelya", remote_index)
 
 

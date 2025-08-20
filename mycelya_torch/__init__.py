@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import types
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Union
 
 import torch
 
@@ -258,6 +258,7 @@ __all__ = [
     "RemoteMachine",
     "CloudProvider",
     "GPUType",
+    "get_all_machines",
     # HuggingFace model loading
     "load_huggingface_model",
     "create_huggingface_model_from_remote",
@@ -268,6 +269,4 @@ __all__ = [
     "get_logging_level",
     "set_logging_level",
     "reset_logging",
-    # Device management utilities
-    "get_all_machines",
 ]

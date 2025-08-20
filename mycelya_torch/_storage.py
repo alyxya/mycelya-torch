@@ -15,7 +15,6 @@ This module manages storage IDs and their lifecycle:
 import threading
 from typing import Dict, List, Optional
 
-from ._device import get_device_registry
 from ._logging import get_logger
 from ._machine import RemoteMachine
 
@@ -135,14 +134,7 @@ class StorageRegistry:
                 )
                 return
 
-            device_registry = get_device_registry()
-            device = device_registry.get_device_by_index(device_idx)
-            if device is None:
-                log.warning(
-                    f"No device found for index {device_idx} during storage "
-                    f"{storage_id} cleanup"
-                )
-                return
+            # Device validation will be handled by orchestrator
 
             # Get all tensor IDs associated with this storage using orchestrator
             tensor_ids = orchestrator.get_tensor_ids_for_storage(storage_id)
@@ -253,13 +245,14 @@ def get_machine_for_storage(storage_id: int) -> RemoteMachine:
     if device_idx is None:
         raise RuntimeError(f"No device found for storage {storage_id}")
 
-    # Get machine for device index
-    registry = get_device_registry()
-    machine = registry.get_device_by_index(device_idx)
-    if machine is None:
-        raise RuntimeError(f"No machine found for device index {device_idx}")
+    # Find the RemoteMachine by device index - linear search through all machines
+    from ._machine import get_all_machines
 
-    return machine
+    for machine in get_all_machines():
+        if machine.remote_index == device_idx:
+            return machine
+
+    raise RuntimeError(f"No RemoteMachine found for device index {device_idx}")
 
 
 def get_machine_for_tensor_id(tensor_id: int) -> RemoteMachine:
@@ -279,13 +272,14 @@ def get_machine_for_tensor_id(tensor_id: int) -> RemoteMachine:
     if device_idx is None:
         raise RuntimeError(f"No device found for tensor {tensor_id}")
 
-    # Get machine for device index
-    registry = get_device_registry()
-    machine = registry.get_device_by_index(device_idx)
-    if machine is None:
-        raise RuntimeError(f"No machine found for device index {device_idx}")
+    # Find the RemoteMachine by device index - linear search through all machines
+    from ._machine import get_all_machines
 
-    return machine
+    for machine in get_all_machines():
+        if machine.remote_index == device_idx:
+            return machine
+
+    raise RuntimeError(f"No RemoteMachine found for device index {device_idx}")
 
 
 def validate_cross_device_operation_tensor_ids(tensor_ids: List[int]) -> None:

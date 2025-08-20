@@ -23,17 +23,6 @@ def _local_scalar_dense(self: torch.Tensor):
         "🔢 _local_scalar_dense operation: retrieving scalar value from remote device"
     )
 
-    # Get remote machine using device registry
-    from .._device import get_device_registry
-
-    registry = get_device_registry()
-    machine = registry.get_device_by_index(self.device.index)
-
-    if machine is None:
-        raise RuntimeError(
-            f"No RemoteMachine found for remote device index {self.device.index}"
-        )
-
     # Get tensor ID and tensor data using tensor-based approach
     tensor_id = get_tensor_id(self)
 

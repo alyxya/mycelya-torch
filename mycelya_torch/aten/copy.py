@@ -16,16 +16,6 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
         raise ValueError("copy_from_device requires a remote tensor")
 
     # Use remote execution to get the tensor data
-    from .._device import get_device_registry
-
-    # Get the device backend
-    registry = get_device_registry()
-    device = registry.get_device_by_index(from_.device.index)
-
-    if device is None:
-        raise RuntimeError(
-            f"No RemoteMachine found for remote device index {from_.device.index}"
-        )
 
     # Get tensor data using orchestrator for centralized client management
     tensor_id = get_tensor_id(from_)
@@ -56,16 +46,6 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
     # Use remote execution to send the tensor data
-    from .._device import get_device_registry
-
-    # Get the device backend
-    registry = get_device_registry()
-    device = registry.get_device_by_index(to_.device.index)
-
-    if device is None:
-        raise RuntimeError(
-            f"No RemoteMachine found for remote device index {to_.device.index}"
-        )
 
     # Use tensor-based approach with tensor IDs
     tensor_id = get_tensor_id(to_)
@@ -147,16 +127,10 @@ def _copy_from(
             result = to_
         else:
             # Different remote devices - not supported
-            from .._device import get_device_registry
-
-            device_registry = get_device_registry()
-            from_device = device_registry.get_device_by_index(from_.device.index)
-            to_device = device_registry.get_device_by_index(to_.device.index)
-
             raise RuntimeError(
                 f"Cross-device remote transfers are not supported. "
-                f'Source device: "{from_device.machine_id}" (index {from_.device.index}), '
-                f'Target device: "{to_device.machine_id}" (index {to_.device.index}). '
+                f"Source device index: {from_.device.index}, "
+                f"Target device index: {to_.device.index}. "
                 f"Only CPU↔remote and same-device transfers are allowed. Use CPU as intermediate."
             )
     else:

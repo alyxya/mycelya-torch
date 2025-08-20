@@ -2,77 +2,88 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Device registry management for mycelya_torch.
+Device manager for mycelya_torch.
 
-This module provides the DeviceRegistry for managing RemoteMachine instances
+This module provides the DeviceManager for managing remote device information
 and their device indices for PyTorch integration.
 """
 
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import Dict, Tuple
 
-if TYPE_CHECKING:
-    from ._machine import RemoteMachine
+import torch
 
 
-class DeviceRegistry:
+class DeviceManager:
     """
-    Registry to manage active RemoteMachine instances.
+    Manager for remote device information.
 
-    Maps device indices directly to RemoteMachine instances for simple lookups.
+    Maps device indices to tuples of (machine_id, device, index) with reverse mapping.
     """
 
     def __init__(self) -> None:
-        self._devices: Dict[int, RemoteMachine] = {}  # index -> RemoteMachine
+        self._devices: Dict[
+            int, Tuple[str, str, int]
+        ] = {}  # index -> (machine_id, device, index)
+        self._reverse_devices: Dict[
+            Tuple[str, str, int], int
+        ] = {}  # (machine_id, device, index) -> index
         self._next_index = 0
 
-    def register_device(self, machine: "RemoteMachine") -> int:
+    def register_device(
+        self, machine_id: str, device: str = "cuda", index: int = 0
+    ) -> int:
         """
         Register a device and return its index.
 
         Args:
-            machine: The RemoteMachine to register
+            machine_id: The unique machine identifier
+            device: The remote machine's device type (default: "cuda")
+            index: The remote machine's device index (default: 0)
 
         Returns:
             The assigned device index
         """
+        device_tuple = (machine_id, device, index)
+
         # Check if device is already registered
-        for index, existing_device in self._devices.items():
-            if existing_device is machine:
-                return index
+        if device_tuple in self._reverse_devices:
+            return self._reverse_devices[device_tuple]
 
         # Assign new index
-        index = self._next_index
+        device_index = self._next_index
         self._next_index += 1
 
-        # Store direct mapping
-        self._devices[index] = machine
+        # Store bidirectional mapping
+        self._devices[device_index] = device_tuple
+        self._reverse_devices[device_tuple] = device_index
 
-        return index
+        return device_index
 
-    def get_device_by_index(self, index: int) -> Optional["RemoteMachine"]:
-        """Get device by its index."""
-        return self._devices.get(index)
+    def get_device(
+        self, machine_id: str, device: str = "cuda", index: int = 0
+    ) -> torch.device:
+        """
+        Get a torch.device object for the given machine configuration.
 
-    def get_device_index(self, machine: "RemoteMachine") -> Optional[int]:
-        """Get the index of a machine."""
-        for index, existing_machine in self._devices.items():
-            if existing_machine is machine:
-                return index
-        return None
+        Args:
+            machine_id: The unique machine identifier
+            device: The remote machine's device type (default: "cuda")
+            index: The remote machine's device index (default: 0)
 
-    def get_all_machines(self) -> list["RemoteMachine"]:
-        """Get a list of all registered machines."""
-        return list(self._devices.values())
-
-
-# Global device registry
-_device_registry = DeviceRegistry()
-
-# Device cleanup is handled via atexit registration in RemoteMachine.__init__
-# Modal handles its own async context cleanup, but we still register explicit cleanup
-# for proper resource management in standalone usage scenarios.
+        Returns:
+            torch.device object with type "mycelya" and the mapped index
+        """
+        device_tuple = (machine_id, device, index)
+        device_index = self._reverse_devices.get(device_tuple)
+        if device_index is None:
+            raise RuntimeError(f"Device not registered: {device_tuple}")
+        return torch.device("mycelya", device_index)
 
 
-def get_device_registry() -> DeviceRegistry:
-    """Get the global device registry."""
-    return _device_registry
+# Global device manager
+_device_manager = DeviceManager()
+
+
+def get_device_manager() -> DeviceManager:
+    """Get the global device manager."""
+    return _device_manager
