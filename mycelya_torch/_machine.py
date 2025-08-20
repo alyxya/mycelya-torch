@@ -148,7 +148,7 @@ class RemoteMachine:
     def start(self) -> None:
         """Start the client for this device."""
         try:
-            orchestrator.start_client_by_machine_id(self.machine_id)
+            orchestrator.start_client(self.machine_id)
             log.info(f"Started client for machine: {self.machine_id}")
         except Exception as e:
             log.error(f"Failed to start client: {e}")
@@ -157,7 +157,7 @@ class RemoteMachine:
     def stop(self) -> None:
         """Stop the client for this device."""
         try:
-            orchestrator.stop_client_by_machine_id(self.machine_id)
+            orchestrator.stop_client(self.machine_id)
             log.info(f"Stopped client: {self.machine_id}")
         except Exception as e:
             # Don't log full stack traces during shutdown
@@ -172,12 +172,12 @@ class RemoteMachine:
         Raises:
             RuntimeError: If client is not available or not running
         """
-        return orchestrator.get_client_by_machine_id(self.machine_id)
+        return orchestrator.get_client(self.machine_id)
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
         try:
-            if not orchestrator.is_client_running_by_machine_id(self.machine_id):
+            if not orchestrator.is_client_running(self.machine_id):
                 self.start()
         except Exception:
             # Client not registered yet, start will handle it
@@ -193,15 +193,6 @@ class RemoteMachine:
 
     def __repr__(self) -> str:
         return self.__str__()
-
-    def __eq__(self, other: object) -> bool:
-        """Two devices are equal only if they have the same machine_id."""
-        if not isinstance(other, RemoteMachine):
-            return False
-        return self.machine_id == other.machine_id
-
-    def __hash__(self) -> int:
-        return hash(self.machine_id)
 
     def device(
         self, type: Optional[str] = None, index: Optional[int] = None

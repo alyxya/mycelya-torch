@@ -61,7 +61,7 @@ class Orchestrator:
     def register_client(self, device_index: int, client: Client) -> None:
         """Register a client for a specific device index (legacy method)."""
         # Find machine_id for this client
-        machine_id = getattr(client, 'machine_id', f"device_{device_index}")
+        machine_id = getattr(client, "machine_id", f"device_{device_index}")
 
         # Store in new structure
         if machine_id in self._clients:
@@ -71,7 +71,9 @@ class Orchestrator:
 
         self._clients[machine_id] = client
         self._machine_to_device[machine_id] = device_index
-        log.info(f"✅ ORCHESTRATOR: Registered client for device index {device_index} (machine {machine_id})")
+        log.info(
+            f"✅ ORCHESTRATOR: Registered client for device index {device_index} (machine {machine_id})"
+        )
 
     def unregister_client(self, device_index: int) -> None:
         """Unregister a client for a specific device index (stops and removes from registry).
@@ -91,7 +93,9 @@ class Orchestrator:
             self._machine_to_device.pop(machine_id, None)
             if client.is_running():
                 client.stop()
-            log.info(f"✅ ORCHESTRATOR: Unregistered client for device index {device_index} (machine {machine_id})")
+            log.info(
+                f"✅ ORCHESTRATOR: Unregistered client for device index {device_index} (machine {machine_id})"
+            )
 
     def get_client_by_device_index(self, device_index: int) -> Client:
         """Get client by device index (legacy method)."""
@@ -105,9 +109,9 @@ class Orchestrator:
         if machine_id is None:
             raise RuntimeError(f"No machine found for device index {device_index}")
 
-        return self.get_client_by_machine_id(machine_id)
+        return self.get_client(machine_id)
 
-    def start_client(self, device_index: int) -> None:
+    def start_client_by_device_index(self, device_index: int) -> None:
         """Start a client by device index (legacy method)."""
         # Find machine_id for this device_index
         machine_id = None
@@ -119,9 +123,9 @@ class Orchestrator:
         if machine_id is None:
             raise RuntimeError(f"No machine found for device index {device_index}")
 
-        self.start_client_by_machine_id(machine_id)
+        self.start_client(machine_id)
 
-    def stop_client(self, device_index: int) -> None:
+    def stop_client_by_device_index(self, device_index: int) -> None:
         """Stop a client by device index (but keep it registered) (legacy method)."""
         # Find machine_id for this device_index
         machine_id = None
@@ -131,9 +135,9 @@ class Orchestrator:
                 break
 
         if machine_id is not None:
-            self.stop_client_by_machine_id(machine_id)
+            self.stop_client(machine_id)
 
-    def is_client_running(self, device_index: int) -> bool:
+    def is_client_running_by_device_index(self, device_index: int) -> bool:
         """Check if a client is running for a device index (legacy method)."""
         # Find machine_id for this device_index
         machine_id = None
@@ -145,10 +149,17 @@ class Orchestrator:
         if machine_id is None:
             return False
 
-        return self.is_client_running_by_machine_id(machine_id)
+        return self.is_client_running(machine_id)
 
     # Machine-based client management methods
-    def create_and_register_client(self, machine_id: str, provider: str, gpu_type: str, device_index: int, batching: bool = True) -> None:
+    def create_and_register_client(
+        self,
+        machine_id: str,
+        provider: str,
+        gpu_type: str,
+        device_index: int,
+        batching: bool = True,
+    ) -> None:
         """Create and register a client for a machine.
 
         Args:
@@ -162,9 +173,11 @@ class Orchestrator:
             client = None
             if provider == "modal":
                 from .backends.modal.client import ModalClient
+
                 client = ModalClient(gpu_type, machine_id, 300, batching)
             elif provider == "mock":
                 from .backends.mock.client import MockClient
+
                 client = MockClient(gpu_type, machine_id, 300, batching)
             else:
                 raise ValueError(f"Provider {provider} not implemented yet")
@@ -173,15 +186,17 @@ class Orchestrator:
                 # Store both mappings
                 self._clients[machine_id] = client
                 self._machine_to_device[machine_id] = device_index
-                log.info(f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}")
+                log.info(
+                    f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
+                )
 
         except ImportError as e:
             log.warning(f"Remote execution not available: {e}")
         except Exception as e:
             log.error(f"Failed to create client for machine {machine_id}: {e}")
 
-    def start_client_by_machine_id(self, machine_id: str) -> None:
-        """Start a client by machine ID."""
+    def start_client(self, machine_id: str) -> None:
+        """Start a client for the given machine."""
         client = self._clients.get(machine_id)
         if client is None:
             raise RuntimeError(f"No client registered for machine {machine_id}")
@@ -189,15 +204,15 @@ class Orchestrator:
             client.start()
             log.info(f"✅ ORCHESTRATOR: Started client for machine {machine_id}")
 
-    def stop_client_by_machine_id(self, machine_id: str) -> None:
-        """Stop a client by machine ID."""
+    def stop_client(self, machine_id: str) -> None:
+        """Stop a client for the given machine."""
         client = self._clients.get(machine_id)
         if client is not None and client.is_running():
             client.stop()
             log.info(f"✅ ORCHESTRATOR: Stopped client for machine {machine_id}")
 
-    def get_client_by_machine_id(self, machine_id: str) -> Client:
-        """Get client by machine ID."""
+    def get_client(self, machine_id: str) -> Client:
+        """Get client for the given machine."""
         client = self._clients.get(machine_id)
         if client is None:
             raise RuntimeError(f"No client registered for machine {machine_id}")
@@ -205,13 +220,13 @@ class Orchestrator:
             raise RuntimeError(f"Client for machine {machine_id} is not running")
         return client
 
-    def is_client_running_by_machine_id(self, machine_id: str) -> bool:
-        """Check if a client is running for a machine ID."""
+    def is_client_running(self, machine_id: str) -> bool:
+        """Check if a client is running for the given machine."""
         client = self._clients.get(machine_id)
         return client is not None and client.is_running()
 
-    def get_device_index_by_machine_id(self, machine_id: str) -> int:
-        """Get device index for a machine ID."""
+    def get_device_index(self, machine_id: str) -> int:
+        """Get device index for the given machine."""
         device_index = self._machine_to_device.get(machine_id)
         if device_index is None:
             raise RuntimeError(f"No device index found for machine {machine_id}")
