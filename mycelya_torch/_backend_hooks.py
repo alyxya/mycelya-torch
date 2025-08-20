@@ -174,10 +174,6 @@ class Driver:
         from ._orchestrator import orchestrator
         
         storage_id = orchestrator.create_storage_by_device_index(nbytes, device_index)
-        if storage_id == 0:
-            raise RuntimeError(
-                f"Failed to create storage ({nbytes} bytes) on device {device_index}"
-            )
         return storage_id
 
     @register(registry)
