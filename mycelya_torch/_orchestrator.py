@@ -421,6 +421,29 @@ class Orchestrator:
 
     # Storage management methods
 
+    def create_storage_by_device_index(self, nbytes: int, device_index: int) -> int:
+        """Create storage using device index (for backend hooks).
+
+        Args:
+            nbytes: Number of bytes to allocate
+            device_index: Device index to resolve to machine
+
+        Returns:
+            Storage ID on success, 0 on failure
+        """
+        from ._device import device_manager
+        
+        # Get machine info from device index
+        machine_id = device_manager.get_machine_id_for_device_index(device_index)
+        if machine_id is None:
+            raise RuntimeError(f"No machine ID found for device index {device_index}")
+
+        # For now, assume cuda:0 - this could be made more sophisticated later
+        remote_type = "cuda"
+        remote_index = 0
+
+        return self.storage.create_storage(nbytes, machine_id, remote_type, remote_index)
+
     def create_storage(
         self, nbytes: int, machine_id: str, remote_type: str, remote_index: int
     ) -> int:
