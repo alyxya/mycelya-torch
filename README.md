@@ -258,24 +258,6 @@ tests/
 └── conftest.py            # Shared test fixtures
 ```
 
-## Recent Updates
-
-### Latest Features (2025-08-19)
-
-- **Modular ATen Organization**: Reorganized operation dispatch into dedicated `aten/` directory with specialized handlers
-- **Enhanced C++ Performance**: Optimized C++ implementations for view operations and tensor management
-- **Google C++ Style**: Applied consistent formatting across all C++ source files
-- **Improved Operation Dispatch**: Simplified and cleaned up PyTorch operation registration system
-- **Better Code Organization**: Clear separation between dispatch logic and ATen registrations
-
-### Core Architecture (2025-08-10)
-
-- **Custom PyTorch Integration**: Complete TensorImpl/StorageImpl following pytorch-npu patterns
-- **Metadata Hash System**: FNV-1a hash computation from tensor properties for unique identification
-- **RPC Batching Optimization**: Background thread processing for reduced network overhead
-- **HuggingFace Integration**: Direct remote model loading without data transfer
-- **Multi-Provider Support**: Extensible backend system (Modal production, Mock development)
-
 ## Limitations
 
 - **Cross-device operations**: Cannot operate between different remote machines directly
@@ -292,7 +274,7 @@ This project is licensed under AGPL-3.0. All contributions must maintain the AGP
 1. Clone the repository
 2. Install in development mode: `pip install -e .`
 3. Run critical regression tests: `pytest tests/test_regression.py::TestCriticalRegression -v`
-4. Use Mock provider for local development: `mycelya_torch.RemoteMachine("mock")`
+4. Use Mock provider for local development: `mycelya_torch.RemoteMachine("mock", "T4")`
 5. Follow existing code style and patterns with ruff formatting
 
 ## License
