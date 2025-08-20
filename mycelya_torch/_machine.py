@@ -147,21 +147,17 @@ class RemoteMachine:
 
     def start(self) -> None:
         """Start the client for this device."""
-        try:
-            orchestrator.start_client(self.machine_id)
-            log.info(f"Started client for machine: {self.machine_id}")
-        except Exception as e:
-            log.error(f"Failed to start client: {e}")
-            # Continue without remote execution capability
+        orchestrator.start_client(self.machine_id)
+        log.info(f"Started machine: {self}")
 
     def stop(self) -> None:
         """Stop the client for this device."""
         try:
             orchestrator.stop_client(self.machine_id)
-            log.info(f"Stopped client: {self.machine_id}")
+            log.info(f"Stopped machine: {self}")
         except Exception as e:
             # Don't log full stack traces during shutdown
-            log.warning(f"Error stopping client {self.machine_id}: {type(e).__name__}")
+            log.warning(f"Error stopping machine {self}: {type(e).__name__}")
 
     def get_client(self):
         """Get the client for this device.
@@ -176,12 +172,8 @@ class RemoteMachine:
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
-        try:
-            if not orchestrator.is_client_running(self.machine_id):
-                self.start()
-        except Exception:
-            # Client not registered yet, start will handle it
-            pass
+        if not orchestrator.is_client_running(self.machine_id):
+            self.start()
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
