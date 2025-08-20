@@ -30,7 +30,7 @@ class DeviceManager:
         self._next_index = 0
 
     def get_device(
-        self, machine_id: str, device: str = "cuda", index: int = 0
+        self, machine_id: str, device: str, index: int
     ) -> torch.device:
         """
         Get a torch.device object for the given machine configuration.
@@ -39,8 +39,8 @@ class DeviceManager:
 
         Args:
             machine_id: The unique machine identifier
-            device: The remote machine's device type (default: "cuda")
-            index: The remote machine's device index (default: 0)
+            device: The remote machine's device type
+            index: The remote machine's device index
 
         Returns:
             torch.device object with type "mycelya" and the mapped index
