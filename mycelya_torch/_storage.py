@@ -13,10 +13,9 @@ This module manages storage IDs and their lifecycle:
 """
 
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from ._logging import get_logger
-from ._machine import RemoteMachine
 
 log = get_logger(__name__)
 
@@ -227,86 +226,3 @@ def resize_storage_by_id(storage_id: int, nbytes: int) -> bool:
     """Resize remote storage by storage ID."""
     return _storage_registry.resize_storage_by_id(storage_id, nbytes)
 
-
-def get_machine_for_storage(storage_id: int) -> RemoteMachine:
-    """Get the machine that owns a specific storage ID.
-
-    Args:
-        storage_id: Storage ID to resolve
-
-    Returns:
-        RemoteMachine that owns the storage
-
-    Raises:
-        RuntimeError: If no device or machine found for storage
-    """
-    # Get device index for this storage
-    device_idx = _storage_registry.storage_id_to_device.get(storage_id)
-    if device_idx is None:
-        raise RuntimeError(f"No device found for storage {storage_id}")
-
-    # Find the RemoteMachine by device index - linear search through all machines
-    from ._machine import get_all_machines
-
-    for machine in get_all_machines():
-        if machine.remote_index == device_idx:
-            return machine
-
-    raise RuntimeError(f"No RemoteMachine found for device index {device_idx}")
-
-
-def get_machine_for_tensor_id(tensor_id: int) -> RemoteMachine:
-    """Get the machine that owns a specific tensor ID.
-
-    Args:
-        tensor_id: Tensor ID to resolve
-
-    Returns:
-        RemoteMachine that owns the tensor
-
-    Raises:
-        RuntimeError: If no device or machine found for tensor
-    """
-    # Get device index for this tensor ID
-    device_idx = get_tensor_device(tensor_id)
-    if device_idx is None:
-        raise RuntimeError(f"No device found for tensor {tensor_id}")
-
-    # Find the RemoteMachine by device index - linear search through all machines
-    from ._machine import get_all_machines
-
-    for machine in get_all_machines():
-        if machine.remote_index == device_idx:
-            return machine
-
-    raise RuntimeError(f"No RemoteMachine found for device index {device_idx}")
-
-
-def validate_cross_device_operation_tensor_ids(tensor_ids: List[int]) -> None:
-    """Validate that all tensor IDs belong to the same device.
-
-    Args:
-        tensor_ids: List of tensor IDs to validate
-
-    Raises:
-        RuntimeError: If tensors are on different devices
-    """
-    if not tensor_ids:
-        return
-
-    # Get the first machine as reference
-    first_machine = get_machine_for_tensor_id(tensor_ids[0])
-    first_device_name = f"{first_machine.provider.value}-{first_machine.gpu_type.value}"
-
-    # Validate all other tensors are on the same machine
-    for tensor_id in tensor_ids[1:]:
-        machine = get_machine_for_tensor_id(tensor_id)
-        current_device_name = f"{machine.provider.value}-{machine.gpu_type.value}"
-
-        if machine.machine_id != first_machine.machine_id:
-            raise RuntimeError(
-                f"Cannot perform operations between tensors on different remote devices. "
-                f"Tensors are on different devices: "
-                f'"{first_device_name}" and "{current_device_name}". '
-                f"Transfer tensors to the same device first: tensor.cpu().to(target_device)"
-            )
