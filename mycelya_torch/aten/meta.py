@@ -5,9 +5,11 @@ from typing import Any, Dict, List, Tuple
 
 import torch
 
+from .._device import get_device_manager
 from .._logging import get_logger
+from .._orchestrator import orchestrator
 from .._utils import get_tensor_id
-from .utils import _get_orchestrator, args_to_tensors_with_ids_and_mask
+from .utils import args_to_tensors_with_ids_and_mask
 
 log = get_logger(__name__)
 
@@ -111,9 +113,6 @@ def _create_output_tensors(
             output_tensor_ids.append(tensor_id)
 
             # Ensure tensor ID is registered with device tracking system
-            from .._device import get_device_manager
-            from .._orchestrator import orchestrator
-
             device_index = remote_device.index
             device_manager = get_device_manager()
             machine_id = device_manager.get_machine_id_for_device_index(device_index)
@@ -146,9 +145,6 @@ def _create_output_tensors(
             output_tensor_ids.append(tensor_id)
 
             # Register tensor ID with device tracking system
-            from .._device import get_device_manager
-            from .._orchestrator import orchestrator
-
             device_index = remote_device.index
             device_manager = get_device_manager()
             machine_id = device_manager.get_machine_id_for_device_index(device_index)
@@ -210,7 +206,6 @@ def _execute_with_static_outputs(
         args_to_tensors_with_ids_and_mask(args, kwargs)
     )
 
-    orchestrator = _get_orchestrator()
     orchestrator.execute_aten_operation(
         op_name,
         input_tensors,
@@ -259,9 +254,6 @@ def _execute_with_dynamic_outputs(
         output_tensor_ids = [get_tensor_id(output_tensor)]
 
         # Ensure tensor ID is registered with device tracking system
-        from .._device import get_device_manager
-        from .._orchestrator import orchestrator
-
         device_index = remote_device.index
         device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
@@ -283,9 +275,6 @@ def _execute_with_dynamic_outputs(
         output_tensor_ids = [get_tensor_id(output_tensor)]
 
         # Register tensor ID with device tracking system
-        from .._device import get_device_manager
-        from .._orchestrator import orchestrator
-
         device_index = remote_device.index
         device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
@@ -303,7 +292,6 @@ def _execute_with_dynamic_outputs(
         args_to_tensors_with_ids_and_mask(args, kwargs)
     )
 
-    orchestrator = _get_orchestrator()
     result_metadata = orchestrator.execute_aten_operation(
         op_name,
         input_tensors,

@@ -11,13 +11,6 @@ from .._utils import get_tensor_id
 log = get_logger(__name__)
 
 
-def _get_orchestrator():
-    """Get the global orchestrator instance."""
-    from .._orchestrator import orchestrator
-
-    return orchestrator
-
-
 def _validate_cross_device_operation(
     op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
 ) -> torch.device:

@@ -13,8 +13,10 @@ from typing import Any, Dict
 import torch
 import torch.nn as nn
 
+from ._device import get_device_manager
 from ._logging import get_logger
 from ._machine import RemoteMachine
+from ._orchestrator import orchestrator
 from ._utils import get_storage_id
 
 log = get_logger(__name__)
@@ -117,7 +119,6 @@ def create_huggingface_model_from_remote(
 
     # Get device index from machine
     device_index = machine.device().index
-    from ._orchestrator import orchestrator
 
     if not orchestrator.is_client_running(device_index):
         raise RuntimeError(
@@ -196,8 +197,6 @@ def create_huggingface_model_from_remote(
 
         # Register the local storage ID in the orchestrator storage manager
         device_index = device.index
-        from ._device import get_device_manager
-
         device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
@@ -245,8 +244,6 @@ def create_huggingface_model_from_remote(
 
         # Register the local storage ID in the orchestrator storage manager
         device_index = device.index
-        from ._device import get_device_manager
-
         device_manager = get_device_manager()
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
 

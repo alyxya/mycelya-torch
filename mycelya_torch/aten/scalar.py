@@ -4,8 +4,8 @@
 import torch
 
 from .._logging import get_logger
+from .._orchestrator import orchestrator
 from .._utils import dtype_to_str, get_tensor_id
-from .utils import _get_orchestrator
 
 log = get_logger(__name__)
 
@@ -27,7 +27,6 @@ def _local_scalar_dense(self: torch.Tensor):
     tensor_id = get_tensor_id(self)
 
     # Get tensor data for this scalar using orchestrator
-    orchestrator = _get_orchestrator()
 
     cpu_tensor = orchestrator.get_tensor_by_id(
         tensor_id,

@@ -12,6 +12,8 @@ import torch
 
 import mycelya_torch._C
 
+from ._device import get_device_manager
+
 
 def get_tensor_id(tensor: torch.Tensor) -> int:
     """Get tensor metadata hash and ensure tensor ID is registered.
@@ -36,7 +38,6 @@ def get_tensor_id(tensor: torch.Tensor) -> int:
     tensor_id = mycelya_torch._C._get_metadata_hash(tensor)
 
     # Register tensor ID for device tracking (needed for cross-device validation)
-    from ._device import get_device_manager
     from ._orchestrator import orchestrator
 
     if orchestrator.get_machine_info_for_tensor(tensor_id) is None:

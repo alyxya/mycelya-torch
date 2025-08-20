@@ -4,8 +4,8 @@
 import torch
 
 from .._logging import get_logger
+from .._orchestrator import orchestrator
 from .._utils import dtype_to_str, get_tensor_id
-from .utils import _get_orchestrator
 
 log = get_logger(__name__)
 
@@ -22,7 +22,6 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     log.info(f"Copying tensor ID {tensor_id} from remote to CPU")
 
     # Use orchestrator to get tensor data with automatic client routing
-    orchestrator = _get_orchestrator()
 
     result = orchestrator.get_tensor_by_id(
         tensor_id,
@@ -52,7 +51,6 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
     log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
 
     # Pass CPU tensor directly to orchestrator without conversion
-    orchestrator = _get_orchestrator()
 
     # First ensure the tensor exists on the remote side
     # This creates the empty tensor if it doesn't exist
@@ -115,7 +113,6 @@ def _copy_from(
                 args_to_tensors_with_ids_and_mask((to_, from_), {})
             )
 
-            orchestrator = _get_orchestrator()
             orchestrator.execute_aten_operation(
                 "aten::copy_.default",
                 input_tensors,
