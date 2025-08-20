@@ -157,17 +157,6 @@ class RemoteMachine:
             # Don't log full stack traces during shutdown
             log.warning(f"Error stopping machine {self}: {type(e).__name__}")
 
-    def get_client(self):
-        """Get the client for this device.
-
-        Returns:
-            The client interface for this device
-
-        Raises:
-            RuntimeError: If client is not available or not running
-        """
-        return orchestrator.get_client(self.machine_id)
-
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
         if not orchestrator.is_client_running(self.machine_id):
