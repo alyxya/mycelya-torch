@@ -23,14 +23,14 @@ class DeviceManager:
     def __init__(self) -> None:
         self._local_to_remote_device: Dict[
             int, Tuple[str, str, int]
-        ] = {}  # local_index -> (machine_id, remote_device, remote_index)
+        ] = {}  # local_index -> (machine_id, remote_type, remote_index)
         self._remote_to_local_device: Dict[
             Tuple[str, str, int], int
-        ] = {}  # (machine_id, remote_device, remote_index) -> local_index
+        ] = {}  # (machine_id, remote_type, remote_index) -> local_index
         self._next_index = 0
 
     def get_device(
-        self, machine_id: str, device: str, index: int
+        self, machine_id: str, type: str, index: int
     ) -> torch.device:
         """
         Get a torch.device object for the given machine configuration.
@@ -39,13 +39,13 @@ class DeviceManager:
 
         Args:
             machine_id: The unique machine identifier
-            device: The remote machine's device type
+            type: The remote machine's device type (e.g., "cuda")
             index: The remote machine's device index
 
         Returns:
             torch.device object with type "mycelya" and the mapped index
         """
-        device_tuple = (machine_id, device, index)
+        device_tuple = (machine_id, type, index)
 
         # Check if device mapping already exists
         local_index = self._remote_to_local_device.get(device_tuple)

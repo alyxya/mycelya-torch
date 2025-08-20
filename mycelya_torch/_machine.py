@@ -317,7 +317,7 @@ class RemoteMachine:
 
         manager = get_device_manager()
         try:
-            device = manager.get_device(self.machine_id, "cuda", 0)
+            device = manager.get_device(self.machine_id, type="cuda", index=0)
             return device.index
         except RuntimeError:
             return None
