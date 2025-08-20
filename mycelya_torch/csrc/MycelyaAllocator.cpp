@@ -43,7 +43,7 @@ void MycelyaAllocator::ReportAndDelete(void *ptr) {
 
   // Convert pointer back to storage ID for deletion
   storage_id_t storage_id = reinterpret_cast<storage_id_t>(ptr);
-  TORCH_CHECK(get_method("free_storage_with_id")(storage_id).cast<bool>(),
+  TORCH_CHECK(get_method("free_storage")(storage_id).cast<bool>(),
               "Failed to free storage with ID ", storage_id);
 
   // If that user code raised an error, just print it without raising it
