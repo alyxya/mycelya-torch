@@ -300,70 +300,33 @@ class RemoteMachine:
 
 
     def device(self, type: Optional[str] = None, index: Optional[int] = None) -> torch.device:
-        """
-        Get a PyTorch device object for this RemoteMachine.
+        """Get a PyTorch device object for this RemoteMachine.
 
         Args:
-            type: Device type string (e.g., "cuda", "cpu", "cuda:1").
-                 Defaults to "cuda" for modal machines, "cpu" for mock machines.
-                 Can include index like "cuda:1" which sets both type and index.
-            index: Device index (defaults to 0). Cannot be specified if type
-                  contains a colon and index (e.g., "cuda:1").
+            type: Device type ("cuda", "cpu", "mps", or "cuda:1" format).
+                 Defaults: modal="cuda", mock="cpu".
+            index: Device index (default: 0). Cannot be used with "type:index" format.
 
         Returns:
-            torch.device: A PyTorch device object with type "mycelya" and the device's index
-
-        Raises:
-            ValueError: If both index kwarg and type string contain index,
-                       or if device type is not supported for the provider.
-
-        Examples:
-            >>> # Modal machine defaults
-            >>> machine = RemoteMachine("modal", "A100-40GB")
-            >>> machine.device()  # cuda:0
-            >>> machine.device(type="cuda", index=1)  # cuda:1
-            >>> machine.device(type="cuda:1")  # cuda:1
-            >>>
-            >>> # Mock machine defaults
-            >>> machine = RemoteMachine("mock")
-            >>> machine.device()  # cpu:0
-            >>> machine.device(type="mps")  # mps:0
+            torch.device with type "mycelya" and mapped index.
         """
-        # Parse type and index from type string if it contains ":"
-        parsed_type = type
-        parsed_index = index
-
-        if type is not None and ":" in type:
+        # Parse "type:index" format
+        if type and ":" in type:
             if index is not None:
-                raise ValueError(
-                    f"Cannot specify both index argument ({index}) and index in type string ('{type}')"
-                )
-            parsed_type, index_str = type.split(":", 1)
-            try:
-                parsed_index = int(index_str)
-            except ValueError:
-                raise ValueError(f"Invalid index in type string '{type}': '{index_str}' is not an integer")
+                raise ValueError(f"Cannot specify both index ({index}) and type:index format ('{type}')")
+            type, index = type.split(":", 1)
+            index = int(index)
 
-        # Set defaults based on provider if not specified
-        if parsed_type is None:
-            if self.provider == CloudProvider.MOCK:
-                parsed_type = "cpu"
-            else:
-                parsed_type = "cuda"
+        # Apply defaults
+        type = type or ("cpu" if self.provider == CloudProvider.MOCK else "cuda")
+        index = index or 0
 
-        if parsed_index is None:
-            parsed_index = 0
+        # Validate device type for provider
+        valid_types = ["cpu", "mps"] if self.provider == CloudProvider.MOCK else ["cuda", "cpu"]
+        if type not in valid_types:
+            raise ValueError(f"{self.provider.value} provider only supports {valid_types}, got '{type}'")
 
-        # Validate type for provider
-        if self.provider == CloudProvider.MOCK:
-            if parsed_type not in ["cpu", "mps"]:
-                raise ValueError(f"Mock provider only supports 'cpu' or 'mps' devices, got '{parsed_type}'")
-        else:
-            if parsed_type not in ["cuda", "cpu"]:
-                raise ValueError(f"Provider {self.provider.value} only supports 'cuda' or 'cpu' devices, got '{parsed_type}'")
-
-        manager = get_device_manager()
-        return manager.get_device(self.machine_id, type=parsed_type, index=parsed_index)
+        return get_device_manager().get_device(self.machine_id, type=type, index=index)
 
 
 def get_all_machines() -> list[RemoteMachine]:
