@@ -152,7 +152,7 @@ class Orchestrator:
         return self.is_client_running(machine_id)
 
     # Machine-based client management methods
-    def create_and_register_client(
+    def create_client(
         self,
         machine_id: str,
         provider: str,

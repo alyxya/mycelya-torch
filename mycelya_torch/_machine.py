@@ -129,7 +129,7 @@ class RemoteMachine:
 
         # Create and register client with orchestrator
         device_index = self.device().index
-        orchestrator.create_and_register_client(
+        orchestrator.create_client(
             self.machine_id,
             self.provider.value,
             self.gpu_type.value,
