@@ -17,6 +17,7 @@ import torch
 
 from ._device import get_device_manager
 from ._logging import get_logger
+from ._orchestrator import orchestrator
 
 log = get_logger(__name__)
 
@@ -132,14 +133,13 @@ class RemoteMachine:
         # Device registration happens lazily when device() is called
 
         # Create and register the client with orchestrator
-        from ._orchestrator import orchestrator
         device_index = self.device().index
         orchestrator.create_and_register_client(
             self.machine_id,
             self.provider.value,
             self.gpu_type.value,
             device_index,
-            self._batching
+            self._batching,
         )
 
         # Start the client if requested
@@ -182,11 +182,9 @@ class RemoteMachine:
         else:
             raise ValueError(f"Provider {self.provider.value} not implemented yet")
 
-
     def start(self) -> None:
         """Start the client for this device."""
         try:
-            from ._orchestrator import orchestrator
             orchestrator.start_client_by_machine_id(self.machine_id)
             log.info(f"Started client for machine: {self.machine_id}")
         except Exception as e:
@@ -196,7 +194,6 @@ class RemoteMachine:
     def stop(self) -> None:
         """Stop the client for this device."""
         try:
-            from ._orchestrator import orchestrator
             orchestrator.stop_client_by_machine_id(self.machine_id)
             log.info(f"Stopped client: {self.machine_id}")
         except Exception as e:
@@ -212,13 +209,11 @@ class RemoteMachine:
         Raises:
             RuntimeError: If client is not available or not running
         """
-        from ._orchestrator import orchestrator
         return orchestrator.get_client_by_machine_id(self.machine_id)
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
         try:
-            from ._orchestrator import orchestrator
             if not orchestrator.is_client_running_by_machine_id(self.machine_id):
                 self.start()
         except Exception:
@@ -257,8 +252,9 @@ class RemoteMachine:
             raise ValueError("modal_gpu_spec only available for Modal provider")
         return self.gpu_type.value
 
-
-    def device(self, type: Optional[str] = None, index: Optional[int] = None) -> torch.device:
+    def device(
+        self, type: Optional[str] = None, index: Optional[int] = None
+    ) -> torch.device:
         """Get a PyTorch device object for this RemoteMachine.
 
         Args:
@@ -272,7 +268,9 @@ class RemoteMachine:
         # Parse "type:index" format
         if type and ":" in type:
             if index is not None:
-                raise ValueError(f"Cannot specify both index ({index}) and type:index format ('{type}')")
+                raise ValueError(
+                    f"Cannot specify both index ({index}) and type:index format ('{type}')"
+                )
             type, index = type.split(":", 1)
             index = int(index)
 
@@ -281,9 +279,13 @@ class RemoteMachine:
         index = index or 0
 
         # Validate device type for provider
-        valid_types = ["cpu", "mps"] if self.provider == CloudProvider.MOCK else ["cuda", "cpu"]
+        valid_types = (
+            ["cpu", "mps"] if self.provider == CloudProvider.MOCK else ["cuda", "cpu"]
+        )
         if type not in valid_types:
-            raise ValueError(f"{self.provider.value} provider only supports {valid_types}, got '{type}'")
+            raise ValueError(
+                f"{self.provider.value} provider only supports {valid_types}, got '{type}'"
+            )
 
         return get_device_manager().get_device(self.machine_id, type=type, index=index)
 
