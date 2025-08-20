@@ -17,16 +17,16 @@ class DeviceManager:
     """
     Manager for remote device information.
 
-    Maps device indices to tuples of (machine_id, device, index) with reverse mapping.
+    Maps local device indices to remote device info with bidirectional lookup.
     """
 
     def __init__(self) -> None:
-        self._devices: Dict[
+        self._local_to_remote_device: Dict[
             int, Tuple[str, str, int]
-        ] = {}  # index -> (machine_id, device, index)
-        self._reverse_devices: Dict[
+        ] = {}  # local_index -> (machine_id, remote_device, remote_index)
+        self._remote_to_local_device: Dict[
             Tuple[str, str, int], int
-        ] = {}  # (machine_id, device, index) -> index
+        ] = {}  # (machine_id, remote_device, remote_index) -> local_index
         self._next_index = 0
 
     def register_device(
@@ -46,18 +46,18 @@ class DeviceManager:
         device_tuple = (machine_id, device, index)
 
         # Check if device is already registered
-        if device_tuple in self._reverse_devices:
-            return self._reverse_devices[device_tuple]
+        if device_tuple in self._remote_to_local_device:
+            return self._remote_to_local_device[device_tuple]
 
-        # Assign new index
-        device_index = self._next_index
+        # Assign new local index
+        local_index = self._next_index
         self._next_index += 1
 
         # Store bidirectional mapping
-        self._devices[device_index] = device_tuple
-        self._reverse_devices[device_tuple] = device_index
+        self._local_to_remote_device[local_index] = device_tuple
+        self._remote_to_local_device[device_tuple] = local_index
 
-        return device_index
+        return local_index
 
     def get_device(
         self, machine_id: str, device: str = "cuda", index: int = 0
@@ -74,10 +74,10 @@ class DeviceManager:
             torch.device object with type "mycelya" and the mapped index
         """
         device_tuple = (machine_id, device, index)
-        device_index = self._reverse_devices.get(device_tuple)
-        if device_index is None:
-            raise RuntimeError(f"Device not registered: {device_tuple}")
-        return torch.device("mycelya", device_index)
+        local_index = self._remote_to_local_device.get(device_tuple)
+        if local_index is None:
+            raise RuntimeError(f"Remote device not registered: {device_tuple}")
+        return torch.device("mycelya", local_index)
 
 
 # Global device manager
