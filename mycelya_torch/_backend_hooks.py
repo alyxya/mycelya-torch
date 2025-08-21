@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List
 import torch
 
 from ._logging import get_logger
+from ._orchestrator import orchestrator
 
 log = get_logger(__name__)
 
@@ -165,21 +166,14 @@ class Driver:
     # Storage operations - delegate to orchestrator
     @register(registry)
     def create_storage(self, nbytes: int, device_index: int) -> int:
-        from ._orchestrator import orchestrator
-
-        storage_id = orchestrator.create_storage(nbytes, device_index)
-        return storage_id
+        return orchestrator.create_storage(nbytes, device_index)
 
     @register(registry)
     def free_storage(self, storage_id: int) -> None:
-        from ._orchestrator import orchestrator
-
         orchestrator.free_storage(storage_id)
 
     @register(registry)
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
-        from ._orchestrator import orchestrator
-
         orchestrator.resize_storage(storage_id, nbytes)
 
     # Device operations

@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 
+from ._device import device_manager
 from ._logging import get_logger
 from ._storage import StorageManager
 from ._utils import dtype_to_str, get_storage_id, get_tensor_id
@@ -187,8 +188,6 @@ class Orchestrator:
         Returns:
             Storage ID on success, 0 on failure
         """
-        from ._device import device_manager
-
         # Get machine info from device index
         machine_id, remote_type, remote_index = device_manager.get_remote_device_info(
             device_index
@@ -491,9 +490,6 @@ class Orchestrator:
 
             # Get nbytes from the tensor's untyped storage
             nbytes = tensor.untyped_storage().nbytes()
-
-            # Import helper function for dtype conversion
-            from ._utils import dtype_to_str
 
             client.create_empty_tensor(
                 tensor_id=tensor_id,
