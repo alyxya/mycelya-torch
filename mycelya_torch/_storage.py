@@ -13,7 +13,7 @@ StorageManager is designed to be used as a property of the Orchestrator class,
 not as a global instance. It does not handle remote cleanup or orchestrator interactions.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ._logging import get_logger
 
@@ -38,6 +38,9 @@ class StorageManager:
         self.storage_id_to_remote_device: Dict[
             int, Tuple[str, str, int]
         ] = {}  # storage_id -> (machine_id, remote_type, remote_index)
+
+        # Storage cache (storage_id -> raw bytes)
+        self._storage_cache: Dict[int, bytes] = {}
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -83,3 +86,41 @@ class StorageManager:
         Note: Remote cleanup is handled by the orchestrator.
         """
         self.storage_id_to_remote_device.pop(storage_id, None)
+        self._storage_cache.pop(storage_id, None)
+
+    def cache_storage(self, storage_id: int, data: bytes) -> None:
+        """Cache storage data by storage ID.
+
+        Args:
+            storage_id: The storage ID to cache
+            data: Raw bytes to cache
+        """
+        self._storage_cache[storage_id] = data
+
+    def get_cached_storage(self, storage_id: int) -> Optional[bytes]:
+        """Get cached storage data by storage ID.
+
+        Args:
+            storage_id: The storage ID to retrieve from cache
+
+        Returns:
+            Raw bytes if cached, None if not in cache
+        """
+        return self._storage_cache.get(storage_id)
+
+    def invalidate_storage_cache(self, storage_id: int) -> None:
+        """Invalidate cache entry for a storage ID.
+
+        Args:
+            storage_id: Storage ID to remove from cache
+        """
+        self._storage_cache.pop(storage_id, None)
+
+    def invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> None:
+        """Invalidate cache entries for multiple storage IDs.
+
+        Args:
+            storage_ids: List of storage IDs to invalidate
+        """
+        for storage_id in storage_ids:
+            self._storage_cache.pop(storage_id, None)
