@@ -111,7 +111,6 @@ def _create_output_tensors(
             tensor_id = get_tensor_id(tensor)
             output_tensor_ids.append(tensor_id)
 
-
         else:
             # Create new tensor
             new_tensor = torch.empty(
@@ -131,7 +130,6 @@ def _create_output_tensors(
             # Get tensor ID from the newly created tensor
             tensor_id = str(get_tensor_id(new_tensor))
             output_tensor_ids.append(tensor_id)
-
 
     return output_tensors, output_tensor_ids
 

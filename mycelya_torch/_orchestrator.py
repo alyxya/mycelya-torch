@@ -160,20 +160,6 @@ class Orchestrator:
             return next(iter(tensor_set))  # Return any tensor ID from the set
         return None
 
-    def get_tensor_ids_for_storage(self, storage_id: int) -> List[int]:
-        """Get all tensor IDs associated with a storage ID.
-
-        Args:
-            storage_id: The storage ID to look up
-
-        Returns:
-            List of tensor IDs that map to this storage, empty list if no mapping exists
-        """
-        tensor_set = self._storage_to_tensors_map.get(storage_id)
-        if tensor_set:
-            return list(tensor_set)
-        return []
-
     def _invalidate_output_tensor_caches(self, output_tensor_ids: List[int]) -> None:
         """Invalidate cache for all output tensors of an operation.
 
@@ -227,14 +213,13 @@ class Orchestrator:
         Args:
             storage_id: Storage ID to free
         """
-        # Get remote device info for remote cleanup
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        tensor_set = self._storage_to_tensors_map.get(storage_id)
 
-        # Free from local tracking first
         self.storage.free_storage_with_id(storage_id)
 
-        # Perform remote cleanup
-        self._cleanup_remote_storage(storage_id, machine_id)
+        if tensor_set:
+            self.get_client(machine_id).remove_tensors(list(tensor_set))
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.
@@ -249,7 +234,6 @@ class Orchestrator:
 
         # Invalidate cache for the resized storage
         self.storage.invalidate_storage_cache(storage_id)
-
 
     # Tensor management methods
 
@@ -297,33 +281,6 @@ class Orchestrator:
         self._cpu_tensor_futures_deques[machine_id].append(copy_entry)
 
         return cpu_tensor_future
-
-    def _cleanup_remote_storage(self, storage_id: int, machine_id: str) -> None:
-        """Clean up storage on remote GPU device.
-
-        Args:
-            storage_id: Storage ID to clean up
-            machine_id: Machine identifier for the storage
-        """
-        try:
-            if not self.is_client_running(machine_id):
-                log.warning(
-                    f"Client for machine {machine_id} not running, skipping cleanup"
-                )
-                return
-
-            # Get all tensor IDs associated with this storage using orchestrator
-            tensor_ids = self.get_tensor_ids_for_storage(storage_id)
-
-            if tensor_ids:
-                client = self.get_client(machine_id)
-                # Remove tensors from remote side
-                client.remove_tensors(list(tensor_ids))
-
-        except Exception as e:
-            log.error(
-                f"Failed remote cleanup for storage {storage_id} on machine {machine_id}: {e}"
-            )
 
     def update_tensor(
         self,
