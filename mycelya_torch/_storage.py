@@ -13,6 +13,7 @@ StorageManager is designed to be used as a property of the Orchestrator class,
 not as a global instance. It does not handle remote cleanup or orchestrator interactions.
 """
 
+from concurrent.futures import Future
 from typing import Dict, List, Optional, Tuple
 
 from ._logging import get_logger
@@ -39,8 +40,8 @@ class StorageManager:
             int, Tuple[str, str, int]
         ] = {}  # storage_id -> (machine_id, remote_type, remote_index)
 
-        # Storage cache (storage_id -> raw bytes)
-        self._storage_cache: Dict[int, bytes] = {}
+        # Storage cache (storage_id -> Future[bytes])
+        self._storage_cache: Dict[int, Future[bytes]] = {}
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -88,23 +89,23 @@ class StorageManager:
         self.storage_id_to_remote_device.pop(storage_id, None)
         self._storage_cache.pop(storage_id, None)
 
-    def cache_storage(self, storage_id: int, data: bytes) -> None:
-        """Cache storage data by storage ID.
+    def cache_storage(self, storage_id: int, data_future: Future[bytes]) -> None:
+        """Cache storage future by storage ID.
 
         Args:
             storage_id: The storage ID to cache
-            data: Raw bytes to cache
+            data_future: Future that will resolve to raw bytes
         """
-        self._storage_cache[storage_id] = data
+        self._storage_cache[storage_id] = data_future
 
-    def get_cached_storage(self, storage_id: int) -> Optional[bytes]:
-        """Get cached storage data by storage ID.
+    def get_cached_storage(self, storage_id: int) -> Optional[Future[bytes]]:
+        """Get cached storage future by storage ID.
 
         Args:
             storage_id: The storage ID to retrieve from cache
 
         Returns:
-            Raw bytes if cached, None if not in cache
+            Future[bytes] if cached, None if not in cache
         """
         return self._storage_cache.get(storage_id)
 
