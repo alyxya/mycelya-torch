@@ -88,22 +88,9 @@ class MockClient(Client):
         if not batch_calls:
             return
 
-        # Execute batch locally and collect results
-        results = []
-        for call in batch_calls:
-            method_name = call["method_name"]
-            args = call.get("args", ())
-            kwargs = call.get("kwargs", {})
-
-            # Get the server method and execute locally
-            server_method = getattr(self._server_instance, method_name)
-            result = server_method.local(*args, **kwargs)
-            if result is not None:
-                results.append(result)
-
-        # Store batch results if any
-        if results:
-            self._pending_results.append(results)
+        # Use local execution for batch and store result
+        result = self._server_instance.execute_batch.local(batch_calls)
+        self._pending_results.append(result)
 
     # Tensor management methods
     def _create_empty_tensor_impl(
