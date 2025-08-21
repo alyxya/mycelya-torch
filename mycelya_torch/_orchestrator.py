@@ -113,27 +113,6 @@ class Orchestrator:
         tensor_set = self._storage_to_tensors_map.get(storage_id)
         return next(iter(tensor_set)) if tensor_set else None
 
-    def _invalidate_output_tensor_caches(
-        self, output_tensors: List[torch.Tensor]
-    ) -> None:
-        """Invalidate cache for all output tensors of an operation.
-
-        This is the fundamental approach: treat all output tensors as mutated and evict from cache.
-        Much simpler and more robust than trying to detect in-place operations.
-
-        Args:
-            output_tensors: List of output tensors
-        """
-        storage_ids_to_invalidate = []
-
-        for tensor in output_tensors:
-            storage_id = get_storage_id(tensor)
-            storage_ids_to_invalidate.append(storage_id)
-
-        # Batch invalidation optimization: remove duplicates and process efficiently
-        if storage_ids_to_invalidate:
-            unique_storage_ids = list(set(storage_ids_to_invalidate))
-            self.storage.invalidate_multiple_storage_caches(unique_storage_ids)
 
     # Storage management methods
 
@@ -364,8 +343,9 @@ class Orchestrator:
                 log.debug(f"Could not register output tensor-storage mapping: {e}")
 
         # Simple and robust cache invalidation: treat all output tensors as mutated
-        # This approach is much simpler than trying to detect in-place operations
-        self._invalidate_output_tensor_caches(output_tensors)
+        if output_tensors:
+            unique_storage_ids = {get_storage_id(tensor) for tensor in output_tensors}
+            self.storage.invalidate_multiple_storage_caches(list(unique_storage_ids))
 
         if return_metadata:
             return result
