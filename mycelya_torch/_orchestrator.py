@@ -344,8 +344,7 @@ class Orchestrator:
 
         # Simple and robust cache invalidation: treat all output tensors as mutated
         if output_tensors:
-            unique_storage_ids = {get_storage_id(tensor) for tensor in output_tensors}
-            self.storage.invalidate_multiple_storage_caches(list(unique_storage_ids))
+            self.storage.invalidate_multiple_storage_caches([get_storage_id(tensor) for tensor in output_tensors])
 
         if return_metadata:
             return result
