@@ -239,8 +239,6 @@ def _execute_with_dynamic_outputs(
     can be added later as needed.
     """
 
-    log.info(f"🔄 Executing {op_name} with dynamic output shapes (no meta kernel)")
-
     # Check for "out" kwarg - special handling needed
     out_tensor = kwargs.get("out", None)
     has_out_kwarg = out_tensor is not None

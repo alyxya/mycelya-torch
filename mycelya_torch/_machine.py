@@ -146,13 +146,11 @@ class RemoteMachine:
     def start(self) -> None:
         """Start the client for this device."""
         orchestrator.start_client(self.machine_id)
-        log.info(f"Started machine: {self}")
 
     def stop(self) -> None:
         """Stop the client for this device."""
         try:
             orchestrator.stop_client(self.machine_id)
-            log.info(f"Stopped machine: {self}")
         except Exception as e:
             # Don't log full stack traces during shutdown
             log.warning(f"Error stopping machine {self}: {type(e).__name__}")

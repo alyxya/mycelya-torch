@@ -121,10 +121,6 @@ def create_huggingface_model_from_remote(
     )
 
     # COMMENTED OUT - needs rewrite for new orchestrator API:
-    log.info(
-        f"Creating HuggingFace model {checkpoint} with remote tensors on {machine.machine_id}"
-    )
-
     # Get device index from machine
     device_index = machine.device().index
 
@@ -132,9 +128,6 @@ def create_huggingface_model_from_remote(
         raise RuntimeError(
             f"Machine {machine.machine_id} is not running. Call machine.start() first."
         )
-
-    # Step 1: Prepare model on remote machine
-    log.info(f"Preparing model {checkpoint} on remote machine...")
     remote_data = orchestrator.prepare_huggingface_model_by_device(
         device_index=device_index,
         checkpoint=checkpoint,
@@ -155,7 +148,6 @@ def create_huggingface_model_from_remote(
     )
 
     # Step 2: Create local model skeleton
-    log.info(f"Creating local {model_type} skeleton...")
     try:
         from transformers import AutoConfig, AutoModelForCausalLM
 
@@ -175,7 +167,6 @@ def create_huggingface_model_from_remote(
         )
 
     # Step 3: Replace parameters with remote tensor stubs
-    log.info("Creating remote tensor stubs for model parameters...")
     device = machine.device()
 
     # Track storage IDs and parameter names for linking
@@ -276,7 +267,6 @@ def create_huggingface_model_from_remote(
         )
 
     # Step 4.5: Handle weight tying for parameters not in state_dict_metadata
-    log.info("Checking for tied weights that need linking...")
     _handle_tied_weights(model, state_dict_metadata, {})
 
     # Step 5: Link local storage IDs to remote model parameters
@@ -356,7 +346,6 @@ def _handle_tied_weights(
         state_dict_metadata: Metadata from remote preparation (only includes unique parameters)
         storage_mapping: Mapping from local storage IDs to remote storage IDs
     """
-    log.info("🔗 Checking for tied weights in model...")
 
     # Get all parameters in the local model (including tied ones)
     all_local_params = dict(model.named_parameters())
@@ -368,10 +357,7 @@ def _handle_tied_weights(
             meta_params.append(name)
 
     if not meta_params:
-        log.info("✅ No parameters on meta device - no tied weights to handle")
         return
-
-    log.info(f"Found {len(meta_params)} parameters on meta device: {meta_params}")
 
     # For each meta parameter, try to find a parameter that shares storage
     for meta_name in meta_params:
@@ -393,8 +379,6 @@ def _handle_tied_weights(
         #     # Handle other embedding tying patterns
 
         if tied_param_name and tied_param is not None:
-            log.info(f"🔗 Tying {meta_name} to {tied_param_name}")
-
             # Replace meta parameter with tied parameter (share storage)
             tied_parameter = nn.Parameter(tied_param.data)
             tied_parameter.requires_grad_(meta_param.requires_grad)

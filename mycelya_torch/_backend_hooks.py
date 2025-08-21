@@ -76,9 +76,7 @@ class RuntimeManager:
         device_count = self.get_device_count()
         if device_idx < 0 or device_idx >= device_count:
             raise ValueError(f"Invalid device index: {device_idx}")
-        old_device = self._current_device
         self._current_device = device_idx
-        log.info(f"Device set from {old_device} to {device_idx}")
 
     def has_primary_context(self, device_idx: int) -> bool:
         """Check if device has primary context"""
@@ -93,7 +91,6 @@ class RuntimeManager:
 
         old_device_idx = self._current_device
         self._current_device = device_idx
-        log.info(f"Device exchanged from {old_device_idx} to {device_idx}")
         return old_device_idx
 
     # Stream management methods
@@ -158,14 +155,11 @@ class Driver:
 
     def exec(self, cmd: str, *args: Any) -> Any:
         """Execute a command using the registry pattern"""
-        log.info(f"Executing command: {cmd}(*{args[:2]}...)")  # Limit args in log
-
         if cmd in Driver.registry:
             res = Driver.registry[cmd](self, *args)
         else:
             raise RuntimeError(f"Unknown command: {cmd}")
 
-        log.info(f"Command {cmd} result: {res}")
         return res
 
     # Storage operations - delegate to orchestrator

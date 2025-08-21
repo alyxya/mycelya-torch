@@ -101,10 +101,6 @@ class Orchestrator:
         # Initialize CPU tensor futures deque for this client
         self._cpu_tensor_futures_deques[machine_id] = deque()
 
-        log.info(
-            f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
-        )
-
     def start_client(self, machine_id: str) -> None:
         """Start a client for the given machine."""
         client = self._clients[machine_id]
@@ -382,8 +378,6 @@ class Orchestrator:
         copy_entry = (storage_future, cpu_tensor_future, tensor)
         self._cpu_tensor_futures_deques[machine_id].append(copy_entry)
 
-        log.info(f"🔄 ORCHESTRATOR: Initiated async copy of tensor {tensor_id} to CPU")
-
         return cpu_tensor_future
 
     def _cleanup_remote_storage(self, storage_id: int, machine_id: str) -> None:
@@ -404,21 +398,9 @@ class Orchestrator:
             tensor_ids = self.get_tensor_ids_for_storage(storage_id)
 
             if tensor_ids:
-                log.info(
-                    f"Cleaning up {len(tensor_ids)} tensor IDs for storage {storage_id}"
-                )
-
                 client = self.get_client(machine_id)
                 # Remove tensors from remote side
                 client.remove_tensors(list(tensor_ids))
-
-                log.info(
-                    f"✅ Successfully cleaned up {len(tensor_ids)} tensors for storage {storage_id}"
-                )
-            else:
-                log.info(
-                    f"No tensor IDs found for storage {storage_id} - may already be cleaned up"
-                )
 
         except Exception as e:
             log.error(
@@ -541,9 +523,6 @@ class Orchestrator:
         Returns:
             None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
         """
-        log.info(
-            f"🎯 ORCHESTRATOR: Executing {op_name} with {len(input_tensors)} input tensors and {len(output_tensors)} output tensors"
-        )
         log.debug(f"Input tensor IDs: {[get_tensor_id(t) for t in input_tensors]}")
         log.debug(f"Output tensor IDs: {[get_tensor_id(t) for t in output_tensors]}")
 
