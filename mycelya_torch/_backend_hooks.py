@@ -186,7 +186,7 @@ class Driver:
     def resize_storage(self, storage_id: int, nbytes: int) -> bool:
         from ._orchestrator import orchestrator
 
-        return orchestrator.resize_storage_by_id(storage_id, nbytes)
+        return orchestrator.resize_storage(storage_id, nbytes)
 
     # Device operations
     @register(registry)

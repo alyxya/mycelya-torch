@@ -293,8 +293,8 @@ class Orchestrator:
 
         return True
 
-    def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
-        """Resize storage by storage ID with remote operation.
+    def resize_storage(self, storage_id: int, nbytes: int) -> bool:
+        """Resize storage with remote operation.
 
         Args:
             storage_id: Storage ID to resize
@@ -455,25 +455,6 @@ class Orchestrator:
             log.error(
                 f"Failed remote cleanup for storage {storage_id} on machine {machine_id}: {e}"
             )
-
-    # Legacy storage methods - mirroring Client
-
-    def resize_storage(self, storage_id: int, nbytes: int) -> None:
-        """Resize storage to accommodate new byte size.
-
-        Args:
-            storage_id: The storage ID to resize
-            nbytes: The number of bytes needed for the new storage size
-
-        Raises:
-            RuntimeError: If storage or client not available
-        """
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        client = self._clients[machine_id]
-        client.resize_storage(storage_id, nbytes)
-
-        # Invalidate cache for the resized storage
-        self.storage.invalidate_storage_cache(storage_id)
 
     def update_tensor(
         self,
