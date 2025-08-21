@@ -34,8 +34,8 @@ class StorageManager:
     """
 
     def __init__(self) -> None:
-        # Storage ID tracking - maps storage to machine info
-        self.storage_id_to_machine_info: Dict[
+        # Storage ID tracking - maps storage to remote device info
+        self.storage_id_to_remote_device: Dict[
             int, Tuple[str, str, int]
         ] = {}  # storage_id -> (machine_id, remote_type, remote_index)
 
@@ -64,15 +64,15 @@ class StorageManager:
 
         log.info(f"🆔 GENERATED Storage ID: {storage_id}")
 
-        # Track the storage ID with machine info
-        machine_info = (machine_id, remote_type, remote_index)
-        self.storage_id_to_machine_info[storage_id] = machine_info
+        # Track the storage ID with remote device info
+        remote_device_info = (machine_id, remote_type, remote_index)
+        self.storage_id_to_remote_device[storage_id] = remote_device_info
 
         log.info(f"Created storage ID {storage_id} for machine {machine_id}")
         return storage_id
 
-    def get_machine_info(self, storage_id: int) -> Tuple[str, str, int]:
-        """Get machine info for a storage ID.
+    def get_remote_device_info(self, storage_id: int) -> Tuple[str, str, int]:
+        """Get remote device info for a storage ID.
 
         Returns:
             Tuple of (machine_id, remote_type, remote_index)
@@ -80,7 +80,7 @@ class StorageManager:
         Raises:
             KeyError: If storage_id not found
         """
-        return self.storage_id_to_machine_info[storage_id]
+        return self.storage_id_to_remote_device[storage_id]
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID (local tracking only).
@@ -91,9 +91,9 @@ class StorageManager:
         if storage_id == 0:  # Empty storage
             return True
 
-        if storage_id in self.storage_id_to_machine_info:
+        if storage_id in self.storage_id_to_remote_device:
             # Clean up local tracking
-            self.storage_id_to_machine_info.pop(storage_id, None)
+            self.storage_id_to_remote_device.pop(storage_id, None)
 
             log.info(f"Freed storage ID {storage_id} from local tracking")
             return True

@@ -50,8 +50,8 @@ class Orchestrator:
         self._cache_hits = 0
         self._cache_misses = 0
 
-        # Tensor ID tracking - maps tensor ID to machine info
-        self._tensor_id_to_machine_info: Dict[
+        # Tensor ID tracking - maps tensor ID to remote device info
+        self._tensor_id_to_remote_device: Dict[
             int, Tuple[str, str, int]
         ] = {}  # tensor_id -> (machine_id, remote_type, remote_index)
 
@@ -322,8 +322,8 @@ class Orchestrator:
             RuntimeError: If storage, machine, or client not found/available
         """
         try:
-            machine_info = self.storage.get_machine_info(storage_id)
-            machine_id, remote_type, remote_index = machine_info
+            remote_device_info = self.storage.get_remote_device_info(storage_id)
+            machine_id, remote_type, remote_index = remote_device_info
             return self.get_client(machine_id)
         except Exception as e:
             raise RuntimeError(
@@ -343,11 +343,11 @@ class Orchestrator:
             RuntimeError: If tensor, machine, or client not found/available
         """
         try:
-            machine_info = self.get_machine_info_for_tensor(tensor_id)
-            if machine_info is None:
-                raise RuntimeError(f"No machine info found for tensor {tensor_id}")
+            remote_device_info = self.get_remote_device_info_for_tensor(tensor_id)
+            if remote_device_info is None:
+                raise RuntimeError(f"No remote device info found for tensor {tensor_id}")
 
-            machine_id, remote_type, remote_index = machine_info
+            machine_id, remote_type, remote_index = remote_device_info
             return self.get_client(machine_id)
         except Exception as e:
             raise RuntimeError(
@@ -389,14 +389,14 @@ class Orchestrator:
         Returns:
             True if freed successfully, False otherwise
         """
-        # Get machine info for remote cleanup
-        machine_info = self.storage.get_machine_info(storage_id)
+        # Get remote device info for remote cleanup
+        remote_device_info = self.storage.get_remote_device_info(storage_id)
 
         # Free from local tracking first
         success = self.storage.free_storage_with_id(storage_id)
 
-        if success and machine_info:
-            machine_id, remote_type, remote_index = machine_info
+        if success and remote_device_info:
+            machine_id, remote_type, remote_index = remote_device_info
             try:
                 # Perform remote cleanup
                 self._cleanup_remote_storage(storage_id, machine_id)
@@ -416,10 +416,10 @@ class Orchestrator:
             True if resized successfully, False otherwise
         """
         try:
-            machine_info = self.storage.get_machine_info(storage_id)
-            machine_id, remote_type, remote_index = machine_info
+            remote_device_info = self.storage.get_remote_device_info(storage_id)
+            machine_id, remote_type, remote_index = remote_device_info
         except KeyError:
-            log.warning(f"No machine info found for storage {storage_id}")
+            log.warning(f"No remote device info found for storage {storage_id}")
             return False
 
         try:
@@ -439,10 +439,10 @@ class Orchestrator:
             return False
 
 
-    def get_machine_info_for_storage(
+    def get_remote_device_info_for_storage(
         self, storage_id: int
     ) -> Tuple[str, str, int]:
-        """Get machine info for a storage ID.
+        """Get remote device info for a storage ID.
 
         Args:
             storage_id: Storage ID to query
@@ -453,14 +453,14 @@ class Orchestrator:
         Raises:
             KeyError: If storage_id not found
         """
-        return self.storage.get_machine_info(storage_id)
+        return self.storage.get_remote_device_info(storage_id)
 
     # Tensor management methods
 
     def register_tensor_id(
         self, tensor_id: int, machine_id: str, remote_type: str, remote_index: int
     ) -> None:
-        """Register a tensor ID with its machine info.
+        """Register a tensor ID with its remote device info.
 
         Args:
             tensor_id: Tensor ID to register
@@ -468,14 +468,14 @@ class Orchestrator:
             remote_type: Remote device type (e.g., "cuda")
             remote_index: Remote device index
         """
-        machine_info = (machine_id, remote_type, remote_index)
-        self._tensor_id_to_machine_info[tensor_id] = machine_info
+        remote_device_info = (machine_id, remote_type, remote_index)
+        self._tensor_id_to_remote_device[tensor_id] = remote_device_info
         log.debug(f"Registered tensor ID {tensor_id} with machine {machine_id}")
 
-    def get_machine_info_for_tensor(
+    def get_remote_device_info_for_tensor(
         self, tensor_id: int
     ) -> Optional[Tuple[str, str, int]]:
-        """Get machine info for a tensor ID.
+        """Get remote device info for a tensor ID.
 
         Args:
             tensor_id: Tensor ID to query
@@ -483,7 +483,7 @@ class Orchestrator:
         Returns:
             Tuple of (machine_id, remote_type, remote_index) or None if not found
         """
-        return self._tensor_id_to_machine_info.get(tensor_id)
+        return self._tensor_id_to_remote_device.get(tensor_id)
 
     def _cleanup_remote_storage(self, storage_id: int, machine_id: str) -> None:
         """Clean up storage on remote GPU device.
@@ -648,8 +648,8 @@ class Orchestrator:
         # Try to invalidate cache by finding storage_id for this tensor_id
         # Note: This is best-effort since tensor_id to storage_id mapping may not be available
         try:
-            machine_info = self.get_machine_info_for_tensor(tensor_id)
-            if machine_info is not None:
+            remote_device_info = self.get_remote_device_info_for_tensor(tensor_id)
+            if remote_device_info is not None:
                 # We can't easily map tensor_id to storage_id, so we skip cache invalidation
                 # for tensor-based updates. Storage-based updates handle cache invalidation properly.
                 log.debug(

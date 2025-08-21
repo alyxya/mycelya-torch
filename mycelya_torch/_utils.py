@@ -40,7 +40,7 @@ def get_tensor_id(tensor: torch.Tensor) -> int:
     # Register tensor ID for device tracking (needed for cross-device validation)
     from ._orchestrator import orchestrator
 
-    if orchestrator.get_machine_info_for_tensor(tensor_id) is None:
+    if orchestrator.get_remote_device_info_for_tensor(tensor_id) is None:
         device_index = tensor.device.index
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
