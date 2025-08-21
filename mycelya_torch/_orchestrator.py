@@ -446,16 +446,6 @@ class Orchestrator:
             log.error(f"Failed to resize storage {storage_id}: {e}")
             return False
 
-    def get_storage_nbytes(self, storage_id: int) -> Optional[int]:
-        """Get the original nbytes for a storage ID.
-
-        Args:
-            storage_id: Storage ID to query
-
-        Returns:
-            Number of bytes or None if not found
-        """
-        return self.storage.get_storage_nbytes(storage_id)
 
     def get_machine_info_for_storage(
         self, storage_id: int
@@ -809,10 +799,8 @@ class Orchestrator:
             # Storage doesn't exist - create empty tensor on remote
             log.debug(f"Creating empty tensor {tensor_id} for new storage {storage_id}")
 
-            # Get the original nbytes from the storage manager
-            nbytes = self.get_storage_nbytes(storage_id)
-            if nbytes is None:
-                raise RuntimeError(f"No nbytes found for storage {storage_id}")
+            # Get nbytes from the tensor's untyped storage
+            nbytes = tensor.untyped_storage().nbytes()
 
             # Import helper function for dtype conversion
             from ._utils import dtype_to_str

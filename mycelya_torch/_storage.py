@@ -39,8 +39,6 @@ class StorageManager:
             int, Tuple[str, str, int]
         ] = {}  # storage_id -> (machine_id, remote_type, remote_index)
 
-        # Storage ID to nbytes mapping - tracks original nbytes from allocator
-        self.storage_id_to_nbytes: Dict[int, int] = {}  # storage_id -> nbytes
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -72,9 +70,6 @@ class StorageManager:
         machine_info = (machine_id, remote_type, remote_index)
         self.storage_id_to_machine_info[storage_id] = machine_info
 
-        # Store the original nbytes from the allocator
-        self.storage_id_to_nbytes[storage_id] = nbytes
-
         log.info(
             f"Created storage ID {storage_id} for machine {machine_id} ({nbytes} bytes)"
         )
@@ -88,9 +83,6 @@ class StorageManager:
         """
         return self.storage_id_to_machine_info.get(storage_id)
 
-    def get_storage_nbytes(self, storage_id: int) -> Optional[int]:
-        """Get the original nbytes for a storage ID from the allocator."""
-        return self.storage_id_to_nbytes.get(storage_id)
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID (local tracking only).
@@ -104,7 +96,6 @@ class StorageManager:
         if storage_id in self.storage_id_to_machine_info:
             # Clean up local tracking
             self.storage_id_to_machine_info.pop(storage_id, None)
-            self.storage_id_to_nbytes.pop(storage_id, None)
 
             log.info(f"Freed storage ID {storage_id} from local tracking")
             return True
@@ -123,7 +114,5 @@ class StorageManager:
             log.warning(f"No machine info found for storage {storage_id}")
             return False
 
-        # Update local nbytes tracking
-        self.storage_id_to_nbytes[storage_id] = nbytes
-        log.info(f"Updated local nbytes for storage {storage_id} to {nbytes}")
+        log.info(f"Resize operation for storage {storage_id} to {nbytes} bytes")
         return True
