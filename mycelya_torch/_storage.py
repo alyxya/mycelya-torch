@@ -42,8 +42,6 @@ class StorageManager:
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
 
-        log.info("🚀 Storage manager initialized")
-
     def create_storage(
         self, machine_id: str, remote_type: str, remote_index: int
     ) -> int:
@@ -62,13 +60,10 @@ class StorageManager:
         storage_id = self._storage_id_counter
         self._storage_id_counter += 1
 
-        log.info(f"🆔 GENERATED Storage ID: {storage_id}")
-
         # Track the storage ID with remote device info
         remote_device_info = (machine_id, remote_type, remote_index)
         self.storage_id_to_remote_device[storage_id] = remote_device_info
 
-        log.info(f"Created storage ID {storage_id} for machine {machine_id}")
         return storage_id
 
     def get_remote_device_info(self, storage_id: int) -> Tuple[str, str, int]:
@@ -94,8 +89,6 @@ class StorageManager:
         if storage_id in self.storage_id_to_remote_device:
             # Clean up local tracking
             self.storage_id_to_remote_device.pop(storage_id, None)
-
-            log.info(f"Freed storage ID {storage_id} from local tracking")
             return True
         else:
             log.warning(f"Attempted to free unknown storage {storage_id}")

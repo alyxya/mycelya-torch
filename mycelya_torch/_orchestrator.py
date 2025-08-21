@@ -104,14 +104,12 @@ class Orchestrator:
         client = self._clients[machine_id]
         if not client.is_running():
             client.start()
-            log.info(f"✅ ORCHESTRATOR: Started client for machine {machine_id}")
 
     def stop_client(self, machine_id: str) -> None:
         """Stop a client for the given machine."""
         client = self._clients[machine_id]
         if client.is_running():
             client.stop()
-            log.info(f"✅ ORCHESTRATOR: Stopped client for machine {machine_id}")
 
     def get_client(self, machine_id: str) -> Client:
         """Get client for the given machine."""
@@ -133,7 +131,6 @@ class Orchestrator:
         """
         if storage_id in self._storage_cache:
             del self._storage_cache[storage_id]
-            log.debug(f"🗑️ Invalidated orchestrator cache for storage {storage_id}")
 
             # Note: Do NOT remove tensor-storage mappings during cache invalidation
             # The mappings should only be updated when tensors are actually created/destroyed via RPC
@@ -176,7 +173,6 @@ class Orchestrator:
         for storage_id in storage_ids:
             if storage_id in self._storage_cache:
                 del self._storage_cache[storage_id]
-                log.debug(f"🗑️ INVALIDATED cache for storage {storage_id}")
 
             # Note: Do NOT clean up tensor→storage mappings during cache invalidation
             # The mappings should only be updated when tensors are actually created/destroyed via RPC
@@ -231,7 +227,6 @@ class Orchestrator:
             self._storage_to_tensors_map[storage_id] = set()
         self._storage_to_tensors_map[storage_id].add(tensor_id)
 
-        log.debug(f"📋 Registered mapping: tensor {tensor_id} -> storage {storage_id}")
 
     def _get_storage_id_for_tensor(self, tensor_id: int) -> Optional[int]:
         """Get storage ID for a tensor ID if mapping exists.
@@ -585,7 +580,6 @@ class Orchestrator:
             )
         except Exception as e:
             log.debug(f"Could not establish mapping/cache for tensor {tensor_id}: {e}")
-            log.info(f"✅ ORCHESTRATOR: Retrieved tensor {tensor_id} (no caching)")
 
         return result
 
@@ -604,7 +598,6 @@ class Orchestrator:
 
         # Invalidate orchestrator cache for the resized storage
         self._invalidate_cache_for_storage(storage_id)
-        log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
 
     def update_tensor(
         self,
@@ -658,7 +651,6 @@ class Orchestrator:
         except Exception as e:
             log.debug(f"Could not invalidate cache for tensor {tensor_id}: {e}")
 
-        log.info(f"✅ ORCHESTRATOR: Updated tensor {tensor_id}")
 
     def execute_aten_operation(
         self,
@@ -718,10 +710,8 @@ class Orchestrator:
         client = self._get_client_for_tensor_id(tensor_id)
 
         # Ensure all input tensors exist on remote before execution
-        log.debug(f"Ensuring {len(input_tensors)} input tensors exist on client")
         for tensor in input_tensors:
             tensor_id = get_tensor_id(tensor)
-            log.debug(f"Ensuring tensor {tensor_id} exists on client")
             self._ensure_tensor_exists_on_client(client, tensor)
 
         # Execute with separated input/output interface
@@ -764,10 +754,8 @@ class Orchestrator:
         self._invalidate_output_tensor_caches(output_tensor_ids)
 
         if return_metadata:
-            log.info(f"✅ ORCHESTRATOR: Completed {op_name} with metadata return")
             return result
         else:
-            log.info(f"✅ ORCHESTRATOR: Completed {op_name} with separated interface")
             return None
 
 
@@ -792,7 +780,6 @@ class Orchestrator:
         # Check orchestrator's storage mapping to decide what to create on remote
         if storage_id not in self._storage_to_tensors_map:
             # Storage doesn't exist - create empty tensor on remote
-            log.debug(f"Creating empty tensor {tensor_id} for new storage {storage_id}")
 
             # Get nbytes from the tensor's untyped storage
             nbytes = tensor.untyped_storage().nbytes()
@@ -833,7 +820,6 @@ class Orchestrator:
                 self._register_tensor_storage_mapping(tensor_id, storage_id)
             else:
                 # Tensor already exists in orchestrator mapping, assume it exists on server
-                log.debug(f"Tensor {tensor_id} already exists in orchestrator mapping")
 
 
 
