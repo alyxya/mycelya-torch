@@ -168,8 +168,6 @@ def create_huggingface_model_from_remote(
         with torch.device("meta"):
             model = AutoModelForCausalLM.from_config(config)
 
-        log.info(f"Created model skeleton: {type(model).__name__}")
-
     except ImportError:
         raise ImportError(
             "transformers library required for HuggingFace model reconstruction. "
@@ -289,14 +287,7 @@ def create_huggingface_model_from_remote(
         device_index, local_storage_ids, parameter_names
     )
 
-    log.info("✅ All storage operations and tensor linking completed")
-
-    log.info("✅ Model tensor linking completed successfully")
-
     # Step 6: Model is now fully connected with remote tensors
-    log.info(
-        f"✅ Successfully created {model_type} model with {len(local_storage_ids)} remote tensors"
-    )
     return model
 
 
@@ -409,7 +400,6 @@ def _handle_tied_weights(
             tied_parameter.requires_grad_(meta_param.requires_grad)
             _set_nested_parameter(model, meta_name, tied_parameter)
 
-            log.info(f"✅ Successfully tied {meta_name} to {tied_param_name}")
         else:
             log.warning(f"❌ Could not find tied parameter for {meta_name}")
 
@@ -421,8 +411,6 @@ def _handle_tied_weights(
         log.warning(
             f"❌ Still have meta parameters after tying: {remaining_meta_params}"
         )
-    else:
-        log.info("✅ All parameters successfully linked - no meta devices remaining")
 
 
 def load_huggingface_model(

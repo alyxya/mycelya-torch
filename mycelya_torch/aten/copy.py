@@ -3,11 +3,7 @@
 
 import torch
 
-from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import dtype_to_str, get_storage_id, get_tensor_id
-
-log = get_logger(__name__)
 
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
@@ -17,10 +13,7 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
 
     # Use orchestrator's new async copy method
     cpu_future = orchestrator.copy_tensor_to_cpu(from_)
-    result = cpu_future.result()
-
-    log.info("Successfully copied tensor from remote to CPU")
-    return result
+    return cpu_future.result()
 
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
@@ -30,31 +23,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
     if from_.device.type != "cpu":
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
-    # Use remote execution to send the tensor data
-
-    # Use storage-based approach
-    tensor_id = get_tensor_id(to_)
-    storage_id = get_storage_id(to_)
-    log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
-
-    # First ensure the tensor exists on the remote side
-    # This creates the empty tensor if it doesn't exist
-    machine_id, _, _ = orchestrator.storage.get_remote_device_info(storage_id)
-    client = orchestrator._clients[machine_id]
-    orchestrator._ensure_tensor_exists_on_client(client, to_)
-
-    # Now update the tensor with data from the CPU tensor
-    # Pass tensor ID and raw data with tensor metadata for reconstruction
-    orchestrator.update_tensor(
-        tensor_id,
-        from_,  # Pass storage tensor directly
-        source_shape=list(from_.shape),
-        source_stride=list(from_.stride()),
-        source_storage_offset=from_.storage_offset(),
-        source_dtype=dtype_to_str(from_.dtype),
-    )
-
-    log.info(f"Successfully updated remote tensor with tensor ID {tensor_id}")
+    # Ensure tensor exists and update with data in one operation
+    orchestrator.ensure_tensor_exists_and_update(to_, from_)
     return to_
 
 

@@ -51,14 +51,11 @@ class MockClient(Client):
             self._server_instance = self._server_class()
             self._is_running = True
 
-            log.info(f"Started mock client: {self.machine_id}")
-
     def stop(self):
         """Stop the mock execution environment."""
         if self._is_running:
             self._server_instance = None
             self._is_running = False
-            log.info(f"Stopped mock client: {self.machine_id}")
 
     def is_running(self) -> bool:
         """Check if the mock client is currently running."""
@@ -121,9 +118,6 @@ class MockClient(Client):
             self._server_instance.create_empty_tensor.local(
                 tensor_id, shape, stride, storage_offset, dtype, nbytes
             )
-            log.info(
-                f"Created empty tensor {tensor_id} with shape {shape} and storage {nbytes} bytes (mock)"
-            )
         except Exception as e:
             raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
 
@@ -139,9 +133,6 @@ class MockClient(Client):
         try:
             self._server_instance.create_tensor_view.local(
                 new_tensor_id, base_tensor_id, shape, stride, offset
-            )
-            log.info(
-                f"Created tensor view {new_tensor_id} from tensor {base_tensor_id} (mock)"
             )
         except Exception as e:
             raise RuntimeError(
@@ -167,7 +158,6 @@ class MockClient(Client):
             source_storage_offset,
             source_dtype,
         )
-        log.info(f"Updated tensor {tensor_id} (mock)")
 
     def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""
@@ -180,12 +170,10 @@ class MockClient(Client):
             return
 
         self._server_instance.remove_tensors.local(tensor_ids)
-        log.info(f"Removed {len(tensor_ids)} tensors (mock)")
 
     def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
         self._server_instance.resize_storage.local(tensor_id, nbytes)
-        log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes (mock)")
 
     # Operation execution methods
     def _execute_aten_operation_impl(
@@ -199,9 +187,6 @@ class MockClient(Client):
         return_metadata: bool = False,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
-        log.info(
-            f"Mock Client executing {op_name} with inputs: {input_tensor_ids}, outputs: {output_tensor_ids}"
-        )
 
         # Execute using .local() - result will be available via resolve_futures
         self._server_instance.execute_aten_operation.local(
@@ -236,7 +221,6 @@ class MockClient(Client):
         self._server_instance.link_model_tensors.local(
             local_tensor_ids, parameter_names
         )
-        log.info(f"Linked {len(local_tensor_ids)} model tensors (mock)")
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

@@ -117,9 +117,6 @@ class ModalClient(Client):
         self._server_instance.create_empty_tensor.spawn(
             tensor_id, shape, stride, storage_offset, dtype, nbytes
         )
-        log.info(
-            f"Created empty tensor {tensor_id} with shape {shape} and storage {nbytes} bytes"
-        )
 
     def _create_tensor_view_impl(
         self,
@@ -133,7 +130,6 @@ class ModalClient(Client):
         self._server_instance.create_tensor_view.spawn(
             new_tensor_id, base_tensor_id, shape, stride, offset
         )
-        log.info(f"Created tensor view {new_tensor_id} from tensor {base_tensor_id}")
 
     def _update_tensor_impl(
         self,
@@ -154,7 +150,6 @@ class ModalClient(Client):
             source_storage_offset,
             source_dtype,
         )
-        log.info(f"Updated tensor {tensor_id}")
 
     def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""
@@ -167,12 +162,10 @@ class ModalClient(Client):
             return
 
         self._server_instance.remove_tensors.spawn(tensor_ids)
-        log.info(f"Removed {len(tensor_ids)} tensors")
 
     def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
         self._server_instance.resize_storage.spawn(tensor_id, nbytes)
-        log.info(f"Resized storage for tensor {tensor_id} to {nbytes} bytes")
 
     # Operation execution methods
     def _execute_aten_operation_impl(
@@ -219,7 +212,6 @@ class ModalClient(Client):
         self._server_instance.link_model_tensors.spawn(
             local_tensor_ids, parameter_names
         )
-        log.info(f"Linked {len(local_tensor_ids)} model tensors")
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

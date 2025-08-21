@@ -579,6 +579,49 @@ class Orchestrator:
         # Invalidate cache for the updated storage
         self._invalidate_cache_for_storage(storage_id)
 
+    def ensure_tensor_exists_and_update(
+        self,
+        target_tensor: torch.Tensor,
+        source_tensor: torch.Tensor,
+    ) -> None:
+        """Ensure target tensor exists on remote and update it with source data.
+
+        This is a convenience method that combines tensor existence checking
+        with tensor updating in a single public interface.
+
+        Args:
+            target_tensor: The mycelya tensor to update (on remote device)
+            source_tensor: The CPU tensor containing the data to copy
+
+        Raises:
+            RuntimeError: If tensors are not valid or operation fails
+        """
+        if target_tensor.device.type != "mycelya":
+            raise RuntimeError("Target tensor must be a mycelya tensor")
+        if source_tensor.device.type != "cpu":
+            raise RuntimeError("Source tensor must be a CPU tensor")
+
+        # Get tensor and storage info
+        tensor_id = get_tensor_id(target_tensor)
+        storage_id = get_storage_id(target_tensor)
+
+        # Get client
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
+
+        # Ensure tensor exists on remote
+        self._ensure_tensor_exists_on_client(client, target_tensor)
+
+        # Update tensor with source data
+        self.update_tensor(
+            tensor_id,
+            source_tensor,
+            source_shape=list(source_tensor.shape),
+            source_stride=list(source_tensor.stride()),
+            source_storage_offset=source_tensor.storage_offset(),
+            source_dtype=dtype_to_str(source_tensor.dtype),
+        )
+
     def execute_aten_operation(
         self,
         op_name: str,
