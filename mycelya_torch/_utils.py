@@ -10,8 +10,6 @@ used by external users of mycelya_torch.
 
 import torch
 
-import mycelya_torch._C
-
 
 def get_tensor_id(tensor: torch.Tensor) -> int:
     """Get tensor metadata hash and ensure tensor ID is registered.
@@ -33,7 +31,8 @@ def get_tensor_id(tensor: torch.Tensor) -> int:
             f"get_tensor_id() can only be called on mycelya tensors, got {tensor.device.type}"
         )
 
-    return mycelya_torch._C._get_metadata_hash(tensor)
+    from mycelya_torch._C import _get_metadata_hash
+    return _get_metadata_hash(tensor)
 
 
 def get_storage_id(tensor: torch.Tensor) -> int:
