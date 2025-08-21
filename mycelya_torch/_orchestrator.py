@@ -883,55 +883,26 @@ class Orchestrator:
                 pass
 
     def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
-        """Resolve any pending CPU tensor futures for a specific client.
+        """Resolve pending CPU tensor futures for a client."""
+        cpu_futures_deque = self._cpu_tensor_futures_deques.get(machine_id)
 
-        Processes the CPU tensor futures deque for the given machine_id, checking if storage
-        futures are ready and reconstructing CPU tensors when they are.
+        while cpu_futures_deque:
+            storage_future, cpu_tensor_future, mycelya_tensor = cpu_futures_deque[0]
 
-        Args:
-            machine_id: Machine ID to process CPU tensor futures for
-        """
-        copy_deque = self._cpu_tensor_futures_deques.get(machine_id)
-        if not copy_deque:
-            return
-
-        # Process futures from the front of the deque (FIFO order)
-        while copy_deque:
-            # Peek at the first entry without removing it
-            storage_future, cpu_tensor_future, mycelya_tensor = copy_deque[0]
-
-            # Check if storage future is ready (non-blocking)
             if not storage_future.done():
-                # Storage future not ready yet, stop processing (maintain order)
                 break
 
-            # Remove the entry from deque since we're processing it
-            copy_deque.popleft()
+            cpu_futures_deque.popleft()
 
-            try:
-                # Get the raw bytes from the completed storage future
-                raw_bytes = storage_future.result()
-
-                # Reconstruct CPU tensor using the mycelya tensor's metadata
-                cpu_tensor = self._reconstruct_tensor_from_cached_storage(
-                    raw_bytes,
-                    list(mycelya_tensor.shape),
-                    list(mycelya_tensor.stride()),
-                    mycelya_tensor.storage_offset(),
-                    dtype_to_str(mycelya_tensor.dtype),
-                )
-
-                # Set the result on the CPU tensor future
-                cpu_tensor_future.set_result(cpu_tensor)
-
-                log.debug(
-                    f"✅ ORCHESTRATOR: Resolved CPU tensor future for tensor {get_tensor_id(mycelya_tensor)}"
-                )
-
-            except Exception as e:
-                # Set exception on the CPU tensor future
-                cpu_tensor_future.set_exception(e)
-                log.error(f"❌ ORCHESTRATOR: Failed to resolve CPU tensor future: {e}")
+            raw_bytes = storage_future.result()
+            cpu_tensor = self._reconstruct_tensor_from_cached_storage(
+                raw_bytes,
+                list(mycelya_tensor.shape),
+                list(mycelya_tensor.stride()),
+                mycelya_tensor.storage_offset(),
+                dtype_to_str(mycelya_tensor.dtype),
+            )
+            cpu_tensor_future.set_result(cpu_tensor)
 
     def _background_loop(self):
         """Background thread for batch execution and future resolution.
