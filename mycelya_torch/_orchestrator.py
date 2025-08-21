@@ -253,53 +253,9 @@ class Orchestrator:
     def update_tensor(
         self,
         target_tensor: torch.Tensor,
-        storage_tensor: torch.Tensor,
-        source_shape: List[int],
-        source_stride: List[int],
-        source_storage_offset: int,
-        source_dtype: str,
-    ) -> None:
-        """Update tensor data with raw data and tensor metadata.
-
-        Args:
-            target_tensor: Target tensor to update
-            storage_tensor: CPU tensor wrapping the storage data
-            source_shape: Shape of the source data
-            source_stride: Stride of the source data
-            source_storage_offset: Storage offset of the source data
-            source_dtype: Data type of the source data
-
-        Raises:
-            RuntimeError: If tensor or client not available
-        """
-        tensor_id = get_tensor_id(target_tensor)
-        storage_id = get_storage_id(target_tensor)
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        client = self._clients[machine_id]
-        # Convert storage tensor to raw bytes for tensor-only interface
-        raw_data = storage_tensor.detach().numpy().tobytes()
-
-        client.update_tensor(
-            tensor_id,
-            raw_data,
-            source_shape,
-            source_stride,
-            source_storage_offset,
-            source_dtype,
-        )
-
-        # Invalidate cache for the updated storage
-        self.storage.invalidate_storage_cache(storage_id)
-
-    def ensure_tensor_exists_and_update(
-        self,
-        target_tensor: torch.Tensor,
         source_tensor: torch.Tensor,
     ) -> None:
         """Ensure target tensor exists on remote and update it with source data.
-
-        This is a convenience method that combines tensor existence checking
-        with tensor updating in a single public interface.
 
         Args:
             target_tensor: The mycelya tensor to update (on remote device)
@@ -323,15 +279,22 @@ class Orchestrator:
         # Ensure tensor exists on remote
         self._ensure_tensor_exists_on_client(client, target_tensor)
 
+        # Get tensor ID and prepare data for update
+        tensor_id = get_tensor_id(target_tensor)
+        raw_data = source_tensor.detach().numpy().tobytes()
+
         # Update tensor with source data
-        self.update_tensor(
-            target_tensor,
-            source_tensor,
-            source_shape=list(source_tensor.shape),
-            source_stride=list(source_tensor.stride()),
-            source_storage_offset=source_tensor.storage_offset(),
-            source_dtype=dtype_to_str(source_tensor.dtype),
+        client.update_tensor(
+            tensor_id,
+            raw_data,
+            list(source_tensor.shape),
+            list(source_tensor.stride()),
+            source_tensor.storage_offset(),
+            dtype_to_str(source_tensor.dtype),
         )
+
+        # Invalidate cache for the updated storage
+        self.storage.invalidate_storage_cache(storage_id)
 
     def execute_aten_operation(
         self,

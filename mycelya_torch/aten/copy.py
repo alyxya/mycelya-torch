@@ -24,7 +24,7 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
     # Ensure tensor exists and update with data in one operation
-    orchestrator.ensure_tensor_exists_and_update(to_, from_)
+    orchestrator.update_tensor(to_, from_)
     return to_
 
 
