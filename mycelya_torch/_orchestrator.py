@@ -52,11 +52,6 @@ class Orchestrator:
             str, deque
         ] = {}  # machine_id -> deque of (storage_future, cpu_tensor_future, mycelya_tensor)
 
-        # Tensor ID tracking - maps tensor ID to remote device info
-        self._tensor_id_to_remote_device: Dict[
-            int, Tuple[str, str, int]
-        ] = {}  # tensor_id -> (machine_id, remote_type, remote_index)
-
         # Tensor ID to Storage ID mapping for cache coordination
         self._tensor_to_storage_map: Dict[int, int] = {}
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
@@ -272,34 +267,6 @@ class Orchestrator:
         return self.storage.get_remote_device_info(storage_id)
 
     # Tensor management methods
-
-    def register_tensor_id(
-        self, tensor_id: int, machine_id: str, remote_type: str, remote_index: int
-    ) -> None:
-        """Register a tensor ID with its remote device info.
-
-        Args:
-            tensor_id: Tensor ID to register
-            machine_id: Machine identifier
-            remote_type: Remote device type (e.g., "cuda")
-            remote_index: Remote device index
-        """
-        remote_device_info = (machine_id, remote_type, remote_index)
-        self._tensor_id_to_remote_device[tensor_id] = remote_device_info
-        log.debug(f"Registered tensor ID {tensor_id} with machine {machine_id}")
-
-    def get_remote_device_info_for_tensor(
-        self, tensor_id: int
-    ) -> Optional[Tuple[str, str, int]]:
-        """Get remote device info for a tensor ID.
-
-        Args:
-            tensor_id: Tensor ID to query
-
-        Returns:
-            Tuple of (machine_id, remote_type, remote_index) or None if not found
-        """
-        return self._tensor_id_to_remote_device.get(tensor_id)
 
     def copy_tensor_to_cpu(self, tensor: torch.Tensor) -> Future[torch.Tensor]:
         """Copy a remote tensor to CPU asynchronously.

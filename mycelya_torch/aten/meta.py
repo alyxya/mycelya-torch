@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Tuple
 
 import torch
 
-from .._device import device_manager
 from .._logging import get_logger
 from .._orchestrator import orchestrator
 from .._utils import get_tensor_id
@@ -112,17 +111,7 @@ def _create_output_tensors(
             tensor_id = get_tensor_id(tensor)
             output_tensor_ids.append(tensor_id)
 
-            # Ensure tensor ID is registered with device tracking system
-            device_index = remote_device.index
-            machine_id = device_manager.get_machine_id_for_device_index(device_index)
 
-            if machine_id is not None:
-                # For now, assume cuda:0 - this could be made more sophisticated later
-                remote_type = "cuda"
-                remote_index = 0
-                orchestrator.register_tensor_id(
-                    tensor_id, machine_id, remote_type, remote_index
-                )
         else:
             # Create new tensor
             new_tensor = torch.empty(
@@ -143,17 +132,6 @@ def _create_output_tensors(
             tensor_id = str(get_tensor_id(new_tensor))
             output_tensor_ids.append(tensor_id)
 
-            # Register tensor ID with device tracking system
-            device_index = remote_device.index
-            machine_id = device_manager.get_machine_id_for_device_index(device_index)
-
-            if machine_id is not None:
-                # For now, assume cuda:0 - this could be made more sophisticated later
-                remote_type = "cuda"
-                remote_index = 0
-                orchestrator.register_tensor_id(
-                    tensor_id, machine_id, remote_type, remote_index
-                )
 
     return output_tensors, output_tensor_ids
 
@@ -246,20 +224,7 @@ def _execute_with_dynamic_outputs(
     if has_out_kwarg:
         log.debug(f"Operation {op_name} has 'out' kwarg, using existing tensor")
         output_tensor = out_tensor
-        # For out tensors, we need to get the tensor ID for remote execution
-        output_tensor_ids = [get_tensor_id(output_tensor)]
 
-        # Ensure tensor ID is registered with device tracking system
-        device_index = remote_device.index
-        machine_id = device_manager.get_machine_id_for_device_index(device_index)
-
-        if machine_id is not None:
-            # For now, assume cuda:0 - this could be made more sophisticated later
-            remote_type = "cuda"
-            remote_index = 0
-            orchestrator.register_tensor_id(
-                output_tensor_ids[0], machine_id, remote_type, remote_index
-            )
     else:
         # Step 1: Infer output dtype based on operation type
         output_dtype = torch.int64 if op_name == "aten::nonzero" else args[0].dtype
@@ -267,19 +232,6 @@ def _execute_with_dynamic_outputs(
 
         # Step 2: Create minimal placeholder tensor with 0 bytes
         output_tensor = torch.empty(0, dtype=output_dtype, device=remote_device)
-        output_tensor_ids = [get_tensor_id(output_tensor)]
-
-        # Register tensor ID with device tracking system
-        device_index = remote_device.index
-        machine_id = device_manager.get_machine_id_for_device_index(device_index)
-
-        if machine_id is not None:
-            # For now, assume cuda:0 - this could be made more sophisticated later
-            remote_type = "cuda"
-            remote_index = 0
-            orchestrator.register_tensor_id(
-                output_tensor_ids[0], machine_id, remote_type, remote_index
-            )
 
     # Step 3: Execute remotely and request metadata return
     processed_args, processed_kwargs, input_tensors, tensor_mask = (
