@@ -259,13 +259,20 @@ def create_modal_app_for_gpu(
 
         def _get_storage_data_impl(self, tensor_id: int):
             """Get raw storage data by tensor ID."""
+            import torch
+            
             tensor_registry = self._tensor_registry
 
             if tensor_id not in tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             tensor = tensor_registry[tensor_id]
-            result = tensor.cpu().detach().numpy().tobytes()
+            # Get the underlying storage data, not just the tensor view
+            storage = tensor.untyped_storage()
+            # Create a tensor that views the entire storage as bytes (minimal allocation)
+            full_tensor = torch.empty(0, dtype=torch.uint8, device=tensor.device)
+            full_tensor.set_(storage, storage_offset=0, size=(storage.nbytes(),), stride=(1,))
+            result = full_tensor.cpu().detach().numpy().tobytes()
 
             self.response_queue.put(result)
 

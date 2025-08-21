@@ -59,6 +59,7 @@ class Orchestrator:
         self._background_thread.start()
 
     # Client management methods
+
     def create_client(
         self,
         machine_id: str,
@@ -113,7 +114,6 @@ class Orchestrator:
         tensor_set = self._storage_to_tensors_map.get(storage_id)
         return next(iter(tensor_set)) if tensor_set else None
 
-
     # Storage management methods
 
     def create_storage(self, nbytes: int, device_index: int) -> int:
@@ -164,7 +164,7 @@ class Orchestrator:
         # Invalidate cache for the resized storage
         self.storage.invalidate_storage_cache(storage_id)
 
-    # Tensor management methods
+    # Tensor methods
 
     def copy_tensor_to_cpu(self, tensor: torch.Tensor) -> Future[torch.Tensor]:
         """Copy a remote tensor to CPU asynchronously.
@@ -242,7 +242,11 @@ class Orchestrator:
 
         # Get tensor ID and prepare data for update
         tensor_id = get_tensor_id(target_tensor)
-        raw_data = source_tensor.detach().numpy().tobytes()
+        # Get the full storage bytes, not just the tensor view bytes
+        storage = source_tensor.untyped_storage()
+        storage_tensor = torch.empty(0, dtype=torch.uint8, device=source_tensor.device)
+        storage_tensor.set_(storage, storage_offset=0, size=(storage.nbytes(),), stride=(1,))
+        raw_data = storage_tensor.detach().numpy().tobytes()
 
         # Update tensor with source data
         client.update_tensor(
