@@ -39,7 +39,8 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
 
     # First ensure the tensor exists on the remote side
     # This creates the empty tensor if it doesn't exist
-    client = orchestrator._get_client_for_storage(storage_id)
+    machine_id, _, _ = orchestrator.storage.get_remote_device_info(storage_id)
+    client = orchestrator._clients[machine_id]
     orchestrator._ensure_tensor_exists_on_client(client, to_)
 
     # Now update the tensor with data from the CPU tensor

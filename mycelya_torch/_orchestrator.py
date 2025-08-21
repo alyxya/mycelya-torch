@@ -277,21 +277,6 @@ class Orchestrator:
             return list(tensor_set)
         return []
 
-    def _get_device_index_for_client(self, client) -> int:
-        """Get device index for a client.
-
-        Args:
-            client: The client to get device index for
-
-        Returns:
-            Device index for the client
-        """
-        # Look up device index by matching client machine_id
-        for device_index, existing_client in self._clients.items():
-            if existing_client is client:
-                return device_index
-        raise RuntimeError(f"Client {client} not found in registered clients")
-
     def _invalidate_output_tensor_caches(self, output_tensor_ids: List[int]) -> None:
         """Invalidate cache for all output tensors of an operation.
 
@@ -313,27 +298,6 @@ class Orchestrator:
         if storage_ids_to_invalidate:
             unique_storage_ids = list(set(storage_ids_to_invalidate))
             self._invalidate_multiple_storage_caches(unique_storage_ids)
-
-    def _get_client_for_storage(self, storage_id: int) -> Client:
-        """Get the client for a specific storage ID with validation.
-
-        Args:
-            storage_id: Storage ID to resolve to client
-
-        Returns:
-            Client: The client managing this storage
-
-        Raises:
-            RuntimeError: If storage, machine, or client not found/available
-        """
-        try:
-            remote_device_info = self.storage.get_remote_device_info(storage_id)
-            machine_id, remote_type, remote_index = remote_device_info
-            return self.get_client(machine_id)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to resolve client for storage {storage_id}: {e}"
-            ) from e
 
     # Storage management methods
 
@@ -490,11 +454,9 @@ class Orchestrator:
         tensor_id = get_tensor_id(tensor)
         storage_id = get_storage_id(tensor)
 
-        # Get the client using storage manager
-        client = self._get_client_for_storage(storage_id)
-
-        # Get machine_id from storage manager
+        # Get machine_id from storage manager and client
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
 
         # Call client's get_storage_data to get future for bytes
         storage_future = client.get_storage_data(tensor_id)
@@ -561,7 +523,8 @@ class Orchestrator:
         Raises:
             RuntimeError: If storage or client not available
         """
-        client = self._get_client_for_storage(storage_id)
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
         client.resize_storage(storage_id, nbytes)
 
         # Invalidate orchestrator cache for the resized storage
@@ -599,7 +562,8 @@ class Orchestrator:
             raise RuntimeError(
                 f"No storage mapping found for tensor {tensor_id}. Ensure tensor exists on remote before updating."
             )
-        client = self._get_client_for_storage(storage_id)
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
         # Convert storage tensor to raw bytes for tensor-only interface
         raw_data = storage_tensor.detach().numpy().tobytes()
 
@@ -670,7 +634,8 @@ class Orchestrator:
 
         # Get the client using the first input tensor's storage ID
         storage_id = get_storage_id(input_tensors[0])
-        client = self._get_client_for_storage(storage_id)
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
 
         # Ensure all input tensors exist on remote before execution
         for tensor in input_tensors:
