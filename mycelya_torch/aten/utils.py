@@ -29,10 +29,20 @@ def _validate_cross_device_operation(
             if remote_device is None:
                 remote_device = obj.device
             elif remote_device != obj.device:
+                from .._device import device_manager
+                try:
+                    remote_info = device_manager.get_remote_device_info(remote_device.index)
+                    current_info = device_manager.get_remote_device_info(obj.device.index)
+                    
+                    if remote_info[0] != current_info[0]:  # machine_id
+                        raise RuntimeError(f'Cannot perform operation "{op_name}" between different machines')
+                    elif remote_info[1:] != current_info[1:]:  # type and index
+                        raise RuntimeError(f'Cannot perform operation "{op_name}" between different devices')
+                except Exception:
+                    pass
                 raise RuntimeError(
-                    f'Cannot perform operation "{op_name}" between tensors on different remote devices '
-                    f"({remote_device} and {obj.device}). "
-                    f"Transfer tensors to the same device first."
+                    f'Cannot perform operation "{op_name}" between tensors on different devices '
+                    f"({remote_device} and {obj.device})"
                 )
         return obj
 

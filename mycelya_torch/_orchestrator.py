@@ -445,6 +445,9 @@ class Orchestrator:
             # Get nbytes from the tensor's untyped storage
             nbytes = tensor.untyped_storage().nbytes()
 
+            # Get device type and index from storage
+            machine_id, device_type, device_index = self.storage.get_remote_device_info(storage_id)
+            
             client.create_empty_tensor(
                 tensor_id=tensor_id,
                 shape=list(tensor.shape),
@@ -452,6 +455,8 @@ class Orchestrator:
                 storage_offset=tensor.storage_offset(),
                 dtype=dtype_to_str(tensor.dtype),
                 nbytes=nbytes,
+                device_type=device_type,
+                device_index=device_index,
             )
             # Register the mapping in orchestrator
             self._register_tensor_storage_mapping(tensor_id, storage_id)

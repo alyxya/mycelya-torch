@@ -113,6 +113,8 @@ def create_modal_app_for_gpu(
             storage_offset: int,
             dtype: str,
             nbytes: int,
+            device_type: str,
+            device_index: int,
         ):
             """Create an empty tensor with given tensor_id and proper storage layout."""
             import torch
@@ -124,11 +126,8 @@ def create_modal_app_for_gpu(
 
             torch_dtype = getattr(torch, dtype)
 
-            # Detect device
-            if torch.cuda.is_available():
-                device = torch.device("cuda")
-            else:
-                device = torch.device("cpu")
+            # Use the explicit device type and index from the client
+            device = torch.device(device_type, device_index)
 
             # Use the exact nbytes provided by the client allocator
             # The client has already calculated the correct storage size
@@ -153,10 +152,12 @@ def create_modal_app_for_gpu(
             storage_offset: int,
             dtype: str,
             nbytes: int,
+            device_type: str,
+            device_index: int,
         ):
             """Create an empty tensor on the remote machine with proper storage layout."""
             self._create_empty_tensor_impl(
-                tensor_id, shape, stride, storage_offset, dtype, nbytes
+                tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index
             )
 
         def _create_tensor_view_impl(

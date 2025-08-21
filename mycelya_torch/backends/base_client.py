@@ -137,6 +137,8 @@ class Client(ABC):
         storage_offset: int,
         dtype: str,
         nbytes: int,
+        device_type: str,
+        device_index: int,
     ) -> None:
         """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
         pass
@@ -149,6 +151,8 @@ class Client(ABC):
         storage_offset: int,
         dtype: str,
         nbytes: int,
+        device_type: str,
+        device_index: int,
     ) -> None:
         """
         Create an empty tensor on the remote machine with proper storage layout.
@@ -160,6 +164,8 @@ class Client(ABC):
             storage_offset: Storage offset for the tensor
             dtype: Data type of the tensor (e.g., "float32", "int64")
             nbytes: Number of bytes for the underlying storage (from client allocator)
+            device_type: Remote device type (e.g., "cuda", "cpu")
+            device_index: Remote device index (e.g., 0, 1)
 
         Returns:
             None
@@ -174,14 +180,14 @@ class Client(ABC):
             self._batch_calls.append(
                 BatchCall(
                     method_name="create_empty_tensor",
-                    args=(tensor_id, shape, stride, storage_offset, dtype, nbytes),
+                    args=(tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index),
                     kwargs={},
                 )
             )
         else:
             # Direct execution (existing behavior)
             self._create_empty_tensor_impl(
-                tensor_id, shape, stride, storage_offset, dtype, nbytes
+                tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index
             )
 
     @abstractmethod
