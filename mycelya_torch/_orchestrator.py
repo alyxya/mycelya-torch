@@ -335,32 +335,6 @@ class Orchestrator:
                 f"Failed to resolve client for storage {storage_id}: {e}"
             ) from e
 
-    def _get_client_for_tensor_id(self, tensor_id: int) -> Client:
-        """Get the client for a specific tensor ID with validation.
-
-        Args:
-            tensor_id: Tensor ID to resolve to client
-
-        Returns:
-            Client: The client managing this tensor
-
-        Raises:
-            RuntimeError: If tensor, machine, or client not found/available
-        """
-        try:
-            remote_device_info = self.get_remote_device_info_for_tensor(tensor_id)
-            if remote_device_info is None:
-                raise RuntimeError(
-                    f"No remote device info found for tensor {tensor_id}"
-                )
-
-            machine_id, remote_type, remote_index = remote_device_info
-            return self.get_client(machine_id)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to resolve client for tensor {tensor_id}: {e}"
-            ) from e
-
     # Storage management methods
 
     def create_storage(self, nbytes: int, device_index: int) -> int:
@@ -512,21 +486,15 @@ class Orchestrator:
                 f"copy_tensor_to_cpu() can only be called on mycelya tensors, got {tensor.device.type}"
             )
 
-        # Get tensor ID
+        # Get tensor and storage IDs
         tensor_id = get_tensor_id(tensor)
+        storage_id = get_storage_id(tensor)
 
-        # Get the client for this tensor
-        client = self._get_client_for_tensor_id(tensor_id)
-        machine_id = None
+        # Get the client using storage manager
+        client = self._get_client_for_storage(storage_id)
 
-        # Find machine_id for this client
-        for mid, c in self._clients.items():
-            if c is client:
-                machine_id = mid
-                break
-
-        if machine_id is None:
-            raise RuntimeError(f"Could not find machine_id for client {client}")
+        # Get machine_id from storage manager
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
 
         # Call client's get_storage_data to get future for bytes
         storage_future = client.get_storage_data(tensor_id)
@@ -625,7 +593,13 @@ class Orchestrator:
         Raises:
             RuntimeError: If tensor or client not available
         """
-        client = self._get_client_for_tensor_id(tensor_id)
+        # Get storage ID for this tensor to use storage-based client resolution
+        storage_id = self._get_storage_id_for_tensor(tensor_id)
+        if storage_id is None:
+            raise RuntimeError(
+                f"No storage mapping found for tensor {tensor_id}. Ensure tensor exists on remote before updating."
+            )
+        client = self._get_client_for_storage(storage_id)
         # Convert storage tensor to raw bytes for tensor-only interface
         raw_data = storage_tensor.detach().numpy().tobytes()
 
@@ -638,18 +612,8 @@ class Orchestrator:
             source_dtype,
         )
 
-        # Try to invalidate cache by finding storage_id for this tensor_id
-        # Note: This is best-effort since tensor_id to storage_id mapping may not be available
-        try:
-            remote_device_info = self.get_remote_device_info_for_tensor(tensor_id)
-            if remote_device_info is not None:
-                # We can't easily map tensor_id to storage_id, so we skip cache invalidation
-                # for tensor-based updates. Storage-based updates handle cache invalidation properly.
-                log.debug(
-                    f"Cache invalidation skipped for tensor {tensor_id} (tensor_id to storage_id mapping not available)"
-                )
-        except Exception as e:
-            log.debug(f"Could not invalidate cache for tensor {tensor_id}: {e}")
+        # Invalidate cache for the updated storage
+        self._invalidate_cache_for_storage(storage_id)
 
     def execute_aten_operation(
         self,
@@ -704,9 +668,9 @@ class Orchestrator:
         # Mappings should only be registered when tensors are actually created via RPC calls
         # to maintain sync between orchestrator mapping and server tensor registry
 
-        # Get the client using the first input tensor's tensor ID
-        tensor_id = get_tensor_id(input_tensors[0])
-        client = self._get_client_for_tensor_id(tensor_id)
+        # Get the client using the first input tensor's storage ID
+        storage_id = get_storage_id(input_tensors[0])
+        client = self._get_client_for_storage(storage_id)
 
         # Ensure all input tensors exist on remote before execution
         for tensor in input_tensors:

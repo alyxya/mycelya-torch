@@ -5,7 +5,7 @@ import torch
 
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import dtype_to_str, get_tensor_id
+from .._utils import dtype_to_str, get_storage_id, get_tensor_id
 
 log = get_logger(__name__)
 
@@ -32,15 +32,14 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
 
     # Use remote execution to send the tensor data
 
-    # Use tensor-based approach with tensor IDs
+    # Use storage-based approach
     tensor_id = get_tensor_id(to_)
+    storage_id = get_storage_id(to_)
     log.info(f"Copying CPU tensor to remote tensor ID {tensor_id}")
-
-    # Pass CPU tensor directly to orchestrator without conversion
 
     # First ensure the tensor exists on the remote side
     # This creates the empty tensor if it doesn't exist
-    client = orchestrator._get_client_for_tensor_id(tensor_id)
+    client = orchestrator._get_client_for_storage(storage_id)
     orchestrator._ensure_tensor_exists_on_client(client, to_)
 
     # Now update the tensor with data from the CPU tensor
