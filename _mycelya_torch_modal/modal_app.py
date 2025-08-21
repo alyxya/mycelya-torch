@@ -260,7 +260,7 @@ def create_modal_app_for_gpu(
         def _get_storage_data_impl(self, tensor_id: int):
             """Get raw storage data by tensor ID."""
             import torch
-            
+
             tensor_registry = self._tensor_registry
 
             if tensor_id not in tensor_registry:
@@ -274,12 +274,12 @@ def create_modal_app_for_gpu(
             full_tensor.set_(storage, storage_offset=0, size=(storage.nbytes(),), stride=(1,))
             result = full_tensor.cpu().detach().numpy().tobytes()
 
-            self.response_queue.put(result)
+            return result
 
         @modal.method()
         def get_storage_data(self, tensor_id: int):
             """Get raw storage data by tensor ID."""
-            self._get_storage_data_impl(tensor_id)
+            return self._get_storage_data_impl(tensor_id)
 
         def _remove_tensors_impl(self, tensor_ids: List[int]):
             """Remove multiple tensors from the remote machine."""
@@ -447,7 +447,7 @@ def create_modal_app_for_gpu(
                         }
                         output_metadata.append(metadata)
 
-                self.response_queue.put(output_metadata)
+                return output_metadata
 
         @modal.method()
         def execute_aten_operation(
@@ -461,7 +461,7 @@ def create_modal_app_for_gpu(
             return_metadata: bool = False,
         ):
             """Execute an aten operation on the remote machine with input tensor IDs."""
-            self._execute_aten_operation_impl(
+            return self._execute_aten_operation_impl(
                 op_name,
                 input_tensor_ids,
                 output_tensor_ids,
@@ -588,7 +588,7 @@ def create_modal_app_for_gpu(
                 "checkpoint": checkpoint,
             }
 
-            self.response_queue.put(result)
+            return result
 
         @modal.method()
         def prepare_huggingface_model(
@@ -598,7 +598,7 @@ def create_modal_app_for_gpu(
             trust_remote_code: bool = False,
         ):
             """Download and prepare a HuggingFace model directly on the remote machine."""
-            self._prepare_huggingface_model_impl(
+            return self._prepare_huggingface_model_impl(
                 checkpoint, torch_dtype, trust_remote_code
             )
 
@@ -698,7 +698,11 @@ def create_modal_app_for_gpu(
                     - method_name: Name of the method to call
                     - args: Arguments for the method
                     - kwargs: Keyword arguments for the method
+
+            Returns:
+                List of non-None return values from the batched operations
             """
+            results = []
             for call in batch_calls:
                 method_name = call["method_name"]
                 args = call.get("args", ())
@@ -707,7 +711,12 @@ def create_modal_app_for_gpu(
                 # Look up the method implementation
                 method_impl = self._method_map[method_name]
 
-                # Call the implementation - it will handle its own queue operations
-                method_impl(*args, **kwargs)
+                # Call the implementation and collect any return values
+                result = method_impl(*args, **kwargs)
+                if result is not None:
+                    results.append(result)
+
+            # Always return a list (empty if no results)
+            return results
 
     return app, PytorchServer, response_queue

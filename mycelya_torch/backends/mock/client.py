@@ -8,6 +8,7 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
+from collections import deque
 from typing import Any, Dict, List
 
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
@@ -39,6 +40,9 @@ class MockClient(Client):
         self._is_running = False
         self.timeout = timeout
 
+        # Deque for storing results from local execution to mirror Modal client structure
+        self._pending_results = deque()
+
         # Initialize the Modal app and server class
         self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id, self.timeout
@@ -62,46 +66,48 @@ class MockClient(Client):
         return self._is_running
 
     def resolve_futures(self) -> None:
-        """Resolve pending futures using Modal's get_many."""
+        """Resolve pending futures using result deque."""
         if not self.is_running():
             return
 
-        n_pending = len(self._pending_futures)
-        if n_pending == 0:
-            return
+        # Process all available results from the deque
+        while self._pending_results and self._pending_futures:
+            result = self._pending_results.popleft()
 
-        # Get responses from Modal queue (non-blocking)
-        responses = self._response_queue.get_many(n_pending, block=False)
-
-        # Handle None or empty responses
-        if not responses:
-            return
-
-        # Resolve futures with responses (popleft is atomic)
-        for response in responses:
-            if self._pending_futures:
-                future = self._pending_futures.popleft()
-                if response is not None:
-                    future.set_result(response)
-                else:
-                    future.set_exception(
-                        RuntimeError("Received None response from server")
-                    )
+            # Handle batch results vs individual results
+            if isinstance(result, list):
+                # This is a batch result - resolve multiple futures
+                for res in result:
+                    if self._pending_futures:
+                        future = self._pending_futures.popleft()
+                        future.set_result(res)
+            else:
+                # Individual result - resolve one future
+                if self._pending_futures:
+                    future = self._pending_futures.popleft()
+                    future.set_result(result)
 
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """Execute a batch of operations via Mock."""
         if not batch_calls:
             return
 
-        # Use local execution for mock
+        # Execute batch locally and collect results
+        results = []
         for call in batch_calls:
             method_name = call["method_name"]
             args = call.get("args", ())
             kwargs = call.get("kwargs", {})
 
-            # Get the implementation method
-            impl_method = getattr(self, f"_{method_name}_impl")
-            impl_method(*args, **kwargs)
+            # Get the server method and execute locally
+            server_method = getattr(self._server_instance, method_name)
+            result = server_method.local(*args, **kwargs)
+            if result is not None:
+                results.append(result)
+
+        # Store batch results if any
+        if results:
+            self._pending_results.append(results)
 
     # Tensor management methods
     def _create_empty_tensor_impl(
@@ -163,8 +169,9 @@ class MockClient(Client):
 
     def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""
-        # Trigger the local call - result will be available via resolve_futures
-        self._server_instance.get_storage_data.local(tensor_id)
+        # Execute local call and store result for resolve_futures
+        result = self._server_instance.get_storage_data.local(tensor_id)
+        self._pending_results.append(result)
 
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
@@ -190,8 +197,8 @@ class MockClient(Client):
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
 
-        # Execute using .local() - result will be available via resolve_futures
-        self._server_instance.execute_aten_operation.local(
+        # Execute using .local() and store result if returning metadata
+        result = self._server_instance.execute_aten_operation.local(
             op_name,
             input_tensor_ids,
             output_tensor_ids,
@@ -200,6 +207,9 @@ class MockClient(Client):
             tensor_mask,
             return_metadata,
         )
+        # Only store result if expecting a return value
+        if return_metadata and result is not None:
+            self._pending_results.append(result)
 
     # HuggingFace model loading methods
     def _prepare_huggingface_model_impl(
@@ -209,10 +219,11 @@ class MockClient(Client):
         trust_remote_code: bool = False,
     ) -> None:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
-        # Trigger the local call - result will be available via resolve_futures
-        self._server_instance.prepare_huggingface_model.local(
+        # Execute local call and store result for resolve_futures
+        result = self._server_instance.prepare_huggingface_model.local(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
+        self._pending_results.append(result)
 
     def _link_model_tensors_impl(
         self,

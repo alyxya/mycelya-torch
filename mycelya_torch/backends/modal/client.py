@@ -8,6 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
+from collections import deque
 from typing import Any, Dict, List
 
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
@@ -39,6 +40,9 @@ class ModalClient(Client):
         self._app_context = None
         self.timeout = timeout
 
+        # Deque for storing FunctionCall objects that may return values
+        self._pending_function_calls = deque()
+
         # Initialize the Modal app and server class
         self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
             self.gpu_type, self.machine_id, self.timeout
@@ -69,39 +73,50 @@ class ModalClient(Client):
         return self._app_context is not None
 
     def resolve_futures(self) -> None:
-        """Resolve pending futures using Modal's get_many."""
+        """Resolve pending futures using FunctionCall polling."""
         if not self.is_running():
             return
 
-        n_pending = len(self._pending_futures)
-        if n_pending == 0:
-            return
+        # Poll FunctionCall objects for completed results
+        while self._pending_function_calls and self._pending_futures:
+            func_call = self._pending_function_calls[0]  # Peek at first
+            try:
+                # Try to get result with zero timeout (non-blocking)
+                result = func_call.get(timeout=0)
+                # Result is ready, remove from deque
+                self._pending_function_calls.popleft()
 
-        # Get responses from Modal queue (non-blocking)
-        responses = self._response_queue.get_many(n_pending, block=False)
-
-        # Handle None or empty responses
-        if not responses:
-            return
-
-        # Resolve futures with responses (popleft is atomic)
-        for response in responses:
-            if self._pending_futures:
-                future = self._pending_futures.popleft()
-                if response is not None:
-                    future.set_result(response)
+                # Handle batch results vs individual results
+                if isinstance(result, list):
+                    # This is a batch result - resolve multiple futures
+                    for res in result:
+                        if self._pending_futures:
+                            future = self._pending_futures.popleft()
+                            future.set_result(res)
                 else:
-                    future.set_exception(
-                        RuntimeError("Received None response from server")
-                    )
+                    # Individual result - resolve one future
+                    if self._pending_futures:
+                        future = self._pending_futures.popleft()
+                        future.set_result(result)
+
+            except TimeoutError:
+                # Result not ready yet, stop polling for now
+                break
+            except Exception as e:
+                # Actual error - remove FunctionCall and set exception on future
+                self._pending_function_calls.popleft()
+                if self._pending_futures:
+                    future = self._pending_futures.popleft()
+                    future.set_exception(e)
 
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """Execute a batch of operations via Modal."""
         if not batch_calls:
             return
 
-        # Use spawn for non-blocking execution
-        self._server_instance.execute_batch.spawn(batch_calls)
+        # Use spawn for non-blocking execution and capture FunctionCall for batch results
+        func_call = self._server_instance.execute_batch.spawn(batch_calls)
+        self._pending_function_calls.append(func_call)
 
     # Tensor management methods
     def _create_empty_tensor_impl(
@@ -155,8 +170,9 @@ class ModalClient(Client):
 
     def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""
-        # Trigger the remote call - result will be available via resolve_futures
-        self._server_instance.get_storage_data.spawn(tensor_id)
+        # Trigger the remote call and capture FunctionCall - result will be available via resolve_futures
+        func_call = self._server_instance.get_storage_data.spawn(tensor_id)
+        self._pending_function_calls.append(func_call)
 
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
@@ -181,8 +197,8 @@ class ModalClient(Client):
         return_metadata: bool = False,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
-        # Call Modal method - result will be available via resolve_futures
-        self._server_instance.execute_aten_operation.spawn(
+        # Call Modal method and capture FunctionCall if returning metadata
+        func_call = self._server_instance.execute_aten_operation.spawn(
             op_name,
             input_tensor_ids,
             output_tensor_ids,
@@ -191,6 +207,9 @@ class ModalClient(Client):
             tensor_mask,
             return_metadata,
         )
+        # Only track FunctionCall if expecting a return value
+        if return_metadata:
+            self._pending_function_calls.append(func_call)
 
     # HuggingFace model loading methods
     def _prepare_huggingface_model_impl(
@@ -200,10 +219,11 @@ class ModalClient(Client):
         trust_remote_code: bool = False,
     ) -> None:
         """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
-        # Trigger the remote call - result will be available via resolve_futures
-        self._server_instance.prepare_huggingface_model.spawn(
+        # Trigger the remote call and capture FunctionCall - result will be available via resolve_futures
+        func_call = self._server_instance.prepare_huggingface_model.spawn(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
+        self._pending_function_calls.append(func_call)
 
     def _link_model_tensors_impl(
         self,
