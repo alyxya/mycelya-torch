@@ -11,13 +11,15 @@ Currently supports Modal as the first provider implementation.
 
 import threading
 import time
+from collections import deque
+from concurrent.futures import Future
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 
 from ._logging import get_logger
 from ._storage import StorageManager
-from ._utils import get_storage_id, get_tensor_id
+from ._utils import dtype_to_str, get_storage_id, get_tensor_id
 from .backends.base_client import Client
 
 log = get_logger(__name__)
@@ -44,6 +46,11 @@ class Orchestrator:
 
         # Centralized client management by machine ID
         self._clients: Dict[str, Client] = {}  # machine_id -> client
+
+        # Per-client CPU tensor futures deques for async tensor copying
+        self._cpu_tensor_futures_deques: Dict[
+            str, deque
+        ] = {}  # machine_id -> deque of (storage_future, cpu_tensor_future, mycelya_tensor)
 
         # Orchestrator-level storage cache (storage_id -> raw_bytes)
         self._storage_cache: Dict[int, bytes] = {}
@@ -95,6 +102,10 @@ class Orchestrator:
 
         # Store client mapping
         self._clients[machine_id] = client
+
+        # Initialize CPU tensor futures deque for this client
+        self._cpu_tensor_futures_deques[machine_id] = deque()
+
         log.info(
             f"✅ ORCHESTRATOR: Created and registered client for machine {machine_id}"
         )
@@ -227,7 +238,6 @@ class Orchestrator:
             self._storage_to_tensors_map[storage_id] = set()
         self._storage_to_tensors_map[storage_id].add(tensor_id)
 
-
     def _get_storage_id_for_tensor(self, tensor_id: int) -> Optional[int]:
         """Get storage ID for a tensor ID if mapping exists.
 
@@ -340,7 +350,9 @@ class Orchestrator:
         try:
             remote_device_info = self.get_remote_device_info_for_tensor(tensor_id)
             if remote_device_info is None:
-                raise RuntimeError(f"No remote device info found for tensor {tensor_id}")
+                raise RuntimeError(
+                    f"No remote device info found for tensor {tensor_id}"
+                )
 
             machine_id, remote_type, remote_index = remote_device_info
             return self.get_client(machine_id)
@@ -348,7 +360,6 @@ class Orchestrator:
             raise RuntimeError(
                 f"Failed to resolve client for tensor {tensor_id}: {e}"
             ) from e
-
 
     # Storage management methods
 
@@ -429,14 +440,11 @@ class Orchestrator:
             # Invalidate orchestrator cache for the resized storage
             self._invalidate_cache_for_storage(storage_id)
 
-            log.info(
-                f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes"
-            )
+            log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
             return True
         except Exception as e:
             log.error(f"Failed to resize storage {storage_id}: {e}")
             return False
-
 
     def get_remote_device_info_for_storage(
         self, storage_id: int
@@ -448,7 +456,7 @@ class Orchestrator:
 
         Returns:
             Tuple of (machine_id, remote_type, remote_index)
-        
+
         Raises:
             KeyError: If storage_id not found
         """
@@ -483,6 +491,56 @@ class Orchestrator:
             Tuple of (machine_id, remote_type, remote_index) or None if not found
         """
         return self._tensor_id_to_remote_device.get(tensor_id)
+
+    def copy_tensor_to_cpu(self, tensor: torch.Tensor) -> Future[torch.Tensor]:
+        """Copy a remote tensor to CPU asynchronously.
+
+        This method initiates an asynchronous copy of a remote tensor to CPU. The copy
+        is handled by the background thread to avoid blocking the main thread.
+
+        Args:
+            tensor: The mycelya tensor to copy to CPU
+
+        Returns:
+            Future[torch.Tensor]: Future that will resolve to the CPU tensor
+
+        Raises:
+            RuntimeError: If tensor is not a mycelya tensor or client not available
+        """
+        if tensor.device.type != "mycelya":
+            raise RuntimeError(
+                f"copy_tensor_to_cpu() can only be called on mycelya tensors, got {tensor.device.type}"
+            )
+
+        # Get tensor ID
+        tensor_id = get_tensor_id(tensor)
+
+        # Get the client for this tensor
+        client = self._get_client_for_tensor_id(tensor_id)
+        machine_id = None
+
+        # Find machine_id for this client
+        for mid, c in self._clients.items():
+            if c is client:
+                machine_id = mid
+                break
+
+        if machine_id is None:
+            raise RuntimeError(f"Could not find machine_id for client {client}")
+
+        # Call client's get_storage_data to get future for bytes
+        storage_future = client.get_storage_data(tensor_id)
+
+        # Create future for CPU tensor result
+        cpu_tensor_future = Future()
+
+        # Add to the CPU tensor futures deque for this client
+        copy_entry = (storage_future, cpu_tensor_future, tensor)
+        self._cpu_tensor_futures_deques[machine_id].append(copy_entry)
+
+        log.info(f"🔄 ORCHESTRATOR: Initiated async copy of tensor {tensor_id} to CPU")
+
+        return cpu_tensor_future
 
     def _cleanup_remote_storage(self, storage_id: int, machine_id: str) -> None:
         """Clean up storage on remote GPU device.
@@ -655,7 +713,6 @@ class Orchestrator:
         except Exception as e:
             log.debug(f"Could not invalidate cache for tensor {tensor_id}: {e}")
 
-
     def execute_aten_operation(
         self,
         op_name: str,
@@ -762,7 +819,6 @@ class Orchestrator:
         else:
             return None
 
-
     def _ensure_tensor_exists_on_client(self, client, tensor: "torch.Tensor") -> None:
         """Ensure tensor exists on remote client using storage mapping logic.
 
@@ -826,12 +882,64 @@ class Orchestrator:
                 # Tensor already exists in orchestrator mapping, assume it exists on server
                 pass
 
+    def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
+        """Resolve any pending CPU tensor futures for a specific client.
+
+        Processes the CPU tensor futures deque for the given machine_id, checking if storage
+        futures are ready and reconstructing CPU tensors when they are.
+
+        Args:
+            machine_id: Machine ID to process CPU tensor futures for
+        """
+        copy_deque = self._cpu_tensor_futures_deques.get(machine_id)
+        if not copy_deque:
+            return
+
+        # Process futures from the front of the deque (FIFO order)
+        while copy_deque:
+            # Peek at the first entry without removing it
+            storage_future, cpu_tensor_future, mycelya_tensor = copy_deque[0]
+
+            # Check if storage future is ready (non-blocking)
+            if not storage_future.done():
+                # Storage future not ready yet, stop processing (maintain order)
+                break
+
+            # Remove the entry from deque since we're processing it
+            copy_deque.popleft()
+
+            try:
+                # Get the raw bytes from the completed storage future
+                raw_bytes = storage_future.result()
+
+                # Reconstruct CPU tensor using the mycelya tensor's metadata
+                cpu_tensor = self._reconstruct_tensor_from_cached_storage(
+                    raw_bytes,
+                    list(mycelya_tensor.shape),
+                    list(mycelya_tensor.stride()),
+                    mycelya_tensor.storage_offset(),
+                    dtype_to_str(mycelya_tensor.dtype),
+                )
+
+                # Set the result on the CPU tensor future
+                cpu_tensor_future.set_result(cpu_tensor)
+
+                log.debug(
+                    f"✅ ORCHESTRATOR: Resolved CPU tensor future for tensor {get_tensor_id(mycelya_tensor)}"
+                )
+
+            except Exception as e:
+                # Set exception on the CPU tensor future
+                cpu_tensor_future.set_exception(e)
+                log.error(f"❌ ORCHESTRATOR: Failed to resolve CPU tensor future: {e}")
+
     def _background_loop(self):
         """Background thread for batch execution and future resolution.
 
         Currently handles:
         - Executing pending batch operations for all clients
         - Resolving pending futures for all clients
+        - Resolving pending CPU tensor futures for tensor copying
 
         Future tasks may include:
         - Cache cleanup
@@ -839,7 +947,7 @@ class Orchestrator:
         - Metrics collection
         """
         while True:
-            for client in self._clients.values():
+            for machine_id, client in self._clients.items():
                 if client.is_running():
                     try:
                         # Execute any pending batched operations first
@@ -847,6 +955,9 @@ class Orchestrator:
 
                         # Then resolve any pending futures
                         client.resolve_futures()
+
+                        # Process CPU tensor futures for this client
+                        self._resolve_cpu_tensor_futures(machine_id)
                     except Exception as e:
                         log.error(f"Error in background maintenance for client: {e}")
 
