@@ -190,13 +190,9 @@ class Orchestrator:
         from ._device import device_manager
 
         # Get machine info from device index
-        machine_id = device_manager.get_machine_id_for_device_index(device_index)
-        if machine_id is None:
-            raise RuntimeError(f"No machine ID found for device index {device_index}")
-
-        # For now, assume cuda:0 - this could be made more sophisticated later
-        remote_type = "cuda"
-        remote_index = 0
+        machine_id, remote_type, remote_index = device_manager.get_remote_device_info(
+            device_index
+        )
 
         return self.storage.create_storage(machine_id, remote_type, remote_index)
 
@@ -209,10 +205,10 @@ class Orchestrator:
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
         tensor_set = self._storage_to_tensors_map.get(storage_id)
 
-        self.storage.free_storage_with_id(storage_id)
-
         if tensor_set:
             self._clients[machine_id].remove_tensors(list(tensor_set))
+
+        self.storage.free_storage_with_id(storage_id)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.

@@ -194,17 +194,12 @@ def create_huggingface_model_from_remote(
 
         # Register the local storage ID in the orchestrator storage manager
         device_index = device.index
-        machine_id = device_manager.get_machine_id_for_device_index(device_index)
-
-        if machine_id is not None:
-            # Register storage with machine info (assuming cuda:0 for now)
-            remote_type = "cuda"
-            remote_index = 0
-            # Manually add the storage mapping since it was created by C++ allocator
-            machine_info = (machine_id, remote_type, remote_index)
-            orchestrator.storage.storage_id_to_machine_info[local_storage_id] = (
-                machine_info
-            )
+        machine_id, remote_type, remote_index = device_manager.get_remote_device_info(
+            device_index
+        )
+        # Manually add the storage mapping since it was created by C++ allocator
+        machine_info = (machine_id, remote_type, remote_index)
+        orchestrator.storage.storage_id_to_machine_info[local_storage_id] = machine_info
 
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
@@ -240,17 +235,12 @@ def create_huggingface_model_from_remote(
 
         # Register the local storage ID in the orchestrator storage manager
         device_index = device.index
-        machine_id = device_manager.get_machine_id_for_device_index(device_index)
-
-        if machine_id is not None:
-            # Register storage with machine info (assuming cuda:0 for now)
-            remote_type = "cuda"
-            remote_index = 0
-            # Manually add the storage mapping since it was created by C++ allocator
-            machine_info = (machine_id, remote_type, remote_index)
-            orchestrator.storage.storage_id_to_machine_info[local_storage_id] = (
-                machine_info
-            )
+        machine_id, remote_type, remote_index = device_manager.get_remote_device_info(
+            device_index
+        )
+        # Manually add the storage mapping since it was created by C++ allocator
+        machine_info = (machine_id, remote_type, remote_index)
+        orchestrator.storage.storage_id_to_machine_info[local_storage_id] = machine_info
 
         # CRITICAL: Register the tensor in the client's tensor ID mapping
         # This ensures the tensor is properly tracked and linked to remote tensors
