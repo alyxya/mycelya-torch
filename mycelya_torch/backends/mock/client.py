@@ -74,18 +74,14 @@ class MockClient(Client):
         while self._pending_results and self._pending_futures:
             result = self._pending_results.popleft()
 
-            # Handle batch results vs individual results
-            if isinstance(result, list):
-                # This is a batch result - resolve multiple futures
+            # Resolve futures based on batching mode
+            if self.batching:
+                # Batch result - iterate over list
                 for res in result:
-                    if self._pending_futures:
-                        future = self._pending_futures.popleft()
-                        future.set_result(res)
+                    self._pending_futures.popleft().set_result(res)
             else:
-                # Individual result - resolve one future
-                if self._pending_futures:
-                    future = self._pending_futures.popleft()
-                    future.set_result(result)
+                # Individual result
+                self._pending_futures.popleft().set_result(result)
 
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """Execute a batch of operations via Mock."""

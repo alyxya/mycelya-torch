@@ -41,7 +41,7 @@ class ModalClient(Client):
         self.timeout = timeout
 
         # Deque for storing FunctionCall objects that may return values
-        self._pending_function_calls = deque()
+        self._pending_results = deque()
 
         # Initialize the Modal app and server class
         self._app, self._server_class, self._response_queue = create_modal_app_for_gpu(
@@ -78,36 +78,25 @@ class ModalClient(Client):
             return
 
         # Poll FunctionCall objects for completed results
-        while self._pending_function_calls and self._pending_futures:
-            func_call = self._pending_function_calls[0]  # Peek at first
+        while self._pending_results and self._pending_futures:
+            func_call = self._pending_results[0]  # Peek at first
             try:
                 # Try to get result with zero timeout (non-blocking)
                 result = func_call.get(timeout=0)
                 # Result is ready, remove from deque
-                self._pending_function_calls.popleft()
+                self._pending_results.popleft()
 
-                # Handle batch results vs individual results
-                if isinstance(result, list):
-                    # This is a batch result - resolve multiple futures
+                # Resolve futures based on batching mode
+                if self.batching:
+                    # Batch result - iterate over list
                     for res in result:
-                        if self._pending_futures:
-                            future = self._pending_futures.popleft()
-                            future.set_result(res)
+                        self._pending_futures.popleft().set_result(res)
                 else:
-                    # Individual result - resolve one future
-                    if self._pending_futures:
-                        future = self._pending_futures.popleft()
-                        future.set_result(result)
+                    # Individual result
+                    self._pending_futures.popleft().set_result(result)
 
             except TimeoutError:
-                # Result not ready yet, stop polling for now
                 break
-            except Exception as e:
-                # Actual error - remove FunctionCall and set exception on future
-                self._pending_function_calls.popleft()
-                if self._pending_futures:
-                    future = self._pending_futures.popleft()
-                    future.set_exception(e)
 
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """Execute a batch of operations via Modal."""
@@ -116,7 +105,7 @@ class ModalClient(Client):
 
         # Use spawn for non-blocking execution and capture FunctionCall for batch results
         func_call = self._server_instance.execute_batch.spawn(batch_calls)
-        self._pending_function_calls.append(func_call)
+        self._pending_results.append(func_call)
 
     # Tensor management methods
     def _create_empty_tensor_impl(
@@ -172,7 +161,7 @@ class ModalClient(Client):
         """Implementation: Get raw storage data by tensor ID."""
         # Trigger the remote call and capture FunctionCall - result will be available via resolve_futures
         func_call = self._server_instance.get_storage_data.spawn(tensor_id)
-        self._pending_function_calls.append(func_call)
+        self._pending_results.append(func_call)
 
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
@@ -209,7 +198,7 @@ class ModalClient(Client):
         )
         # Only track FunctionCall if expecting a return value
         if return_metadata:
-            self._pending_function_calls.append(func_call)
+            self._pending_results.append(func_call)
 
     # HuggingFace model loading methods
     def _prepare_huggingface_model_impl(
@@ -223,7 +212,7 @@ class ModalClient(Client):
         func_call = self._server_instance.prepare_huggingface_model.spawn(
             checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
         )
-        self._pending_function_calls.append(func_call)
+        self._pending_results.append(func_call)
 
     def _link_model_tensors_impl(
         self,
