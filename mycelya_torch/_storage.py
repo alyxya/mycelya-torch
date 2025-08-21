@@ -77,19 +77,9 @@ class StorageManager:
         """
         return self.storage_id_to_remote_device[storage_id]
 
-    def free_storage_with_id(self, storage_id: int) -> bool:
+    def free_storage_with_id(self, storage_id: int) -> None:
         """Free storage by storage ID (local tracking only).
 
         Note: Remote cleanup is handled by the orchestrator.
         """
-        storage_id = int(storage_id)
-        if storage_id == 0:  # Empty storage
-            return True
-
-        if storage_id in self.storage_id_to_remote_device:
-            # Clean up local tracking
-            self.storage_id_to_remote_device.pop(storage_id, None)
-            return True
-        else:
-            log.warning(f"Attempted to free unknown storage {storage_id}")
-            return False
+        self.storage_id_to_remote_device.pop(storage_id, None)
