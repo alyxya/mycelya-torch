@@ -125,40 +125,6 @@ class Orchestrator:
         client = self._clients[machine_id]
         return client.is_running()
 
-    def _reconstruct_tensor_from_cached_storage(
-        self,
-        cached_bytes: bytes,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str,
-    ) -> torch.Tensor:
-        """Reconstruct tensor from cached storage bytes with metadata.
-
-        Args:
-            cached_bytes: Raw storage bytes from cache
-            shape: Tensor shape
-            stride: Tensor stride
-            storage_offset: Storage offset for tensor view
-            dtype: Tensor data type
-
-        Returns:
-            Reconstructed CPU tensor
-        """
-        # Convert dtype string to torch dtype
-        torch_dtype = getattr(torch, dtype)
-
-        # Create untyped storage from cached bytes
-        untyped_storage = torch.UntypedStorage.from_buffer(
-            cached_bytes, dtype=torch.uint8
-        )
-
-        # Create empty tensor and set storage with view parameters
-        tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
-        tensor.set_(untyped_storage, storage_offset, shape, stride)
-
-        return tensor
-
     def _register_tensor_storage_mapping(self, tensor_id: int, storage_id: int) -> None:
         """Register a mapping between tensor ID and storage ID for cache coordination.
 
@@ -679,13 +645,19 @@ class Orchestrator:
             cpu_futures_deque.popleft()
 
             raw_bytes = storage_future.result()
-            cpu_tensor = self._reconstruct_tensor_from_cached_storage(
-                raw_bytes,
-                list(mycelya_tensor.shape),
-                list(mycelya_tensor.stride()),
-                mycelya_tensor.storage_offset(),
-                dtype_to_str(mycelya_tensor.dtype),
+
+            # Reconstruct CPU tensor from raw bytes
+            untyped_storage = torch.UntypedStorage.from_buffer(
+                raw_bytes, dtype=torch.uint8
             )
+            cpu_tensor = torch.empty(0, dtype=mycelya_tensor.dtype, device="cpu")
+            cpu_tensor.set_(
+                untyped_storage,
+                mycelya_tensor.storage_offset(),
+                mycelya_tensor.shape,
+                mycelya_tensor.stride(),
+            )
+
             cpu_tensor_future.set_result(cpu_tensor)
 
     def _background_loop(self):
