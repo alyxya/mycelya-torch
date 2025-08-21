@@ -172,20 +172,20 @@ class Driver:
     @register(registry)
     def create_storage(self, nbytes: int, device_index: int) -> int:
         from ._orchestrator import orchestrator
-        
+
         storage_id = orchestrator.create_storage(nbytes, device_index)
         return storage_id
 
     @register(registry)
     def free_storage(self, storage_id: int) -> bool:
         from ._orchestrator import orchestrator
-        
+
         return orchestrator.free_storage_with_id(storage_id)
 
     @register(registry)
     def resize_storage(self, storage_id: int, nbytes: int) -> bool:
         from ._orchestrator import orchestrator
-        
+
         return orchestrator.resize_storage_by_id(storage_id, nbytes)
 
     # Device operations

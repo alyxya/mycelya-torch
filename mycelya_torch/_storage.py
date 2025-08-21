@@ -39,7 +39,6 @@ class StorageManager:
             int, Tuple[str, str, int]
         ] = {}  # storage_id -> (machine_id, remote_type, remote_index)
 
-
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
 

@@ -371,7 +371,7 @@ class Orchestrator:
             Storage ID on success, 0 on failure
         """
         from ._device import device_manager
-        
+
         # Get machine info from device index
         machine_id = device_manager.get_machine_id_for_device_index(device_index)
         if machine_id is None:
@@ -868,7 +868,7 @@ class Orchestrator:
 
             # Yield to the main thread before waiting
             time.sleep(0)
-            
+
             # Wait up to 0.1 seconds, but wake up immediately if main thread is waiting
             self._main_thread_waiting.wait(timeout=0.1)
 
