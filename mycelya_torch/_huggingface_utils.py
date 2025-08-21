@@ -58,8 +58,11 @@ def create_remote_tensor_stub(
     storage_elements_needed = max_offset + 1
 
     # Create tensor with sufficient underlying storage first
-    # Use a 1D tensor with enough elements, then as_strided to the desired view
-    base_tensor = torch.empty(storage_elements_needed, dtype=torch_dtype, device=device)
+    # Use UntypedStorage with exact byte size, then as_strided to the desired view
+    storage_bytes = storage_elements_needed * torch_dtype.itemsize
+    untyped_storage = torch.UntypedStorage(storage_bytes, device=device)
+    base_tensor = torch.empty(0, dtype=torch_dtype, device=device)
+    base_tensor.set_(untyped_storage, 0, [storage_elements_needed], [1])
 
     # Use as_strided to create the exact tensor view that matches the HF parameter
     # Note: as_strided preserves the device and creates a proper mycelya tensor

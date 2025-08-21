@@ -134,14 +134,12 @@ def create_modal_app_for_gpu(
             # The client has already calculated the correct storage size
             storage_nbytes = nbytes
 
-            # Create a storage tensor that can hold the data with the exact nbytes size
-            storage_tensor = torch.empty(
-                storage_nbytes, dtype=torch.uint8, device=device
-            )
+            # Create untyped storage with the exact nbytes size
+            untyped_storage = torch.UntypedStorage(storage_nbytes, device=device)
 
             # Create the tensor view with the specified layout
             tensor = torch.empty(0, dtype=torch_dtype, device=device).set_(
-                storage_tensor.untyped_storage(), storage_offset, shape, stride
+                untyped_storage, storage_offset, shape, stride
             )
 
             tensor_registry[tensor_id] = tensor
