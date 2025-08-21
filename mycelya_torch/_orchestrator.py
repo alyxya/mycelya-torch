@@ -250,21 +250,6 @@ class Orchestrator:
         # Invalidate cache for the resized storage
         self.storage.invalidate_storage_cache(storage_id)
 
-    def get_remote_device_info_for_storage(
-        self, storage_id: int
-    ) -> Tuple[str, str, int]:
-        """Get remote device info for a storage ID.
-
-        Args:
-            storage_id: Storage ID to query
-
-        Returns:
-            Tuple of (machine_id, remote_type, remote_index)
-
-        Raises:
-            KeyError: If storage_id not found
-        """
-        return self.storage.get_remote_device_info(storage_id)
 
     # Tensor management methods
 
