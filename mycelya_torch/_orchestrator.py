@@ -133,61 +133,6 @@ class Orchestrator:
         client = self._clients[machine_id]
         return client.is_running()
 
-    def _invalidate_cache_for_storage(self, storage_id: int) -> None:
-        """Invalidate cache entry for a specific storage ID.
-
-        Args:
-            storage_id: Storage ID to remove from cache
-        """
-        self.storage.invalidate_storage_cache(storage_id)
-
-        # Note: Do NOT remove tensor-storage mappings during cache invalidation
-        # The mappings should only be updated when tensors are actually created/destroyed via RPC
-        # Cache invalidation is separate from tensor existence tracking
-
-    def _get_cached_storage_future(self, storage_id: int) -> Optional[Future[bytes]]:
-        """Get cached storage future by storage ID.
-
-        Args:
-            storage_id: The storage ID to retrieve from cache
-
-        Returns:
-            Future[bytes] if cached, None if not in cache
-        """
-        cached_future = self.storage.get_cached_storage(storage_id)
-        if cached_future is not None:
-            self._cache_hits += 1
-            log.debug(f"🎯 CACHE HIT for storage {storage_id}")
-            return cached_future
-        else:
-            self._cache_misses += 1
-            log.debug(f"❌ CACHE MISS for storage {storage_id}")
-            return None
-
-    def _cache_storage_future(
-        self, storage_id: int, data_future: Future[bytes]
-    ) -> None:
-        """Cache storage future by storage ID.
-
-        Args:
-            storage_id: The storage ID to cache
-            data_future: Future that will resolve to raw bytes
-        """
-        self.storage.cache_storage(storage_id, data_future)
-        log.debug(f"💾 CACHED storage future {storage_id}")
-
-    def _invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> None:
-        """Invalidate cache entries for multiple storage IDs and clean up mappings.
-
-        Args:
-            storage_ids: List of storage IDs to invalidate
-        """
-        self.storage.invalidate_multiple_storage_caches(storage_ids)
-
-        # Note: Do NOT clean up tensor→storage mappings during cache invalidation
-        # The mappings should only be updated when tensors are actually created/destroyed via RPC
-        # Cache invalidation is separate from tensor existence tracking
-
     def _reconstruct_tensor_from_cached_storage(
         self,
         cached_bytes: bytes,
@@ -296,7 +241,7 @@ class Orchestrator:
         # Batch invalidation optimization: remove duplicates and process efficiently
         if storage_ids_to_invalidate:
             unique_storage_ids = list(set(storage_ids_to_invalidate))
-            self._invalidate_multiple_storage_caches(unique_storage_ids)
+            self.storage.invalidate_multiple_storage_caches(unique_storage_ids)
 
     # Storage management methods
 
@@ -374,8 +319,8 @@ class Orchestrator:
             client = self.get_client(machine_id)
             client.resize_storage(storage_id, nbytes)
 
-            # Invalidate orchestrator cache for the resized storage
-            self._invalidate_cache_for_storage(storage_id)
+            # Invalidate cache for the resized storage
+            self.storage.invalidate_storage_cache(storage_id)
 
             log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
             return True
@@ -457,13 +402,20 @@ class Orchestrator:
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
 
         # First try to get cached storage future
-        storage_future = self._get_cached_storage_future(storage_id)
+        storage_future = self.storage.get_cached_storage(storage_id)
 
         if storage_future is None:
             # Cache miss - get data from client and cache the future
+            self._cache_misses += 1
+            log.debug(f"❌ CACHE MISS for storage {storage_id}")
             client = self._clients[machine_id]
             storage_future = client.get_storage_data(tensor_id)
-            self._cache_storage_future(storage_id, storage_future)
+            self.storage.cache_storage(storage_id, storage_future)
+            log.debug(f"💾 CACHED storage future {storage_id}")
+        else:
+            # Cache hit
+            self._cache_hits += 1
+            log.debug(f"🎯 CACHE HIT for storage {storage_id}")
 
         # Create future for CPU tensor result
         cpu_tensor_future = Future()
@@ -531,8 +483,8 @@ class Orchestrator:
         client = self._clients[machine_id]
         client.resize_storage(storage_id, nbytes)
 
-        # Invalidate orchestrator cache for the resized storage
-        self._invalidate_cache_for_storage(storage_id)
+        # Invalidate cache for the resized storage
+        self.storage.invalidate_storage_cache(storage_id)
 
     def update_tensor(
         self,
@@ -581,7 +533,7 @@ class Orchestrator:
         )
 
         # Invalidate cache for the updated storage
-        self._invalidate_cache_for_storage(storage_id)
+        self.storage.invalidate_storage_cache(storage_id)
 
     def ensure_tensor_exists_and_update(
         self,
