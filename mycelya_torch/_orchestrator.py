@@ -824,8 +824,7 @@ class Orchestrator:
                 self._register_tensor_storage_mapping(tensor_id, storage_id)
             else:
                 # Tensor already exists in orchestrator mapping, assume it exists on server
-
-
+                pass
 
     def _background_loop(self):
         """Background thread for batch execution and future resolution.

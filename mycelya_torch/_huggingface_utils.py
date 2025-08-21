@@ -113,6 +113,14 @@ def create_huggingface_model_from_remote(
     Returns:
         Local model object with all parameters as remote tensors
     """
+    # TODO: Rewrite HuggingFace integration after orchestrator API stabilizes
+    # The current implementation uses deprecated orchestrator methods and
+    # direct storage access that no longer exists.
+    raise NotImplementedError(
+        "HuggingFace model loading temporarily disabled - needs rewrite for new orchestrator API"
+    )
+
+    # COMMENTED OUT - needs rewrite for new orchestrator API:
     log.info(
         f"Creating HuggingFace model {checkpoint} with remote tensors on {machine.machine_id}"
     )
