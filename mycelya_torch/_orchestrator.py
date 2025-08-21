@@ -108,13 +108,6 @@ class Orchestrator:
         if client.is_running():
             client.stop()
 
-    def get_client(self, machine_id: str) -> Client:
-        """Get client for the given machine."""
-        client = self._clients[machine_id]
-        if not client.is_running():
-            raise RuntimeError(f"Client for machine {machine_id} is not running")
-        return client
-
     def is_client_running(self, machine_id: str) -> bool:
         """Check if a client is running for the given machine."""
         client = self._clients[machine_id]
@@ -219,7 +212,7 @@ class Orchestrator:
         self.storage.free_storage_with_id(storage_id)
 
         if tensor_set:
-            self.get_client(machine_id).remove_tensors(list(tensor_set))
+            self._clients[machine_id].remove_tensors(list(tensor_set))
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.
