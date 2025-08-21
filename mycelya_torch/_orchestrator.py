@@ -108,18 +108,6 @@ class Orchestrator:
         client = self._clients[machine_id]
         return client.is_running()
 
-    def _register_tensor_storage_mapping(self, tensor_id: int, storage_id: int) -> None:
-        """Register a mapping between tensor ID and storage ID for remote cleanup.
-
-        Args:
-            tensor_id: The tensor ID (metadata hash)
-            storage_id: The storage ID (storage pointer)
-        """
-        # Update storage -> tensors mapping
-        if storage_id not in self._storage_to_tensors_map:
-            self._storage_to_tensors_map[storage_id] = set()
-        self._storage_to_tensors_map[storage_id].add(tensor_id)
-
     def _get_tensor_id_for_storage(self, storage_id: int) -> Optional[int]:
         """Get a tensor ID for a storage ID if mapping exists.
 
@@ -374,7 +362,10 @@ class Orchestrator:
             try:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
-                self._register_tensor_storage_mapping(tensor_id, storage_id)
+                # Update storage -> tensors mapping
+                if storage_id not in self._storage_to_tensors_map:
+                    self._storage_to_tensors_map[storage_id] = set()
+                self._storage_to_tensors_map[storage_id].add(tensor_id)
             except Exception as e:
                 log.debug(f"Could not register output tensor-storage mapping: {e}")
 
@@ -410,7 +401,7 @@ class Orchestrator:
 
             # Get device type and index from storage
             machine_id, device_type, device_index = self.storage.get_remote_device_info(storage_id)
-            
+
             client.create_empty_tensor(
                 tensor_id=tensor_id,
                 shape=list(tensor.shape),
@@ -422,7 +413,9 @@ class Orchestrator:
                 device_index=device_index,
             )
             # Register the mapping in orchestrator
-            self._register_tensor_storage_mapping(tensor_id, storage_id)
+            if storage_id not in self._storage_to_tensors_map:
+                self._storage_to_tensors_map[storage_id] = set()
+            self._storage_to_tensors_map[storage_id].add(tensor_id)
         else:
             # Storage exists - check if this specific tensor ID exists in orchestrator mapping
             if tensor_id not in self._storage_to_tensors_map[storage_id]:
@@ -441,7 +434,9 @@ class Orchestrator:
                     offset=tensor.storage_offset(),
                 )
                 # Register the new tensor in orchestrator mapping
-                self._register_tensor_storage_mapping(tensor_id, storage_id)
+                if storage_id not in self._storage_to_tensors_map:
+                    self._storage_to_tensors_map[storage_id] = set()
+                self._storage_to_tensors_map[storage_id].add(tensor_id)
 
     def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
         """Resolve pending CPU tensor futures for a client."""
