@@ -109,18 +109,9 @@ class Orchestrator:
         return client.is_running()
 
     def _get_tensor_id_for_storage(self, storage_id: int) -> Optional[int]:
-        """Get a tensor ID for a storage ID if mapping exists.
-
-        Args:
-            storage_id: The storage ID to look up
-
-        Returns:
-            Any tensor ID that maps to this storage, None if no mapping exists
-        """
+        """Get any tensor ID for a storage ID if mapping exists."""
         tensor_set = self._storage_to_tensors_map.get(storage_id)
-        if tensor_set:
-            return next(iter(tensor_set))  # Return any tensor ID from the set
-        return None
+        return next(iter(tensor_set)) if tensor_set else None
 
     def _invalidate_output_tensor_caches(
         self, output_tensors: List[torch.Tensor]
@@ -184,9 +175,12 @@ class Orchestrator:
             storage_id: Storage ID to resize
             nbytes: New size in bytes
         """
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        client = self._clients[machine_id]
-        client.resize_storage(storage_id, nbytes)
+        # Get a tensor ID for this storage if mapping exists
+        tensor_id = self._get_tensor_id_for_storage(storage_id)
+        if tensor_id is not None:
+            machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+            client = self._clients[machine_id]
+            client.resize_storage(tensor_id, nbytes)
 
         # Invalidate cache for the resized storage
         self.storage.invalidate_storage_cache(storage_id)
@@ -424,8 +418,7 @@ class Orchestrator:
                     f"Creating tensor view {tensor_id} from existing storage {storage_id}"
                 )
                 # Find any existing tensor ID for this storage as the base
-                existing_tensor_ids = self._storage_to_tensors_map[storage_id]
-                base_tensor_id = next(iter(existing_tensor_ids))
+                base_tensor_id = self._get_tensor_id_for_storage(storage_id)
                 client.create_tensor_view(
                     new_tensor_id=tensor_id,
                     base_tensor_id=base_tensor_id,
