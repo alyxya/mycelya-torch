@@ -293,36 +293,19 @@ class Orchestrator:
 
         return True
 
-    def resize_storage(self, storage_id: int, nbytes: int) -> bool:
+    def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.
 
         Args:
             storage_id: Storage ID to resize
             nbytes: New size in bytes
-
-        Returns:
-            True if resized successfully, False otherwise
         """
-        try:
-            remote_device_info = self.storage.get_remote_device_info(storage_id)
-            machine_id, remote_type, remote_index = remote_device_info
-        except KeyError:
-            log.warning(f"No remote device info found for storage {storage_id}")
-            return False
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
+        client.resize_storage(storage_id, nbytes)
 
-        try:
-            # Perform remote resize
-            client = self.get_client(machine_id)
-            client.resize_storage(storage_id, nbytes)
-
-            # Invalidate cache for the resized storage
-            self.storage.invalidate_storage_cache(storage_id)
-
-            log.info(f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes")
-            return True
-        except Exception as e:
-            log.error(f"Failed to resize storage {storage_id}: {e}")
-            return False
+        # Invalidate cache for the resized storage
+        self.storage.invalidate_storage_cache(storage_id)
 
     def get_remote_device_info_for_storage(
         self, storage_id: int
