@@ -52,10 +52,6 @@ class Orchestrator:
             str, deque
         ] = {}  # machine_id -> deque of (storage_future, cpu_tensor_future, mycelya_tensor)
 
-        # Cache statistics (now handled by StorageManager)
-        self._cache_hits = 0
-        self._cache_misses = 0
-
         # Tensor ID tracking - maps tensor ID to remote device info
         self._tensor_id_to_remote_device: Dict[
             int, Tuple[str, str, int]
@@ -406,16 +402,9 @@ class Orchestrator:
 
         if storage_future is None:
             # Cache miss - get data from client and cache the future
-            self._cache_misses += 1
-            log.debug(f"❌ CACHE MISS for storage {storage_id}")
             client = self._clients[machine_id]
             storage_future = client.get_storage_data(tensor_id)
             self.storage.cache_storage(storage_id, storage_future)
-            log.debug(f"💾 CACHED storage future {storage_id}")
-        else:
-            # Cache hit
-            self._cache_hits += 1
-            log.debug(f"🎯 CACHE HIT for storage {storage_id}")
 
         # Create future for CPU tensor result
         cpu_tensor_future = Future()
