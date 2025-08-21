@@ -323,9 +323,6 @@ class Orchestrator:
         """
         try:
             machine_info = self.storage.get_machine_info(storage_id)
-            if machine_info is None:
-                raise RuntimeError(f"No machine info found for storage {storage_id}")
-
             machine_id, remote_type, remote_index = machine_info
             return self.get_client(machine_id)
         except Exception as e:
@@ -381,7 +378,7 @@ class Orchestrator:
         remote_type = "cuda"
         remote_index = 0
 
-        return self.storage.create_storage(nbytes, machine_id, remote_type, remote_index)
+        return self.storage.create_storage(machine_id, remote_type, remote_index)
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID with remote cleanup.
@@ -418,30 +415,25 @@ class Orchestrator:
         Returns:
             True if resized successfully, False otherwise
         """
-        machine_info = self.storage.get_machine_info(storage_id)
-        if machine_info is None:
+        try:
+            machine_info = self.storage.get_machine_info(storage_id)
+            machine_id, remote_type, remote_index = machine_info
+        except KeyError:
             log.warning(f"No machine info found for storage {storage_id}")
             return False
-
-        machine_id, remote_type, remote_index = machine_info
 
         try:
             # Perform remote resize
             client = self.get_client(machine_id)
             client.resize_storage(storage_id, nbytes)
 
-            # Update local tracking
-            success = self.storage.resize_storage_by_id(storage_id, nbytes)
-
             # Invalidate orchestrator cache for the resized storage
             self._invalidate_cache_for_storage(storage_id)
 
-            if success:
-                log.info(
-                    f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes"
-                )
-
-            return success
+            log.info(
+                f"✅ ORCHESTRATOR: Resized storage {storage_id} to {nbytes} bytes"
+            )
+            return True
         except Exception as e:
             log.error(f"Failed to resize storage {storage_id}: {e}")
             return False
@@ -449,14 +441,17 @@ class Orchestrator:
 
     def get_machine_info_for_storage(
         self, storage_id: int
-    ) -> Optional[Tuple[str, str, int]]:
+    ) -> Tuple[str, str, int]:
         """Get machine info for a storage ID.
 
         Args:
             storage_id: Storage ID to query
 
         Returns:
-            Tuple of (machine_id, remote_type, remote_index) or None if not found
+            Tuple of (machine_id, remote_type, remote_index)
+        
+        Raises:
+            KeyError: If storage_id not found
         """
         return self.storage.get_machine_info(storage_id)
 

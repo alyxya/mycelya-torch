@@ -45,13 +45,12 @@ class StorageManager:
         log.info("🚀 Storage manager initialized")
 
     def create_storage(
-        self, nbytes: int, machine_id: str, remote_type: str, remote_index: int
+        self, machine_id: str, remote_type: str, remote_index: int
     ) -> int:
         """
         Create remote storage with an incremental unique ID.
 
         Args:
-            nbytes: Number of bytes to allocate
             machine_id: Machine identifier for the storage
             remote_type: Remote device type (e.g., "cuda")
             remote_index: Remote device index
@@ -69,19 +68,19 @@ class StorageManager:
         machine_info = (machine_id, remote_type, remote_index)
         self.storage_id_to_machine_info[storage_id] = machine_info
 
-        log.info(
-            f"Created storage ID {storage_id} for machine {machine_id} ({nbytes} bytes)"
-        )
+        log.info(f"Created storage ID {storage_id} for machine {machine_id}")
         return storage_id
 
-    def get_machine_info(self, storage_id: int) -> Optional[Tuple[str, str, int]]:
+    def get_machine_info(self, storage_id: int) -> Tuple[str, str, int]:
         """Get machine info for a storage ID.
 
         Returns:
-            Tuple of (machine_id, remote_type, remote_index) or None if not found
-        """
-        return self.storage_id_to_machine_info.get(storage_id)
+            Tuple of (machine_id, remote_type, remote_index)
 
+        Raises:
+            KeyError: If storage_id not found
+        """
+        return self.storage_id_to_machine_info[storage_id]
 
     def free_storage_with_id(self, storage_id: int) -> bool:
         """Free storage by storage ID (local tracking only).
@@ -101,17 +100,3 @@ class StorageManager:
         else:
             log.warning(f"Attempted to free unknown storage {storage_id}")
             return False
-
-    def resize_storage_by_id(self, storage_id: int, nbytes: int) -> bool:
-        """Resize storage by storage ID (local tracking only).
-
-        Note: Remote resize is handled by the orchestrator.
-        """
-        storage_id = int(storage_id)
-
-        if storage_id not in self.storage_id_to_machine_info:
-            log.warning(f"No machine info found for storage {storage_id}")
-            return False
-
-        log.info(f"Resize operation for storage {storage_id} to {nbytes} bytes")
-        return True
