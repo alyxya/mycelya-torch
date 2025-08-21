@@ -48,8 +48,7 @@ class Orchestrator:
             str, deque
         ] = {}  # machine_id -> deque of (storage_future, cpu_tensor_future, mycelya_tensor)
 
-        # Tensor ID to Storage ID mapping for cache coordination
-        self._tensor_to_storage_map: Dict[int, int] = {}
+        # Storage ID to tensor IDs mapping for remote cleanup
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
 
         # Background thread for periodic maintenance tasks
@@ -110,30 +109,16 @@ class Orchestrator:
         return client.is_running()
 
     def _register_tensor_storage_mapping(self, tensor_id: int, storage_id: int) -> None:
-        """Register a mapping between tensor ID and storage ID for cache coordination.
+        """Register a mapping between tensor ID and storage ID for remote cleanup.
 
         Args:
             tensor_id: The tensor ID (metadata hash)
             storage_id: The storage ID (storage pointer)
         """
-        # Update tensor -> storage mapping
-        self._tensor_to_storage_map[tensor_id] = storage_id
-
         # Update storage -> tensors mapping
         if storage_id not in self._storage_to_tensors_map:
             self._storage_to_tensors_map[storage_id] = set()
         self._storage_to_tensors_map[storage_id].add(tensor_id)
-
-    def _get_storage_id_for_tensor(self, tensor_id: int) -> Optional[int]:
-        """Get storage ID for a tensor ID if mapping exists.
-
-        Args:
-            tensor_id: The tensor ID to look up
-
-        Returns:
-            Storage ID if mapping exists, None otherwise
-        """
-        return self._tensor_to_storage_map.get(tensor_id)
 
     def _get_tensor_id_for_storage(self, storage_id: int) -> Optional[int]:
         """Get a tensor ID for a storage ID if mapping exists.
@@ -149,22 +134,22 @@ class Orchestrator:
             return next(iter(tensor_set))  # Return any tensor ID from the set
         return None
 
-    def _invalidate_output_tensor_caches(self, output_tensor_ids: List[int]) -> None:
+    def _invalidate_output_tensor_caches(
+        self, output_tensors: List[torch.Tensor]
+    ) -> None:
         """Invalidate cache for all output tensors of an operation.
 
         This is the fundamental approach: treat all output tensors as mutated and evict from cache.
         Much simpler and more robust than trying to detect in-place operations.
 
         Args:
-            output_tensor_ids: List of tensor IDs for output tensors
+            output_tensors: List of output tensors
         """
         storage_ids_to_invalidate = []
 
-        for tensor_id in output_tensor_ids:
-            # Get storage ID for this tensor if we have a mapping
-            storage_id = self._get_storage_id_for_tensor(tensor_id)
-            if storage_id is not None:
-                storage_ids_to_invalidate.append(storage_id)
+        for tensor in output_tensors:
+            storage_id = get_storage_id(tensor)
+            storage_ids_to_invalidate.append(storage_id)
 
         # Batch invalidation optimization: remove duplicates and process efficiently
         if storage_ids_to_invalidate:
@@ -267,36 +252,28 @@ class Orchestrator:
 
     def update_tensor(
         self,
-        tensor_id: int,
+        target_tensor: torch.Tensor,
         storage_tensor: torch.Tensor,
         source_shape: List[int],
         source_stride: List[int],
         source_storage_offset: int,
         source_dtype: str,
     ) -> None:
-        """Update tensor data by tensor ID with raw data and tensor metadata.
+        """Update tensor data with raw data and tensor metadata.
 
         Args:
-            tensor_id: Tensor ID to update
+            target_tensor: Target tensor to update
             storage_tensor: CPU tensor wrapping the storage data
             source_shape: Shape of the source data
             source_stride: Stride of the source data
             source_storage_offset: Storage offset of the source data
             source_dtype: Data type of the source data
-            target_shape: Shape of the target view
-            target_stride: Stride of the target view
-            target_storage_offset: Storage offset of the target view
-            target_dtype: Data type of the target view
 
         Raises:
             RuntimeError: If tensor or client not available
         """
-        # Get storage ID for this tensor to use storage-based client resolution
-        storage_id = self._get_storage_id_for_tensor(tensor_id)
-        if storage_id is None:
-            raise RuntimeError(
-                f"No storage mapping found for tensor {tensor_id}. Ensure tensor exists on remote before updating."
-            )
+        tensor_id = get_tensor_id(target_tensor)
+        storage_id = get_storage_id(target_tensor)
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
         client = self._clients[machine_id]
         # Convert storage tensor to raw bytes for tensor-only interface
@@ -336,8 +313,7 @@ class Orchestrator:
         if source_tensor.device.type != "cpu":
             raise RuntimeError("Source tensor must be a CPU tensor")
 
-        # Get tensor and storage info
-        tensor_id = get_tensor_id(target_tensor)
+        # Get storage info
         storage_id = get_storage_id(target_tensor)
 
         # Get client
@@ -349,7 +325,7 @@ class Orchestrator:
 
         # Update tensor with source data
         self.update_tensor(
-            tensor_id,
+            target_tensor,
             source_tensor,
             source_shape=list(source_tensor.shape),
             source_stride=list(source_tensor.stride()),
@@ -400,9 +376,6 @@ class Orchestrator:
                         f"Transfer tensors to the same device first: tensor.to(target_device)"
                     )
 
-        # Extract tensor IDs for cache management
-        output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
-
         # Get the client using the first input tensor's storage ID
         storage_id = get_storage_id(input_tensors[0])
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
@@ -438,19 +411,13 @@ class Orchestrator:
             try:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
-                # Register mapping if not already known
-                existing_storage = self._get_storage_id_for_tensor(tensor_id)
-                if existing_storage != storage_id:
-                    self._register_tensor_storage_mapping(tensor_id, storage_id)
-                    log.debug(
-                        f"🗺️ Registered output tensor {tensor_id} -> storage {storage_id}"
-                    )
+                self._register_tensor_storage_mapping(tensor_id, storage_id)
             except Exception as e:
                 log.debug(f"Could not register output tensor-storage mapping: {e}")
 
         # Simple and robust cache invalidation: treat all output tensors as mutated
         # This approach is much simpler than trying to detect in-place operations
-        self._invalidate_output_tensor_caches(output_tensor_ids)
+        self._invalidate_output_tensor_caches(output_tensors)
 
         if return_metadata:
             return result
