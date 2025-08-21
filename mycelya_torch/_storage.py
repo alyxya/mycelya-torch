@@ -81,7 +81,7 @@ class StorageManager:
         """
         return self.storage_id_to_remote_device[storage_id]
 
-    def free_storage_with_id(self, storage_id: int) -> None:
+    def free_storage(self, storage_id: int) -> None:
         """Free storage by storage ID (local tracking only).
 
         Note: Remote cleanup is handled by the orchestrator.

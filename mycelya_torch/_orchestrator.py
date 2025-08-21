@@ -208,7 +208,7 @@ class Orchestrator:
         if tensor_set:
             self._clients[machine_id].remove_tensors(list(tensor_set))
 
-        self.storage.free_storage_with_id(storage_id)
+        self.storage.free_storage(storage_id)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.
