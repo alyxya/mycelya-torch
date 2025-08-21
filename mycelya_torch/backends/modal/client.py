@@ -10,8 +10,6 @@ along with related functionality for creating and managing Modal applications.
 
 from typing import Any, Dict, List
 
-import torch
-
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
 from ..._logging import get_logger
@@ -157,38 +155,6 @@ class ModalClient(Client):
             source_dtype,
         )
         log.info(f"Updated tensor {tensor_id}")
-
-    def get_tensor_by_id(
-        self,
-        tensor_id: int,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str,
-    ) -> torch.Tensor:
-        """
-        Get tensor data by tensor ID and reconstruct as tensor with specified view.
-
-        Args:
-            tensor_id: The tensor ID (metadata hash)
-            shape: Tensor shape for view
-            stride: Tensor stride for view
-            storage_offset: Storage offset for view
-            dtype: Tensor data type
-
-        Returns:
-            CPU tensor reconstructed with specified view
-        """
-        # Get raw data
-        raw_bytes_future = self.get_storage_data(tensor_id)
-        raw_bytes = raw_bytes_future.result()
-
-        # Convert raw bytes to tensor with specified view
-        torch_dtype = getattr(torch, dtype)
-        untyped_storage = torch.UntypedStorage.from_buffer(raw_bytes, dtype=torch.uint8)
-        tensor = torch.empty(0, dtype=torch_dtype, device="cpu")
-        tensor.set_(untyped_storage, storage_offset, shape, stride)
-        return tensor
 
     def _get_storage_data_impl(self, tensor_id: int) -> None:
         """Implementation: Get raw storage data by tensor ID."""

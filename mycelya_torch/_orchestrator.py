@@ -583,68 +583,6 @@ class Orchestrator:
 
     # Legacy storage methods - mirroring Client
 
-    def get_tensor_by_id(
-        self,
-        tensor_id: int,
-        shape: List[int],
-        stride: List[int],
-        storage_offset: int,
-        dtype: str,
-    ) -> "torch.Tensor":
-        """Get tensor data by tensor ID with specified view parameters.
-
-        This method retrieves tensor data using tensor IDs with storage-level caching
-        via tensor-to-storage mapping when available.
-
-        Args:
-            tensor_id: The tensor ID to retrieve
-            shape: Tensor shape for view
-            stride: Tensor stride for view
-            storage_offset: Storage offset for view
-            dtype: Tensor data type
-
-        Returns:
-            CPU tensor reconstructed from tensor data with specified view
-
-        Raises:
-            RuntimeError: If tensor or client not available
-        """
-        # Try to use storage cache via tensor→storage mapping first
-        storage_id = self._get_storage_id_for_tensor(tensor_id)
-        if storage_id is not None:
-            # We have a mapping, try cache first
-            cached_bytes = self._get_cached_storage_data(storage_id)
-            if cached_bytes is not None:
-                # Cache hit via mapping
-                result = self._reconstruct_tensor_from_cached_storage(
-                    cached_bytes, shape, stride, storage_offset, dtype
-                )
-                log.info(
-                    f"✅ ORCHESTRATOR: Retrieved tensor {tensor_id} from cache (storage {storage_id})"
-                )
-                return result
-
-        # Cache miss or no mapping - fall back to client retrieval
-        client = self._get_client_for_tensor_id(tensor_id)
-        result = client.get_tensor_by_id(
-            tensor_id, shape, stride, storage_offset, dtype
-        )
-
-        # Try to establish mapping and cache for future requests
-        try:
-            # Extract storage_id from reconstructed tensor and cache/map it
-            actual_storage_id = get_storage_id(result)
-            raw_bytes = result.detach().numpy().tobytes()
-            self._cache_storage_data(actual_storage_id, raw_bytes)
-            self._register_tensor_storage_mapping(tensor_id, actual_storage_id)
-            log.info(
-                f"✅ ORCHESTRATOR: Retrieved tensor {tensor_id}, cached as storage {actual_storage_id}"
-            )
-        except Exception as e:
-            log.debug(f"Could not establish mapping/cache for tensor {tensor_id}: {e}")
-
-        return result
-
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage to accommodate new byte size.
 

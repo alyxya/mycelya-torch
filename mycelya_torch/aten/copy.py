@@ -15,25 +15,11 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     if from_.device.type != "mycelya":
         raise ValueError("copy_from_device requires a remote tensor")
 
-    # Use remote execution to get the tensor data
+    # Use orchestrator's new async copy method
+    cpu_future = orchestrator.copy_tensor_to_cpu(from_)
+    result = cpu_future.result()
 
-    # Get tensor data using orchestrator for centralized client management
-    tensor_id = get_tensor_id(from_)
-    log.info(f"Copying tensor ID {tensor_id} from remote to CPU")
-
-    # Use orchestrator to get tensor data with automatic client routing
-
-    result = orchestrator.get_tensor_by_id(
-        tensor_id,
-        shape=list(from_.shape),
-        stride=list(from_.stride()),
-        storage_offset=from_.storage_offset(),
-        dtype=dtype_to_str(from_.dtype),
-    )
-
-    log.info(
-        f"Successfully copied contiguous tensor data for tensor ID {tensor_id} to CPU"
-    )
+    log.info("Successfully copied tensor from remote to CPU")
     return result
 
 

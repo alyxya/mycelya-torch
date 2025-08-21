@@ -5,7 +5,6 @@ import torch
 
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import dtype_to_str, get_tensor_id
 
 log = get_logger(__name__)
 
@@ -23,18 +22,9 @@ def _local_scalar_dense(self: torch.Tensor):
         "🔢 _local_scalar_dense operation: retrieving scalar value from remote device"
     )
 
-    # Get tensor ID and tensor data using tensor-based approach
-    tensor_id = get_tensor_id(self)
-
-    # Get tensor data for this scalar using orchestrator
-
-    cpu_tensor = orchestrator.get_tensor_by_id(
-        tensor_id,
-        shape=list(self.shape),
-        stride=list(self.stride()),
-        storage_offset=self.storage_offset(),
-        dtype=dtype_to_str(self.dtype),
-    )
+    # Use orchestrator's new async copy method
+    cpu_future = orchestrator.copy_tensor_to_cpu(self)
+    cpu_tensor = cpu_future.result()
 
     # Call item() on the CPU tensor to get the Python scalar
     return cpu_tensor.item()
