@@ -26,9 +26,6 @@ from .backends.base_client import Client
 log = get_logger(__name__)
 
 
-# Exception handling is done through standard RuntimeError
-
-
 class Orchestrator:
     """Orchestrates remote execution of aten operations across remote machines.
 
@@ -40,8 +37,6 @@ class Orchestrator:
     """
 
     def __init__(self):
-        # Simple utility-based architecture - no service objects needed
-
         # Storage management
         self.storage = StorageManager()
 
@@ -408,10 +403,6 @@ class Orchestrator:
         # Extract tensor IDs for cache management
         output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
 
-        # Note: Do not proactively register tensor mappings here
-        # Mappings should only be registered when tensors are actually created via RPC calls
-        # to maintain sync between orchestrator mapping and server tensor registry
-
         # Get the client using the first input tensor's storage ID
         storage_id = get_storage_id(input_tensors[0])
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
@@ -481,13 +472,9 @@ class Orchestrator:
             f"Ensuring tensor {tensor_id} with storage {storage_id} exists on client"
         )
 
-        # Both storage_id and tensor_id should always be valid for mycelya tensors
-        # The _get_tensor_id() and _get_storage_id() methods will raise errors for non-mycelya tensors
-
         # Check orchestrator's storage mapping to decide what to create on remote
         if storage_id not in self._storage_to_tensors_map:
             # Storage doesn't exist - create empty tensor on remote
-
             # Get nbytes from the tensor's untyped storage
             nbytes = tensor.untyped_storage().nbytes()
 
@@ -510,9 +497,7 @@ class Orchestrator:
                 )
                 # Find any existing tensor ID for this storage as the base
                 existing_tensor_ids = self._storage_to_tensors_map[storage_id]
-                base_tensor_id = next(
-                    iter(existing_tensor_ids)
-                )  # Get any existing tensor
+                base_tensor_id = next(iter(existing_tensor_ids))
                 client.create_tensor_view(
                     new_tensor_id=tensor_id,
                     base_tensor_id=base_tensor_id,
@@ -522,9 +507,6 @@ class Orchestrator:
                 )
                 # Register the new tensor in orchestrator mapping
                 self._register_tensor_storage_mapping(tensor_id, storage_id)
-            else:
-                # Tensor already exists in orchestrator mapping, assume it exists on server
-                pass
 
     def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
         """Resolve pending CPU tensor futures for a client."""
