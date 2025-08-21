@@ -264,34 +264,20 @@ class Orchestrator:
 
         return self.storage.create_storage(machine_id, remote_type, remote_index)
 
-    def free_storage_with_id(self, storage_id: int) -> bool:
-        """Free storage by storage ID with remote cleanup.
+    def free_storage(self, storage_id: int) -> None:
+        """Free storage with remote cleanup.
 
         Args:
             storage_id: Storage ID to free
-
-        Returns:
-            True if freed successfully, False otherwise
         """
         # Get remote device info for remote cleanup
-        try:
-            remote_device_info = self.storage.get_remote_device_info(storage_id)
-            machine_id, remote_type, remote_index = remote_device_info
-        except KeyError:
-            # Storage doesn't exist, nothing to clean up
-            return True
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
 
         # Free from local tracking first
         self.storage.free_storage_with_id(storage_id)
 
         # Perform remote cleanup
-        try:
-            self._cleanup_remote_storage(storage_id, machine_id)
-        except Exception as e:
-            log.error(f"Failed remote cleanup for storage {storage_id}: {e}")
-            return False
-
-        return True
+        self._cleanup_remote_storage(storage_id, machine_id)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.

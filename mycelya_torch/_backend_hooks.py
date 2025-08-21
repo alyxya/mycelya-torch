@@ -177,10 +177,10 @@ class Driver:
         return storage_id
 
     @register(registry)
-    def free_storage(self, storage_id: int) -> bool:
+    def free_storage(self, storage_id: int) -> None:
         from ._orchestrator import orchestrator
 
-        return orchestrator.free_storage_with_id(storage_id)
+        orchestrator.free_storage(storage_id)
 
     @register(registry)
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
