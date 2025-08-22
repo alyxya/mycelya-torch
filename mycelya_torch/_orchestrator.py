@@ -238,7 +238,7 @@ class Orchestrator:
         client = self._clients[machine_id]
 
         # Ensure tensor exists on remote
-        self._ensure_tensor_exists_on_client(client, target_tensor)
+        self._maybe_create_tensor(target_tensor)
 
         # Get tensor ID and prepare data for update
         tensor_id = get_tensor_id(target_tensor)
@@ -312,7 +312,7 @@ class Orchestrator:
         # Ensure all input tensors exist on remote before execution
         for tensor in input_tensors:
             tensor_id = get_tensor_id(tensor)
-            self._ensure_tensor_exists_on_client(client, tensor)
+            self._maybe_create_tensor(tensor)
 
         # Execute with separated input/output interface
         result_future = client.execute_aten_operation(
@@ -353,7 +353,7 @@ class Orchestrator:
         if return_metadata:
             return result
 
-    def _ensure_tensor_exists_on_client(self, client, tensor: torch.Tensor) -> None:
+    def _maybe_create_tensor(self, tensor: torch.Tensor) -> None:
         """Ensure tensor exists on remote client using storage mapping logic.
 
         Logic:
@@ -367,6 +367,10 @@ class Orchestrator:
         log.debug(
             f"Ensuring tensor {tensor_id} with storage {storage_id} exists on client"
         )
+
+        # Get client from tensor's storage
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
 
         # Check orchestrator's storage mapping to decide what to create on remote
         if storage_id not in self._storage_to_tensors_map:
