@@ -109,12 +109,12 @@ class Orchestrator:
         client = self._clients[machine_id]
         return client.is_running()
 
+    # Storage management methods
+
     def _get_tensor_id_for_storage(self, storage_id: int) -> Optional[int]:
         """Get any tensor ID for a storage ID if mapping exists."""
         tensor_set = self._storage_to_tensors_map.get(storage_id)
         return next(iter(tensor_set)) if tensor_set else None
-
-    # Storage management methods
 
     def create_storage(self, nbytes: int, device_index: int) -> int:
         """Create storage using device index.
@@ -352,10 +352,8 @@ class Orchestrator:
 
         if return_metadata:
             return result
-        else:
-            return None
 
-    def _ensure_tensor_exists_on_client(self, client, tensor: "torch.Tensor") -> None:
+    def _ensure_tensor_exists_on_client(self, client, tensor: torch.Tensor) -> None:
         """Ensure tensor exists on remote client using storage mapping logic.
 
         Logic:
