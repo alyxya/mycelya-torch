@@ -263,6 +263,48 @@ class Orchestrator:
         # Invalidate cache for the updated storage
         self.storage.invalidate_storage_cache(storage_id)
 
+    def copy_tensor(
+        self,
+        source_tensor: torch.Tensor,
+        target_tensor: torch.Tensor,
+    ) -> None:
+        """Copy tensor data from source to target on the same remote machine.
+
+        Args:
+            source_tensor: The mycelya tensor to copy from
+            target_tensor: The mycelya tensor to copy to
+
+        Raises:
+            RuntimeError: If tensors are not on the same machine or operation fails
+        """
+        if source_tensor.device.type != "mycelya":
+            raise RuntimeError("Source tensor must be a mycelya tensor")
+        if target_tensor.device.type != "mycelya":
+            raise RuntimeError("Target tensor must be a mycelya tensor")
+
+        # Get storage info for both tensors
+        source_storage_id = get_storage_id(source_tensor)
+        target_storage_id = get_storage_id(target_tensor)
+
+        # Get machine info for both tensors
+        source_machine_id, _, _ = self.storage.get_remote_device_info(source_storage_id)
+        target_machine_id, _, _ = self.storage.get_remote_device_info(target_storage_id)
+
+        # Validate they're on the same machine
+        if source_machine_id != target_machine_id:
+            raise RuntimeError(
+                f"Cross-machine remote transfers are not supported. "
+                f"Source machine: {source_machine_id}, Target machine: {target_machine_id}. "
+                f"Only CPU↔remote and same-machine transfers are allowed. Use CPU as intermediate."
+            )
+
+        # Get client and perform copy
+        client = self._clients[source_machine_id]
+        client.copy_tensor(source_tensor, target_tensor)
+
+        # Invalidate cache for the target storage since it was modified
+        self.storage.invalidate_storage_cache(target_storage_id)
+
     def execute_aten_operation(
         self,
         op_name: str,
