@@ -70,7 +70,7 @@ def _copy_from(
             )
 
             orchestrator.execute_aten_operation(
-                "aten::copy_.default",
+                "aten.copy_.default",
                 input_tensors,
                 [to_],  # output tensors
                 processed_args,

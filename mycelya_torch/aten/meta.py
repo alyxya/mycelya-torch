@@ -225,7 +225,7 @@ def _execute_with_dynamic_outputs(
 
     else:
         # Step 1: Infer output dtype based on operation type
-        output_dtype = torch.int64 if op_name == "aten::nonzero" else args[0].dtype
+        output_dtype = torch.int64 if op_name == "aten.nonzero" else args[0].dtype
         log.debug(f"Inferred output dtype: {output_dtype}")
 
         # Step 2: Create minimal placeholder tensor with 0 bytes

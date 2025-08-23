@@ -411,8 +411,7 @@ def create_modal_app_for_gpu(
                     processed_kwargs[key] = replace_tensor_id_with_tensor(value)
 
             # Get the operation
-            op_name_fixed = op_name.replace("::", ".")
-            op_parts = op_name_fixed.split(".")
+            op_parts = op_name.split(".")
             op = torch.ops
             for part in op_parts:
                 op = getattr(op, part)

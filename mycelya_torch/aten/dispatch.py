@@ -20,10 +20,10 @@ def _execute_aten_operation(
 ) -> Any:
     """Execute operation on remote device - simplified from complex strategy pattern."""
 
-    op_name = op.overloadpacket._qualified_op_name
+    op_name = str(op)
 
     # Check for unsupported operations before meta execution
-    if op_name == "aten::repeat_interleave":
+    if op_name == "aten.repeat_interleave":
         raise RuntimeError(
             "repeat_interleave is not supported on remote devices due to a PyTorch bug where tensor repeats "
             "are incorrectly dispatched to single-argument overload. "
@@ -48,7 +48,7 @@ def _remote_kernel_fallback(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> Any:
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
-    op_name = op.overloadpacket._qualified_op_name
+    op_name = str(op)
 
     # Validate cross-device operations upfront and get the remote device
     remote_device = _validate_cross_device_operation(op_name, args, kwargs)

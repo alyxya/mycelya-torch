@@ -126,16 +126,16 @@ def _has_static_output_shape(
 
     # Always dynamic operations (output shape depends on data)
     ALWAYS_DYNAMIC = {
-        "aten::masked_select",
-        "aten::nonzero",
-        "aten::unique",
-        "aten::_unique2",
+        "aten.masked_select",
+        "aten.nonzero",
+        "aten.unique",
+        "aten._unique2",
     }
     if op_name in ALWAYS_DYNAMIC:
         return False
 
-    # Special case: aten::index can be static (tensor indexing) or dynamic (boolean indexing)
-    if op_name == "aten::index":
+    # Special case: aten.index can be static (tensor indexing) or dynamic (boolean indexing)
+    if op_name == "aten.index":
         if len(args) >= 2 and isinstance(args[1], (tuple, list)):
             # Boolean indexing is dynamic, tensor indexing is static
             return not any(
@@ -145,7 +145,7 @@ def _has_static_output_shape(
             )
 
     # Add more conditional operations here as needed:
-    # if op_name == "aten::where":
+    # if op_name == "aten.where":
     #     return len(args) != 1  # 1-arg form is dynamic, 3-arg form is static
 
     return True
