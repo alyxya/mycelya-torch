@@ -58,33 +58,31 @@ def _copy_from(
         # CPU to remote - supported
         result = copy_from_host_to_device(from_, to_)
     elif from_.device.type == "mycelya" and to_.device.type == "mycelya":
-        # Remote to remote transfers
-        if from_.device.index == to_.device.index:
-            # Same remote device - allowed (needed for gradients and internal operations)
-            # We can't import _remote_kernel_fallback here due to circular imports,
-            # so we'll use the orchestrator directly for same-device copies
-            from .utils import args_to_tensors_with_ids_and_mask
+        # Remote to remote transfers - check if they're on the same machine
+        from .._utils import get_storage_id
 
-            processed_args, processed_kwargs, input_tensors, tensor_mask = (
-                args_to_tensors_with_ids_and_mask((to_, from_), {})
-            )
+        from_storage_id = get_storage_id(from_)
+        to_storage_id = get_storage_id(to_)
 
-            orchestrator.execute_aten_operation(
-                "aten.copy_.default",
-                input_tensors,
-                [to_],  # output tensors
-                processed_args,
-                processed_kwargs,
-                tensor_mask,
-            )
+        # Get machine info for both tensors
+        from_machine_id, from_device_type, from_device_index = (
+            orchestrator.storage.get_remote_device_info(from_storage_id)
+        )
+        to_machine_id, to_device_type, to_device_index = (
+            orchestrator.storage.get_remote_device_info(to_storage_id)
+        )
+
+        if from_machine_id == to_machine_id:
+            # Same remote machine - use new copy operation
+            client = orchestrator._clients[from_machine_id]
+            client.copy_tensor(from_, to_)
             result = to_
         else:
-            # Different remote devices - not supported
+            # Different remote machines - not supported
             raise RuntimeError(
-                f"Cross-device remote transfers are not supported. "
-                f"Source device index: {from_.device.index}, "
-                f"Target device index: {to_.device.index}. "
-                f"Only CPU↔remote and same-device transfers are allowed. Use CPU as intermediate."
+                f"Cross-machine remote transfers are not supported. "
+                f"Source machine: {from_machine_id}, Target machine: {to_machine_id}. "
+                f"Only CPU↔remote and same-machine transfers are allowed. Use CPU as intermediate."
             )
     else:
         # All other cases (non-remote device copies) - blocked

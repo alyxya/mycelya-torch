@@ -231,6 +231,14 @@ class ModalClient(Client):
             local_tensor_ids, parameter_names
         )
 
+    def _copy_tensor_impl(
+        self,
+        source_tensor_id: int,
+        target_tensor_id: int,
+    ) -> None:
+        """Implementation: Copy tensor data from source to target on the remote machine."""
+        self._server_instance.copy_tensor.spawn(source_tensor_id, target_tensor_id)
+
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
         return (

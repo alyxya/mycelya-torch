@@ -94,6 +94,7 @@ def create_modal_app_for_gpu(
                 "get_storage_data": self._get_storage_data_impl,
                 "remove_tensors": self._remove_tensors_impl,
                 "resize_storage": self._resize_storage_impl,
+                "copy_tensor": self._copy_tensor_impl,
                 "execute_aten_operation": self._execute_aten_operation_impl,
                 "prepare_huggingface_model": self._prepare_huggingface_model_impl,
                 "link_model_tensors": self._link_model_tensors_impl,
@@ -329,6 +330,29 @@ def create_modal_app_for_gpu(
         def resize_storage(self, tensor_id: int, nbytes: int):
             """Resize the underlying storage for a tensor."""
             self._resize_storage_impl(tensor_id, nbytes)
+
+        def _copy_tensor_impl(self, source_tensor_id: int, target_tensor_id: int):
+            """Copy tensor data from source to target on the remote machine."""
+
+            tensor_registry = self._tensor_registry
+
+            # Validate both tensors exist
+            if source_tensor_id not in tensor_registry:
+                raise ValueError(f"Source tensor ID {source_tensor_id} does not exist")
+            if target_tensor_id not in tensor_registry:
+                raise ValueError(f"Target tensor ID {target_tensor_id} does not exist")
+
+            # Get tensors
+            source_tensor = tensor_registry[source_tensor_id]
+            target_tensor = tensor_registry[target_tensor_id]
+
+            # Perform copy operation directly on the remote machine
+            target_tensor.copy_(source_tensor)
+
+        @modal.method()
+        def copy_tensor(self, source_tensor_id: int, target_tensor_id: int):
+            """Copy tensor data from source to target on the remote machine."""
+            self._copy_tensor_impl(source_tensor_id, target_tensor_id)
 
         def _execute_aten_operation_impl(
             self,
