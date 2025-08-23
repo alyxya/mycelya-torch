@@ -32,6 +32,7 @@ def get_tensor_id(tensor: torch.Tensor) -> int:
         )
 
     from mycelya_torch._C import _get_metadata_hash
+
     return _get_metadata_hash(tensor)
 
 

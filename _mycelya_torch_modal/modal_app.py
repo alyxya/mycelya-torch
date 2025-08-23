@@ -157,7 +157,14 @@ def create_modal_app_for_gpu(
         ):
             """Create an empty tensor on the remote machine with proper storage layout."""
             self._create_empty_tensor_impl(
-                tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index
+                tensor_id,
+                shape,
+                stride,
+                storage_offset,
+                dtype,
+                nbytes,
+                device_type,
+                device_index,
             )
 
         def _create_tensor_view_impl(
@@ -271,7 +278,9 @@ def create_modal_app_for_gpu(
             storage = tensor.untyped_storage()
             # Create a tensor that views the entire storage as bytes (minimal allocation)
             full_tensor = torch.empty(0, dtype=torch.uint8, device=tensor.device)
-            full_tensor.set_(storage, storage_offset=0, size=(storage.nbytes(),), stride=(1,))
+            full_tensor.set_(
+                storage, storage_offset=0, size=(storage.nbytes(),), stride=(1,)
+            )
             result = full_tensor.cpu().detach().numpy().tobytes()
 
             return result

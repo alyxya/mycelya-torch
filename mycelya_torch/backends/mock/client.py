@@ -107,7 +107,14 @@ class MockClient(Client):
         """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
         try:
             self._server_instance.create_empty_tensor.local(
-                tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index
+                tensor_id,
+                shape,
+                stride,
+                storage_offset,
+                dtype,
+                nbytes,
+                device_type,
+                device_index,
             )
         except Exception as e:
             raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e

@@ -245,7 +245,9 @@ class Orchestrator:
         # Get the full storage bytes, not just the tensor view bytes
         storage = source_tensor.untyped_storage()
         storage_tensor = torch.empty(0, dtype=torch.uint8, device=source_tensor.device)
-        storage_tensor.set_(storage, storage_offset=0, size=(storage.nbytes(),), stride=(1,))
+        storage_tensor.set_(
+            storage, storage_offset=0, size=(storage.nbytes(),), stride=(1,)
+        )
         raw_data = storage_tensor.detach().numpy().tobytes()
 
         # Update tensor with source data
@@ -348,7 +350,9 @@ class Orchestrator:
 
         # Simple and robust cache invalidation: treat all output tensors as mutated
         if output_tensors:
-            self.storage.invalidate_multiple_storage_caches([get_storage_id(tensor) for tensor in output_tensors])
+            self.storage.invalidate_multiple_storage_caches(
+                [get_storage_id(tensor) for tensor in output_tensors]
+            )
 
         if return_metadata:
             return result
@@ -379,7 +383,9 @@ class Orchestrator:
             nbytes = tensor.untyped_storage().nbytes()
 
             # Get device type and index from storage
-            machine_id, device_type, device_index = self.storage.get_remote_device_info(storage_id)
+            machine_id, device_type, device_index = self.storage.get_remote_device_info(
+                storage_id
+            )
 
             client.create_empty_tensor(
                 tensor_id=tensor_id,

@@ -180,14 +180,30 @@ class Client(ABC):
             self._batch_calls.append(
                 BatchCall(
                     method_name="create_empty_tensor",
-                    args=(tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index),
+                    args=(
+                        tensor_id,
+                        shape,
+                        stride,
+                        storage_offset,
+                        dtype,
+                        nbytes,
+                        device_type,
+                        device_index,
+                    ),
                     kwargs={},
                 )
             )
         else:
             # Direct execution (existing behavior)
             self._create_empty_tensor_impl(
-                tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index
+                tensor_id,
+                shape,
+                stride,
+                storage_offset,
+                dtype,
+                nbytes,
+                device_type,
+                device_index,
             )
 
     @abstractmethod

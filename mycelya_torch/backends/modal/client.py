@@ -121,7 +121,14 @@ class ModalClient(Client):
     ) -> None:
         """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
         self._server_instance.create_empty_tensor.spawn(
-            tensor_id, shape, stride, storage_offset, dtype, nbytes, device_type, device_index
+            tensor_id,
+            shape,
+            stride,
+            storage_offset,
+            dtype,
+            nbytes,
+            device_type,
+            device_index,
         )
 
     def _create_tensor_view_impl(
