@@ -86,6 +86,9 @@ def create_modal_app_for_gpu(
             # checkpoint -> {model: nn.Module, parameter_tensor_map: Dict[str, int]}
             self._model_registry = {}
 
+            # Temporary tensor registry: string_key -> torch.Tensor (for operations that create tensors remotely first)
+            self._temp_tensor_registry = {}
+
             # Method mapping for batch execution
             self._method_map = {
                 "create_empty_tensor": self._create_empty_tensor_impl,
@@ -97,7 +100,7 @@ def create_modal_app_for_gpu(
                 "copy_tensor": self._copy_tensor_impl,
                 "execute_aten_operation": self._execute_aten_operation_impl,
                 "prepare_huggingface_model": self._prepare_huggingface_model_impl,
-                "link_model_tensors": self._link_model_tensors_impl,
+                "link_tensors": self._link_tensors_impl,
             }
 
         @modal.exit()
@@ -634,88 +637,53 @@ def create_modal_app_for_gpu(
                 checkpoint, torch_dtype, trust_remote_code
             )
 
-        def _link_model_tensors_impl(
+        def _link_tensors_impl(
             self,
             local_tensor_ids: List[int],
-            parameter_names: List[str],
+            temp_keys: List[str],
         ):
-            """Implementation of link_model_tensors without Modal decorators."""
+            """Implementation of link_tensors without Modal decorators."""
 
-            if len(local_tensor_ids) != len(parameter_names):
+            if len(local_tensor_ids) != len(temp_keys):
                 raise ValueError(
-                    f"Mismatch between tensor IDs ({len(local_tensor_ids)}) and parameter names ({len(parameter_names)})"
+                    f"Mismatch between tensor IDs ({len(local_tensor_ids)}) and temp keys ({len(temp_keys)})"
                 )
 
             tensor_registry = self._tensor_registry
-            model_registry = self._model_registry
+            temp_tensor_registry = self._temp_tensor_registry
 
-            if not model_registry:
-                raise RuntimeError(
-                    "No models found in registry. Call prepare_huggingface_model first."
-                )
+            for local_tensor_id, temp_key in zip(local_tensor_ids, temp_keys):
+                if temp_key not in temp_tensor_registry:
+                    raise KeyError(
+                        f"Temporary tensor key '{temp_key}' not found in temporary registry"
+                    )
 
-            # Find the model that contains these parameters
-            model_data = None
-            for _checkpoint, model_info in model_registry.items():
-                # Check if this model has the requested parameters
-                param_tensors = model_info.get("parameter_tensors", {})
-                buffer_tensors = model_info.get("buffer_tensors", {})
-                all_tensors = {**param_tensors, **buffer_tensors}
+                # Get the tensor from temporary registry
+                remote_tensor = temp_tensor_registry[temp_key]
 
-                missing_params = [p for p in parameter_names if p not in all_tensors]
-                if len(missing_params) == 0:
-                    model_data = model_info
-                    break
-                else:
-                    continue
-
-            if model_data is None:
-                available_params = (
-                    list(
-                        next(iter(model_registry.values()))
-                        .get("parameter_tensors", {})
-                        .keys()
-                    )[:10]
-                    if model_registry
-                    else []
-                )
-                raise RuntimeError(
-                    f"Could not find model containing all parameters: {parameter_names[:5]}... "
-                    f"Available parameters: {available_params}"
-                )
-
-            # Get all available tensors from the model
-            param_tensors = model_data.get("parameter_tensors", {})
-            buffer_tensors = model_data.get("buffer_tensors", {})
-            all_tensors = {**param_tensors, **buffer_tensors}
-
-            for local_tensor_id, param_name in zip(local_tensor_ids, parameter_names):
-                if param_name not in all_tensors:
-                    continue
-
-                # Get the actual tensor data
-                remote_tensor = all_tensors[param_name]
-
-                # Link the local tensor ID to the remote tensor in the registry
+                # Link the local tensor ID to the remote tensor in the main registry
                 tensor_registry[local_tensor_id] = remote_tensor
 
+                # Remove from temporary registry after linking
+                del temp_tensor_registry[temp_key]
+
         @modal.method()
-        def link_model_tensors(
+        def link_tensors(
             self,
             local_tensor_ids: List[int],
-            parameter_names: List[str],
+            temp_keys: List[str],
         ):
             """
-            Link local mycelya tensor IDs to remote model parameter tensors.
+            Link local mycelya tensor IDs to remote tensors from temporary registry.
 
-            This method establishes linkage between local tensor IDs and remote model parameters
-            in the tensor registry.
+            This method establishes linkage between local tensor IDs and remote tensors
+            that were previously stored in the temporary registry.
 
             Args:
                 local_tensor_ids: List of local tensor IDs from created mycelya tensors
-                parameter_names: List of parameter names corresponding to each tensor ID
+                temp_keys: List of temporary registry keys corresponding to each tensor ID
             """
-            self._link_model_tensors_impl(local_tensor_ids, parameter_names)
+            self._link_tensors_impl(local_tensor_ids, temp_keys)
 
         @modal.method()
         def execute_batch(self, batch_calls: List["PytorchServer.BatchCall"]):

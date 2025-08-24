@@ -619,37 +619,37 @@ class Client(ABC):
         return future
 
     @abstractmethod
-    def _link_model_tensors_impl(
+    def _link_tensors_impl(
         self,
         local_tensor_ids: List[int],
-        parameter_names: List[str],
+        temp_keys: List[str],
     ) -> None:
-        """Implementation: Link local mycelya tensor IDs to remote model parameter tensors."""
+        """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
         pass
 
-    def link_model_tensors(
+    def link_tensors(
         self,
         local_tensor_ids: List[int],
-        parameter_names: List[str],
+        temp_keys: List[str],
     ) -> None:
         """
-        Link local mycelya tensor IDs to remote model parameter tensors.
+        Link local mycelya tensor IDs to remote tensors from temporary registry.
 
-        This method is used after HuggingFace model loading to connect the locally
-        created mycelya tensors to the corresponding remote model parameter tensors.
+        This method is used to connect locally created mycelya tensors to remote tensors
+        that were previously stored in the temporary registry by remote operations.
 
         Args:
             local_tensor_ids: List of local tensor IDs from created mycelya tensors
-            parameter_names: List of parameter names corresponding to each tensor ID
+            temp_keys: List of temporary registry keys corresponding to each tensor ID
 
         Returns:
             None
 
         Example:
-            # After model preparation and local tensor creation
-            local_tensor_ids = [get_tensor_id(tensor) for tensor in model.parameters()]
-            parameter_names = ["model.embed_tokens.weight", "layer.0.weight", ...]
-            client.link_model_tensors(local_tensor_ids, parameter_names)
+            # After remote operations that populate temporary registry
+            local_tensor_ids = [get_tensor_id(tensor) for tensor in tensors]
+            temp_keys = ["temp_key_1", "temp_key_2", ...]
+            client.link_tensors(local_tensor_ids, temp_keys)
         """
         if not self.is_running():
             raise RuntimeError(
@@ -660,14 +660,14 @@ class Client(ABC):
             # Add to batch
             self._batch_calls.append(
                 BatchCall(
-                    method_name="link_model_tensors",
-                    args=(local_tensor_ids, parameter_names),
+                    method_name="link_tensors",
+                    args=(local_tensor_ids, temp_keys),
                     kwargs={},
                 )
             )
         else:
             # Direct execution (existing behavior)
-            self._link_model_tensors_impl(local_tensor_ids, parameter_names)
+            self._link_tensors_impl(local_tensor_ids, temp_keys)
 
     @abstractmethod
     def __repr__(self) -> str:

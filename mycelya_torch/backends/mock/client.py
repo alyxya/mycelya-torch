@@ -228,15 +228,13 @@ class MockClient(Client):
         )
         self._pending_results.append(result)
 
-    def _link_model_tensors_impl(
+    def _link_tensors_impl(
         self,
         local_tensor_ids: List[int],
-        parameter_names: List[str],
+        temp_keys: List[str],
     ) -> None:
-        """Implementation: Link local mycelya tensor IDs to remote model parameter tensors."""
-        self._server_instance.link_model_tensors.local(
-            local_tensor_ids, parameter_names
-        )
+        """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
+        self._server_instance.link_tensors.local(local_tensor_ids, temp_keys)
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
