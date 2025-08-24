@@ -300,7 +300,9 @@ class Orchestrator:
 
         # Get client and perform copy
         client = self._clients[source_machine_id]
-        client.copy_tensor(source_tensor, target_tensor)
+        source_tensor_id = get_tensor_id(source_tensor)
+        target_tensor_id = get_tensor_id(target_tensor)
+        client.copy_tensor(source_tensor_id, target_tensor_id)
 
         # Invalidate cache for the target storage since it was modified
         self.storage.invalidate_storage_cache(target_storage_id)

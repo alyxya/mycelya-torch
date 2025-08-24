@@ -174,6 +174,19 @@ class MockClient(Client):
         """Implementation: Resize the underlying storage for a tensor."""
         self._server_instance.resize_storage.local(tensor_id, nbytes)
 
+    def _copy_tensor_impl(
+        self,
+        source_tensor_id: int,
+        target_tensor_id: int,
+    ) -> None:
+        """Implementation: Copy tensor data from source to target on the remote machine."""
+        try:
+            self._server_instance.copy_tensor.local(source_tensor_id, target_tensor_id)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to copy tensor from {source_tensor_id} to {target_tensor_id}: {e}"
+            ) from e
+
     # Operation execution methods
     def _execute_aten_operation_impl(
         self,
@@ -224,19 +237,6 @@ class MockClient(Client):
         self._server_instance.link_model_tensors.local(
             local_tensor_ids, parameter_names
         )
-
-    def _copy_tensor_impl(
-        self,
-        source_tensor_id: int,
-        target_tensor_id: int,
-    ) -> None:
-        """Implementation: Copy tensor data from source to target on the remote machine."""
-        try:
-            self._server_instance.copy_tensor.local(source_tensor_id, target_tensor_id)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to copy tensor from {source_tensor_id} to {target_tensor_id}: {e}"
-            ) from e
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"

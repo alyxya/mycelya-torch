@@ -424,6 +424,52 @@ class Client(ABC):
             # Direct execution (existing behavior)
             self._resize_storage_impl(tensor_id, nbytes)
 
+    # Tensor copy methods
+    @abstractmethod
+    def _copy_tensor_impl(
+        self,
+        source_tensor_id: int,
+        target_tensor_id: int,
+    ) -> None:
+        """Implementation: Copy tensor data from source to target on the remote machine."""
+        pass
+
+    def copy_tensor(
+        self,
+        source_tensor_id: int,
+        target_tensor_id: int,
+    ) -> None:
+        """
+        Copy tensor data from source to target on the same remote machine.
+
+        Both tensors must exist on the same remote machine. This operation
+        performs the copy directly on the remote machine without data transfer.
+
+        Args:
+            source_tensor_id: ID of the source tensor to copy from
+            target_tensor_id: ID of the target tensor to copy to
+
+        Returns:
+            None
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="copy_tensor",
+                    args=(source_tensor_id, target_tensor_id),
+                    kwargs={},
+                )
+            )
+        else:
+            # Direct execution (existing behavior)
+            self._copy_tensor_impl(source_tensor_id, target_tensor_id)
+
     # Operation execution methods
     @abstractmethod
     def _execute_aten_operation_impl(
@@ -622,56 +668,6 @@ class Client(ABC):
         else:
             # Direct execution (existing behavior)
             self._link_model_tensors_impl(local_tensor_ids, parameter_names)
-
-    # Tensor copy methods
-    @abstractmethod
-    def _copy_tensor_impl(
-        self,
-        source_tensor_id: int,
-        target_tensor_id: int,
-    ) -> None:
-        """Implementation: Copy tensor data from source to target on the remote machine."""
-        pass
-
-    def copy_tensor(
-        self,
-        source_tensor: "torch.Tensor",
-        target_tensor: "torch.Tensor",
-    ) -> None:
-        """
-        Copy tensor data from source to target on the same remote machine.
-
-        Both tensors must exist on the same remote machine. This operation
-        performs the copy directly on the remote machine without data transfer.
-
-        Args:
-            source_tensor: Source tensor to copy from
-            target_tensor: Target tensor to copy to
-
-        Returns:
-            None
-        """
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
-
-        # Extract tensor IDs from tensors
-        source_tensor_id = get_tensor_id(source_tensor)
-        target_tensor_id = get_tensor_id(target_tensor)
-
-        if self.batching:
-            # Add to batch
-            self._batch_calls.append(
-                BatchCall(
-                    method_name="copy_tensor",
-                    args=(source_tensor_id, target_tensor_id),
-                    kwargs={},
-                )
-            )
-        else:
-            # Direct execution (existing behavior)
-            self._copy_tensor_impl(source_tensor_id, target_tensor_id)
 
     @abstractmethod
     def __repr__(self) -> str:
