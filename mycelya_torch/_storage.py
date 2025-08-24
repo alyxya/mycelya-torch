@@ -109,19 +109,11 @@ class StorageManager:
         """
         return self._storage_cache.get(storage_id)
 
-    def invalidate_storage_cache(self, storage_id: int) -> None:
-        """Invalidate cache entry for a storage ID.
+    def invalidate_storage_caches(self, storage_ids: List[int]) -> None:
+        """Invalidate cache entries for one or more storage IDs.
 
         Args:
-            storage_id: Storage ID to remove from cache
-        """
-        self._storage_cache.pop(storage_id, None)
-
-    def invalidate_multiple_storage_caches(self, storage_ids: List[int]) -> None:
-        """Invalidate cache entries for multiple storage IDs.
-
-        Args:
-            storage_ids: List of storage IDs to invalidate
+            storage_ids: List of storage IDs to remove from cache (can be single element)
         """
         for storage_id in storage_ids:
             self._storage_cache.pop(storage_id, None)

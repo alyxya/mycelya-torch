@@ -162,7 +162,7 @@ class Orchestrator:
             client.resize_storage(tensor_id, nbytes)
 
         # Invalidate cache for the resized storage
-        self.storage.invalidate_storage_cache(storage_id)
+        self.storage.invalidate_storage_caches([storage_id])
 
     # Tensor methods
 
@@ -261,7 +261,7 @@ class Orchestrator:
         )
 
         # Invalidate cache for the updated storage
-        self.storage.invalidate_storage_cache(storage_id)
+        self.storage.invalidate_storage_caches([storage_id])
 
     def copy_tensor(
         self,
@@ -305,7 +305,7 @@ class Orchestrator:
         client.copy_tensor(source_tensor_id, target_tensor_id)
 
         # Invalidate cache for the target storage since it was modified
-        self.storage.invalidate_storage_cache(target_storage_id)
+        self.storage.invalidate_storage_caches([target_storage_id])
 
     def execute_aten_operation(
         self,
@@ -394,7 +394,7 @@ class Orchestrator:
 
         # Simple and robust cache invalidation: treat all output tensors as mutated
         if output_tensors:
-            self.storage.invalidate_multiple_storage_caches(
+            self.storage.invalidate_storage_caches(
                 [get_storage_id(tensor) for tensor in output_tensors]
             )
 
