@@ -9,7 +9,7 @@ for development and testing without requiring remote cloud resources.
 """
 
 from collections import deque
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
@@ -191,27 +191,23 @@ class MockClient(Client):
     def _execute_aten_operation_impl(
         self,
         op_name: str,
-        input_tensor_ids: List[int],
-        output_tensor_ids: List[int],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        return_metadata: bool = False,
+        output_tensor_ids: Optional[List[int]] = None,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
 
         # Execute using .local() and store result if returning metadata
         result = self._server_instance.execute_aten_operation.local(
             op_name,
-            input_tensor_ids,
-            output_tensor_ids,
             args,
             kwargs,
             tensor_mask,
-            return_metadata,
+            output_tensor_ids,
         )
-        # Only store result if expecting a return value
-        if return_metadata and result is not None:
+        # Only store result if expecting a return value for dynamic operations
+        if output_tensor_ids is None and result is not None:
             self._pending_results.append(result)
 
     # HuggingFace model loading methods

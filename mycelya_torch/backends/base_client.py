@@ -11,13 +11,12 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from collections import deque
 from concurrent.futures import Future
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, TypedDict, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 if TYPE_CHECKING:
-    import torch
+    pass
 
 # Import utility functions
-from .._utils import get_tensor_id
 
 
 class BatchCall(TypedDict):
@@ -475,12 +474,10 @@ class Client(ABC):
     def _execute_aten_operation_impl(
         self,
         op_name: str,
-        input_tensor_ids: List[int],
-        output_tensor_ids: List[int],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        return_metadata: bool = False,
+        output_tensor_ids: Optional[List[int]] = None,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         pass
@@ -488,40 +485,32 @@ class Client(ABC):
     def execute_aten_operation(
         self,
         op_name: str,
-        input_tensors: List["torch.Tensor"],
-        output_tensors: List["torch.Tensor"],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        return_metadata: bool = False,
+        output_tensor_ids: Optional[List[int]] = None,
     ) -> Union[Future[List[Dict[str, Any]]], None]:
         """
-        Execute an aten operation on the remote machine with input and output tensors.
+        Execute an aten operation on the remote machine.
 
         Args:
             op_name: The aten operation name to execute
-            input_tensors: List of input tensors
-            output_tensors: List of output tensors to store results
             args: Operation arguments (with tensor IDs replacing tensors)
             kwargs: Operation keyword arguments (with tensor IDs replacing tensors)
             tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
-            return_metadata: If True, return output tensor metadata instead of None
+            output_tensor_ids: List of output tensor IDs for static operations, or None for dynamic operations
 
         Returns:
-            None for normal operations, or Future[List[Dict]] of output tensor metadata if return_metadata=True
+            None for static operations, or Future[List[Dict]] of output tensor metadata for dynamic operations
         """
         if not self.is_running():
             raise RuntimeError(
                 f"Machine {self.machine_id} is not running. Call start() first."
             )
 
-        # Extract tensor IDs from tensors
-        input_tensor_ids = [get_tensor_id(tensor) for tensor in input_tensors]
-        output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
-
-        # Create future if metadata is requested
+        # Create future for dynamic operations
         future = None
-        if return_metadata:
+        if output_tensor_ids is None:
             future = Future()
             self._pending_futures.append(future)
 
@@ -532,12 +521,10 @@ class Client(ABC):
                     method_name="execute_aten_operation",
                     args=(
                         op_name,
-                        input_tensor_ids,
-                        output_tensor_ids,
                         args,
                         kwargs,
                         tensor_mask,
-                        return_metadata,
+                        output_tensor_ids,
                     ),
                     kwargs={},
                 )
@@ -546,12 +533,10 @@ class Client(ABC):
             # Direct execution (existing behavior)
             self._execute_aten_operation_impl(
                 op_name,
-                input_tensor_ids,
-                output_tensor_ids,
                 args,
                 kwargs,
                 tensor_mask,
-                return_metadata,
+                output_tensor_ids,
             )
 
         return future

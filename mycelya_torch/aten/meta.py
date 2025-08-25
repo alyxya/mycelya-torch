@@ -6,9 +6,9 @@ from typing import Any, Dict, List, Tuple
 import torch
 
 from .._logging import get_logger
-from .._orchestrator import orchestrator
+
+# Lazy import of orchestrator to avoid circular imports
 from .._utils import get_tensor_id
-from .utils import args_to_tensors_with_ids_and_mask
 
 log = get_logger(__name__)
 
@@ -176,17 +176,12 @@ def _execute_with_static_outputs(
         output_tensors = []
 
     # Step 4: Execute remotely
-    processed_args, processed_kwargs, input_tensors, tensor_mask = (
-        args_to_tensors_with_ids_and_mask(args, kwargs)
-    )
-
+    from .._orchestrator import orchestrator
     orchestrator.execute_aten_operation(
         op_name,
-        input_tensors,
+        args,
+        kwargs,
         output_tensors,
-        processed_args,
-        processed_kwargs,
-        tensor_mask,
     )
 
     # Step 5: Correct output tensor shapes to match meta tensor shapes
@@ -225,40 +220,44 @@ def _execute_with_dynamic_outputs(
 
     else:
         # Step 1: Infer output dtype based on operation type
-        output_dtype = torch.int64 if op_name == "aten.nonzero" else args[0].dtype
+        output_dtype = torch.int64 if op_name in ("aten.nonzero", "aten.nonzero.default") else args[0].dtype
         log.debug(f"Inferred output dtype: {output_dtype}")
 
         # Step 2: Create minimal placeholder tensor with 0 bytes
         output_tensor = torch.empty(0, dtype=output_dtype, device=remote_device)
 
-    # Step 3: Execute remotely and request metadata return
-    processed_args, processed_kwargs, input_tensors, tensor_mask = (
-        args_to_tensors_with_ids_and_mask(args, kwargs)
-    )
-
-    result_metadata = orchestrator.execute_aten_operation(
+    # Step 3: Execute remotely as dynamic operation (no output tensors provided)
+    from .._orchestrator import orchestrator
+    result = orchestrator.execute_aten_operation(
         op_name,
-        input_tensors,
-        [output_tensor],
-        processed_args,
-        processed_kwargs,
-        tensor_mask,
-        return_metadata=True,
+        args,
+        kwargs,
+        output_tensors=None,
     )
 
-    # Step 4: Update output tensor metadata from remote execution results
-    if not result_metadata or len(result_metadata) != 1:
+    # Step 4: Process dynamic operation result
+    if not result or not isinstance(result, list):
         raise RuntimeError(
-            f"Expected exactly 1 output metadata for {op_name}, got {len(result_metadata) if result_metadata else 0}"
+            f"Expected metadata list from dynamic operation {op_name}, got {type(result)}"
         )
 
-    metadata = result_metadata[0]
+    metadata_list = result
+
+    if not metadata_list or len(metadata_list) != 1:
+        raise RuntimeError(
+            f"Expected exactly 1 output metadata for {op_name}, got {len(metadata_list)}"
+        )
+
+    metadata = metadata_list[0]
 
     # Validate dtype matches expectation
     actual_dtype = metadata["dtype"]
-    if str(output_tensor.dtype) != actual_dtype:
+    from .._utils import dtype_to_str
+
+    expected_dtype_str = dtype_to_str(output_tensor.dtype)
+    if expected_dtype_str != actual_dtype:
         raise RuntimeError(
-            f"Dtype mismatch for {op_name}: expected {output_tensor.dtype}, got {actual_dtype}"
+            f"Dtype mismatch for {op_name}: expected {expected_dtype_str}, got {actual_dtype}"
         )
 
     # Resize storage to match remote result
@@ -269,5 +268,18 @@ def _execute_with_dynamic_outputs(
         output_tensor, metadata["shape"], metadata["stride"], metadata["storage_offset"]
     )
 
-    # Step 5: Return single tensor result
+    # Step 5: Link the local tensor to the remote tensor using temp key from metadata
+    if "temp_key" not in metadata:
+        raise RuntimeError(
+            f"Expected temp_key in metadata for dynamic operation {op_name}"
+        )
+
+    temp_key = metadata["temp_key"]
+
+    # Link through orchestrator (proper architecture)
+    from .._orchestrator import orchestrator
+
+    orchestrator.link_tensors([output_tensor], [temp_key])
+
+    # Step 6: Return single tensor result
     return output_tensor

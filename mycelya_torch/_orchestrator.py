@@ -21,6 +21,7 @@ from ._device import device_manager
 from ._logging import get_logger
 from ._storage import StorageManager
 from ._utils import dtype_to_str, get_storage_id, get_tensor_id
+from .aten.utils import args_to_tensors_with_ids_and_mask
 from .backends.base_client import Client
 
 log = get_logger(__name__)
@@ -310,36 +311,38 @@ class Orchestrator:
     def execute_aten_operation(
         self,
         op_name: str,
-        input_tensors: List[torch.Tensor],
-        output_tensors: List[torch.Tensor],
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-        tensor_mask: List[bool],
-        return_metadata: bool = False,
+        output_tensors: Optional[List[torch.Tensor]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
-        """Execute remote operation with tensor objects passed directly.
+        """Execute remote operation with tensor objects in args/kwargs.
 
         Args:
             op_name: Name of the operation to execute
-            input_tensors: List of input mycelya tensors
-            output_tensors: List of output mycelya tensors to store results
-            args: Processed args with tensor IDs replacing tensors
-            kwargs: Processed kwargs with tensor IDs replacing tensors
-            tensor_mask: Boolean mask indicating which positions in args/kwargs had tensors
-            return_metadata: If True, return output tensor metadata instead of None
+            args: Operation args containing original tensors
+            kwargs: Operation kwargs containing original tensors
+            output_tensors: List of output tensors with proper shapes/dtypes for static operations,
+                           or None for dynamic operations
 
         Returns:
-            None for normal operations, or List[Dict] of output tensor metadata if return_metadata=True
+            For dynamic operations (output_tensors=None): List[Dict] metadata with temp_key embedded
+            For static operations: None
         """
+        # Transform args/kwargs: replace tensors with tensor IDs and extract tensor info
+        processed_args, processed_kwargs, input_tensors, tensor_mask = args_to_tensors_with_ids_and_mask(args, kwargs)
+
         log.debug(f"Input tensor IDs: {[get_tensor_id(t) for t in input_tensors]}")
-        log.debug(f"Output tensor IDs: {[get_tensor_id(t) for t in output_tensors]}")
+        if output_tensors:
+            log.debug(f"Output tensor IDs: {[get_tensor_id(t) for t in output_tensors]}")
+        else:
+            log.debug("Dynamic operation: no output tensor IDs provided")
 
         # Validate that we have input tensors
         if not input_tensors:
             raise RuntimeError(f"No input tensors provided for operation {op_name}")
 
         # Validate all tensors are on the same device using their device attributes
-        all_tensors = input_tensors + output_tensors
+        all_tensors = input_tensors + (output_tensors or [])
         if len(all_tensors) > 1:
             first_device = all_tensors[0].device
             for tensor in all_tensors[1:]:
@@ -357,18 +360,22 @@ class Orchestrator:
 
         # Ensure all input tensors exist on remote before execution
         for tensor in input_tensors:
-            tensor_id = get_tensor_id(tensor)
             self._maybe_create_tensor(tensor)
 
-        # Execute with separated input/output interface
+        # Execute with simplified client interface
+        if output_tensors is None:
+            # Dynamic operation: no output tensor IDs provided
+            output_tensor_ids = None
+        else:
+            # Static operation: extract output tensor IDs
+            output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
+
         result_future = client.execute_aten_operation(
             op_name,
-            input_tensors,
-            output_tensors,
-            args,
-            kwargs,
+            processed_args,
+            processed_kwargs,
             tensor_mask,
-            return_metadata,
+            output_tensor_ids,
         )
 
         # Get result from future if one was returned
@@ -380,25 +387,26 @@ class Orchestrator:
         else:
             result = None
 
-        # Register tensor-storage mappings for output tensors
-        for output_tensor in output_tensors:
-            try:
-                tensor_id = get_tensor_id(output_tensor)
-                storage_id = get_storage_id(output_tensor)
-                # Update storage -> tensors mapping
-                if storage_id not in self._storage_to_tensors_map:
-                    self._storage_to_tensors_map[storage_id] = set()
-                self._storage_to_tensors_map[storage_id].add(tensor_id)
-            except Exception as e:
-                log.debug(f"Could not register output tensor-storage mapping: {e}")
+        if output_tensors is not None:
+            # Static operation: register tensor-storage mappings and invalidate caches
+            for output_tensor in output_tensors:
+                try:
+                    tensor_id = get_tensor_id(output_tensor)
+                    storage_id = get_storage_id(output_tensor)
+                    # Update storage -> tensors mapping
+                    if storage_id not in self._storage_to_tensors_map:
+                        self._storage_to_tensors_map[storage_id] = set()
+                    self._storage_to_tensors_map[storage_id].add(tensor_id)
+                except Exception as e:
+                    log.debug(f"Could not register output tensor-storage mapping: {e}")
 
-        # Simple and robust cache invalidation: treat all output tensors as mutated
-        if output_tensors:
+            # Simple and robust cache invalidation: treat all output tensors as mutated
             self.storage.invalidate_storage_caches(
                 [get_storage_id(tensor) for tensor in output_tensors]
             )
-
-        if return_metadata:
+            return None
+        else:
+            # Dynamic operation: return metadata list with temp_key embedded
             return result
 
     def _maybe_create_tensor(self, tensor: torch.Tensor) -> None:
@@ -465,6 +473,35 @@ class Orchestrator:
                 if storage_id not in self._storage_to_tensors_map:
                     self._storage_to_tensors_map[storage_id] = set()
                 self._storage_to_tensors_map[storage_id].add(tensor_id)
+
+    def link_tensors(self, local_tensors: List[torch.Tensor], temp_keys: List[str]) -> None:
+        """Link local tensors to remote tensors from temporary registry.
+
+        Args:
+            local_tensors: List of local mycelya tensors to link
+            temp_keys: List of temporary keys from remote execution
+
+        Note: All tensors must be on the same device.
+        """
+        if not local_tensors or not temp_keys:
+            return
+
+        if len(local_tensors) != len(temp_keys):
+            raise ValueError(
+                f"Mismatch between tensors ({len(local_tensors)}) and temp keys ({len(temp_keys)})"
+            )
+
+        # Extract tensor IDs from tensors
+        local_tensor_ids = [get_tensor_id(tensor) for tensor in local_tensors]
+
+        # Get the machine from the first tensor (all should be on same device)
+        first_tensor = local_tensors[0]
+        storage_id = get_storage_id(first_tensor)
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        client = self._clients[machine_id]
+
+        # Delegate to client
+        client.link_tensors(local_tensor_ids, temp_keys)
 
     def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
         """Resolve pending CPU tensor futures for a client."""

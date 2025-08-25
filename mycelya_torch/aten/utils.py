@@ -127,9 +127,13 @@ def _has_static_output_shape(
     # Always dynamic operations (output shape depends on data)
     ALWAYS_DYNAMIC = {
         "aten.masked_select",
+        "aten.masked_select.default",
         "aten.nonzero",
+        "aten.nonzero.default",
         "aten.unique",
+        "aten.unique.default",
         "aten._unique2",
+        "aten._unique2.default",
     }
     if op_name in ALWAYS_DYNAMIC:
         return False

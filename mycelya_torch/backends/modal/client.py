@@ -9,7 +9,7 @@ along with related functionality for creating and managing Modal applications.
 """
 
 from collections import deque
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
 
@@ -193,26 +193,22 @@ class ModalClient(Client):
     def _execute_aten_operation_impl(
         self,
         op_name: str,
-        input_tensor_ids: List[int],
-        output_tensor_ids: List[int],
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        return_metadata: bool = False,
+        output_tensor_ids: Optional[List[int]] = None,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         # Call Modal method and capture FunctionCall if returning metadata
         func_call = self._server_instance.execute_aten_operation.spawn(
             op_name,
-            input_tensor_ids,
-            output_tensor_ids,
             args,
             kwargs,
             tensor_mask,
-            return_metadata,
+            output_tensor_ids,
         )
-        # Only track FunctionCall if expecting a return value
-        if return_metadata:
+        # Only track FunctionCall if expecting a return value for dynamic operations
+        if output_tensor_ids is None:
             self._pending_results.append(func_call)
 
     # HuggingFace model loading methods

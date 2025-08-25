@@ -13,7 +13,7 @@ This module handles all Modal-specific functionality including:
 Part of: mycelya_torch PyTorch extension
 """
 
-from typing import Any, Dict, List, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 import modal
 
@@ -360,82 +360,114 @@ def create_modal_app_for_gpu(
         def _execute_aten_operation_impl(
             self,
             op_name: str,
-            input_tensor_ids: List[int],
-            output_tensor_ids: List[int],
             args: List[Any],
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
-            return_metadata: bool = False,
+            output_tensor_ids: Optional[List[int]] = None,
         ):
             """Implementation of execute_aten_operation without Modal decorators."""
+            import uuid
+
             import torch
 
             # Get tensor registry
             tensor_registry = self._tensor_registry
 
-            # Reconstruct input tensors from tensor registry
-            input_tensors = []
-            for tensor_id in input_tensor_ids:
-                # Check if tensor exists in registry
-                if tensor_id in tensor_registry:
-                    tensor = tensor_registry[tensor_id]
-                else:
-                    # Tensor missing from registry - this shouldn't happen with proper orchestrator management
-                    raise ValueError(
-                        f"Input tensor ID {tensor_id} not found in registry"
-                    )
-
-                input_tensors.append(tensor)
-
-            # Replace tensor IDs with actual tensors using tensor mask
-            tensor_index = 0
+            # Two-pass algorithm: First pass - extract tensor IDs
+            tensor_ids = []
             mask_index = 0
 
-            def replace_tensor_id_with_tensor(obj):
-                """Replace tensor ID with actual tensor, consuming mask once per call."""
-                nonlocal tensor_index, mask_index
+            def extract_tensor_ids_pass(obj):
+                """First pass: Extract tensor IDs from args/kwargs using tensor mask."""
+                nonlocal mask_index
 
                 if mask_index >= len(tensor_mask):
                     raise IndexError(
-                        f"Mask index {mask_index} out of range (have {len(tensor_mask)} mask entries)"
+                        f"Tensor mask index {mask_index} out of range for operation {op_name}. "
+                        f"Expected {len(tensor_mask)} entries but processing more arguments."
                     )
 
                 is_tensor = tensor_mask[mask_index]
                 mask_index += 1
 
                 if is_tensor:
-                    # Expecting a tensor ID (integer), replace with actual tensor
-                    if tensor_index < len(input_tensors):
-                        result = input_tensors[tensor_index]
-                        tensor_index += 1
-                        return result
-                    else:
-                        raise IndexError(
-                            f"Tensor index {tensor_index} out of range (have {len(input_tensors)} input tensors)"
+                    if not isinstance(obj, int):
+                        raise ValueError(
+                            f"Expected tensor ID (int) for operation {op_name}, got {type(obj).__name__}: {obj}"
                         )
+                    tensor_ids.append(obj)
+
+                    # Validate tensor exists in registry
+                    if obj not in tensor_registry:
+                        raise RuntimeError(
+                            f"Tensor ID {obj} not found in registry for operation {op_name}. "
+                            f"Available tensor IDs: {list(tensor_registry.keys())}"
+                        )
+
+            # Process args and kwargs to extract tensor IDs
+            for arg in args:
+                if isinstance(arg, (list, tuple)):
+                    for item in arg:
+                        extract_tensor_ids_pass(item)
+                else:
+                    extract_tensor_ids_pass(arg)
+
+            for _key, value in kwargs.items():
+                if isinstance(value, (list, tuple)):
+                    for item in value:
+                        extract_tensor_ids_pass(item)
+                else:
+                    extract_tensor_ids_pass(value)
+
+            # Second pass - reconstruct args/kwargs with actual tensors
+            tensor_index = 0
+            mask_index = 0
+
+            def replace_with_tensor_pass(obj):
+                """Second pass: Replace tensor IDs with actual tensors using tensor mask."""
+                nonlocal tensor_index, mask_index
+
+                if mask_index >= len(tensor_mask):
+                    raise IndexError(
+                        f"Tensor mask index {mask_index} out of range for operation {op_name}. "
+                        f"Expected {len(tensor_mask)} entries but processing more arguments."
+                    )
+
+                is_tensor = tensor_mask[mask_index]
+                mask_index += 1
+
+                if is_tensor:
+                    if tensor_index >= len(tensor_ids):
+                        raise RuntimeError(
+                            f"Tensor index {tensor_index} out of range for operation {op_name}. "
+                            f"Available tensor count: {len(tensor_ids)}"
+                        )
+                    tensor_id = tensor_ids[tensor_index]
+                    tensor_index += 1
+                    return tensor_registry[tensor_id]
                 return obj
 
-            # Iterate over args (matching client-side structure exactly)
+            # Reconstruct args with tensors
             processed_args = []
             for arg in args:
                 if isinstance(arg, (list, tuple)):
                     processed_arg = []
                     for item in arg:
-                        processed_arg.append(replace_tensor_id_with_tensor(item))
+                        processed_arg.append(replace_with_tensor_pass(item))
                     processed_args.append(type(arg)(processed_arg))
                 else:
-                    processed_args.append(replace_tensor_id_with_tensor(arg))
+                    processed_args.append(replace_with_tensor_pass(arg))
 
-            # Iterate over kwargs values (matching client-side structure exactly)
+            # Reconstruct kwargs with tensors
             processed_kwargs = {}
             for key, value in kwargs.items():
                 if isinstance(value, (list, tuple)):
                     processed_value = []
                     for item in value:
-                        processed_value.append(replace_tensor_id_with_tensor(item))
+                        processed_value.append(replace_with_tensor_pass(item))
                     processed_kwargs[key] = type(value)(processed_value)
                 else:
-                    processed_kwargs[key] = replace_tensor_id_with_tensor(value)
+                    processed_kwargs[key] = replace_with_tensor_pass(value)
 
             # Get the operation
             op_parts = op_name.split(".")
@@ -455,56 +487,70 @@ def create_modal_app_for_gpu(
                 else []
             )
 
-            # Enforce contract: output_tensor_ids and result_tensors must have same length
-            if len(output_tensor_ids) != len(result_tensors):
-                raise RuntimeError(
-                    f"Contract violation in {op_name}: output_tensor_ids length ({len(output_tensor_ids)}) "
-                    f"!= result_tensors length ({len(result_tensors)}). This indicates a bug in the client-side "
-                    f"meta tensor execution or output tensor creation."
-                )
-
-            # Store result tensors in tensor registry
-            for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
-                tensor_registry[tensor_id] = result_tensor
-
-            # Return metadata if requested
-            if return_metadata:
+            if output_tensor_ids is None:
+                # Dynamic operation: store in temp registry and return metadata with temp_key embedded
+                temp_tensor_registry = self._temp_tensor_registry
                 output_metadata = []
+
                 for i, result_tensor in enumerate(result_tensors):
-                    if i < len(output_tensor_ids):
-                        metadata = {
-                            "shape": list(result_tensor.shape),
-                            "dtype": self._dtype_to_str(result_tensor.dtype),
-                            "stride": list(result_tensor.stride()),
-                            "storage_offset": result_tensor.storage_offset(),
-                            "storage_nelements": result_tensor.untyped_storage().nbytes()
-                            // result_tensor.element_size(),
-                        }
-                        output_metadata.append(metadata)
+                    # Generate collision-safe temp key with debugging context
+                    temp_key = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
+
+                    # Store tensor in temp registry
+                    temp_tensor_registry[temp_key] = result_tensor
+
+                    # Create metadata with temp_key embedded
+                    metadata = {
+                        "shape": list(result_tensor.shape),
+                        "dtype": self._dtype_to_str(result_tensor.dtype),
+                        "stride": list(result_tensor.stride()),
+                        "storage_offset": result_tensor.storage_offset(),
+                        "storage_nelements": result_tensor.untyped_storage().nbytes()
+                        // result_tensor.element_size(),
+                        "temp_key": temp_key,  # Embed temp_key in metadata
+                    }
+                    output_metadata.append(metadata)
 
                 return output_metadata
+            else:
+                # Static operation: store in main registry using provided tensor IDs
+                # Enforce contract: output_tensor_ids and result_tensors must have same length
+                if len(output_tensor_ids) != len(result_tensors):
+                    raise RuntimeError(
+                        f"Contract violation in {op_name}: output_tensor_ids length ({len(output_tensor_ids)}) "
+                        f"!= result_tensors length ({len(result_tensors)}). This indicates a bug in the client-side "
+                        f"meta tensor execution or output tensor creation."
+                    )
+
+                # Store result tensors in tensor registry
+                for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
+                    tensor_registry[tensor_id] = result_tensor
 
         @modal.method()
         def execute_aten_operation(
             self,
             op_name: str,
-            input_tensor_ids: List[int],
-            output_tensor_ids: List[int],
             args: List[Any],
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
-            return_metadata: bool = False,
+            output_tensor_ids: Optional[List[int]] = None,
         ):
-            """Execute an aten operation on the remote machine with input tensor IDs."""
-            return self._execute_aten_operation_impl(
+            """Execute an aten operation on the remote machine."""
+            result = self._execute_aten_operation_impl(
                 op_name,
-                input_tensor_ids,
-                output_tensor_ids,
                 args,
                 kwargs,
                 tensor_mask,
-                return_metadata,
+                output_tensor_ids,
             )
+
+            # Handle return format based on whether this is a dynamic operation
+            if output_tensor_ids is None:
+                # Dynamic operation: result is metadata list with temp_key embedded
+                return result
+            else:
+                # Static operation: no return value needed
+                return None
 
         def _prepare_huggingface_model_impl(
             self,
