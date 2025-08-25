@@ -397,15 +397,12 @@ class Orchestrator:
         if output_tensors is not None:
             # Static operation: register tensor-storage mappings and invalidate caches
             for output_tensor in output_tensors:
-                try:
-                    tensor_id = get_tensor_id(output_tensor)
-                    storage_id = get_storage_id(output_tensor)
-                    # Update storage -> tensors mapping
-                    if storage_id not in self._storage_to_tensors_map:
-                        self._storage_to_tensors_map[storage_id] = set()
-                    self._storage_to_tensors_map[storage_id].add(tensor_id)
-                except Exception as e:
-                    log.debug(f"Could not register output tensor-storage mapping: {e}")
+                tensor_id = get_tensor_id(output_tensor)
+                storage_id = get_storage_id(output_tensor)
+                # Update storage -> tensors mapping
+                if storage_id not in self._storage_to_tensors_map:
+                    self._storage_to_tensors_map[storage_id] = set()
+                self._storage_to_tensors_map[storage_id].add(tensor_id)
 
             # Simple and robust cache invalidation: treat all output tensors as mutated
             self.storage.invalidate_storage_caches(
@@ -427,9 +424,6 @@ class Orchestrator:
         tensor_id = get_tensor_id(tensor)
         storage_id = get_storage_id(tensor)
 
-        log.debug(
-            f"Ensuring tensor {tensor_id} with storage {storage_id} exists on client"
-        )
 
         # Get client from tensor's storage
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
@@ -464,9 +458,6 @@ class Orchestrator:
             # Storage exists - check if this specific tensor ID exists in orchestrator mapping
             if tensor_id not in self._storage_to_tensors_map[storage_id]:
                 # Need to create a view of an existing tensor
-                log.debug(
-                    f"Creating tensor view {tensor_id} from existing storage {storage_id}"
-                )
                 # Find any existing tensor ID for this storage as the base
                 base_tensor_id = self._get_tensor_id_for_storage(storage_id)
                 client.create_tensor_view(

@@ -222,9 +222,6 @@ class Driver:
         # In a real implementation, this might create actual event objects
         # but for remote execution, we just need unique identifiers
         event_id = self.runtime_manager.get_new_event_id()
-        log.debug(
-            f"Created event ID {event_id} on device {device_idx} with flag {flag}"
-        )
         return event_id
 
     @register(registry)

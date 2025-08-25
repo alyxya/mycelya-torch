@@ -44,9 +44,6 @@ def _execute_meta_operation(
             if "out" in meta_kwargs and isinstance(meta_kwargs["out"], torch.Tensor):
                 meta_out = meta_kwargs["out"]
                 if meta_out.shape != out_tensor.shape:
-                    log.debug(
-                        f"Resizing empty 'out' tensor from {out_tensor.shape} to {meta_out.shape}"
-                    )
                     out_tensor.resize_(meta_out.shape)
 
     return meta_result, original_tensors

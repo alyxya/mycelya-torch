@@ -179,7 +179,6 @@ def create_huggingface_model_from_remote(
     # Track storage sharing: remote_storage_id -> local_base_tensor
 
     for name, param_metadata in state_dict_metadata.items():
-        log.debug(f"Creating remote tensor stub for parameter: {name}")
 
         # Create remote tensor stub (this will generate a local storage ID)
         remote_tensor = create_remote_tensor_stub(
@@ -214,13 +213,9 @@ def create_huggingface_model_from_remote(
 
         # Replace parameter in model
         _set_nested_parameter(model, name, nn.Parameter(remote_tensor))
-        log.debug(
-            f"Replaced parameter {name} with remote tensor (local_storage_id={local_storage_id})"
-        )
 
     # Step 4: Replace buffers with remote tensor stubs
     for name, buffer_meta in buffer_metadata.items():
-        log.debug(f"Creating remote tensor stub for buffer: {name}")
 
         # Create remote tensor stub (buffers don't require gradients)
         remote_tensor = create_remote_tensor_stub(
@@ -255,9 +250,6 @@ def create_huggingface_model_from_remote(
 
         # Replace buffer in model
         _set_nested_buffer(model, name, remote_tensor)
-        log.debug(
-            f"Replaced buffer {name} with remote tensor (local_storage_id={local_storage_id})"
-        )
 
     # Step 4.5: Handle weight tying for parameters not in state_dict_metadata
     _handle_tied_weights(model, state_dict_metadata, {})

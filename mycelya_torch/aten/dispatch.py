@@ -34,7 +34,6 @@ def _execute_aten_operation(
 
     # Step 1: Check if operation requires dynamic output handling
     has_static_output = _has_static_output_shape(op_name, args, kwargs)
-    log.debug(f"🔍 Operation {op_name} has static output shape: {has_static_output}")
 
     if has_static_output:
         # Standard path: Use meta tensors for shape inference
