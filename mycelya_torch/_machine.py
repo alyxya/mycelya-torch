@@ -75,7 +75,7 @@ class RemoteMachine:
     def __init__(
         self,
         provider: Union[str, CloudProvider],
-        gpu_type: Union[str, GPUType, None] = None,
+        gpu_type: Optional[Union[str, GPUType]] = None,
         start: bool = True,
         _batching: bool = True,
     ) -> None:

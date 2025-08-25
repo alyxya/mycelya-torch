@@ -483,7 +483,7 @@ class Client(ABC):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         output_tensor_ids: Optional[List[int]] = None,
-    ) -> Union[Future[List[Dict[str, Any]]], None]:
+    ) -> Optional[Future[List[Dict[str, Any]]]]:
         """
         Execute an aten operation on the remote machine.
 
