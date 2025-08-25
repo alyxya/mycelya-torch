@@ -7,7 +7,7 @@ import torch
 
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import get_tensor_id
+from .._utils import dtype_to_str, get_tensor_id
 
 log = get_logger(__name__)
 
@@ -118,7 +118,6 @@ def _execute_with_dynamic_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ..
     metadata = result[0]
     
     # Validate dtype
-    from .._utils import dtype_to_str
     if dtype_to_str(output_tensor.dtype) != metadata["dtype"]:
         raise RuntimeError(f"Dtype mismatch for {op_name}: expected {dtype_to_str(output_tensor.dtype)}, got {metadata['dtype']}")
 
