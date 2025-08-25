@@ -49,7 +49,7 @@ def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_de
             if meta_output.stride() != tensor.stride():
                 tensor = torch.as_strided(tensor, meta_output.shape, meta_output.stride(), meta_output.storage_offset())
             output_tensors.append(tensor)
-            output_tensor_ids.append(str(get_tensor_id(tensor)))
+            output_tensor_ids.append(get_tensor_id(tensor))
 
     return output_tensors, output_tensor_ids
 
