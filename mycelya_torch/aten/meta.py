@@ -6,8 +6,7 @@ from typing import Any, Dict, List, Tuple
 import torch
 
 from .._logging import get_logger
-
-# Lazy import of orchestrator to avoid circular imports
+from .._orchestrator import orchestrator
 from .._utils import get_tensor_id
 
 log = get_logger(__name__)
@@ -176,7 +175,6 @@ def _execute_with_static_outputs(
         output_tensors = []
 
     # Step 4: Execute remotely
-    from .._orchestrator import orchestrator
     orchestrator.execute_aten_operation(
         op_name,
         args,
@@ -227,7 +225,6 @@ def _execute_with_dynamic_outputs(
         output_tensor = torch.empty(0, dtype=output_dtype, device=remote_device)
 
     # Step 3: Execute remotely as dynamic operation (no output tensors provided)
-    from .._orchestrator import orchestrator
     result = orchestrator.execute_aten_operation(
         op_name,
         args,
@@ -277,8 +274,6 @@ def _execute_with_dynamic_outputs(
     temp_key = metadata["temp_key"]
 
     # Link through orchestrator (proper architecture)
-    from .._orchestrator import orchestrator
-
     orchestrator.link_tensors([output_tensor], [temp_key])
 
     # Step 6: Return single tensor result

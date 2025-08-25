@@ -20,8 +20,7 @@ import torch
 from ._device import device_manager
 from ._logging import get_logger
 from ._storage import StorageManager
-from ._utils import dtype_to_str, get_storage_id, get_tensor_id
-from .aten.utils import args_to_tensors_with_ids_and_mask
+from ._utils import args_to_tensors_with_ids_and_mask, dtype_to_str, get_storage_id, get_tensor_id
 from .backends.base_client import Client
 
 log = get_logger(__name__)

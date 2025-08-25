@@ -3,6 +3,8 @@
 
 import torch
 
+from .._orchestrator import orchestrator
+
 
 def _local_scalar_dense(self: torch.Tensor):
     """Custom implementation of _local_scalar_dense for remote tensors."""
@@ -13,8 +15,6 @@ def _local_scalar_dense(self: torch.Tensor):
         )
 
     # Get scalar value from remote device
-    # Import orchestrator lazily to avoid circular imports
-    from .._orchestrator import orchestrator
 
     # Use orchestrator's new async copy method
     cpu_future = orchestrator.copy_tensor_to_cpu(self)
