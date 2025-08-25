@@ -80,11 +80,9 @@ def args_to_tensors_with_ids_and_mask(
     kwargs: Dict[str, Any],
 ) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[torch.Tensor], List[bool]]:
     """Convert args/kwargs, replacing remote tensors with tensor IDs and collecting tensors."""
-    tensor_list: List[torch.Tensor] = []
-    tensor_mask: List[bool] = []
+    tensor_list, tensor_mask = [], []
 
-    def replace_remote_tensor_with_id(obj):
-        """Replace remote tensors with tensor IDs and collect tensors."""
+    def process(obj):
         if isinstance(obj, torch.Tensor):
             tensor_list.append(obj)
             tensor_mask.append(True)
@@ -92,26 +90,12 @@ def args_to_tensors_with_ids_and_mask(
         tensor_mask.append(False)
         return obj
 
-    # Iterate over args
-    processed_args = []
-    for arg in args:
-        if isinstance(arg, (list, tuple)):
-            processed_arg = []
-            for item in arg:
-                processed_arg.append(replace_remote_tensor_with_id(item))
-            processed_args.append(type(arg)(processed_arg))
-        else:
-            processed_args.append(replace_remote_tensor_with_id(arg))
+    def process_container(container):
+        if isinstance(container, (list, tuple)):
+            return type(container)(process(item) for item in container)
+        return process(container)
 
-    # Iterate over kwargs values
-    processed_kwargs = {}
-    for key, value in kwargs.items():
-        if isinstance(value, (list, tuple)):
-            processed_value = []
-            for item in value:
-                processed_value.append(replace_remote_tensor_with_id(item))
-            processed_kwargs[key] = type(value)(processed_value)
-        else:
-            processed_kwargs[key] = replace_remote_tensor_with_id(value)
+    processed_args = tuple(process_container(arg) for arg in args)
+    processed_kwargs = {k: process_container(v) for k, v in kwargs.items()}
 
-    return tuple(processed_args), processed_kwargs, tensor_list, tensor_mask
+    return processed_args, processed_kwargs, tensor_list, tensor_mask
