@@ -367,164 +367,73 @@ def create_modal_app_for_gpu(
         ):
             """Implementation of execute_aten_operation without Modal decorators."""
             import uuid
-
             import torch
 
-            # Get tensor registry
             tensor_registry = self._tensor_registry
+            
+            # Process args/kwargs with two-pass algorithm: extract IDs then replace with tensors
+            tensor_ids, mask_index = [], 0
 
-            # Two-pass algorithm: First pass - extract tensor IDs
-            tensor_ids = []
-            mask_index = 0
-
-            def extract_tensor_ids_pass(obj):
-                """First pass: Extract tensor IDs from args/kwargs using tensor mask."""
+            def process_item(obj, extract_ids=True):
                 nonlocal mask_index
-
                 if mask_index >= len(tensor_mask):
-                    raise IndexError(
-                        f"Tensor mask index {mask_index} out of range for operation {op_name}. "
-                        f"Expected {len(tensor_mask)} entries but processing more arguments."
-                    )
-
+                    raise IndexError(f"Tensor mask out of range for {op_name}")
+                
                 is_tensor = tensor_mask[mask_index]
                 mask_index += 1
-
+                
                 if is_tensor:
-                    if not isinstance(obj, int):
-                        raise ValueError(
-                            f"Expected tensor ID (int) for operation {op_name}, got {type(obj).__name__}: {obj}"
-                        )
-                    tensor_ids.append(obj)
-
-                    # Validate tensor exists in registry
-                    if obj not in tensor_registry:
-                        raise RuntimeError(
-                            f"Tensor ID {obj} not found in registry for operation {op_name}. "
-                            f"Available tensor IDs: {list(tensor_registry.keys())}"
-                        )
-
-            # Process args and kwargs to extract tensor IDs
-            for arg in args:
-                if isinstance(arg, (list, tuple)):
-                    for item in arg:
-                        extract_tensor_ids_pass(item)
-                else:
-                    extract_tensor_ids_pass(arg)
-
-            for _key, value in kwargs.items():
-                if isinstance(value, (list, tuple)):
-                    for item in value:
-                        extract_tensor_ids_pass(item)
-                else:
-                    extract_tensor_ids_pass(value)
-
-            # Second pass - reconstruct args/kwargs with actual tensors
-            tensor_index = 0
-            mask_index = 0
-
-            def replace_with_tensor_pass(obj):
-                """Second pass: Replace tensor IDs with actual tensors using tensor mask."""
-                nonlocal tensor_index, mask_index
-
-                if mask_index >= len(tensor_mask):
-                    raise IndexError(
-                        f"Tensor mask index {mask_index} out of range for operation {op_name}. "
-                        f"Expected {len(tensor_mask)} entries but processing more arguments."
-                    )
-
-                is_tensor = tensor_mask[mask_index]
-                mask_index += 1
-
-                if is_tensor:
-                    if tensor_index >= len(tensor_ids):
-                        raise RuntimeError(
-                            f"Tensor index {tensor_index} out of range for operation {op_name}. "
-                            f"Available tensor count: {len(tensor_ids)}"
-                        )
-                    tensor_id = tensor_ids[tensor_index]
-                    tensor_index += 1
-                    return tensor_registry[tensor_id]
+                    if extract_ids:
+                        if not isinstance(obj, int) or obj not in tensor_registry:
+                            raise ValueError(f"Invalid tensor ID {obj} for {op_name}")
+                        tensor_ids.append(obj)
+                    else:
+                        return tensor_registry[tensor_ids.pop(0)]
                 return obj
 
-            # Reconstruct args with tensors
-            processed_args = []
-            for arg in args:
-                if isinstance(arg, (list, tuple)):
-                    processed_arg = []
-                    for item in arg:
-                        processed_arg.append(replace_with_tensor_pass(item))
-                    processed_args.append(type(arg)(processed_arg))
-                else:
-                    processed_args.append(replace_with_tensor_pass(arg))
+            def process_container(container, extract_ids=True):
+                return type(container)([process_item(item, extract_ids) for item in container]) if isinstance(container, (list, tuple)) else process_item(container, extract_ids)
 
-            # Reconstruct kwargs with tensors
-            processed_kwargs = {}
-            for key, value in kwargs.items():
-                if isinstance(value, (list, tuple)):
-                    processed_value = []
-                    for item in value:
-                        processed_value.append(replace_with_tensor_pass(item))
-                    processed_kwargs[key] = type(value)(processed_value)
-                else:
-                    processed_kwargs[key] = replace_with_tensor_pass(value)
+            # First pass: extract tensor IDs
+            for arg in args: process_container(arg, True)
+            for value in kwargs.values(): process_container(value, True)
 
-            # Get the operation
-            op_parts = op_name.split(".")
+            # Second pass: replace with tensors  
+            mask_index = 0
+            processed_args = [process_container(arg, False) for arg in args]
+            processed_kwargs = {k: process_container(v, False) for k, v in kwargs.items()}
+
+            # Execute operation
             op = torch.ops
-            for part in op_parts:
-                op = getattr(op, part)
-
-            # Execute the operation on input tensors - this will create result tensors
+            for part in op_name.split("."): op = getattr(op, part)
             result = op(*processed_args, **processed_kwargs)
 
-            # Handle output tensors
-            result_tensors = (
-                [result]
-                if isinstance(result, torch.Tensor)
-                else list(result)
-                if isinstance(result, (list, tuple))
-                else []
-            )
+            # Normalize result to list
+            result_tensors = [result] if isinstance(result, torch.Tensor) else list(result) if isinstance(result, (list, tuple)) else []
 
+            # Handle static vs dynamic operations
             if output_tensor_ids is None:
-                # Dynamic operation: store in temp registry and return metadata with temp_key embedded
-                temp_tensor_registry = self._temp_tensor_registry
+                # Dynamic: return metadata with temp keys
+                temp_registry = self._temp_tensor_registry
                 output_metadata = []
-
-                for i, result_tensor in enumerate(result_tensors):
-                    # Generate collision-safe temp key with debugging context
+                for i, t in enumerate(result_tensors):
                     temp_key = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
-
-                    # Store tensor in temp registry
-                    temp_tensor_registry[temp_key] = result_tensor
-
-                    # Create metadata with temp_key embedded
-                    metadata = {
-                        "shape": list(result_tensor.shape),
-                        "dtype": self._dtype_to_str(result_tensor.dtype),
-                        "stride": list(result_tensor.stride()),
-                        "storage_offset": result_tensor.storage_offset(),
-                        "storage_nelements": result_tensor.untyped_storage().nbytes()
-                        // result_tensor.element_size(),
-                        "temp_key": temp_key,  # Embed temp_key in metadata
-                    }
-                    output_metadata.append(metadata)
-
+                    temp_registry[temp_key] = t
+                    output_metadata.append({
+                        "shape": list(t.shape), 
+                        "dtype": self._dtype_to_str(t.dtype), 
+                        "stride": list(t.stride()), 
+                        "storage_offset": t.storage_offset(),
+                        "storage_nelements": t.untyped_storage().nbytes() // t.element_size(),
+                        "temp_key": temp_key
+                    })
                 return output_metadata
             else:
-                # Static operation: store in main registry using provided tensor IDs
-                # Enforce contract: output_tensor_ids and result_tensors must have same length
+                # Static: store in main registry
                 if len(output_tensor_ids) != len(result_tensors):
-                    raise RuntimeError(
-                        f"Contract violation in {op_name}: output_tensor_ids length ({len(output_tensor_ids)}) "
-                        f"!= result_tensors length ({len(result_tensors)}). This indicates a bug in the client-side "
-                        f"meta tensor execution or output tensor creation."
-                    )
-
-                # Store result tensors in tensor registry
-                for tensor_id, result_tensor in zip(output_tensor_ids, result_tensors):
-                    tensor_registry[tensor_id] = result_tensor
+                    raise RuntimeError(f"Output tensor count mismatch in {op_name}")
+                for tid, tensor in zip(output_tensor_ids, result_tensors):
+                    tensor_registry[tid] = tensor
 
         @modal.method()
         def execute_aten_operation(
