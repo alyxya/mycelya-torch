@@ -192,7 +192,7 @@ class Orchestrator:
 
         # Get machine_id from storage manager
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        
+
         # Ensure tensor exists on remote before copying
         self._maybe_create_tensor(tensor)
 
@@ -304,7 +304,7 @@ class Orchestrator:
         # Ensure both tensors exist on remote before copying
         self._maybe_create_tensor(source_tensor)
         self._maybe_create_tensor(target_tensor)
-        
+
         # Get client and perform copy
         client = self._clients[source_machine_id]
         source_tensor_id = get_tensor_id(source_tensor)
@@ -343,11 +343,11 @@ class Orchestrator:
             if isinstance(obj, torch.Tensor):
                 input_tensors.append(obj)
                 tensor_mask.append(True)
-                
+
                 # Validate and get device info through storage
                 storage_id = get_storage_id(obj)
                 tensor_device_info = self.storage.get_remote_device_info(storage_id)
-                
+
                 if remote_device_info is None:
                     remote_device_info = tensor_device_info
                 elif remote_device_info != tensor_device_info:
@@ -355,23 +355,23 @@ class Orchestrator:
                         f"Cannot perform operation {op_name} between different devices. "
                         f"Expected device {remote_device_info}, got {tensor_device_info}"
                     )
-                
+
                 # Ensure tensor exists on remote
                 self._maybe_create_tensor(obj)
                 return get_tensor_id(obj)
-            
+
             tensor_mask.append(False)
             return obj
 
         processed_args, processed_kwargs = map_args_kwargs(process_tensor, args, kwargs)
-        
+
         # Validate output tensors separately (they don't need tensor ID processing)
         if output_tensors:
             for output_tensor in output_tensors:
                 if isinstance(output_tensor, torch.Tensor):
                     storage_id = get_storage_id(output_tensor)
                     tensor_device_info = self.storage.get_remote_device_info(storage_id)
-                    
+
                     if remote_device_info is None:
                         remote_device_info = tensor_device_info
                     elif remote_device_info != tensor_device_info:
@@ -379,7 +379,7 @@ class Orchestrator:
                             f"Cannot perform operation {op_name} between different devices. "
                             f"Expected device {remote_device_info}, got {tensor_device_info}"
                         )
-        
+
         client = self._clients[remote_device_info[0]]  # Extract machine_id from (machine_id, device_type, device_index)
 
         # Execute with simplified client interface
@@ -399,10 +399,10 @@ class Orchestrator:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
                 self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
-            
+
             self.storage.invalidate_storage_caches([get_storage_id(t) for t in output_tensors])
             return None
-        
+
         # Dynamic operation: get result and return metadata for tensor linking
         if result_future is not None:
             self._main_thread_waiting.set()
@@ -552,7 +552,7 @@ class Orchestrator:
                         # Process CPU tensor futures for this client
                         self._resolve_cpu_tensor_futures(machine_id)
                     except Exception as e:
-                        log.error(f"Error in background maintenance for client: {e}")
+                        log.error(f"Error in background thread for client: {e}")
 
             # Yield to the main thread before waiting
             time.sleep(0)
