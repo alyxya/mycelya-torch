@@ -409,8 +409,6 @@ class Orchestrator:
             result = result_future.result()
             self._main_thread_waiting.clear()
             return result
-        
-        return None
 
     def _maybe_create_tensor(self, tensor: torch.Tensor) -> None:
         """Ensure tensor exists on remote client using storage mapping logic.
