@@ -371,7 +371,6 @@ def create_modal_app_for_gpu(
 
             tensor_registry = self._tensor_registry
             
-            # Single pass: replace tensor IDs with tensors
             mask_iter = iter(tensor_mask)
 
             def process_item(obj):
@@ -384,7 +383,9 @@ def create_modal_app_for_gpu(
 
             # Execute operation
             op = torch.ops
-            for part in op_name.split("."): op = getattr(op, part)
+            op_parts = op_name.split(".")
+            for part in op_parts:
+                op = getattr(op, part)
             result = op(*processed_args, **processed_kwargs)
 
             # Normalize result to list
@@ -403,7 +404,7 @@ def create_modal_app_for_gpu(
                         "dtype": self._dtype_to_str(t.dtype), 
                         "stride": list(t.stride()), 
                         "storage_offset": t.storage_offset(),
-                        "storage_nelements": t.untyped_storage().nbytes() // t.element_size(),
+                        "nbytes": t.untyped_storage().nbytes(),
                         "temp_key": temp_key
                     })
                 return output_metadata

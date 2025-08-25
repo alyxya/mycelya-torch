@@ -113,7 +113,8 @@ def _execute_with_dynamic_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ..
         raise RuntimeError(f"Dtype mismatch for {op_name}: expected {dtype_to_str(output_tensor.dtype)}, got {metadata['dtype']}")
 
     # Update tensor shape and link to remote
-    output_tensor.resize_([metadata["storage_nelements"]])
+    storage_nelements = metadata["nbytes"] // output_tensor.element_size()
+    output_tensor.resize_([storage_nelements])
     output_tensor = torch.as_strided(output_tensor, metadata["shape"], metadata["stride"], metadata["storage_offset"])
     orchestrator.link_tensors([output_tensor], [metadata["temp_key"]])
 
