@@ -115,13 +115,24 @@ def _execute_with_dynamic_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ..
     return output_tensor
 
 
-def _execute_aten_operation(
-    op: torch._ops.OpOverload,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
-    remote_device: torch.device,
+def _remote_kernel_fallback(
+    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> Any:
-    """Execute operation on remote device - simplified from complex strategy pattern."""
+    """Execute PyTorch operations on remote devices using simple dispatch logic."""
+    
+    # Get remote device from first tensor (orchestrator will handle validation)
+    remote_device = None
+    for arg in args:
+        if isinstance(arg, torch.Tensor):
+            remote_device = arg.device
+            break
+    
+    if remote_device is None:
+        # Check kwargs for tensors
+        for value in kwargs.values():
+            if isinstance(value, torch.Tensor):
+                remote_device = value.device
+                break
 
     op_name = str(op)
 
@@ -135,8 +146,7 @@ def _execute_aten_operation(
 
     # Note: aten::view is now handled directly in C++ (view_mycelya) and won't reach this fallback
 
-    # Step 1: Check if operation requires dynamic output handling
-    # Always dynamic operations (output shape depends on data)
+    # Check if operation requires dynamic output handling
     ALWAYS_DYNAMIC = {
         "aten.masked_select",
         "aten.masked_select.default", 
@@ -164,25 +174,3 @@ def _execute_aten_operation(
     else:
         # Dynamic path: Create placeholder outputs and get metadata from remote execution
         return _execute_with_dynamic_outputs(op, args, kwargs, remote_device, op_name)
-
-
-def _remote_kernel_fallback(
-    op: torch._ops.OpOverload, *args: Any, **kwargs: Any
-) -> Any:
-    """Execute PyTorch operations on remote devices using simple dispatch logic."""
-    
-    # Get remote device from first tensor (orchestrator will handle validation)
-    remote_device = None
-    for arg in args:
-        if isinstance(arg, torch.Tensor):
-            remote_device = arg.device
-            break
-    
-    if remote_device is None:
-        # Check kwargs for tensors
-        for value in kwargs.values():
-            if isinstance(value, torch.Tensor):
-                remote_device = value.device
-                break
-    
-    return _execute_aten_operation(op, args, kwargs, remote_device)
