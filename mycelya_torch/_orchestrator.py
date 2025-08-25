@@ -192,6 +192,9 @@ class Orchestrator:
 
         # Get machine_id from storage manager
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        
+        # Ensure tensor exists on remote before copying
+        self._maybe_create_tensor(tensor)
 
         # First try to get cached storage future
         storage_future = self.storage.get_cached_storage(storage_id)
@@ -298,6 +301,10 @@ class Orchestrator:
                 f"Only CPU↔remote and same-machine transfers are allowed. Use CPU as intermediate."
             )
 
+        # Ensure both tensors exist on remote before copying
+        self._maybe_create_tensor(source_tensor)
+        self._maybe_create_tensor(target_tensor)
+        
         # Get client and perform copy
         client = self._clients[source_machine_id]
         source_tensor_id = get_tensor_id(source_tensor)
