@@ -11,13 +11,7 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from collections import deque
 from concurrent.futures import Future
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypedDict, Union
-
-if TYPE_CHECKING:
-    pass
-
-# Import utility functions
-
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call.
