@@ -75,6 +75,16 @@ def dtype_to_str(dtype: torch.dtype) -> str:
     return str(dtype).replace("torch.", "")
 
 
+def map_args_kwargs(func, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    """Lightweight function to apply func to all elements in args/kwargs, recursing into lists/tuples."""
+    def map_container(container):
+        if isinstance(container, (list, tuple)):
+            return type(container)(func(item) for item in container)
+        return func(container)
+
+    return tuple(map_container(arg) for arg in args), {k: map_container(v) for k, v in kwargs.items()}
+
+
 def args_to_tensors_with_ids_and_mask(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
@@ -90,12 +100,5 @@ def args_to_tensors_with_ids_and_mask(
         tensor_mask.append(False)
         return obj
 
-    def process_container(container):
-        if isinstance(container, (list, tuple)):
-            return type(container)(process(item) for item in container)
-        return process(container)
-
-    processed_args = tuple(process_container(arg) for arg in args)
-    processed_kwargs = {k: process_container(v) for k, v in kwargs.items()}
-
+    processed_args, processed_kwargs = map_args_kwargs(process, args, kwargs)
     return processed_args, processed_kwargs, tensor_list, tensor_mask

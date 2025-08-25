@@ -7,7 +7,7 @@ import torch
 
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import dtype_to_str, get_tensor_id
+from .._utils import dtype_to_str, get_tensor_id, map_args_kwargs
 
 log = get_logger(__name__)
 
@@ -33,13 +33,7 @@ def _execute_meta_operation(
                 meta_tensor = torch.as_strided(meta_tensor, obj.shape, obj.stride(), obj.storage_offset())
         return meta_tensor
 
-    def convert_container(container):
-        if isinstance(container, (list, tuple)):
-            return type(container)(to_meta_tensor(item) for item in container)
-        return to_meta_tensor(container)
-
-    meta_args = tuple(convert_container(arg) for arg in args)
-    meta_kwargs = {k: convert_container(v) for k, v in kwargs.items()}
+    meta_args, meta_kwargs = map_args_kwargs(to_meta_tensor, args, kwargs)
     meta_result = op(*meta_args, **meta_kwargs)
 
     # Special handling for "out" parameter: resize empty output tensors to match meta result

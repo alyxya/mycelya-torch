@@ -14,11 +14,12 @@ log = get_logger(__name__)
 def _validate_cross_device_operation(
     op_name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
 ) -> torch.device:
-    """Validate that all tensors are remote and on the same device. Returns the remote device."""
+    """Validate that all tensors are remote and on the same machine. Returns the remote device."""
+    remote_machine_id = None
     remote_device = None
 
     def check_tensor_device(obj):
-        nonlocal remote_device
+        nonlocal remote_machine_id, remote_device
         if isinstance(obj, torch.Tensor):
             if obj.device.type != "mycelya":
                 raise RuntimeError(
@@ -26,50 +27,25 @@ def _validate_cross_device_operation(
                     f'on device "{obj.device}".'
                 )
 
-            if remote_device is None:
+            # Get machine info through storage, not device index
+            from .._utils import get_storage_id
+            from .._orchestrator import orchestrator
+            
+            storage_id = get_storage_id(obj)
+            machine_id, _, _ = orchestrator.storage.get_remote_device_info(storage_id)
+
+            if remote_machine_id is None:
+                remote_machine_id = machine_id
                 remote_device = obj.device
-            elif remote_device != obj.device:
-                from .._device import device_manager
-
-                try:
-                    remote_info = device_manager.get_remote_device_info(
-                        remote_device.index
-                    )
-                    current_info = device_manager.get_remote_device_info(
-                        obj.device.index
-                    )
-
-                    if remote_info[0] != current_info[0]:  # machine_id
-                        raise RuntimeError(
-                            f'Cannot perform operation "{op_name}" between different machines'
-                        )
-                    elif remote_info[1:] != current_info[1:]:  # type and index
-                        raise RuntimeError(
-                            f'Cannot perform operation "{op_name}" between different devices'
-                        )
-                except Exception:
-                    pass
+            elif remote_machine_id != machine_id:
                 raise RuntimeError(
-                    f'Cannot perform operation "{op_name}" between tensors on different devices '
-                    f"({remote_device} and {obj.device})"
+                    f'Cannot perform operation "{op_name}" between different machines'
                 )
         return obj
 
-    # Iterate over args
-    for arg in args:
-        if isinstance(arg, (list, tuple)):
-            for item in arg:
-                check_tensor_device(item)
-        else:
-            check_tensor_device(arg)
-
-    # Iterate over kwargs values
-    for value in kwargs.values():
-        if isinstance(value, (list, tuple)):
-            for item in value:
-                check_tensor_device(item)
-        else:
-            check_tensor_device(value)
+    # Use map_args_kwargs to check all tensors
+    from .._utils import map_args_kwargs
+    map_args_kwargs(check_tensor_device, args, kwargs)
 
     if remote_device is None:
         raise RuntimeError(f'No remote tensors found for operation "{op_name}"')
