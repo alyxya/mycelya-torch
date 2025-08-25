@@ -134,11 +134,11 @@ def _remote_kernel_fallback(
 
     # Note: aten::view is now handled directly in C++ (view_mycelya) and won't reach this fallback
 
-    # Try meta tensor execution first, fall back to dynamic if it fails
+    # Try meta tensor execution first, fall back to dynamic if not implemented
     try:
         meta_result, original_tensors = _execute_meta_operation(op, args, kwargs)
         # Meta tensor execution succeeded - use static output path
         return _execute_with_static_outputs(op, args, kwargs, remote_device, op_name, meta_result, original_tensors)
-    except Exception:
-        # Meta tensor execution failed - operation has data-dependent output shape
+    except NotImplementedError:
+        # Operation doesn't support meta tensor execution - use dynamic output path
         return _execute_with_dynamic_outputs(op, args, kwargs, remote_device, op_name)
