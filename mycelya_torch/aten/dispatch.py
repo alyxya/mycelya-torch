@@ -33,25 +33,23 @@ def _execute_meta_operation(
     return meta_result, original_tensors
 
 
-def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_device: torch.device) -> tuple[List, List]:
+def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_device: torch.device) -> List:
     """Create output tensors based on meta execution results."""
-    output_tensors, output_tensor_ids = [], []
+    output_tensors = []
 
     for meta_output in meta_outputs:
         if meta_output in original_tensors:
             # Reuse original tensor (in-place operation)
             tensor = original_tensors[meta_output]
             output_tensors.append(tensor)
-            output_tensor_ids.append(get_tensor_id(tensor))
         else:
             # Create new tensor
             tensor = torch.empty(meta_output.shape, dtype=meta_output.dtype, device=remote_device)
             if meta_output.stride() != tensor.stride():
                 tensor = torch.as_strided(tensor, meta_output.shape, meta_output.stride(), meta_output.storage_offset())
             output_tensors.append(tensor)
-            output_tensor_ids.append(get_tensor_id(tensor))
 
-    return output_tensors, output_tensor_ids
+    return output_tensors
 
 
 def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device, op_name: str) -> Any:
@@ -72,7 +70,7 @@ def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...
                 out_tensor.resize_(meta_outputs[0].shape)
     
     # Create output tensors and execute remotely
-    output_tensors = _create_output_tensors(meta_outputs, original_tensors, remote_device)[0] if meta_outputs else []
+    output_tensors = _create_output_tensors(meta_outputs, original_tensors, remote_device) if meta_outputs else []
     orchestrator.execute_aten_operation(op_name, args, kwargs, output_tensors)
 
     # Correct shapes and return results
