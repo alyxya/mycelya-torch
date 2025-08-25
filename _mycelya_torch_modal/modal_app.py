@@ -371,29 +371,16 @@ def create_modal_app_for_gpu(
 
             tensor_registry = self._tensor_registry
             
-            # Two-pass algorithm: extract tensor IDs then replace with tensors
-            tensor_ids = []
+            # Single pass: replace tensor IDs with tensors
             mask_iter = iter(tensor_mask)
 
-            def extract_tensors(obj):
+            def process_item(obj):
                 if isinstance(obj, (list, tuple)):
-                    return [extract_tensors(item) for item in obj]
-                if next(mask_iter):
-                    tensor_ids.append(obj)
+                    return type(obj)(process_item(item) for item in obj)
+                return tensor_registry[obj] if next(mask_iter) else obj
 
-            def replace_tensors(obj):
-                if isinstance(obj, (list, tuple)):
-                    return type(obj)(replace_tensors(item) for item in obj)
-                return tensor_registry[tensor_ids.pop(0)] if next(mask_iter) else obj
-
-            # First pass: extract tensor IDs
-            for arg in args: extract_tensors(arg)
-            for value in kwargs.values(): extract_tensors(value)
-
-            # Second pass: replace with tensors
-            mask_iter = iter(tensor_mask)
-            processed_args = [replace_tensors(arg) for arg in args]
-            processed_kwargs = {k: replace_tensors(v) for k, v in kwargs.items()}
+            processed_args = [process_item(arg) for arg in args]
+            processed_kwargs = {k: process_item(v) for k, v in kwargs.items()}
 
             # Execute operation
             op = torch.ops
