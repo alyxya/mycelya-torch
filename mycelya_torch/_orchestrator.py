@@ -337,14 +337,17 @@ class Orchestrator:
                 all_tensors.append(obj)
                 tensor_mask.append(True)
                 
-                # Validate and get machine_id through storage
+                # Validate and get device info through storage
                 storage_id = get_storage_id(obj)
-                tensor_machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+                tensor_device_info = self.storage.get_remote_device_info(storage_id)
                 
                 if machine_id is None:
-                    machine_id = tensor_machine_id
-                elif machine_id != tensor_machine_id:
-                    raise RuntimeError(f"Cannot perform operation {op_name} between different machines")
+                    machine_id = tensor_device_info
+                elif machine_id != tensor_device_info:
+                    raise RuntimeError(
+                        f"Cannot perform operation {op_name} between different devices. "
+                        f"Expected device {machine_id}, got {tensor_device_info}"
+                    )
                 
                 # Ensure tensor exists on remote
                 self._maybe_create_tensor(obj)
@@ -362,7 +365,7 @@ class Orchestrator:
         if not all_tensors:
             raise RuntimeError(f"No input tensors provided for operation {op_name}")
         
-        client = self._clients[machine_id]
+        client = self._clients[machine_id[0]]  # machine_id is (machine_id, device_type, device_index)
 
         # Execute with simplified client interface
         output_tensor_ids = [get_tensor_id(t) for t in output_tensors] if output_tensors else None
