@@ -8,7 +8,6 @@ import torch
 from .._logging import get_logger
 from .._orchestrator import orchestrator
 from .._utils import dtype_to_str, get_tensor_id, map_args_kwargs
-from .utils import _has_static_output_shape, _validate_cross_device_operation
 
 log = get_logger(__name__)
 
@@ -143,7 +142,27 @@ def _execute_aten_operation(
     # Note: aten::view is now handled directly in C++ (view_mycelya) and won't reach this fallback
 
     # Step 1: Check if operation requires dynamic output handling
-    has_static_output = _has_static_output_shape(op_name, args, kwargs)
+    # Always dynamic operations (output shape depends on data)
+    ALWAYS_DYNAMIC = {
+        "aten.masked_select",
+        "aten.masked_select.default", 
+        "aten.nonzero",
+        "aten.nonzero.default",
+        "aten.unique",
+        "aten.unique.default",
+        "aten._unique2",
+        "aten._unique2.default",
+    }
+    
+    has_static_output = True
+    if op_name in ALWAYS_DYNAMIC:
+        has_static_output = False
+    elif op_name == "aten.index" and len(args) >= 2 and isinstance(args[1], (tuple, list)):
+        # Boolean indexing is dynamic, tensor indexing is static
+        has_static_output = not any(
+            isinstance(idx, torch.Tensor) and idx.dtype == torch.bool
+            for idx in args[1] if idx is not None
+        )
 
     if has_static_output:
         # Standard path: Use meta tensors for shape inference
@@ -157,11 +176,19 @@ def _remote_kernel_fallback(
     op: torch._ops.OpOverload, *args: Any, **kwargs: Any
 ) -> Any:
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
-    op_name = str(op)
-
-    # Validate cross-device operations upfront and get the remote device
-    remote_device = _validate_cross_device_operation(op_name, args, kwargs)
-
-    # All operations go through standard aten dispatch
-    # View operations are now handled by PyTorch's built-in mechanisms
+    
+    # Get remote device from first tensor (orchestrator will handle validation)
+    remote_device = None
+    for arg in args:
+        if isinstance(arg, torch.Tensor):
+            remote_device = arg.device
+            break
+    
+    if remote_device is None:
+        # Check kwargs for tensors
+        for value in kwargs.values():
+            if isinstance(value, torch.Tensor):
+                remote_device = value.device
+                break
+    
     return _execute_aten_operation(op, args, kwargs, remote_device)
