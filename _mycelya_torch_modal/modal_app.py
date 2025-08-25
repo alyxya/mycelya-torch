@@ -371,37 +371,29 @@ def create_modal_app_for_gpu(
 
             tensor_registry = self._tensor_registry
             
-            # Process args/kwargs with two-pass algorithm: extract IDs then replace with tensors
-            tensor_ids, mask_index = [], 0
+            # Two-pass algorithm: extract tensor IDs then replace with tensors
+            tensor_ids = []
+            mask_iter = iter(tensor_mask)
 
-            def process_item(obj, extract_ids=True):
-                nonlocal mask_index
-                if mask_index >= len(tensor_mask):
-                    raise IndexError(f"Tensor mask out of range for {op_name}")
-                
-                is_tensor = tensor_mask[mask_index]
-                mask_index += 1
-                
-                if is_tensor:
-                    if extract_ids:
-                        if not isinstance(obj, int) or obj not in tensor_registry:
-                            raise ValueError(f"Invalid tensor ID {obj} for {op_name}")
-                        tensor_ids.append(obj)
-                    else:
-                        return tensor_registry[tensor_ids.pop(0)]
-                return obj
+            def extract_tensors(obj):
+                if isinstance(obj, (list, tuple)):
+                    return [extract_tensors(item) for item in obj]
+                if next(mask_iter):
+                    tensor_ids.append(obj)
 
-            def process_container(container, extract_ids=True):
-                return type(container)([process_item(item, extract_ids) for item in container]) if isinstance(container, (list, tuple)) else process_item(container, extract_ids)
+            def replace_tensors(obj):
+                if isinstance(obj, (list, tuple)):
+                    return type(obj)(replace_tensors(item) for item in obj)
+                return tensor_registry[tensor_ids.pop(0)] if next(mask_iter) else obj
 
             # First pass: extract tensor IDs
-            for arg in args: process_container(arg, True)
-            for value in kwargs.values(): process_container(value, True)
+            for arg in args: extract_tensors(arg)
+            for value in kwargs.values(): extract_tensors(value)
 
-            # Second pass: replace with tensors  
-            mask_index = 0
-            processed_args = [process_container(arg, False) for arg in args]
-            processed_kwargs = {k: process_container(v, False) for k, v in kwargs.items()}
+            # Second pass: replace with tensors
+            mask_iter = iter(tensor_mask)
+            processed_args = [replace_tensors(arg) for arg in args]
+            processed_kwargs = {k: replace_tensors(v) for k, v in kwargs.items()}
 
             # Execute operation
             op = torch.ops
