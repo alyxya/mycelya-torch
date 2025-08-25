@@ -124,16 +124,6 @@ def _remote_kernel_fallback(
 
     op_name = str(op)
 
-    # Check for unsupported operations before meta execution
-    if op_name == "aten.repeat_interleave":
-        raise RuntimeError(
-            "repeat_interleave is not supported on remote devices due to a PyTorch bug where tensor repeats "
-            "are incorrectly dispatched to single-argument overload. "
-            "Use tensor.repeat() or other alternatives instead."
-        )
-
-    # Note: aten::view is now handled directly in C++ (view_mycelya) and won't reach this fallback
-
     # Try meta tensor execution first, fall back to dynamic if not implemented
     try:
         meta_result, original_tensors = _execute_meta_operation(op, args, kwargs)
