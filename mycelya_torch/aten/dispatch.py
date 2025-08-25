@@ -50,13 +50,8 @@ def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_de
     return output_tensors
 
 
-def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device, op_name: str) -> Any:
+def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device, op_name: str, meta_result: Any, original_tensors: Dict) -> Any:
     """Execute operation using meta tensors for shape inference."""
-    try:
-        meta_result, original_tensors = _execute_meta_operation(op, args, kwargs)
-    except Exception as e:
-        raise RuntimeError(f"Meta tensor execution failed for {op_name}: {e}")
-
     # Normalize meta_result to list
     meta_outputs = [meta_result] if isinstance(meta_result, torch.Tensor) else list(meta_result) if isinstance(meta_result, (tuple, list)) else []
 
@@ -139,31 +134,11 @@ def _remote_kernel_fallback(
 
     # Note: aten::view is now handled directly in C++ (view_mycelya) and won't reach this fallback
 
-    # Check if operation requires dynamic output handling
-    ALWAYS_DYNAMIC = {
-        "aten.masked_select",
-        "aten.masked_select.default", 
-        "aten.nonzero",
-        "aten.nonzero.default",
-        "aten.unique",
-        "aten.unique.default",
-        "aten._unique2",
-        "aten._unique2.default",
-    }
-    
-    has_static_output = True
-    if op_name in ALWAYS_DYNAMIC:
-        has_static_output = False
-    elif op_name == "aten.index" and len(args) >= 2 and isinstance(args[1], (tuple, list)):
-        # Boolean indexing is dynamic, tensor indexing is static
-        has_static_output = not any(
-            isinstance(idx, torch.Tensor) and idx.dtype == torch.bool
-            for idx in args[1] if idx is not None
-        )
-
-    if has_static_output:
-        # Standard path: Use meta tensors for shape inference
-        return _execute_with_static_outputs(op, args, kwargs, remote_device, op_name)
-    else:
-        # Dynamic path: Create placeholder outputs and get metadata from remote execution
+    # Try meta tensor execution first, fall back to dynamic if it fails
+    try:
+        meta_result, original_tensors = _execute_meta_operation(op, args, kwargs)
+        # Meta tensor execution succeeded - use static output path
+        return _execute_with_static_outputs(op, args, kwargs, remote_device, op_name, meta_result, original_tensors)
+    except Exception:
+        # Meta tensor execution failed - operation has data-dependent output shape
         return _execute_with_dynamic_outputs(op, args, kwargs, remote_device, op_name)
