@@ -26,25 +26,6 @@ from .backends.base_client import Client
 log = get_logger(__name__)
 
 
-def args_to_tensors_with_ids_and_mask(
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
-) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[torch.Tensor], List[bool]]:
-    """Convert args/kwargs, replacing remote tensors with tensor IDs and collecting tensors."""
-    tensor_list, tensor_mask = [], []
-
-    def process(obj):
-        if isinstance(obj, torch.Tensor):
-            tensor_list.append(obj)
-            tensor_mask.append(True)
-            return get_tensor_id(obj)
-        tensor_mask.append(False)
-        return obj
-
-    processed_args, processed_kwargs = map_args_kwargs(process, args, kwargs)
-    return processed_args, processed_kwargs, tensor_list, tensor_mask
-
-
 class Orchestrator:
     """Orchestrates remote execution of aten operations across remote machines.
 
@@ -347,7 +328,17 @@ class Orchestrator:
             For static operations: None
         """
         # Transform args/kwargs: replace tensors with tensor IDs and extract tensor info
-        processed_args, processed_kwargs, input_tensors, tensor_mask = args_to_tensors_with_ids_and_mask(args, kwargs)
+        input_tensors, tensor_mask = [], []
+
+        def process(obj):
+            if isinstance(obj, torch.Tensor):
+                input_tensors.append(obj)
+                tensor_mask.append(True)
+                return get_tensor_id(obj)
+            tensor_mask.append(False)
+            return obj
+
+        processed_args, processed_kwargs = map_args_kwargs(process, args, kwargs)
 
         log.debug(f"Input tensor IDs: {[get_tensor_id(t) for t in input_tensors]}")
         if output_tensors:
