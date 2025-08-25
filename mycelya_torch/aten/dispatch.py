@@ -45,8 +45,6 @@ def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_de
         else:
             # Create new tensor
             tensor = torch.empty(meta_output.shape, dtype=meta_output.dtype, device=remote_device)
-            if meta_output.stride() != tensor.stride():
-                tensor = torch.as_strided(tensor, meta_output.shape, meta_output.stride(), meta_output.storage_offset())
             output_tensors.append(tensor)
 
     return output_tensors
