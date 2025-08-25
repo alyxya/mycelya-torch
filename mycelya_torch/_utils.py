@@ -83,22 +83,3 @@ def map_args_kwargs(func, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> Tupl
         return func(container)
 
     return tuple(map_container(arg) for arg in args), {k: map_container(v) for k, v in kwargs.items()}
-
-
-def args_to_tensors_with_ids_and_mask(
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
-) -> Tuple[Tuple[Any, ...], Dict[str, Any], List[torch.Tensor], List[bool]]:
-    """Convert args/kwargs, replacing remote tensors with tensor IDs and collecting tensors."""
-    tensor_list, tensor_mask = [], []
-
-    def process(obj):
-        if isinstance(obj, torch.Tensor):
-            tensor_list.append(obj)
-            tensor_mask.append(True)
-            return get_tensor_id(obj)
-        tensor_mask.append(False)
-        return obj
-
-    processed_args, processed_kwargs = map_args_kwargs(process, args, kwargs)
-    return processed_args, processed_kwargs, tensor_list, tensor_mask
