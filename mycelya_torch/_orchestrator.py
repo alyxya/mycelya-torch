@@ -365,9 +365,20 @@ class Orchestrator:
 
         processed_args, processed_kwargs = map_args_kwargs(process_tensor, args, kwargs)
         
-        # Add output tensors to validation
+        # Validate output tensors separately (they don't need tensor ID processing)
         if output_tensors:
-            map_args_kwargs(process_tensor, (output_tensors,), {})
+            for output_tensor in output_tensors:
+                if isinstance(output_tensor, torch.Tensor):
+                    storage_id = get_storage_id(output_tensor)
+                    tensor_device_info = self.storage.get_remote_device_info(storage_id)
+                    
+                    if remote_device_info is None:
+                        remote_device_info = tensor_device_info
+                    elif remote_device_info != tensor_device_info:
+                        raise RuntimeError(
+                            f"Cannot perform operation {op_name} between different devices. "
+                            f"Expected device {remote_device_info}, got {tensor_device_info}"
+                        )
         
         if not all_tensors:
             raise RuntimeError(f"No input tensors provided for operation {op_name}")
