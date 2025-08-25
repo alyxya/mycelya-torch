@@ -393,33 +393,24 @@ class Orchestrator:
             output_tensor_ids,
         )
 
-        # Get result from future if one was returned
-        if result_future is not None:
-            # Signal background thread that main thread is waiting on a future
-            self._main_thread_waiting.set()
-            result = result_future.result()
-            self._main_thread_waiting.clear()
-        else:
-            result = None
-
+        # Static operation: register tensor mappings and return None
         if output_tensors is not None:
-            # Static operation: register tensor-storage mappings and invalidate caches
             for output_tensor in output_tensors:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
-                # Update storage -> tensors mapping
-                if storage_id not in self._storage_to_tensors_map:
-                    self._storage_to_tensors_map[storage_id] = set()
-                self._storage_to_tensors_map[storage_id].add(tensor_id)
-
-            # Simple and robust cache invalidation: treat all output tensors as mutated
-            self.storage.invalidate_storage_caches(
-                [get_storage_id(tensor) for tensor in output_tensors]
-            )
+                self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
+            
+            self.storage.invalidate_storage_caches([get_storage_id(t) for t in output_tensors])
             return None
-        else:
-            # Dynamic operation: return metadata list with temp_key embedded
+        
+        # Dynamic operation: get result and return metadata for tensor linking
+        if result_future is not None:
+            self._main_thread_waiting.set()
+            result = result_future.result()
+            self._main_thread_waiting.clear()
             return result
+        
+        return None
 
     def _maybe_create_tensor(self, tensor: torch.Tensor) -> None:
         """Ensure tensor exists on remote client using storage mapping logic.
