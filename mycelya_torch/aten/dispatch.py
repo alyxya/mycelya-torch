@@ -61,15 +61,15 @@ def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...
     except Exception as e:
         raise RuntimeError(f"Meta tensor execution failed for {op_name}: {e}")
 
-    # Handle "out" parameter: resize empty output tensors to match meta result
-    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
-        out_tensor = kwargs["out"]
-        if out_tensor.numel() == 0 and isinstance(meta_result, torch.Tensor):
-            if meta_result.shape != out_tensor.shape:
-                out_tensor.resize_(meta_result.shape)
-
     # Normalize meta_result to list
     meta_outputs = [meta_result] if isinstance(meta_result, torch.Tensor) else list(meta_result) if isinstance(meta_result, (tuple, list)) else []
+
+    # Handle "out" parameter: resize empty output tensors to match meta result
+    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor) and meta_outputs:
+        out_tensor = kwargs["out"]
+        if out_tensor.numel() == 0:
+            if meta_outputs[0].shape != out_tensor.shape:
+                out_tensor.resize_(meta_outputs[0].shape)
     
     # Create output tensors and execute remotely
     output_tensors = _create_output_tensors(meta_outputs, original_tensors, remote_device)[0] if meta_outputs else []
