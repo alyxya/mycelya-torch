@@ -327,57 +327,45 @@ class Orchestrator:
             For dynamic operations (output_tensors=None): List[Dict] metadata with temp_key embedded
             For static operations: None
         """
-        # Transform args/kwargs: replace tensors with tensor IDs and extract tensor info
-        input_tensors, tensor_mask = [], []
+        # Process args/kwargs: validate, collect tensors, replace with IDs
+        all_tensors, tensor_mask = [], []
+        machine_id = None
 
-        def process(obj):
+        def process_tensor(obj):
+            nonlocal machine_id
             if isinstance(obj, torch.Tensor):
-                input_tensors.append(obj)
+                all_tensors.append(obj)
                 tensor_mask.append(True)
+                
+                # Validate and get machine_id through storage
+                storage_id = get_storage_id(obj)
+                tensor_machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+                
+                if machine_id is None:
+                    machine_id = tensor_machine_id
+                elif machine_id != tensor_machine_id:
+                    raise RuntimeError(f"Cannot perform operation {op_name} between different machines")
+                
+                # Ensure tensor exists on remote
+                self._maybe_create_tensor(obj)
                 return get_tensor_id(obj)
+            
             tensor_mask.append(False)
             return obj
 
-        processed_args, processed_kwargs = map_args_kwargs(process, args, kwargs)
-
-        log.debug(f"Input tensor IDs: {[get_tensor_id(t) for t in input_tensors]}")
+        processed_args, processed_kwargs = map_args_kwargs(process_tensor, args, kwargs)
+        
+        # Add output tensors to validation
         if output_tensors:
-            log.debug(f"Output tensor IDs: {[get_tensor_id(t) for t in output_tensors]}")
-        else:
-            log.debug("Dynamic operation: no output tensor IDs provided")
-
-        # Validate that we have input tensors
-        if not input_tensors:
+            map_args_kwargs(process_tensor, (output_tensors,), {})
+        
+        if not all_tensors:
             raise RuntimeError(f"No input tensors provided for operation {op_name}")
-
-        # Validate all tensors are on the same device using their device attributes
-        all_tensors = input_tensors + (output_tensors or [])
-        if len(all_tensors) > 1:
-            first_device = all_tensors[0].device
-            for tensor in all_tensors[1:]:
-                if tensor.device != first_device:
-                    raise RuntimeError(
-                        f"Cannot perform operations between tensors on different devices. "
-                        f"Found tensors on devices: {first_device} and {tensor.device}. "
-                        f"Transfer tensors to the same device first: tensor.to(target_device)"
-                    )
-
-        # Get the client using the first input tensor's storage ID
-        storage_id = get_storage_id(input_tensors[0])
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        
         client = self._clients[machine_id]
 
-        # Ensure all input tensors exist on remote before execution
-        for tensor in input_tensors:
-            self._maybe_create_tensor(tensor)
-
         # Execute with simplified client interface
-        if output_tensors is None:
-            # Dynamic operation: no output tensor IDs provided
-            output_tensor_ids = None
-        else:
-            # Static operation: extract output tensor IDs
-            output_tensor_ids = [get_tensor_id(tensor) for tensor in output_tensors]
+        output_tensor_ids = [get_tensor_id(t) for t in output_tensors] if output_tensors else None
 
         result_future = client.execute_aten_operation(
             op_name,
