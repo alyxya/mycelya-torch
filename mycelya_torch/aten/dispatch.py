@@ -16,7 +16,6 @@ def _execute_meta_operation(
     op: torch._ops.OpOverload,
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-    track_originals: bool = False,
 ) -> tuple[Any, Dict]:
     """Execute operation on meta tensors for shape inference."""
     original_tensors = {}
@@ -24,13 +23,8 @@ def _execute_meta_operation(
     def to_meta_tensor(obj):
         if not isinstance(obj, torch.Tensor):
             return obj
-        if track_originals:
-            meta_tensor = obj.to("meta")
-            original_tensors[meta_tensor] = obj
-        else:
-            meta_tensor = torch.empty(obj.shape, dtype=obj.dtype, device="meta")
-            if obj.stride() != meta_tensor.stride():
-                meta_tensor = torch.as_strided(meta_tensor, obj.shape, obj.stride(), obj.storage_offset())
+        meta_tensor = obj.to("meta")
+        original_tensors[meta_tensor] = obj
         return meta_tensor
 
     meta_args, meta_kwargs = map_args_kwargs(to_meta_tensor, args, kwargs)
@@ -73,7 +67,7 @@ def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_de
 def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device, op_name: str) -> Any:
     """Execute operation using meta tensors for shape inference."""
     try:
-        meta_result, original_tensors = _execute_meta_operation(op, args, kwargs, track_originals=True)
+        meta_result, original_tensors = _execute_meta_operation(op, args, kwargs)
     except Exception as e:
         raise RuntimeError(f"Meta tensor execution failed for {op_name}: {e}")
 
