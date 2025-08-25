@@ -30,16 +30,6 @@ def _execute_meta_operation(
     meta_args, meta_kwargs = map_args_kwargs(to_meta_tensor, args, kwargs)
     meta_result = op(*meta_args, **meta_kwargs)
 
-    # Special handling for "out" parameter: resize empty output tensors to match meta result
-    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
-        out_tensor = kwargs["out"]
-        if out_tensor.numel() == 0:
-            # Find the corresponding meta output tensor to get the expected shape
-            if "out" in meta_kwargs and isinstance(meta_kwargs["out"], torch.Tensor):
-                meta_out = meta_kwargs["out"]
-                if meta_out.shape != out_tensor.shape:
-                    out_tensor.resize_(meta_out.shape)
-
     return meta_result, original_tensors
 
 
@@ -70,6 +60,13 @@ def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...
         meta_result, original_tensors = _execute_meta_operation(op, args, kwargs)
     except Exception as e:
         raise RuntimeError(f"Meta tensor execution failed for {op_name}: {e}")
+
+    # Handle "out" parameter: resize empty output tensors to match meta result
+    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor):
+        out_tensor = kwargs["out"]
+        if out_tensor.numel() == 0 and isinstance(meta_result, torch.Tensor):
+            if meta_result.shape != out_tensor.shape:
+                out_tensor.resize_(meta_result.shape)
 
     # Normalize meta_result to list
     meta_outputs = [meta_result] if isinstance(meta_result, torch.Tensor) else list(meta_result) if isinstance(meta_result, (tuple, list)) else []
