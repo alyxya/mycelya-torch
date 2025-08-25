@@ -329,10 +329,10 @@ class Orchestrator:
         """
         # Process args/kwargs: validate, collect tensors, replace with IDs
         all_tensors, tensor_mask = [], []
-        machine_id = None
+        remote_device_info = None
 
         def process_tensor(obj):
-            nonlocal machine_id
+            nonlocal remote_device_info
             if isinstance(obj, torch.Tensor):
                 all_tensors.append(obj)
                 tensor_mask.append(True)
@@ -341,12 +341,12 @@ class Orchestrator:
                 storage_id = get_storage_id(obj)
                 tensor_device_info = self.storage.get_remote_device_info(storage_id)
                 
-                if machine_id is None:
-                    machine_id = tensor_device_info
-                elif machine_id != tensor_device_info:
+                if remote_device_info is None:
+                    remote_device_info = tensor_device_info
+                elif remote_device_info != tensor_device_info:
                     raise RuntimeError(
                         f"Cannot perform operation {op_name} between different devices. "
-                        f"Expected device {machine_id}, got {tensor_device_info}"
+                        f"Expected device {remote_device_info}, got {tensor_device_info}"
                     )
                 
                 # Ensure tensor exists on remote
@@ -365,7 +365,7 @@ class Orchestrator:
         if not all_tensors:
             raise RuntimeError(f"No input tensors provided for operation {op_name}")
         
-        client = self._clients[machine_id[0]]  # machine_id is (machine_id, device_type, device_index)
+        client = self._clients[remote_device_info[0]]  # Extract machine_id from (machine_id, device_type, device_index)
 
         # Execute with simplified client interface
         output_tensor_ids = [get_tensor_id(t) for t in output_tensors] if output_tensors else None
