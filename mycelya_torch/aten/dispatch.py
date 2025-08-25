@@ -74,33 +74,37 @@ def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...
     return tuple(output_tensors) if len(output_tensors) > 1 else output_tensors[0] if output_tensors else None
 
 
-def _execute_with_dynamic_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device, op_name: str) -> torch.Tensor:
+def _execute_with_dynamic_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...], kwargs: Dict[str, Any], remote_device: torch.device, op_name: str) -> Any:
     """Execute operation with dynamic output shapes."""
-    # Use existing tensor or create placeholder
-    output_tensor = kwargs.get("out") or torch.empty(
-        0, 
-        dtype=torch.int64 if op_name in ("aten.nonzero", "aten.nonzero.default") else args[0].dtype,
-        device=remote_device
-    )
-
     # Execute remotely and get metadata
     result = orchestrator.execute_aten_operation(op_name, args, kwargs, output_tensors=None)
-    if not result or len(result) != 1:
-        raise RuntimeError(f"Expected exactly 1 output metadata for {op_name}, got {len(result or [])}")
+    if not result:
+        raise RuntimeError(f"No output metadata returned for {op_name}")
 
-    metadata = result[0]
+    # Create output tensors from metadata
+    output_tensors = []
+    temp_keys = []
     
-    # Validate dtype
-    if dtype_to_str(output_tensor.dtype) != metadata["dtype"]:
-        raise RuntimeError(f"Dtype mismatch for {op_name}: expected {dtype_to_str(output_tensor.dtype)}, got {metadata['dtype']}")
-
-    # Update tensor shape and link to remote
-    storage_nelements = metadata["nbytes"] // output_tensor.element_size()
-    output_tensor.resize_([storage_nelements])
-    output_tensor = torch.as_strided(output_tensor, metadata["shape"], metadata["stride"], metadata["storage_offset"])
-    orchestrator.link_tensors([output_tensor], [metadata["temp_key"]])
-
-    return output_tensor
+    for metadata in result:
+        # Parse dtype from string
+        dtype_str = metadata["dtype"]
+        if not hasattr(torch, dtype_str):
+            raise RuntimeError(f"Unknown dtype {dtype_str} for {op_name}")
+        dtype = getattr(torch, dtype_str)
+        
+        # Create tensor with exact shape from remote metadata
+        storage_nelements = metadata["nbytes"] // dtype.itemsize
+        output_tensor = torch.empty([storage_nelements], dtype=dtype, device=remote_device)
+        output_tensor = torch.as_strided(output_tensor, metadata["shape"], metadata["stride"], metadata["storage_offset"])
+        
+        output_tensors.append(output_tensor)
+        temp_keys.append(metadata["temp_key"])
+    
+    # Link all tensors to remote data
+    orchestrator.link_tensors(output_tensors, temp_keys)
+    
+    # Return single tensor or tuple based on result count
+    return tuple(output_tensors) if len(output_tensors) > 1 else output_tensors[0] if output_tensors else None
 
 
 def _remote_kernel_fallback(
