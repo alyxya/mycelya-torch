@@ -39,8 +39,10 @@ def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_de
 
     for meta_output in meta_outputs:
         if meta_output in original_tensors:
-            # Reuse original tensor (in-place operation)
+            # Reuse original tensor (in-place operation) and correct shape if needed
             tensor = original_tensors[meta_output]
+            if tensor.shape != meta_output.shape:
+                tensor.resize_(meta_output.shape)
             output_tensors.append(tensor)
         else:
             # Create new tensor
@@ -65,11 +67,6 @@ def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...
     # Create output tensors and execute remotely
     output_tensors = _create_output_tensors(meta_outputs, original_tensors, remote_device) if meta_outputs else []
     orchestrator.execute_aten_operation(op_name, args, kwargs, output_tensors)
-
-    # Correct shapes and return results
-    for tensor, meta in zip(output_tensors, meta_outputs):
-        if tensor.shape != meta.shape:
-            tensor.resize_(meta.shape)
 
     return tuple(output_tensors) if len(output_tensors) > 1 else output_tensors[0] if output_tensors else None
 
