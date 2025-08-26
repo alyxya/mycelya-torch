@@ -395,6 +395,12 @@ class Orchestrator:
 
         # Static operation: register tensor mappings and return None
         if output_tensors is not None:
+            # Unlink old out tensor if ID changed after resize
+            if 'out' in kwargs and kwargs['out'] is not None and output_tensors:
+                out_tensor = kwargs['out']
+                if get_tensor_id(out_tensor) != get_tensor_id(output_tensors[0]):
+                    self._unlink_tensor(out_tensor)
+            
             for output_tensor in output_tensors:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
@@ -497,6 +503,27 @@ class Orchestrator:
 
         # Delegate to client
         client.link_tensors(local_tensor_ids, temp_keys)
+
+    def _unlink_tensor(self, tensor: torch.Tensor) -> None:
+        """Unlink tensor ID from remote storage without freeing the storage.
+        
+        This removes the tensor ID mapping but keeps the underlying storage intact.
+        Used when tensor IDs change due to resize operations.
+        
+        Args:
+            tensor: Tensor whose ID should be unlinked
+        """
+        tensor_id = get_tensor_id(tensor)
+        storage_id = get_storage_id(tensor)
+        
+        # Remove from local tracking
+        if storage_id in self._storage_to_tensors_map:
+            self._storage_to_tensors_map[storage_id].discard(tensor_id)
+        
+        # Call client to unlink the ID
+        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        if machine_id in self._clients:
+            self._clients[machine_id].remove_tensors([tensor_id])
 
     def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
         """Resolve pending CPU tensor futures for a client."""

@@ -7,7 +7,7 @@ import torch
 
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import dtype_to_str, get_tensor_id, map_args_kwargs
+from .._utils import map_args_kwargs
 
 log = get_logger(__name__)
 
@@ -33,7 +33,7 @@ def _execute_meta_operation(
     return meta_result, original_tensors
 
 
-def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_device: torch.device) -> List:
+def _create_output_tensors(meta_outputs: List, original_tensors: Dict, remote_device: torch.device) -> List[torch.Tensor]:
     """Create output tensors based on meta execution results."""
     output_tensors = []
 
@@ -56,16 +56,10 @@ def _execute_with_static_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ...
     """Execute operation using meta tensors for shape inference."""
     # Normalize meta_result to list
     meta_outputs = [meta_result] if isinstance(meta_result, torch.Tensor) else list(meta_result) if isinstance(meta_result, (tuple, list)) else []
-
-    # Handle "out" parameter: resize empty output tensors to match meta result
-    if "out" in kwargs and isinstance(kwargs["out"], torch.Tensor) and meta_outputs:
-        out_tensor = kwargs["out"]
-        if out_tensor.numel() == 0:
-            if meta_outputs[0].shape != out_tensor.shape:
-                out_tensor.resize_(meta_outputs[0].shape)
     
-    # Create output tensors and execute remotely
+    # Create output tensors 
     output_tensors = _create_output_tensors(meta_outputs, original_tensors, remote_device) if meta_outputs else []
+    
     orchestrator.execute_aten_operation(op_name, args, kwargs, output_tensors)
 
     return tuple(output_tensors) if len(output_tensors) > 1 else output_tensors[0] if output_tensors else None
