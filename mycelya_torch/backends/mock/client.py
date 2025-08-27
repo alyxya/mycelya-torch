@@ -45,7 +45,7 @@ class MockClient(Client):
 
         # Initialize the Modal app and server class
         self._app, self._server_class = create_modal_app_for_gpu(
-            self.gpu_type, self.machine_id, self.timeout
+            self.gpu_type, self.timeout
         )
 
     def start(self):

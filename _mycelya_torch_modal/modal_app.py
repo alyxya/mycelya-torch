@@ -25,22 +25,19 @@ image = modal.Image.debian_slim().pip_install(
 
 def create_modal_app_for_gpu(
     gpu_type: str,
-    machine_id: str,
     timeout: int,
 ) -> Tuple[modal.App, Any]:
     """
-    Create a Modal app and class for a specific GPU type and device.
+    Create a Modal app and class for a specific GPU type.
 
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
-        machine_id: The machine ID (e.g., "modal-t4-f3a7d67e")
         timeout: Function timeout in seconds
 
     Returns:
-        Tuple of (modal_app, server_class) for the specified device
+        Tuple of (modal_app, server_class) for the specified GPU type
     """
-    app = modal.App(f"mycelya-torch-{machine_id}")
-
+    app = modal.App("mycelya-torch")
 
     @app.cls(
         image=image,
