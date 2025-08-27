@@ -27,7 +27,7 @@ def create_modal_app_for_gpu(
     gpu_type: str,
     machine_id: str,
     timeout: int,
-) -> Tuple[modal.App, Any, modal.Queue]:
+) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and class for a specific GPU type and device.
 
@@ -37,14 +37,10 @@ def create_modal_app_for_gpu(
         timeout: Function timeout in seconds
 
     Returns:
-        Tuple of (modal_app, server_class, response_queue) for the specified device
+        Tuple of (modal_app, server_class) for the specified device
     """
     app = modal.App(f"mycelya-torch-{machine_id}")
 
-    # Create a Modal Queue for responses (for external access)
-    response_queue = modal.Queue.from_name(
-        f"responses-{machine_id}", create_if_missing=True
-    )
 
     @app.cls(
         image=image,
@@ -86,13 +82,6 @@ def create_modal_app_for_gpu(
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
-
-            import modal
-
-            # Create the response queue when container starts
-            self.response_queue = modal.Queue.from_name(
-                f"responses-{machine_id}", create_if_missing=True
-            )
 
             # Initialize registries only (device detection done per-method to avoid serialization issues)
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
@@ -681,4 +670,4 @@ def create_modal_app_for_gpu(
             # Always return a list (empty if no results)
             return results
 
-    return app, PytorchServer, response_queue
+    return app, PytorchServer
