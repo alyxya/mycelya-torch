@@ -63,6 +63,21 @@ def create_modal_app_for_gpu(
             args: Tuple[Any, ...]
             kwargs: Dict[str, Any]
 
+        class TensorMetadata(TypedDict):
+            """Structure for tensor metadata with temp key.
+
+            This TypedDict defines the structure returned by dynamic operations
+            that need to pass tensor metadata along with a temporary key for
+            linking local tensors to remote tensors.
+            """
+
+            shape: List[int]
+            dtype: str
+            stride: List[int]
+            storage_offset: int
+            nbytes: int
+            temp_key: str
+
         @staticmethod
         def _dtype_to_str(dtype) -> str:
             """Convert torch.dtype to string without 'torch.' prefix."""
@@ -367,10 +382,11 @@ def create_modal_app_for_gpu(
         ):
             """Implementation of execute_aten_operation without Modal decorators."""
             import uuid
+
             import torch
 
             tensor_registry = self._tensor_registry
-            
+
             mask_iter = iter(tensor_mask)
 
             def process_item(obj):
@@ -389,7 +405,13 @@ def create_modal_app_for_gpu(
             result = op(*processed_args, **processed_kwargs)
 
             # Normalize result to list
-            result_tensors = [result] if isinstance(result, torch.Tensor) else list(result) if isinstance(result, (list, tuple)) else []
+            result_tensors = (
+                [result]
+                if isinstance(result, torch.Tensor)
+                else list(result)
+                if isinstance(result, (list, tuple))
+                else []
+            )
 
             # Handle static vs dynamic operations
             if output_tensor_ids is None:
@@ -399,14 +421,16 @@ def create_modal_app_for_gpu(
                 for i, t in enumerate(result_tensors):
                     temp_key = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
                     temp_registry[temp_key] = t
-                    output_metadata.append({
-                        "shape": list(t.shape), 
-                        "dtype": self._dtype_to_str(t.dtype), 
-                        "stride": list(t.stride()), 
-                        "storage_offset": t.storage_offset(),
-                        "nbytes": t.untyped_storage().nbytes(),
-                        "temp_key": temp_key
-                    })
+                    output_metadata.append(
+                        self.TensorMetadata(
+                            shape=list(t.shape),
+                            dtype=self._dtype_to_str(t.dtype),
+                            stride=list(t.stride()),
+                            storage_offset=t.storage_offset(),
+                            nbytes=t.untyped_storage().nbytes(),
+                            temp_key=temp_key,
+                        )
+                    )
                 return output_metadata
             else:
                 # Static: store in main registry

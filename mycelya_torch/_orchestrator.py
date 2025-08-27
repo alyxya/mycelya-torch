@@ -20,7 +20,13 @@ import torch
 from ._device import device_manager
 from ._logging import get_logger
 from ._storage import StorageManager
-from ._utils import dtype_to_str, get_storage_id, get_tensor_id, map_args_kwargs
+from ._utils import (
+    TensorMetadata,
+    dtype_to_str,
+    get_storage_id,
+    get_tensor_id,
+    map_args_kwargs,
+)
 from .backends.base_client import Client
 
 log = get_logger(__name__)
@@ -320,7 +326,7 @@ class Orchestrator:
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
         output_tensors: Optional[List[torch.Tensor]] = None,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[List[TensorMetadata]]:
         """Execute remote operation with tensor objects in args/kwargs.
 
         Args:
@@ -331,7 +337,7 @@ class Orchestrator:
                            or None for dynamic operations
 
         Returns:
-            For dynamic operations (output_tensors=None): List[Dict] metadata with temp_key embedded
+            For dynamic operations (output_tensors=None): List[TensorMetadata] metadata with temp_key embedded
             For static operations: None
         """
         # Process args/kwargs: validate, collect tensors, replace with IDs
@@ -380,10 +386,14 @@ class Orchestrator:
                             f"Expected device {remote_device_info}, got {tensor_device_info}"
                         )
 
-        client = self._clients[remote_device_info[0]]  # Extract machine_id from (machine_id, device_type, device_index)
+        client = self._clients[
+            remote_device_info[0]
+        ]  # Extract machine_id from (machine_id, device_type, device_index)
 
         # Execute with simplified client interface
-        output_tensor_ids = [get_tensor_id(t) for t in output_tensors] if output_tensors else None
+        output_tensor_ids = (
+            [get_tensor_id(t) for t in output_tensors] if output_tensors else None
+        )
 
         result_future = client.execute_aten_operation(
             op_name,
@@ -396,17 +406,21 @@ class Orchestrator:
         # Static operation: register tensor mappings and return None
         if output_tensors is not None:
             # Unlink old out tensor if ID changed after resize
-            if 'out' in kwargs and kwargs['out'] is not None and output_tensors:
-                out_tensor = kwargs['out']
+            if "out" in kwargs and kwargs["out"] is not None and output_tensors:
+                out_tensor = kwargs["out"]
                 if get_tensor_id(out_tensor) != get_tensor_id(output_tensors[0]):
                     self._unlink_tensor(out_tensor)
-            
+
             for output_tensor in output_tensors:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
-                self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
+                self._storage_to_tensors_map.setdefault(storage_id, set()).add(
+                    tensor_id
+                )
 
-            self.storage.invalidate_storage_caches([get_storage_id(t) for t in output_tensors])
+            self.storage.invalidate_storage_caches(
+                [get_storage_id(t) for t in output_tensors]
+            )
             return None
 
         # Dynamic operation: get result and return metadata for tensor linking
@@ -426,7 +440,6 @@ class Orchestrator:
         """
         tensor_id = get_tensor_id(tensor)
         storage_id = get_storage_id(tensor)
-
 
         # Get client from tensor's storage
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
@@ -475,7 +488,9 @@ class Orchestrator:
                     self._storage_to_tensors_map[storage_id] = set()
                 self._storage_to_tensors_map[storage_id].add(tensor_id)
 
-    def link_tensors(self, local_tensors: List[torch.Tensor], temp_keys: List[str]) -> None:
+    def link_tensors(
+        self, local_tensors: List[torch.Tensor], temp_keys: List[str]
+    ) -> None:
         """Link local tensors to remote tensors from temporary registry.
 
         Args:
@@ -506,20 +521,20 @@ class Orchestrator:
 
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.
-        
+
         This removes the tensor ID mapping but keeps the underlying storage intact.
         Used when tensor IDs change due to resize operations.
-        
+
         Args:
             tensor: Tensor whose ID should be unlinked
         """
         tensor_id = get_tensor_id(tensor)
         storage_id = get_storage_id(tensor)
-        
+
         # Remove from local tracking
         if storage_id in self._storage_to_tensors_map:
             self._storage_to_tensors_map[storage_id].discard(tensor_id)
-        
+
         # Call client to unlink the ID
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
         if machine_id in self._clients:

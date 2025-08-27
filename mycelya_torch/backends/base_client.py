@@ -11,7 +11,10 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from collections import deque
 from concurrent.futures import Future
-from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
+
+from .._utils import TensorMetadata
+
 
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call.
@@ -483,7 +486,7 @@ class Client(ABC):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         output_tensor_ids: Optional[List[int]] = None,
-    ) -> Optional[Future[List[Dict[str, Any]]]]:
+    ) -> Optional[Future[List[TensorMetadata]]]:
         """
         Execute an aten operation on the remote machine.
 
@@ -495,7 +498,7 @@ class Client(ABC):
             output_tensor_ids: List of output tensor IDs for static operations, or None for dynamic operations
 
         Returns:
-            None for static operations, or Future[List[Dict]] of output tensor metadata for dynamic operations
+            None for static operations, or Future[List[TensorMetadata]] of output tensor metadata for dynamic operations
         """
         if not self.is_running():
             raise RuntimeError(

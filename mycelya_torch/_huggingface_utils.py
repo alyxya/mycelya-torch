@@ -179,7 +179,6 @@ def create_huggingface_model_from_remote(
     # Track storage sharing: remote_storage_id -> local_base_tensor
 
     for name, param_metadata in state_dict_metadata.items():
-
         # Create remote tensor stub (this will generate a local storage ID)
         remote_tensor = create_remote_tensor_stub(
             storage_id=0,  # Unused - local storage ID will be generated
@@ -216,7 +215,6 @@ def create_huggingface_model_from_remote(
 
     # Step 4: Replace buffers with remote tensor stubs
     for name, buffer_meta in buffer_metadata.items():
-
         # Create remote tensor stub (buffers don't require gradients)
         remote_tensor = create_remote_tensor_stub(
             storage_id=0,  # Unused - local storage ID will be generated
