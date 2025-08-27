@@ -405,12 +405,6 @@ class Orchestrator:
 
         # Static operation: register tensor mappings and return None
         if output_tensors is not None:
-            # Unlink old out tensor if ID changed after resize
-            if "out" in kwargs and kwargs["out"] is not None and output_tensors:
-                out_tensor = kwargs["out"]
-                if get_tensor_id(out_tensor) != get_tensor_id(output_tensors[0]):
-                    self._unlink_tensor(out_tensor)
-
             for output_tensor in output_tensors:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
