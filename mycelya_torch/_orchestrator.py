@@ -9,6 +9,7 @@ This module provides a generic interface for remote execution of PyTorch operati
 Currently supports Modal as the first provider implementation.
 """
 
+import atexit
 import threading
 import time
 from collections import deque
@@ -59,10 +60,15 @@ class Orchestrator:
 
         # Background thread for periodic maintenance tasks
         self._main_thread_waiting = threading.Event()
+        self._running_flag = threading.Event()
+        self._running_flag.set()  # Start as running
         self._background_thread = threading.Thread(
             target=self._background_loop, daemon=True
         )
         self._background_thread.start()
+        
+        # Register shutdown hook
+        atexit.register(self._shutdown)
 
     # Client management methods
 
@@ -624,7 +630,7 @@ class Orchestrator:
         - Connection health checks
         - Metrics collection
         """
-        while True:
+        while self._running_flag.is_set():
             for machine_id, client in self._clients.items():
                 if client.is_running():
                     try:
@@ -642,8 +648,20 @@ class Orchestrator:
             # Yield to the main thread before waiting
             time.sleep(0)
 
-            # Wait up to 0.1 seconds, but wake up immediately if main thread is waiting
+            # Wait up to 0.1 seconds, but wake up immediately if main thread is waiting or shutdown is requested
             self._main_thread_waiting.wait(timeout=0.1)
+        
+        log.info("Background thread shutting down gracefully")
+        # Signal that the background loop has finished
+        self._running_flag.set()
+
+    def _shutdown(self) -> None:
+        """Gracefully shutdown the orchestrator background thread."""
+        self._running_flag.clear()
+        self._main_thread_waiting.set()  # Wake up the background thread
+        
+        # Wait for the background thread to finish (running flag will be set by background loop)
+        self._running_flag.wait()
 
 
 # Global orchestrator instance (Modal provider implementation)
