@@ -69,8 +69,6 @@ def _execute_with_dynamic_outputs(op: torch._ops.OpOverload, args: Tuple[Any, ..
     """Execute operation with dynamic output shapes."""
     # Execute remotely and get metadata
     result = orchestrator.execute_aten_operation(op_name, args, kwargs, output_tensors=None)
-    if not result:
-        raise RuntimeError(f"No output metadata returned for {op_name}")
 
     # Create output tensors from metadata
     output_tensors = []
