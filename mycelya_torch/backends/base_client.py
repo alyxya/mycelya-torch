@@ -96,6 +96,24 @@ class Client(ABC):
         pass
 
     @abstractmethod
+    def propagate_exception_to_futures(self, exception: Exception) -> None:
+        """
+        Propagate the given exception to all pending futures.
+
+        This method should be called when a fatal error occurs that affects
+        all pending operations for this client. All futures in _pending_futures
+        will be resolved with the provided exception, and any client-specific
+        result queues should also be cleared.
+
+        Args:
+            exception: The exception to set on all pending futures
+
+        Returns:
+            None
+        """
+        pass
+
+    @abstractmethod
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """
         Implementation: Execute a batch of operations.

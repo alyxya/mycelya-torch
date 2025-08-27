@@ -98,6 +98,17 @@ class ModalClient(Client):
             except TimeoutError:
                 break
 
+    def propagate_exception_to_futures(self, exception: Exception) -> None:
+        """Propagate the given exception to all pending futures."""
+        # Set exception on all pending futures
+        while self._pending_futures:
+            future = self._pending_futures.popleft()
+            if not future.cancelled():
+                future.set_exception(exception)
+
+        # Clear the pending results queue since they're no longer valid
+        self._pending_results.clear()
+
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
         """Execute a batch of operations via Modal."""
         if not batch_calls:

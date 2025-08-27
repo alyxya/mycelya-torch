@@ -66,7 +66,7 @@ class Orchestrator:
             target=self._background_loop, daemon=True
         )
         self._background_thread.start()
-        
+
         # Register shutdown hook
         atexit.register(self._shutdown)
 
@@ -617,6 +617,22 @@ class Orchestrator:
 
             cpu_tensor_future.set_result(cpu_tensor)
 
+    def _propagate_exception_to_cpu_tensor_futures(
+        self, machine_id: str, exception: Exception
+    ) -> None:
+        """Propagate the given exception to all pending CPU tensor futures for a client."""
+        cpu_futures_deque = self._cpu_tensor_futures_deques.get(machine_id)
+        if not cpu_futures_deque:
+            return
+
+        # Set exception on all CPU tensor futures and clear the deque
+        while cpu_futures_deque:
+            storage_future, cpu_tensor_future, mycelya_tensor = (
+                cpu_futures_deque.popleft()
+            )
+            if not cpu_tensor_future.cancelled():
+                cpu_tensor_future.set_exception(exception)
+
     def _background_loop(self):
         """Background thread for batch execution and future resolution.
 
@@ -643,14 +659,18 @@ class Orchestrator:
                         # Process CPU tensor futures for this client
                         self._resolve_cpu_tensor_futures(machine_id)
                     except Exception as e:
-                        log.error(f"Error in background thread for client: {e}")
+                        log.error(f"Fatal error for client {machine_id}: {e}")
+                        # Propagate the exception to all pending futures for this client
+                        client.propagate_exception_to_futures(e)
+                        # Also propagate to CPU tensor futures for this client
+                        self._propagate_exception_to_cpu_tensor_futures(machine_id, e)
 
             # Yield to the main thread before waiting
             time.sleep(0)
 
             # Wait up to 0.1 seconds, but wake up immediately if main thread is waiting or shutdown is requested
             self._main_thread_waiting.wait(timeout=0.1)
-        
+
         log.info("Background thread shutting down gracefully")
         # Signal that the background loop has finished
         self._running_flag.set()
@@ -659,7 +679,7 @@ class Orchestrator:
         """Gracefully shutdown the orchestrator background thread."""
         self._running_flag.clear()
         self._main_thread_waiting.set()  # Wake up the background thread
-        
+
         # Wait for the background thread to finish (running flag will be set by background loop)
         self._running_flag.wait()
 
