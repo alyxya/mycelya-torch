@@ -117,11 +117,6 @@ class Orchestrator:
 
     # Storage management methods
 
-    def _get_tensor_id_for_storage(self, storage_id: int) -> Optional[int]:
-        """Get any tensor ID for a storage ID if mapping exists."""
-        tensor_set = self._storage_to_tensors_map.get(storage_id)
-        return next(iter(tensor_set)) if tensor_set else None
-
     def create_storage(self, nbytes: int, device_index: int) -> int:
         """Create storage using device index.
 
@@ -161,8 +156,9 @@ class Orchestrator:
             nbytes: New size in bytes
         """
         # Get a tensor ID for this storage if mapping exists
-        tensor_id = self._get_tensor_id_for_storage(storage_id)
-        if tensor_id is not None:
+        tensor_set = self._storage_to_tensors_map.get(storage_id)
+        if tensor_set:
+            tensor_id = next(iter(tensor_set))
             machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
             client = self._clients[machine_id]
             client.resize_storage(tensor_id, nbytes)
