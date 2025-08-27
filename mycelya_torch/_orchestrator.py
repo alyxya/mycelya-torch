@@ -230,9 +230,34 @@ class Orchestrator:
         Raises:
             RuntimeError: If tensor is not a mycelya tensor or client not available
         """
-        # Get the future from the async method
+        if tensor.device.type != "mycelya":
+            raise RuntimeError(
+                f"copy_tensor_to_cpu() can only be called on mycelya tensors, got {tensor.device.type}"
+            )
+
+        # Get tensor and storage IDs
+        storage_id = get_storage_id(tensor)
+
+        # Fast path: check if storage is already cached and done
+        storage_future = self.storage.get_cached_storage(storage_id)
+        if storage_future is not None and storage_future.done():
+            # Direct reconstruction from cached data
+            raw_bytes = storage_future.result()
+            untyped_storage = torch.UntypedStorage.from_buffer(
+                raw_bytes, dtype=torch.uint8
+            )
+            cpu_tensor = torch.empty(0, dtype=tensor.dtype, device="cpu")
+            cpu_tensor.set_(
+                untyped_storage,
+                tensor.storage_offset(),
+                tensor.shape,
+                tensor.stride(),
+            )
+            return cpu_tensor
+
+        # Slow path: go through async method
         result_future = self.copy_tensor_to_cpu_future(tensor)
-        
+
         # Wait for result while signaling background thread to continue
         if result_future is not None:
             self._main_thread_waiting.set()
@@ -459,18 +484,18 @@ class Orchestrator:
         tensor_id = get_tensor_id(tensor)
         storage_id = get_storage_id(tensor)
 
-        # Get client and device info from tensor's storage
-        machine_id, device_type, device_index = self.storage.get_remote_device_info(
-            storage_id
-        )
-        client = self._clients[machine_id]
-
         # Get or create tensor set for this storage
         tensor_set = self._storage_to_tensors_map.setdefault(storage_id, set())
 
         # Check if tensor already exists
         if tensor_id in tensor_set:
             return
+
+        # Get client and device info from tensor's storage
+        machine_id, device_type, device_index = self.storage.get_remote_device_info(
+            storage_id
+        )
+        client = self._clients[machine_id]
 
         if not tensor_set:
             # Storage doesn't exist - create empty tensor on remote
