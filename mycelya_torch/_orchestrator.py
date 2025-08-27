@@ -439,52 +439,44 @@ class Orchestrator:
         tensor_id = get_tensor_id(tensor)
         storage_id = get_storage_id(tensor)
 
-        # Get client from tensor's storage
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        # Get client and device info from tensor's storage
+        machine_id, device_type, device_index = self.storage.get_remote_device_info(
+            storage_id
+        )
         client = self._clients[machine_id]
 
-        # Check orchestrator's storage mapping to decide what to create on remote
-        if storage_id not in self._storage_to_tensors_map:
+        # Get or create tensor set for this storage
+        tensor_set = self._storage_to_tensors_map.setdefault(storage_id, set())
+
+        # Check if tensor already exists
+        if tensor_id in tensor_set:
+            return
+
+        if not tensor_set:
             # Storage doesn't exist - create empty tensor on remote
-            # Get nbytes from the tensor's untyped storage
-            nbytes = tensor.untyped_storage().nbytes()
-
-            # Get device type and index from storage
-            machine_id, device_type, device_index = self.storage.get_remote_device_info(
-                storage_id
-            )
-
             client.create_empty_tensor(
                 tensor_id=tensor_id,
                 shape=list(tensor.shape),
                 stride=list(tensor.stride()),
                 storage_offset=tensor.storage_offset(),
                 dtype=dtype_to_str(tensor.dtype),
-                nbytes=nbytes,
+                nbytes=tensor.untyped_storage().nbytes(),
                 device_type=device_type,
                 device_index=device_index,
             )
-            # Register the mapping in orchestrator
-            if storage_id not in self._storage_to_tensors_map:
-                self._storage_to_tensors_map[storage_id] = set()
-            self._storage_to_tensors_map[storage_id].add(tensor_id)
         else:
-            # Storage exists - check if this specific tensor ID exists in orchestrator mapping
-            if tensor_id not in self._storage_to_tensors_map[storage_id]:
-                # Need to create a view of an existing tensor
-                # Find any existing tensor ID for this storage as the base
-                base_tensor_id = self._get_tensor_id_for_storage(storage_id)
-                client.create_tensor_view(
-                    new_tensor_id=tensor_id,
-                    base_tensor_id=base_tensor_id,
-                    shape=list(tensor.shape),
-                    stride=list(tensor.stride()),
-                    offset=tensor.storage_offset(),
-                )
-                # Register the new tensor in orchestrator mapping
-                if storage_id not in self._storage_to_tensors_map:
-                    self._storage_to_tensors_map[storage_id] = set()
-                self._storage_to_tensors_map[storage_id].add(tensor_id)
+            # Storage exists - create view of existing tensor
+            base_tensor_id = next(iter(tensor_set))
+            client.create_tensor_view(
+                new_tensor_id=tensor_id,
+                base_tensor_id=base_tensor_id,
+                shape=list(tensor.shape),
+                stride=list(tensor.stride()),
+                offset=tensor.storage_offset(),
+            )
+
+        # Register the tensor in orchestrator mapping
+        tensor_set.add(tensor_id)
 
     def link_tensors(
         self, local_tensors: List[torch.Tensor], temp_keys: List[str]
