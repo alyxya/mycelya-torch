@@ -517,6 +517,16 @@ class Orchestrator:
         # Delegate to client
         client.link_tensors(local_tensor_ids, temp_keys)
 
+        # Update orchestrator's storage mapping to track these linked tensors
+        for tensor in local_tensors:
+            tensor_id = get_tensor_id(tensor)
+            storage_id = get_storage_id(tensor)
+
+            # Register tensor ID in orchestrator mapping
+            self._storage_to_tensors_map.setdefault(storage_id, set()).add(
+                tensor_id
+            )
+
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.
 
