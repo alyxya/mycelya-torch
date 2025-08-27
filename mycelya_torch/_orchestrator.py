@@ -58,6 +58,11 @@ class Orchestrator:
         # Storage ID to tensor IDs mapping for remote cleanup
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
 
+        # Client stop signal events for thread-safe shutdown coordination
+        self._client_stop_signals: Dict[
+            str, threading.Event
+        ] = {}  # machine_id -> Event
+
         # Background thread for periodic maintenance tasks
         self._main_thread_waiting = threading.Event()
         self._running_flag = threading.Event()
@@ -104,6 +109,10 @@ class Orchestrator:
         # Initialize CPU tensor futures deque for this client
         self._cpu_tensor_futures_deques[machine_id] = deque()
 
+        # Initialize client stop signal event (initially set - no stop requested)
+        self._client_stop_signals[machine_id] = threading.Event()
+        self._client_stop_signals[machine_id].set()
+
     def start_client(self, machine_id: str) -> None:
         """Start a client for the given machine."""
         client = self._clients[machine_id]
@@ -112,9 +121,14 @@ class Orchestrator:
 
     def stop_client(self, machine_id: str) -> None:
         """Stop a client for the given machine."""
-        client = self._clients[machine_id]
-        if client.is_running():
-            client.stop()
+        # Clear the event to signal stop request
+        self._client_stop_signals[machine_id].clear()
+        # Wake up background thread
+        self._main_thread_waiting.set()
+        # Wait for background thread to set it back (confirming stop)
+        self._client_stop_signals[machine_id].wait()
+        # Clear the wake-up signal after finishing waiting
+        self._main_thread_waiting.clear()
 
     # Storage management methods
 
@@ -643,6 +657,15 @@ class Orchestrator:
         """
         while self._running_flag.is_set():
             for machine_id, client in self._clients.items():
+                # Check if client should be stopped (stop request signaled by cleared event)
+                if not self._client_stop_signals[machine_id].is_set():
+                    if client.is_running():
+                        client.stop()
+                    # Set event to signal completion of stop
+                    self._client_stop_signals[machine_id].set()
+                    continue
+
+                # Normal processing for running clients
                 if client.is_running():
                     try:
                         # Execute any pending batched operations first
@@ -677,6 +700,8 @@ class Orchestrator:
 
         # Wait for the background thread to finish (running flag will be set by background loop)
         self._running_flag.wait()
+        # Clear the wake-up signal after finishing waiting
+        self._main_thread_waiting.clear()
 
 
 # Global orchestrator instance (Modal provider implementation)
