@@ -8,7 +8,6 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
-from collections import deque
 from typing import Any, Dict, List, Optional
 
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
@@ -39,9 +38,6 @@ class MockClient(Client):
         self._server_instance = None
         self._is_running = False
         self.timeout = timeout
-
-        # Deque for storing results from local execution to mirror Modal client structure
-        self._pending_results = deque()
 
         # Initialize the Modal app and server class
         self._app, self._server_class = create_modal_app_for_gpu(

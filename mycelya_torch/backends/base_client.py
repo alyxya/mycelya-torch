@@ -49,8 +49,11 @@ class Client(ABC):
         self.machine_id = machine_id
         self.batching = batching
 
-        # Deque for storing pending futures that need to be resolved
+        # Deque for storing pending futures that need to be resolved (returned to caller)
         self._pending_futures = deque()
+
+        # Deque for storing pending results/FunctionCalls from remote operations (1:1 correspondence with futures)
+        self._pending_results = deque()
 
         # Deque for storing pending batch calls when batching is enabled
         self._batch_calls = deque()

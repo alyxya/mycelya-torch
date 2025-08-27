@@ -8,7 +8,6 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from collections import deque
 from typing import Any, Dict, List, Optional
 
 from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
@@ -39,9 +38,6 @@ class ModalClient(Client):
         self._server_instance = None
         self._app_context = None
         self.timeout = timeout
-
-        # Deque for storing FunctionCall objects that may return values
-        self._pending_results = deque()
 
         # Initialize the Modal app and server class
         self._app, self._server_class = create_modal_app_for_gpu(
