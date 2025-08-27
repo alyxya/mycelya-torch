@@ -168,7 +168,7 @@ class Orchestrator:
 
     # Tensor methods
 
-    def copy_tensor_to_cpu(self, tensor: torch.Tensor) -> Future[torch.Tensor]:
+    def copy_tensor_to_cpu_future(self, tensor: torch.Tensor) -> Future[torch.Tensor]:
         """Copy a remote tensor to CPU asynchronously.
 
         This method initiates an asynchronous copy of a remote tensor to CPU. The copy
@@ -215,6 +215,30 @@ class Orchestrator:
         self._cpu_tensor_futures_deques[machine_id].append(copy_entry)
 
         return cpu_tensor_future
+
+    def copy_tensor_to_cpu(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Copy a remote tensor to CPU synchronously.
+
+        This method waits for the copy operation to complete and returns the CPU tensor directly.
+
+        Args:
+            tensor: The mycelya tensor to copy to CPU
+
+        Returns:
+            torch.Tensor: The CPU tensor with the copied data
+
+        Raises:
+            RuntimeError: If tensor is not a mycelya tensor or client not available
+        """
+        # Get the future from the async method
+        result_future = self.copy_tensor_to_cpu_future(tensor)
+        
+        # Wait for result while signaling background thread to continue
+        if result_future is not None:
+            self._main_thread_waiting.set()
+            result = result_future.result()
+            self._main_thread_waiting.clear()
+            return result
 
     def update_tensor(
         self,

@@ -11,9 +11,8 @@ def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
     if from_.device.type != "mycelya":
         raise ValueError("copy_from_device requires a remote tensor")
 
-    # Use orchestrator's new async copy method
-    cpu_future = orchestrator.copy_tensor_to_cpu(from_)
-    return cpu_future.result()
+    # Use orchestrator's synchronous copy method
+    return orchestrator.copy_tensor_to_cpu(from_)
 
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:

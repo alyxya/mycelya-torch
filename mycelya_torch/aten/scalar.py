@@ -16,9 +16,8 @@ def _local_scalar_dense(self: torch.Tensor):
 
     # Get scalar value from remote device
 
-    # Use orchestrator's new async copy method
-    cpu_future = orchestrator.copy_tensor_to_cpu(self)
-    cpu_tensor = cpu_future.result()
+    # Use orchestrator's synchronous copy method
+    cpu_tensor = orchestrator.copy_tensor_to_cpu(self)
 
     # Call item() on the CPU tensor to get the Python scalar
     return cpu_tensor.item()
