@@ -560,9 +560,7 @@ class Orchestrator:
             storage_id = get_storage_id(tensor)
 
             # Register tensor ID in orchestrator mapping
-            self._storage_to_tensors_map.setdefault(storage_id, set()).add(
-                tensor_id
-            )
+            self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.
