@@ -113,28 +113,12 @@ def _execute_with_dynamic_outputs(
     # Create output tensors from metadata
     output_tensors = []
     temp_keys = []
-
     for metadata in result:
-        # Parse dtype from string
-        dtype_str = metadata["dtype"]
-        if not hasattr(torch, dtype_str):
-            raise RuntimeError(f"Unknown dtype {dtype_str} for {op_name}")
-        dtype = getattr(torch, dtype_str)
-
-        # Create tensor with exact shape from remote metadata using untyped storage
-        storage_bytes = metadata["nbytes"]
-
-        # Create untyped storage with exact byte size
-        untyped_storage = torch.UntypedStorage(storage_bytes, device=remote_device)
-
-        # Create tensor directly with untyped storage and proper metadata
+        dtype = getattr(torch, metadata["dtype"])
+        storage = torch.UntypedStorage(metadata["nbytes"], device=remote_device)
         output_tensor = torch.empty(0, dtype=dtype, device=remote_device).set_(
-            untyped_storage,
-            metadata["storage_offset"],
-            metadata["shape"],
-            metadata["stride"],
+            storage, metadata["storage_offset"], metadata["shape"], metadata["stride"]
         )
-
         output_tensors.append(output_tensor)
         temp_keys.append(metadata["temp_key"])
 
