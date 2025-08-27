@@ -5,9 +5,10 @@ from typing import Any, Dict, List, Tuple
 
 import torch
 
+from .._device import device_manager
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import map_args_kwargs
+from .._utils import get_storage_id, map_args_kwargs
 
 log = get_logger(__name__)
 
@@ -16,16 +17,34 @@ def _execute_meta_operation(
     op: torch._ops.OpOverload,
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
+    device_container: List[torch.device],
 ) -> tuple[Any, Dict]:
-    """Execute operation on meta tensors for shape inference."""
+    """Execute operation on meta tensors for shape inference and device resolution."""
     original_tensors = {}
 
+    if "device" in kwargs:
+        device_container.append(kwargs["device"])
+
     def to_meta_tensor(obj):
-        if not isinstance(obj, torch.Tensor):
-            return obj
-        meta_tensor = obj.to("meta")
-        original_tensors[meta_tensor] = obj
-        return meta_tensor
+        # Check tensor device if container still empty
+        if not device_container and isinstance(obj, torch.Tensor):
+            if obj.device.type == "mycelya":
+                # Equivalent to device_container.append(obj.device) except when virtual devices are a thing
+                device_container.append(
+                    device_manager.get_mycelya_device(
+                        *orchestrator.storage.get_remote_device_info(
+                            get_storage_id(obj)
+                        )
+                    )
+                )
+
+        # Convert tensor to meta for shape inference
+        if isinstance(obj, torch.Tensor):
+            meta_tensor = obj.to("meta")
+            original_tensors[meta_tensor] = obj
+            return meta_tensor
+
+        return obj
 
     meta_args, meta_kwargs = map_args_kwargs(to_meta_tensor, args, kwargs)
     meta_result = op(*meta_args, **meta_kwargs)
@@ -61,7 +80,6 @@ def _execute_with_static_outputs(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
     remote_device: torch.device,
-    op_name: str,
     meta_result: Any,
     original_tensors: Dict,
 ) -> Any:
@@ -82,7 +100,7 @@ def _execute_with_static_outputs(
         else []
     )
 
-    orchestrator.execute_aten_operation(op_name, args, kwargs, output_tensors)
+    orchestrator.execute_aten_operation(str(op), args, kwargs, output_tensors)
 
     return (
         tuple(output_tensors)
@@ -98,12 +116,11 @@ def _execute_with_dynamic_outputs(
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
     remote_device: torch.device,
-    op_name: str,
 ) -> Any:
     """Execute operation with dynamic output shapes."""
     # Execute remotely and get metadata
     result = orchestrator.execute_aten_operation(
-        op_name, args, kwargs, output_tensors=None
+        str(op), args, kwargs, output_tensors=None
     )
 
     # TODO: Handle operations that return tensors aliasing to existing storage
@@ -125,14 +142,7 @@ def _execute_with_dynamic_outputs(
     # Link all tensors to remote data
     orchestrator.link_tensors(output_tensors, temp_keys)
 
-    # Return single tensor or tuple based on result count
-    return (
-        tuple(output_tensors)
-        if len(output_tensors) > 1
-        else output_tensors[0]
-        if output_tensors
-        else None
-    )
+    return output_tensors[0] if len(output_tensors) == 1 else tuple(output_tensors)
 
 
 def _remote_kernel_fallback(
@@ -140,29 +150,15 @@ def _remote_kernel_fallback(
 ) -> Any:
     """Execute PyTorch operations on remote devices using simple dispatch logic."""
 
-    # Get remote device from first tensor (orchestrator will handle validation)
-    remote_device = None
-    for arg in args:
-        if isinstance(arg, torch.Tensor):
-            remote_device = arg.device
-            break
-
-    if remote_device is None:
-        # Check kwargs for tensors
-        for value in kwargs.values():
-            if isinstance(value, torch.Tensor):
-                remote_device = value.device
-                break
-
-    op_name = str(op)
+    device_container = []
 
     # Try meta tensor execution first, fall back to dynamic if not implemented
     try:
-        meta_result, original_tensors = _execute_meta_operation(op, args, kwargs)
-        # Meta tensor execution succeeded - use static output path
+        meta_result, original_tensors = _execute_meta_operation(
+            op, args, kwargs, device_container
+        )
         return _execute_with_static_outputs(
-            op, args, kwargs, remote_device, op_name, meta_result, original_tensors
+            op, args, kwargs, device_container[0], meta_result, original_tensors
         )
     except NotImplementedError:
-        # Operation doesn't support meta tensor execution - use dynamic output path
-        return _execute_with_dynamic_outputs(op, args, kwargs, remote_device, op_name)
+        return _execute_with_dynamic_outputs(op, args, kwargs, device_container[0])

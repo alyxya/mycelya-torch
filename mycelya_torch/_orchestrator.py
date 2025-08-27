@@ -342,7 +342,11 @@ class Orchestrator:
         """
         # Process args/kwargs: validate, collect tensors, replace with IDs
         input_tensors, tensor_mask = [], []
-        remote_device_info = None
+        remote_device_info = (
+            device_manager.get_remote_device_info(kwargs["device"].index)
+            if "device" in kwargs
+            else None
+        )
 
         def process_tensor(obj):
             nonlocal remote_device_info
