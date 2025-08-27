@@ -127,10 +127,7 @@ def create_huggingface_model_from_remote(
     # Get device index from machine
     device_index = machine.device().index
 
-    if not orchestrator.is_client_running(device_index):
-        raise RuntimeError(
-            f"Machine {machine.machine_id} is not running. Call machine.start() first."
-        )
+    machine.start()
     remote_data = orchestrator.prepare_huggingface_model_by_device(
         device_index=device_index,
         checkpoint=checkpoint,

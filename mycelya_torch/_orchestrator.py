@@ -116,11 +116,6 @@ class Orchestrator:
         if client.is_running():
             client.stop()
 
-    def is_client_running(self, machine_id: str) -> bool:
-        """Check if a client is running for the given machine."""
-        client = self._clients[machine_id]
-        return client.is_running()
-
     # Storage management methods
 
     def create_storage(self, nbytes: int, device_index: int) -> int:

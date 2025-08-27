@@ -157,8 +157,7 @@ class RemoteMachine:
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
-        if not orchestrator.is_client_running(self.machine_id):
-            self.start()
+        self.start()
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
