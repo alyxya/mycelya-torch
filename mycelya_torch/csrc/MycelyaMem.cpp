@@ -148,6 +148,24 @@ at::Tensor view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
                             self.storage_offset());
 }
 
+// C++ implementation of _unsafe_view to preserve MycelyaTensorImpl
+at::Tensor _unsafe_view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "_unsafe_view_mycelya expects a mycelya tensor");
+
+  // Use the same logic as view_mycelya to preserve MycelyaTensorImpl
+  at::DimVector inferred_size = at::infer_size_dv(size, self.numel());
+  auto stride =
+      at::detail::computeStride(self.sizes(), self.strides(), inferred_size);
+  TORCH_CHECK(stride.has_value(),
+              "_unsafe_view size is not compatible with input tensor's size and stride "
+              "(at least one dimension spans across two contiguous subspaces).");
+
+  // Use as_strided to preserve MycelyaTensorImpl
+  return as_strided_mycelya(self, inferred_size, *stride,
+                            self.storage_offset());
+}
+
 // C++ implementation of set_.source_Storage_storage_offset for tensor metadata operations
 at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
                         int64_t storage_offset, at::IntArrayRef size,
@@ -242,6 +260,7 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // Register view operations in C++ for better performance
   m.impl("view", view_mycelya);
   m.impl("as_strided", as_strided_mycelya);
+  m.impl("_unsafe_view", _unsafe_view_mycelya);
   
   // Register set_ operations in C++ following OpenReg pattern
   m.impl("set_.source_Tensor", set_source_tensor_mycelya);
