@@ -577,6 +577,36 @@ class Orchestrator:
             # Register tensor ID in orchestrator mapping
             self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
+    def prepare_huggingface_model(
+        self,
+        device_index: int,
+        checkpoint: str,
+        torch_dtype: str = "auto",
+        trust_remote_code: bool = False,
+    ):
+        """Prepare a HuggingFace model on the remote machine associated with device_index.
+
+        Args:
+            device_index: Local mycelya device index
+            checkpoint: HuggingFace model checkpoint
+            torch_dtype: Data type for model weights
+            trust_remote_code: Whether to trust remote code for custom models
+
+        Returns:
+            Future that resolves to model metadata with temp_keys
+        """
+        # Get machine info from device index using device manager
+        from ._device import device_manager
+        machine_id, _, _ = device_manager.get_remote_device_info(device_index)
+        client = self._clients[machine_id]
+
+        # Delegate to client's prepare_huggingface_model method
+        return client.prepare_huggingface_model(
+            checkpoint=checkpoint,
+            torch_dtype=torch_dtype,
+            trust_remote_code=trust_remote_code,
+        )
+
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.
 

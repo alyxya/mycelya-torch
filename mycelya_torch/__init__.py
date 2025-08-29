@@ -204,12 +204,6 @@ torch._register_device_module("mycelya", _create_module())
 # Import ATen implementations to ensure PyTorch registrations are executed
 import mycelya_torch.aten  # noqa: E402
 
-# HuggingFace model loading utilities
-from ._huggingface_utils import (  # noqa: E402
-    create_huggingface_model_from_remote,
-    load_huggingface_model,
-)
-
 # Import public API components
 from ._logging import (  # noqa: E402
     disable_logging,
@@ -226,6 +220,11 @@ from ._machine import (  # noqa: E402
     get_all_machines,
 )
 
+# Remote state dict loading utilities
+from ._state_dict import (  # noqa: E402
+    load_huggingface_state_dict,
+)
+
 # Define the public API
 __all__ = [
     # Core machine and device classes
@@ -233,9 +232,8 @@ __all__ = [
     "CloudProvider",
     "GPUType",
     "get_all_machines",
-    # HuggingFace model loading
-    "load_huggingface_model",
-    "create_huggingface_model_from_remote",
+    # Remote state dict loading
+    "load_huggingface_state_dict",
     # Logging utilities
     "enable_debug_logging",
     "enable_info_logging",

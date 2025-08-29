@@ -79,8 +79,6 @@ def create_modal_app_for_gpu(
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
-            import torch
-
             # Initialize registries only (device detection done per-method to avoid serialization issues)
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
             self._tensor_registry = {}
@@ -461,15 +459,37 @@ def create_modal_app_for_gpu(
             torch_dtype: str = "auto",
             trust_remote_code: bool = False,
         ):
-            """Implementation of prepare_huggingface_model without Modal decorators."""
+            """Implementation of prepare_huggingface_model without Modal decorators.
+
+            This loads HuggingFace model weights directly on the remote machine,
+            stores them in temporary registry with unique keys, and returns metadata.
+            """
+            import uuid
+
             import torch
 
             try:
-                from transformers import AutoModelForCausalLM
+                import transformers  # noqa: F401
             except ImportError:
                 raise ImportError(
                     "transformers library required for HuggingFace model loading. "
                     "Add 'transformers' to the Modal image dependencies."
+                )
+
+            # Import safetensors and standard loading utilities
+            try:
+                from safetensors.torch import load_file as load_safetensors
+
+                HAS_SAFETENSORS = True
+            except ImportError:
+                HAS_SAFETENSORS = False
+
+            try:
+                from huggingface_hub import hf_hub_download, list_repo_files
+            except ImportError:
+                raise ImportError(
+                    "huggingface_hub required for downloading model files. "
+                    "Add 'huggingface_hub' to the Modal image dependencies."
                 )
 
             # Get the appropriate device for tensor operations
@@ -493,83 +513,88 @@ def create_modal_app_for_gpu(
                 # Handle string like "float32"
                 torch_dtype_obj = getattr(torch, torch_dtype)
 
-            # Load model directly to appropriate device
-            if device.type == "cpu":
-                # For CPU/mock execution, don't use device_map (requires accelerate)
-                model = AutoModelForCausalLM.from_pretrained(
-                    checkpoint,
-                    torch_dtype=torch_dtype_obj,
-                    trust_remote_code=trust_remote_code,
-                )
-                model = model.to(device)
-            else:
-                # For GPU execution, use device_map
-                model = AutoModelForCausalLM.from_pretrained(
-                    checkpoint,
-                    torch_dtype=torch_dtype_obj,
-                    device_map={"": device},  # Load directly to our device
-                    trust_remote_code=trust_remote_code,
-                )
+            # Download and determine available weight files
+            try:
+                repo_files = list_repo_files(checkpoint)
+                safetensor_files = [f for f in repo_files if f.endswith(".safetensors")]
+                pytorch_files = [
+                    f for f in repo_files if f.endswith(".bin") and "pytorch_model" in f
+                ]
 
-            # Extract state dict metadata without transferring data
+                # Prefer safetensors if available
+                if safetensor_files and HAS_SAFETENSORS:
+                    weight_files = safetensor_files
+                    use_safetensors = True
+                elif pytorch_files:
+                    weight_files = pytorch_files
+                    use_safetensors = False
+                else:
+                    raise RuntimeError(
+                        f"No supported weight files found in {checkpoint}"
+                    )
+
+            except Exception as e:
+                raise RuntimeError(f"Failed to access repository {checkpoint}: {e}")
+
+            # Load state dict from weight files
+            state_dict = {}
+
+            for weight_file in weight_files:
+                try:
+                    file_path = hf_hub_download(checkpoint, weight_file)
+
+                    if use_safetensors:
+                        # Load from safetensors
+                        file_state_dict = load_safetensors(
+                            file_path, device=str(device)
+                        )
+                    else:
+                        # Load from PyTorch pickle file
+                        file_state_dict = torch.load(file_path, map_location=device)
+
+                    state_dict.update(file_state_dict)
+
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to load {weight_file} from {checkpoint}: {e}"
+                    )
+
+            # Convert dtype if specified
+            if torch_dtype_obj != torch.float32:
+                for key, tensor in state_dict.items():
+                    if tensor.dtype.is_floating_point:
+                        state_dict[key] = tensor.to(torch_dtype_obj)
+
+            # Handle tied weights - add missing lm_head.weight if needed
+            if "lm_head.weight" not in state_dict and "model.embed_tokens.weight" in state_dict:
+                # Tie lm_head.weight to embed_tokens.weight
+                state_dict["lm_head.weight"] = state_dict["model.embed_tokens.weight"]
+
+            # Create temporary keys and store tensors in temporary registry
             state_dict_metadata = {}
+            temp_tensor_registry = self._temp_tensor_registry
 
-            for name, param in model.named_parameters():
-                # Collect metadata for client (no storage ID generation here)
+            for name, tensor in state_dict.items():
+                # Generate unique temporary key
+                temp_key = f"hf_{checkpoint}_{name}_{uuid.uuid4().hex[:8]}"
+
+                # Store tensor in temporary registry for linking
+                temp_tensor_registry[temp_key] = tensor.detach().contiguous()
+
+                # Collect metadata for client with temp_key
                 state_dict_metadata[name] = {
-                    "shape": list(param.shape),
-                    "stride": list(param.stride()),
-                    "dtype": self._dtype_to_str(param.dtype),
-                    "storage_offset": param.storage_offset(),
-                    "requires_grad": param.requires_grad,
-                    # Store actual tensor data for later linking
-                    "_tensor_data": param.detach().contiguous().to(device),
+                    "shape": list(tensor.shape),
+                    "stride": list(tensor.stride()),
+                    "dtype": self._dtype_to_str(tensor.dtype),
+                    "storage_offset": tensor.storage_offset(),
+                    "nbytes": tensor.numel() * tensor.element_size(),
+                    "temp_key": temp_key,  # Key for linking
                 }
-
-            # Also handle buffers (non-trainable parameters like batch norm running stats)
-            buffer_metadata = {}
-            for name, buffer in model.named_buffers():
-                # Collect metadata for client (no storage ID generation here)
-                buffer_metadata[name] = {
-                    "shape": list(buffer.shape),
-                    "stride": list(buffer.stride()),
-                    "dtype": self._dtype_to_str(buffer.dtype),
-                    "storage_offset": buffer.storage_offset(),
-                    "requires_grad": False,  # Buffers don't require gradients
-                    # Store actual tensor data for later linking
-                    "_tensor_data": buffer.detach().contiguous().to(device),
-                }
-
-            # Store model and tensor data for later linking
-            model_registry = self._model_registry
-            model_registry[checkpoint] = {
-                "model": model,
-                "parameter_tensors": {
-                    name: metadata["_tensor_data"]
-                    for name, metadata in state_dict_metadata.items()
-                },
-                "buffer_tensors": {
-                    name: metadata["_tensor_data"]
-                    for name, metadata in buffer_metadata.items()
-                },
-            }
-
-            # Clean metadata for return (remove internal tensor data)
-            clean_state_dict = {
-                name: {k: v for k, v in meta.items() if k != "_tensor_data"}
-                for name, meta in state_dict_metadata.items()
-            }
-            clean_buffer_dict = {
-                name: {k: v for k, v in meta.items() if k != "_tensor_data"}
-                for name, meta in buffer_metadata.items()
-            }
 
             result = {
-                "state_dict_metadata": clean_state_dict,
-                "buffer_metadata": clean_buffer_dict,
-                "config": model.config.to_dict(),
-                "model_type": type(model).__name__,
+                "state_dict_metadata": state_dict_metadata,
                 "checkpoint": checkpoint,
+                "total_params": len(state_dict_metadata),
             }
 
             return result
