@@ -470,13 +470,6 @@ def create_modal_app_for_gpu(
 
             import torch
 
-            try:
-                import transformers  # noqa: F401
-            except ImportError:
-                raise ImportError(
-                    "transformers library required for HuggingFace model loading. "
-                    "Add 'transformers' to the Modal image dependencies."
-                )
 
             # Import safetensors and standard loading utilities
             try:
