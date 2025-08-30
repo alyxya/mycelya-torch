@@ -79,6 +79,8 @@ def create_modal_app_for_gpu(
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
+            import torch  # Preload torch import for better performance
+
             # Initialize registries only (device detection done per-method to avoid serialization issues)
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
             self._tensor_registry = {}
