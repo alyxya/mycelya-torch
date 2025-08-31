@@ -600,8 +600,8 @@ class Orchestrator:
         machine_id, _, _ = device_manager.get_remote_device_info(device_index)
         client = self._clients[machine_id]
 
-        # Delegate to client's prepare_huggingface_model method
-        return client.prepare_huggingface_model(
+        # Delegate to client's load_huggingface_state_dict method
+        return client.load_huggingface_state_dict(
             checkpoint=checkpoint,
             torch_dtype=torch_dtype,
             trust_remote_code=trust_remote_code,

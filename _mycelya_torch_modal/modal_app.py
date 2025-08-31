@@ -101,7 +101,7 @@ def create_modal_app_for_gpu(
                 "resize_storage": self._resize_storage_impl,
                 "copy_tensor": self._copy_tensor_impl,
                 "execute_aten_operation": self._execute_aten_operation_impl,
-                "prepare_huggingface_model": self._prepare_huggingface_model_impl,
+                "load_huggingface_state_dict": self._load_huggingface_state_dict_impl,
                 "link_tensors": self._link_tensors_impl,
             }
 
@@ -455,13 +455,13 @@ def create_modal_app_for_gpu(
                 # Static operation: no return value needed
                 return None
 
-        def _prepare_huggingface_model_impl(
+        def _load_huggingface_state_dict_impl(
             self,
             checkpoint: str,
             torch_dtype: str = "auto",
             trust_remote_code: bool = False,
         ):
-            """Implementation of prepare_huggingface_model without Modal decorators.
+            """Implementation of load_huggingface_state_dict without Modal decorators.
 
             This loads HuggingFace model weights directly on the remote machine,
             stores them in temporary registry with unique keys, and returns metadata.
@@ -574,14 +574,14 @@ def create_modal_app_for_gpu(
             return result
 
         @modal.method()
-        def prepare_huggingface_model(
+        def load_huggingface_state_dict(
             self,
             checkpoint: str,
             torch_dtype: str = "auto",
             trust_remote_code: bool = False,
         ):
             """Download and prepare a HuggingFace model directly on the remote machine."""
-            return self._prepare_huggingface_model_impl(
+            return self._load_huggingface_state_dict_impl(
                 checkpoint, torch_dtype, trust_remote_code
             )
 
