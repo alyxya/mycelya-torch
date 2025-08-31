@@ -472,12 +472,7 @@ def create_modal_app_for_gpu(
 
 
             # Import safetensors and standard loading utilities
-            try:
-                from safetensors.torch import load_file as load_safetensors
-
-                HAS_SAFETENSORS = True
-            except ImportError:
-                HAS_SAFETENSORS = False
+            from safetensors.torch import load_file as load_safetensors
 
             try:
                 from huggingface_hub import hf_hub_download, list_repo_files
@@ -517,7 +512,7 @@ def create_modal_app_for_gpu(
                 ]
 
                 # Prefer safetensors if available
-                if safetensor_files and HAS_SAFETENSORS:
+                if safetensor_files:
                     weight_files = safetensor_files
                     use_safetensors = True
                 elif pytorch_files:
