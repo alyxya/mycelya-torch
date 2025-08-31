@@ -76,6 +76,7 @@ def load_huggingface_state_dict(
     device: torch.device,
     torch_dtype: str = "auto",
     trust_remote_code: bool = False,
+    path: str = "",
 ) -> Dict[str, torch.Tensor]:
     """Load HuggingFace model weights directly as a state dict of remote mycelya tensors.
 
@@ -86,8 +87,9 @@ def load_huggingface_state_dict(
     Args:
         repo_id: HuggingFace repository ID (e.g., "microsoft/DialoGPT-medium")
         device: Mycelya device where weights should be loaded
-        torch_dtype: Data type for model weights ("auto", "float32", "float16", etc.)
-        trust_remote_code: Whether to trust remote code for custom models
+        torch_dtype: Data type for model weights (ignored, uses model defaults)
+        trust_remote_code: Whether to trust remote code (ignored)
+        path: Path within repository to load from (default: whole repo)
 
     Returns:
         State dict mapping parameter names to mycelya tensors with remote data
@@ -110,6 +112,7 @@ def load_huggingface_state_dict(
         checkpoint=repo_id,
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
+        path=path,
     )
 
     # Wait for remote loading to complete

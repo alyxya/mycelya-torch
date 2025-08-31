@@ -458,6 +458,7 @@ def create_modal_app_for_gpu(
         def _load_huggingface_state_dict_impl(
             self,
             repo: str,
+            path: str = "",
         ):
             """Implementation of load_huggingface_state_dict without Modal decorators.
 
@@ -478,6 +479,11 @@ def create_modal_app_for_gpu(
 
             # Download and determine available weight files
             repo_files = list_repo_files(repo)
+            
+            # Filter files by path if specified
+            if path:
+                repo_files = [f for f in repo_files if f.startswith(path)]
+            
             safetensor_files = [f for f in repo_files if f.endswith(".safetensors")]
             pytorch_files = [
                 f for f in repo_files if f.endswith(".bin") and "pytorch_model" in f
@@ -491,8 +497,9 @@ def create_modal_app_for_gpu(
                 weight_files = pytorch_files
                 use_safetensors = False
             else:
+                path_info = f" in path '{path}'" if path else ""
                 raise RuntimeError(
-                    f"No supported weight files found in {repo}"
+                    f"No supported weight files found in {repo}{path_info}"
                 )
 
             # Load state dict from weight files
@@ -551,9 +558,10 @@ def create_modal_app_for_gpu(
         def load_huggingface_state_dict(
             self,
             repo: str,
+            path: str = "",
         ):
             """Download and prepare a HuggingFace model directly on the remote machine."""
-            return self._load_huggingface_state_dict_impl(repo)
+            return self._load_huggingface_state_dict_impl(repo, path)
 
         def _link_tensors_impl(
             self,

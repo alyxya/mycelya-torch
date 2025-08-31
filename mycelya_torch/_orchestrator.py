@@ -583,6 +583,7 @@ class Orchestrator:
         checkpoint: str,
         torch_dtype: str = "auto",
         trust_remote_code: bool = False,
+        path: str = "",
     ):
         """Prepare a HuggingFace model on the remote machine associated with device_index.
 
@@ -591,6 +592,7 @@ class Orchestrator:
             checkpoint: HuggingFace model checkpoint
             torch_dtype: Data type for model weights (ignored)
             trust_remote_code: Whether to trust remote code (ignored)
+            path: Path within the repository to load from (default: whole repo)
 
         Returns:
             Future that resolves to model metadata with temp_keys
@@ -601,7 +603,7 @@ class Orchestrator:
         client = self._clients[machine_id]
 
         # Delegate to client's load_huggingface_state_dict method
-        return client.load_huggingface_state_dict(repo=checkpoint)
+        return client.load_huggingface_state_dict(repo=checkpoint, path=path)
 
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.
