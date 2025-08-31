@@ -589,8 +589,8 @@ class Orchestrator:
         Args:
             device_index: Local mycelya device index
             checkpoint: HuggingFace model checkpoint
-            torch_dtype: Data type for model weights
-            trust_remote_code: Whether to trust remote code for custom models
+            torch_dtype: Data type for model weights (ignored)
+            trust_remote_code: Whether to trust remote code (ignored)
 
         Returns:
             Future that resolves to model metadata with temp_keys
@@ -601,11 +601,7 @@ class Orchestrator:
         client = self._clients[machine_id]
 
         # Delegate to client's load_huggingface_state_dict method
-        return client.load_huggingface_state_dict(
-            checkpoint=checkpoint,
-            torch_dtype=torch_dtype,
-            trust_remote_code=trust_remote_code,
-        )
+        return client.load_huggingface_state_dict(repo=checkpoint)
 
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.

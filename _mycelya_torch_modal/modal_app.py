@@ -457,9 +457,7 @@ def create_modal_app_for_gpu(
 
         def _load_huggingface_state_dict_impl(
             self,
-            checkpoint: str,
-            torch_dtype: str = "auto",
-            trust_remote_code: bool = False,
+            repo: str,
         ):
             """Implementation of load_huggingface_state_dict without Modal decorators.
 
@@ -467,13 +465,8 @@ def create_modal_app_for_gpu(
             stores them in temporary registry with unique keys, and returns metadata.
             """
             import uuid
-
             import torch
-
-
-            # Import safetensors and standard loading utilities
             from safetensors.torch import load_file as load_safetensors
-
             from huggingface_hub import hf_hub_download, list_repo_files
 
             # Get the appropriate device for tensor operations
@@ -482,23 +475,9 @@ def create_modal_app_for_gpu(
             else:
                 device = torch.device("cpu")
 
-            # Handle torch_dtype parameter
-            if torch_dtype == "auto" or torch_dtype is None:
-                torch_dtype_obj = (
-                    torch.float16 if device.type == "cuda" else torch.float32
-                )
-            elif torch_dtype.startswith("torch."):
-                # Handle string like "torch.float32"
-                dtype_name = torch_dtype.split(".")[
-                    -1
-                ]  # Get "float32" from "torch.float32"
-                torch_dtype_obj = getattr(torch, dtype_name)
-            else:
-                # Handle string like "float32"
-                torch_dtype_obj = getattr(torch, torch_dtype)
 
             # Download and determine available weight files
-            repo_files = list_repo_files(checkpoint)
+            repo_files = list_repo_files(repo)
             safetensor_files = [f for f in repo_files if f.endswith(".safetensors")]
             pytorch_files = [
                 f for f in repo_files if f.endswith(".bin") and "pytorch_model" in f
@@ -513,14 +492,14 @@ def create_modal_app_for_gpu(
                 use_safetensors = False
             else:
                 raise RuntimeError(
-                    f"No supported weight files found in {checkpoint}"
+                    f"No supported weight files found in {repo}"
                 )
 
             # Load state dict from weight files
             state_dict = {}
 
             for weight_file in weight_files:
-                file_path = hf_hub_download(checkpoint, weight_file)
+                file_path = hf_hub_download(repo, weight_file)
 
                 if use_safetensors:
                     # Load from safetensors
@@ -533,11 +512,6 @@ def create_modal_app_for_gpu(
 
                 state_dict.update(file_state_dict)
 
-            # Convert dtype if specified
-            if torch_dtype_obj != torch.float32:
-                for key, tensor in state_dict.items():
-                    if tensor.dtype.is_floating_point:
-                        state_dict[key] = tensor.to(torch_dtype_obj)
 
             # Handle tied weights - add missing lm_head.weight if needed
             if "lm_head.weight" not in state_dict and "model.embed_tokens.weight" in state_dict:
@@ -550,7 +524,7 @@ def create_modal_app_for_gpu(
 
             for name, tensor in state_dict.items():
                 # Generate unique temporary key
-                temp_key = f"hf_{checkpoint}_{name}_{uuid.uuid4().hex[:8]}"
+                temp_key = f"hf_{repo}_{name}_{uuid.uuid4().hex[:8]}"
 
                 # Store tensor in temporary registry for linking
                 temp_tensor_registry[temp_key] = tensor.detach().contiguous()
@@ -567,7 +541,7 @@ def create_modal_app_for_gpu(
 
             result = {
                 "state_dict_metadata": state_dict_metadata,
-                "checkpoint": checkpoint,
+                "repo": repo,
                 "total_params": len(state_dict_metadata),
             }
 
@@ -576,14 +550,10 @@ def create_modal_app_for_gpu(
         @modal.method()
         def load_huggingface_state_dict(
             self,
-            checkpoint: str,
-            torch_dtype: str = "auto",
-            trust_remote_code: bool = False,
+            repo: str,
         ):
             """Download and prepare a HuggingFace model directly on the remote machine."""
-            return self._load_huggingface_state_dict_impl(
-                checkpoint, torch_dtype, trust_remote_code
-            )
+            return self._load_huggingface_state_dict_impl(repo)
 
         def _link_tensors_impl(
             self,
