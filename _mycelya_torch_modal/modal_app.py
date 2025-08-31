@@ -474,13 +474,7 @@ def create_modal_app_for_gpu(
             # Import safetensors and standard loading utilities
             from safetensors.torch import load_file as load_safetensors
 
-            try:
-                from huggingface_hub import hf_hub_download, list_repo_files
-            except ImportError:
-                raise ImportError(
-                    "huggingface_hub required for downloading model files. "
-                    "Add 'huggingface_hub' to the Modal image dependencies."
-                )
+            from huggingface_hub import hf_hub_download, list_repo_files
 
             # Get the appropriate device for tensor operations
             if torch.cuda.is_available():
@@ -504,50 +498,40 @@ def create_modal_app_for_gpu(
                 torch_dtype_obj = getattr(torch, torch_dtype)
 
             # Download and determine available weight files
-            try:
-                repo_files = list_repo_files(checkpoint)
-                safetensor_files = [f for f in repo_files if f.endswith(".safetensors")]
-                pytorch_files = [
-                    f for f in repo_files if f.endswith(".bin") and "pytorch_model" in f
-                ]
+            repo_files = list_repo_files(checkpoint)
+            safetensor_files = [f for f in repo_files if f.endswith(".safetensors")]
+            pytorch_files = [
+                f for f in repo_files if f.endswith(".bin") and "pytorch_model" in f
+            ]
 
-                # Prefer safetensors if available
-                if safetensor_files:
-                    weight_files = safetensor_files
-                    use_safetensors = True
-                elif pytorch_files:
-                    weight_files = pytorch_files
-                    use_safetensors = False
-                else:
-                    raise RuntimeError(
-                        f"No supported weight files found in {checkpoint}"
-                    )
-
-            except Exception as e:
-                raise RuntimeError(f"Failed to access repository {checkpoint}: {e}")
+            # Prefer safetensors if available
+            if safetensor_files:
+                weight_files = safetensor_files
+                use_safetensors = True
+            elif pytorch_files:
+                weight_files = pytorch_files
+                use_safetensors = False
+            else:
+                raise RuntimeError(
+                    f"No supported weight files found in {checkpoint}"
+                )
 
             # Load state dict from weight files
             state_dict = {}
 
             for weight_file in weight_files:
-                try:
-                    file_path = hf_hub_download(checkpoint, weight_file)
+                file_path = hf_hub_download(checkpoint, weight_file)
 
-                    if use_safetensors:
-                        # Load from safetensors
-                        file_state_dict = load_safetensors(
-                            file_path, device=str(device)
-                        )
-                    else:
-                        # Load from PyTorch pickle file
-                        file_state_dict = torch.load(file_path, map_location=device)
-
-                    state_dict.update(file_state_dict)
-
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Failed to load {weight_file} from {checkpoint}: {e}"
+                if use_safetensors:
+                    # Load from safetensors
+                    file_state_dict = load_safetensors(
+                        file_path, device=str(device)
                     )
+                else:
+                    # Load from PyTorch pickle file
+                    file_state_dict = torch.load(file_path, map_location=device)
+
+                state_dict.update(file_state_dict)
 
             # Convert dtype if specified
             if torch_dtype_obj != torch.float32:
