@@ -594,7 +594,6 @@ class Orchestrator:
             Future that resolves to model metadata with temp_keys
         """
         # Get machine info from device index using device manager
-        from ._device import device_manager
         machine_id, remote_device_type, remote_device_index = device_manager.get_remote_device_info(device_index)
         client = self._clients[machine_id]
 
