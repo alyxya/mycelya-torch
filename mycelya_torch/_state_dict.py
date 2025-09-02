@@ -45,7 +45,7 @@ def _create_remote_tensor_from_metadata(
     untyped_storage = torch.UntypedStorage(storage_bytes, device=device)
     remote_tensor = torch.empty(0, dtype=torch_dtype, device=device)
     remote_tensor.set_(untyped_storage, storage_offset, shape, stride)
-    remote_tensor.requires_grad_(metadata.get("requires_grad", False))
+    remote_tensor.requires_grad_(metadata["requires_grad"])
 
     return remote_tensor
 
