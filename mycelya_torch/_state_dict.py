@@ -40,23 +40,14 @@ def _create_remote_tensor_from_metadata(
     stride = metadata["stride"]
     storage_offset = metadata["storage_offset"]
 
-    # Calculate the maximum memory address this tensor accesses
-    if not shape:  # Empty tensor
-        storage_elements_needed = 0
-    else:
-        max_address = storage_offset
-        for dim_size, dim_stride in zip(shape, stride):
-            if dim_size > 1:
-                max_address += (dim_size - 1) * abs(dim_stride)
-        storage_elements_needed = max_address + 1
-
-    # Create untyped storage with sufficient space
-    storage_bytes = storage_elements_needed * torch_dtype.itemsize
+    # Create untyped storage with size from metadata
+    storage_bytes = metadata["nbytes"]
     untyped_storage = torch.UntypedStorage(storage_bytes, device=device)
 
     # Create base tensor from untyped storage
+    storage_elements = storage_bytes // torch_dtype.itemsize
     base_tensor = torch.empty(0, dtype=torch_dtype, device=device)
-    base_tensor.set_(untyped_storage, 0, [storage_elements_needed], [1])
+    base_tensor.set_(untyped_storage, 0, [storage_elements], [1])
 
     # Create tensor view with exact shape/stride/offset
     remote_tensor = torch.as_strided(base_tensor, shape, stride, storage_offset)
