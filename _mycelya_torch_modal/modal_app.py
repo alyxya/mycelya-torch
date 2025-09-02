@@ -474,23 +474,21 @@ def create_modal_app_for_gpu(
             safetensor_files = [f for f in files if f.endswith(".safetensors")]
             pytorch_files = [f for f in files if f.endswith(".bin") and "pytorch_model" in f]
             
+            # Load weight files
+            state_dict = {}
             if safetensor_files:
-                weight_files, use_safetensors = safetensor_files, True
+                for weight_file in safetensor_files:
+                    file_path = hf_hub_download(repo, weight_file)
+                    file_state_dict = load_safetensors(file_path, device=str(device))
+                    state_dict.update(file_state_dict)
             elif pytorch_files:
-                weight_files, use_safetensors = pytorch_files, False
+                for weight_file in pytorch_files:
+                    file_path = hf_hub_download(repo, weight_file)
+                    file_state_dict = torch.load(file_path, map_location=device)
+                    state_dict.update(file_state_dict)
             else:
                 path_info = f" in path '{path}'" if path else ""
                 raise RuntimeError(f"No weight files found in {repo}{path_info}")
-
-            # Load all weight files
-            state_dict = {}
-            for weight_file in weight_files:
-                file_path = hf_hub_download(repo, weight_file)
-                if use_safetensors:
-                    file_state_dict = load_safetensors(file_path, device=str(device))
-                else:
-                    file_state_dict = torch.load(file_path, map_location=device)
-                state_dict.update(file_state_dict)
 
             # Store tensors and create metadata
             state_dict_metadata = {}
