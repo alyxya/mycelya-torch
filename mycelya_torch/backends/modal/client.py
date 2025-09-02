@@ -219,16 +219,17 @@ class ModalClient(Client):
             self._pending_results.append(func_call)
 
     # HuggingFace model loading methods
-    def _prepare_huggingface_model_impl(
+    def _load_huggingface_state_dict_impl(
         self,
-        checkpoint: str,
-        torch_dtype: str = "auto",
-        trust_remote_code: bool = False,
+        repo: str,
+        path: str,
+        device_type: str,
+        device_index: int,
     ) -> None:
-        """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
+        """Implementation: Load HuggingFace state dict directly on the remote machine."""
         # Trigger the remote call and capture FunctionCall - result will be available via resolve_futures
-        func_call = self._server_instance.prepare_huggingface_model.spawn(
-            checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
+        func_call = self._server_instance.load_huggingface_state_dict.spawn(
+            repo, path, device_type, device_index
         )
         self._pending_results.append(func_call)
 

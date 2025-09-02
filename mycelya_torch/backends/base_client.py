@@ -561,38 +561,38 @@ class Client(ABC):
 
     # HuggingFace model loading methods
     @abstractmethod
-    def _prepare_huggingface_model_impl(
+    def _load_huggingface_state_dict_impl(
         self,
-        checkpoint: str,
-        torch_dtype: str = "auto",
-        trust_remote_code: bool = False,
+        repo: str,
+        path: str,
+        device_type: str,
+        device_index: int,
     ) -> None:
-        """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
+        """Implementation: Load HuggingFace state dict directly on the remote machine."""
         pass
 
-    def prepare_huggingface_model(
+    def load_huggingface_state_dict(
         self,
-        checkpoint: str,
-        torch_dtype: str = "auto",
-        trust_remote_code: bool = False,
-    ) -> Future[Dict[str, Any]]:
+        repo: str,
+        path: str,
+        device_type: str,
+        device_index: int,
+    ) -> Future[Dict[str, TensorMetadata]]:
         """
-        Download and prepare a HuggingFace model directly on the remote machine.
+        Load HuggingFace state dict directly on the remote machine.
 
         This method downloads the model weights directly on the remote GPU,
         loads them into GPU memory, and returns metadata needed to create
         local tensor stubs.
 
         Args:
-            checkpoint: HuggingFace model checkpoint (e.g., "gpt2", "bert-base-uncased")
-            torch_dtype: Data type for model weights ("auto", "float32", "float16", etc.)
-            trust_remote_code: Whether to trust remote code for custom models
+            repo: HuggingFace repository ID (e.g., "microsoft/DialoGPT-medium")
+            path: Path within repository to load from (default: whole repo)
+            device_type: Device type (e.g., "cuda", "cpu")
+            device_index: Device index (e.g., 0 for cuda:0)
 
         Returns:
-            Future that resolves to a Dict containing:
-            - state_dict_metadata: Dict[str, Dict] mapping parameter names to tensor metadata
-            - config: Model configuration dictionary
-            - model_type: Model class name string
+            Future that resolves to Dict[str, TensorMetadata] mapping parameter names to tensor metadata
         """
         if not self.is_running():
             raise RuntimeError(
@@ -608,15 +608,15 @@ class Client(ABC):
             # Add to batch
             self._batch_calls.append(
                 BatchCall(
-                    method_name="prepare_huggingface_model",
-                    args=(checkpoint, torch_dtype, trust_remote_code),
+                    method_name="load_huggingface_state_dict",
+                    args=(repo, path, device_type, device_index),
                     kwargs={},
                 )
             )
         else:
             # Direct execution (existing behavior)
-            self._prepare_huggingface_model_impl(
-                checkpoint, torch_dtype, trust_remote_code
+            self._load_huggingface_state_dict_impl(
+                repo, path, device_type, device_index
             )
 
         return future

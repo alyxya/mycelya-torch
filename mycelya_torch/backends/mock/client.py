@@ -218,16 +218,17 @@ class MockClient(Client):
             self._pending_results.append(result)
 
     # HuggingFace model loading methods
-    def _prepare_huggingface_model_impl(
+    def _load_huggingface_state_dict_impl(
         self,
-        checkpoint: str,
-        torch_dtype: str = "auto",
-        trust_remote_code: bool = False,
+        repo: str,
+        path: str,
+        device_type: str,
+        device_index: int,
     ) -> None:
-        """Implementation: Download and prepare a HuggingFace model directly on the remote machine."""
+        """Implementation: Load HuggingFace state dict directly on the remote machine."""
         # Execute local call and store result for resolve_futures
-        result = self._server_instance.prepare_huggingface_model.local(
-            checkpoint, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code
+        result = self._server_instance.load_huggingface_state_dict.local(
+            repo, path, device_type, device_index
         )
         self._pending_results.append(result)
 
