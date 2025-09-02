@@ -519,10 +519,6 @@ def create_modal_app_for_gpu(
                 state_dict.update(file_state_dict)
 
 
-            # Handle tied weights - add missing lm_head.weight if needed
-            if "lm_head.weight" not in state_dict and "model.embed_tokens.weight" in state_dict:
-                # Tie lm_head.weight to embed_tokens.weight
-                state_dict["lm_head.weight"] = state_dict["model.embed_tokens.weight"]
 
             # Create temporary keys and store tensors in temporary registry
             state_dict_metadata = {}
