@@ -456,87 +456,54 @@ def create_modal_app_for_gpu(
                 return None
 
         def _load_huggingface_state_dict_impl(
-            self,
-            repo: str,
-            path: str,
-            device_type: str,
-            device_index: int,
+            self, repo: str, path: str, device_type: str, device_index: int
         ):
-            """Implementation of load_huggingface_state_dict without Modal decorators.
-
-            This loads HuggingFace model weights directly on the remote machine,
-            stores them in temporary registry with unique keys, and returns metadata.
-            """
+            """Load HuggingFace model weights and store with temporary keys."""
             import uuid
             import torch
             from safetensors.torch import load_file as load_safetensors
             from huggingface_hub import hf_hub_download, list_repo_files
 
-            # Use the explicit device type and index from the client
             device = torch.device(device_type, device_index)
-
-
-            # Download and determine available weight files
-            repo_files = list_repo_files(repo)
-
-            # Filter files by path if specified
+            
+            # Find weight files
+            files = list_repo_files(repo)
             if path:
-                repo_files = [f for f in repo_files if f.startswith(path)]
-
-            safetensor_files = [f for f in repo_files if f.endswith(".safetensors")]
-            pytorch_files = [
-                f for f in repo_files if f.endswith(".bin") and "pytorch_model" in f
-            ]
-
-            # Prefer safetensors if available
+                files = [f for f in files if f.startswith(path)]
+            
+            safetensor_files = [f for f in files if f.endswith(".safetensors")]
+            pytorch_files = [f for f in files if f.endswith(".bin") and "pytorch_model" in f]
+            
             if safetensor_files:
-                weight_files = safetensor_files
-                use_safetensors = True
+                weight_files, use_safetensors = safetensor_files, True
             elif pytorch_files:
-                weight_files = pytorch_files
-                use_safetensors = False
+                weight_files, use_safetensors = pytorch_files, False
             else:
                 path_info = f" in path '{path}'" if path else ""
-                raise RuntimeError(
-                    f"No supported weight files found in {repo}{path_info}"
-                )
+                raise RuntimeError(f"No weight files found in {repo}{path_info}")
 
-            # Load state dict from weight files
+            # Load all weight files
             state_dict = {}
-
             for weight_file in weight_files:
                 file_path = hf_hub_download(repo, weight_file)
-
                 if use_safetensors:
-                    # Load from safetensors
-                    file_state_dict = load_safetensors(
-                        file_path, device=str(device)
-                    )
+                    file_state_dict = load_safetensors(file_path, device=str(device))
                 else:
-                    # Load from PyTorch pickle file
                     file_state_dict = torch.load(file_path, map_location=device)
-
                 state_dict.update(file_state_dict)
 
-            # Create temporary keys and store tensors in temporary registry
+            # Store tensors and create metadata
             state_dict_metadata = {}
-            temp_tensor_registry = self._temp_tensor_registry
-
             for name, tensor in state_dict.items():
-                # Generate unique temporary key
                 temp_key = f"hf_{repo}_{name}_{uuid.uuid4().hex[:8]}"
-
-                # Store tensor in temporary registry for linking
-                temp_tensor_registry[temp_key] = tensor
-
-                # Collect metadata for client with temp_key
+                self._temp_tensor_registry[temp_key] = tensor
                 state_dict_metadata[name] = {
                     "shape": list(tensor.shape),
                     "stride": list(tensor.stride()),
                     "dtype": self._dtype_to_str(tensor.dtype),
                     "storage_offset": tensor.storage_offset(),
                     "nbytes": tensor.numel() * tensor.element_size(),
-                    "temp_key": temp_key,  # Key for linking
+                    "temp_key": temp_key,
                 }
 
             return state_dict_metadata
