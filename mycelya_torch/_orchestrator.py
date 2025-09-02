@@ -577,13 +577,13 @@ class Orchestrator:
             # Register tensor ID in orchestrator mapping
             self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
-    def prepare_huggingface_model(
+    def load_huggingface_state_dict(
         self,
         device_index: int,
         checkpoint: str,
         path: str = "",
     ):
-        """Prepare a HuggingFace model on the remote machine associated with device_index.
+        """Load a HuggingFace state dict on the remote machine associated with device_index.
 
         Args:
             device_index: Local mycelya device index

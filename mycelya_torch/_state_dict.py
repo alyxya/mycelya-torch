@@ -79,7 +79,7 @@ def load_huggingface_state_dict(
 
     # Step 1: Load model weights remotely through orchestrator
     # The orchestrator will handle client management and ensure the machine is running
-    future = orchestrator.prepare_huggingface_model(
+    future = orchestrator.load_huggingface_state_dict(
         device_index=device.index,
         checkpoint=repo_id,
         path=path,
