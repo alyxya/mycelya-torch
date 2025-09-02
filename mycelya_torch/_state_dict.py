@@ -34,13 +34,8 @@ def _create_remote_tensor_from_metadata(
     Returns:
         Local tensor stub ready for linking to remote storage
     """
-    # Convert string dtype to torch dtype
-    if isinstance(metadata["dtype"], str):
-        torch_dtype = getattr(torch, metadata["dtype"])
-    else:
-        torch_dtype = metadata["dtype"]
-
-    # Calculate storage elements needed for this tensor view
+    # Extract metadata
+    torch_dtype = getattr(torch, metadata["dtype"])
     shape = metadata["shape"]
     stride = metadata["stride"]
     storage_offset = metadata["storage_offset"]
