@@ -274,11 +274,10 @@ class Orchestrator:
         result_future = self.copy_tensor_to_cpu_future(tensor)
 
         # Wait for result while signaling background thread to continue
-        if result_future is not None:
-            self._main_thread_waiting.set()
-            result = result_future.result()
-            self._main_thread_waiting.clear()
-            return result
+        self._main_thread_waiting.set()
+        result = result_future.result()
+        self._main_thread_waiting.clear()
+        return result
 
     def update_tensor(
         self,
@@ -577,7 +576,7 @@ class Orchestrator:
             # Register tensor ID in orchestrator mapping
             self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
-    def load_huggingface_state_dict(
+    def load_huggingface_state_dict_future(
         self,
         device_index: int,
         checkpoint: str,
@@ -604,6 +603,31 @@ class Orchestrator:
             device_type=remote_device_type,
             device_index=remote_device_index
         )
+
+    def load_huggingface_state_dict(
+        self,
+        device_index: int,
+        checkpoint: str,
+        path: str = "",
+    ) -> Dict[str, TensorMetadata]:
+        """Load a HuggingFace state dict on the remote machine synchronously.
+
+        Args:
+            device_index: Local mycelya device index
+            checkpoint: HuggingFace model checkpoint
+            path: Path within the repository to load from (default: whole repo)
+
+        Returns:
+            Dict[str, TensorMetadata] mapping parameter names to tensor metadata
+        """
+        # Go through async method
+        result_future = self.load_huggingface_state_dict_future(device_index, checkpoint, path)
+
+        # Wait for result while signaling background thread to continue
+        self._main_thread_waiting.set()
+        result = result_future.result()
+        self._main_thread_waiting.clear()
+        return result
 
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.
