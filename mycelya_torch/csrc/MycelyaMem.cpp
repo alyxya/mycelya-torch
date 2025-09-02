@@ -248,6 +248,37 @@ const at::Tensor &resize_mycelya_(
   return self;
 }
 
+// C++ implementation of alias that preserves MycelyaTensorImpl
+at::Tensor alias_mycelya(const at::Tensor &self) {
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "alias_mycelya expects a mycelya tensor");
+
+  // alias should return the same tensor (or a view that shares storage)
+  // Use as_strided with current shape/stride to preserve MycelyaTensorImpl
+  return as_strided_mycelya(self, self.sizes(), self.strides(), 
+                            self.storage_offset());
+}
+
+// C++ implementation of _lazy_clone that preserves MycelyaTensorImpl  
+at::Tensor _lazy_clone_mycelya(const at::Tensor &self) {
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "_lazy_clone_mycelya expects a mycelya tensor");
+
+  // _lazy_clone should return a clone-like tensor with new storage
+  // For mycelya tensors, create an empty tensor with same shape and copy data
+  // This preserves MycelyaTensorImpl unlike the default implementation
+  
+  // Create empty tensor with same shape and dtype
+  auto scalar_type = c10::typeMetaToScalarType(self.dtype());
+  auto result = empty_mycelya(self.sizes(), scalar_type, c10::Layout::Strided,
+                              self.device(), c10::nullopt, c10::nullopt);
+  
+  // Copy data from original tensor (this will go through remote execution)
+  result.copy_(self);
+  
+  return result;
+}
+
 // Register the C++ implementations directly with PyTorch's dispatch system
 // This follows the OpenReg pattern where empty operations are implemented in
 // C++
@@ -270,6 +301,10 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // Register resize_ following OpenReg pattern - uses default implementation
   // with custom hook
   m.impl("resize_", resize_mycelya_);
+  
+  // Register alias and _lazy_clone operations in C++
+  m.impl("alias", alias_mycelya);
+  m.impl("_lazy_clone", _lazy_clone_mycelya);
 }
 
 }  // namespace mycelya
