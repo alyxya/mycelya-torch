@@ -69,6 +69,7 @@ def create_modal_app_for_gpu(
             stride: List[int]
             storage_offset: int
             nbytes: int
+            requires_grad: bool
             temp_key: str
 
         @staticmethod

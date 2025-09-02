@@ -27,6 +27,7 @@ class TensorMetadata(TypedDict):
     stride: List[int]
     storage_offset: int
     nbytes: int
+    requires_grad: bool
     temp_key: str
 
 
