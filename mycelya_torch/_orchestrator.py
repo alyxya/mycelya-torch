@@ -599,11 +599,16 @@ class Orchestrator:
         """
         # Get machine info from device index using device manager
         from ._device import device_manager
-        machine_id, _, _ = device_manager.get_remote_device_info(device_index)
+        machine_id, remote_device_type, remote_device_index = device_manager.get_remote_device_info(device_index)
         client = self._clients[machine_id]
 
         # Delegate to client's load_huggingface_state_dict method
-        return client.load_huggingface_state_dict(repo=checkpoint, path=path)
+        return client.load_huggingface_state_dict(
+            repo=checkpoint, 
+            path=path,
+            device_type=remote_device_type,
+            device_index=remote_device_index
+        )
 
     def _unlink_tensor(self, tensor: torch.Tensor) -> None:
         """Unlink tensor ID from remote storage without freeing the storage.

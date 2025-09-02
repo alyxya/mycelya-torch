@@ -458,7 +458,9 @@ def create_modal_app_for_gpu(
         def _load_huggingface_state_dict_impl(
             self,
             repo: str,
-            path: str = "",
+            path: str,
+            device_type: str,
+            device_index: int,
         ):
             """Implementation of load_huggingface_state_dict without Modal decorators.
 
@@ -470,11 +472,8 @@ def create_modal_app_for_gpu(
             from safetensors.torch import load_file as load_safetensors
             from huggingface_hub import hf_hub_download, list_repo_files
 
-            # Get the appropriate device for tensor operations
-            if torch.cuda.is_available():
-                device = torch.device("cuda")
-            else:
-                device = torch.device("cpu")
+            # Use the explicit device type and index from the client
+            device = torch.device(device_type, device_index)
 
 
             # Download and determine available weight files
@@ -558,10 +557,12 @@ def create_modal_app_for_gpu(
         def load_huggingface_state_dict(
             self,
             repo: str,
-            path: str = "",
+            path: str,
+            device_type: str,
+            device_index: int,
         ):
             """Download and prepare a HuggingFace model directly on the remote machine."""
-            return self._load_huggingface_state_dict_impl(repo, path)
+            return self._load_huggingface_state_dict_impl(repo, path, device_type, device_index)
 
         def _link_tensors_impl(
             self,
