@@ -79,14 +79,11 @@ def load_huggingface_state_dict(
 
     # Step 1: Load model weights remotely through orchestrator
     # The orchestrator will handle client management and ensure the machine is running
-    future = orchestrator.load_huggingface_state_dict(
+    state_dict_metadata = orchestrator.load_huggingface_state_dict(
         device_index=device.index,
         checkpoint=repo_id,
         path=path,
     )
-
-    # Wait for remote loading to complete
-    state_dict_metadata = future.result()
 
     # Step 2: Create local tensor stubs and collect temp_keys for linking
     state_dict = {}
