@@ -539,7 +539,7 @@ def create_modal_app_for_gpu(
                     "temp_key": temp_key,  # Key for linking
                 }
 
-            return {"state_dict_metadata": state_dict_metadata}
+            return state_dict_metadata
 
         @modal.method()
         def load_huggingface_state_dict(

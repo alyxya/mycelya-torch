@@ -116,12 +116,10 @@ def load_huggingface_state_dict(
     )
 
     # Wait for remote loading to complete
-    remote_metadata = future.result()
+    state_dict_metadata = future.result()
     log.debug(
-        f"Received metadata for {len(remote_metadata.get('state_dict_metadata', {}))} parameters"
+        f"Received metadata for {len(state_dict_metadata)} parameters"
     )
-
-    state_dict_metadata = remote_metadata["state_dict_metadata"]
 
     # Step 2: Create local tensor stubs and collect temp_keys for linking
     state_dict = {}
