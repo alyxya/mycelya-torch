@@ -218,16 +218,16 @@ class MockClient(Client):
             self._pending_results.append(result)
 
     # HuggingFace model loading methods
-    def _load_huggingface_state_dict_impl(
+    def _load_huggingface_state_dicts_impl(
         self,
         repo: str,
         path: str,
         device_type: str,
         device_index: int,
     ) -> None:
-        """Implementation: Load HuggingFace state dict directly on the remote machine."""
+        """Implementation: Load HuggingFace state dicts organized by directory on the remote machine."""
         # Execute local call and store result for resolve_futures
-        result = self._server_instance.load_huggingface_state_dict.local(
+        result = self._server_instance.load_huggingface_state_dicts.local(
             repo, path, device_type, device_index
         )
         self._pending_results.append(result)

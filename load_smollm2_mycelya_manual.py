@@ -15,8 +15,11 @@ device = machine.device()
 config = AutoConfig.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_config(config)
 
-# Load state dict directly onto mycelya device
-state_dict = mycelya_torch.load_huggingface_state_dict(model_name, device)
+# Load state dicts organized by directory onto mycelya device
+state_dicts = mycelya_torch.load_huggingface_state_dicts(model_name, device)
+
+# Extract root directory state dict (SmolLM2 has all weights in root)
+state_dict = state_dicts[""]
 
 # Use strict=False to allow missing tied weights, then let model.tie_weights() handle them
 model.load_state_dict(state_dict, strict=False, assign=True)

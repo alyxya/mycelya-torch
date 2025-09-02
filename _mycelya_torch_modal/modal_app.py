@@ -102,7 +102,7 @@ def create_modal_app_for_gpu(
                 "resize_storage": self._resize_storage_impl,
                 "copy_tensor": self._copy_tensor_impl,
                 "execute_aten_operation": self._execute_aten_operation_impl,
-                "load_huggingface_state_dict": self._load_huggingface_state_dict_impl,
+                "load_huggingface_state_dicts": self._load_huggingface_state_dicts_impl,
                 "link_tensors": self._link_tensors_impl,
             }
 
@@ -456,10 +456,11 @@ def create_modal_app_for_gpu(
                 # Static operation: no return value needed
                 return None
 
-        def _load_huggingface_state_dict_impl(
+        def _load_huggingface_state_dicts_impl(
             self, repo: str, path: str, device_type: str, device_index: int
         ):
-            """Load HuggingFace model weights and store with temporary keys."""
+            """Load HuggingFace model weights organized by directory and store with temporary keys."""
+            import os
             import uuid
             import torch
             from safetensors.torch import load_file as load_safetensors
@@ -475,51 +476,66 @@ def create_modal_app_for_gpu(
             safetensor_files = [f for f in files if f.endswith(".safetensors")]
             pytorch_files = [f for f in files if f.endswith(".bin") and "pytorch_model" in f]
             
-            # Load weight files
-            state_dict = {}
-            if safetensor_files:
-                for weight_file in safetensor_files:
-                    file_path = hf_hub_download(repo, weight_file)
-                    file_state_dict = load_safetensors(file_path, device="cpu")
-                    # Move tensors to target device
-                    file_state_dict = {k: v.to(device) for k, v in file_state_dict.items()}
-                    state_dict.update(file_state_dict)
-            elif pytorch_files:
-                for weight_file in pytorch_files:
-                    file_path = hf_hub_download(repo, weight_file)
-                    file_state_dict = torch.load(file_path, map_location=device)
-                    state_dict.update(file_state_dict)
-            else:
+            # Group files by directory
+            file_dirs = {}  # directory -> list of files
+            all_weight_files = safetensor_files if safetensor_files else pytorch_files
+            
+            if not all_weight_files:
                 path_info = f" in path '{path}'" if path else ""
                 raise RuntimeError(f"No weight files found in {repo}{path_info}")
-
-            # Store tensors and create metadata
-            state_dict_metadata = {}
-            for name, tensor in state_dict.items():
-                temp_key = f"hf_{repo}_{name}_{uuid.uuid4().hex[:8]}"
-                self._temp_tensor_registry[temp_key] = tensor
-                state_dict_metadata[name] = {
-                    "shape": list(tensor.shape),
-                    "stride": list(tensor.stride()),
-                    "dtype": self._dtype_to_str(tensor.dtype),
-                    "storage_offset": tensor.storage_offset(),
-                    "nbytes": tensor.numel() * tensor.element_size(),
-                    "requires_grad": tensor.requires_grad,
-                    "temp_key": temp_key,
-                }
-
-            return state_dict_metadata
+            
+            for weight_file in all_weight_files:
+                file_dir = os.path.dirname(weight_file) or ""  # Empty string for root
+                if file_dir not in file_dirs:
+                    file_dirs[file_dir] = []
+                file_dirs[file_dir].append(weight_file)
+            
+            # Always return hierarchical structure for consistency
+            hierarchical_metadata = {}
+            
+            for directory, dir_files in file_dirs.items():
+                dir_state_dict = {}
+                
+                # Load all files in this directory
+                for weight_file in dir_files:
+                    file_path = hf_hub_download(repo, weight_file)
+                    if weight_file.endswith(".safetensors"):
+                        file_state_dict = load_safetensors(file_path, device="cpu")
+                        file_state_dict = {k: v.to(device) for k, v in file_state_dict.items()}
+                    else:  # pytorch files
+                        file_state_dict = torch.load(file_path, map_location=device)
+                    dir_state_dict.update(file_state_dict)
+                
+                # Create metadata for this directory's tensors
+                dir_metadata = {}
+                for name, tensor in dir_state_dict.items():
+                    temp_key = f"hf_{repo}_{directory}_{name}_{uuid.uuid4().hex[:8]}"
+                    self._temp_tensor_registry[temp_key] = tensor
+                    dir_metadata[name] = {
+                        "shape": list(tensor.shape),
+                        "stride": list(tensor.stride()),
+                        "dtype": self._dtype_to_str(tensor.dtype),
+                        "storage_offset": tensor.storage_offset(),
+                        "nbytes": tensor.untyped_storage().nbytes(),
+                        "requires_grad": tensor.requires_grad,
+                        "temp_key": temp_key,
+                    }
+                
+                # Use directory name as key (empty string for root)
+                hierarchical_metadata[directory] = dir_metadata
+            
+            return hierarchical_metadata
 
         @modal.method()
-        def load_huggingface_state_dict(
+        def load_huggingface_state_dicts(
             self,
             repo: str,
             path: str,
             device_type: str,
             device_index: int,
         ):
-            """Download and prepare a HuggingFace model directly on the remote machine."""
-            return self._load_huggingface_state_dict_impl(repo, path, device_type, device_index)
+            """Download and prepare HuggingFace model weights organized by directory."""
+            return self._load_huggingface_state_dicts_impl(repo, path, device_type, device_index)
 
         def _link_tensors_impl(
             self,

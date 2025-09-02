@@ -222,7 +222,7 @@ from ._machine import (  # noqa: E402
 
 # Remote state dict loading utilities
 from ._state_dict import (  # noqa: E402
-    load_huggingface_state_dict,
+    load_huggingface_state_dicts,
 )
 
 # Define the public API
@@ -233,7 +233,7 @@ __all__ = [
     "GPUType",
     "get_all_machines",
     # Remote state dict loading
-    "load_huggingface_state_dict",
+    "load_huggingface_state_dicts",
     # Logging utilities
     "enable_debug_logging",
     "enable_info_logging",

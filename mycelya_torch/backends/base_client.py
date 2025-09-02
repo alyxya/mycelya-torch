@@ -561,29 +561,29 @@ class Client(ABC):
 
     # HuggingFace model loading methods
     @abstractmethod
-    def _load_huggingface_state_dict_impl(
+    def _load_huggingface_state_dicts_impl(
         self,
         repo: str,
         path: str,
         device_type: str,
         device_index: int,
     ) -> None:
-        """Implementation: Load HuggingFace state dict directly on the remote machine."""
+        """Implementation: Load HuggingFace state dicts organized by directory on the remote machine."""
         pass
 
-    def load_huggingface_state_dict(
+    def load_huggingface_state_dicts(
         self,
         repo: str,
         path: str,
         device_type: str,
         device_index: int,
-    ) -> Future[Dict[str, TensorMetadata]]:
+    ) -> Future[Dict[str, Dict[str, TensorMetadata]]]:
         """
-        Load HuggingFace state dict directly on the remote machine.
+        Load HuggingFace state dicts organized by directory on the remote machine.
 
         This method downloads the model weights directly on the remote GPU,
-        loads them into GPU memory, and returns metadata needed to create
-        local tensor stubs.
+        loads them into GPU memory organized by directory structure, and returns 
+        metadata needed to create local tensor stubs.
 
         Args:
             repo: HuggingFace repository ID (e.g., "microsoft/DialoGPT-medium")
@@ -608,14 +608,14 @@ class Client(ABC):
             # Add to batch
             self._batch_calls.append(
                 BatchCall(
-                    method_name="load_huggingface_state_dict",
+                    method_name="load_huggingface_state_dicts",
                     args=(repo, path, device_type, device_index),
                     kwargs={},
                 )
             )
         else:
             # Direct execution (existing behavior)
-            self._load_huggingface_state_dict_impl(
+            self._load_huggingface_state_dicts_impl(
                 repo, path, device_type, device_index
             )
 
