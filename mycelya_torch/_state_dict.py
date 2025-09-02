@@ -77,11 +77,8 @@ def load_huggingface_state_dict(
             f"load_huggingface_state_dict() only supports mycelya devices, got {device.type}"
         )
 
-    log.info(f"Loading HuggingFace model '{repo_id}' state dict on {device}")
-
     # Step 1: Load model weights remotely through orchestrator
     # The orchestrator will handle client management and ensure the machine is running
-    log.debug(f"Requesting remote model loading for {repo_id}")
     future = orchestrator.prepare_huggingface_model(
         device_index=device.index,
         checkpoint=repo_id,
@@ -90,9 +87,6 @@ def load_huggingface_state_dict(
 
     # Wait for remote loading to complete
     state_dict_metadata = future.result()
-    log.debug(
-        f"Received metadata for {len(state_dict_metadata)} parameters"
-    )
 
     # Step 2: Create local tensor stubs and collect temp_keys for linking
     state_dict = {}
@@ -108,10 +102,8 @@ def load_huggingface_state_dict(
         temp_keys.append(metadata["temp_key"])
 
     # Step 3: Link all tensors at once using the orchestrator
-    log.debug(f"Linking {len(local_tensors)} tensors to remote storage")
     orchestrator.link_tensors(local_tensors, temp_keys)
 
-    log.info(f"Successfully loaded {len(state_dict)} parameters for {repo_id}")
     return state_dict
 
 
