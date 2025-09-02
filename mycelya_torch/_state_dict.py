@@ -39,18 +39,12 @@ def _create_remote_tensor_from_metadata(
     shape = metadata["shape"]
     stride = metadata["stride"]
     storage_offset = metadata["storage_offset"]
-
-    # Create untyped storage with size from metadata
     storage_bytes = metadata["nbytes"]
+
+    # Create tensor with exact shape/stride/offset
     untyped_storage = torch.UntypedStorage(storage_bytes, device=device)
-
-    # Create base tensor from untyped storage
-    storage_elements = storage_bytes // torch_dtype.itemsize
-    base_tensor = torch.empty(0, dtype=torch_dtype, device=device)
-    base_tensor.set_(untyped_storage, 0, [storage_elements], [1])
-
-    # Create tensor view with exact shape/stride/offset
-    remote_tensor = torch.as_strided(base_tensor, shape, stride, storage_offset)
+    remote_tensor = torch.empty(0, dtype=torch_dtype, device=device)
+    remote_tensor.set_(untyped_storage, storage_offset, shape, stride)
     remote_tensor.requires_grad_(metadata.get("requires_grad", False))
 
     return remote_tensor
