@@ -14,40 +14,9 @@ import torch
 
 from ._logging import get_logger
 from ._orchestrator import orchestrator
-from ._utils import TensorMetadata
+from ._utils import TensorMetadata, create_mycelya_tensor_from_metadata
 
 log = get_logger(__name__)
-
-
-def _create_remote_tensor_from_metadata(
-    metadata: TensorMetadata, device: torch.device
-) -> torch.Tensor:
-    """Create a local tensor stub that will be linked to remote storage.
-
-    This creates a tensor with the correct shape, stride, and dtype that can
-    be used as a stub before linking to actual remote tensor data.
-
-    Args:
-        metadata: Tensor metadata containing shape, dtype, stride, storage_offset, requires_grad
-        device: Mycelya device where the tensor should appear to be located
-
-    Returns:
-        Local tensor stub ready for linking to remote storage
-    """
-    # Extract metadata
-    torch_dtype = getattr(torch, metadata["dtype"])
-    shape = metadata["shape"]
-    stride = metadata["stride"]
-    storage_offset = metadata["storage_offset"]
-    storage_bytes = metadata["nbytes"]
-
-    # Create tensor with exact shape/stride/offset
-    untyped_storage = torch.UntypedStorage(storage_bytes, device=device)
-    remote_tensor = torch.empty(0, dtype=torch_dtype, device=device)
-    remote_tensor.set_(untyped_storage, storage_offset, shape, stride)
-    remote_tensor.requires_grad_(metadata["requires_grad"])
-
-    return remote_tensor
 
 
 def load_huggingface_state_dict(
@@ -87,21 +56,18 @@ def load_huggingface_state_dict(
 
     # Step 2: Create local tensor stubs and collect temp_keys for linking
     state_dict = {}
-    local_tensors = []
+    tensors = []
     temp_keys = []
 
     for param_name, metadata in state_dict_metadata.items():
         # Create local tensor stub with proper shape/stride/dtype
-        local_tensor = _create_remote_tensor_from_metadata(metadata, device)
+        tensor = create_mycelya_tensor_from_metadata(metadata, device)
 
-        state_dict[param_name] = local_tensor
-        local_tensors.append(local_tensor)
+        state_dict[param_name] = tensor
+        tensors.append(tensor)
         temp_keys.append(metadata["temp_key"])
 
     # Step 3: Link all tensors at once using the orchestrator
-    orchestrator.link_tensors(local_tensors, temp_keys)
+    orchestrator.link_tensors(tensors, temp_keys)
 
     return state_dict
-
-
-

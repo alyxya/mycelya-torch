@@ -8,7 +8,7 @@ import torch
 from .._device import device_manager
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import get_storage_id, map_args_kwargs
+from .._utils import get_storage_id, map_args_kwargs, create_mycelya_tensor_from_metadata
 
 log = get_logger(__name__)
 
@@ -131,11 +131,7 @@ def _execute_with_dynamic_outputs(
     output_tensors = []
     temp_keys = []
     for metadata in result:
-        dtype = getattr(torch, metadata["dtype"])
-        storage = torch.UntypedStorage(metadata["nbytes"], device=remote_device)
-        output_tensor = torch.empty(0, dtype=dtype, device=remote_device).set_(
-            storage, metadata["storage_offset"], metadata["shape"], metadata["stride"]
-        )
+        output_tensor = create_mycelya_tensor_from_metadata(metadata, remote_device)
         output_tensors.append(output_tensor)
         temp_keys.append(metadata["temp_key"])
 

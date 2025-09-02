@@ -8,10 +8,9 @@ from mycelya tensors. These functions are for internal use only and should not b
 used by external users of mycelya_torch.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
 
 import torch
-from typing_extensions import TypedDict
 
 
 class TensorMetadata(TypedDict):
@@ -27,8 +26,8 @@ class TensorMetadata(TypedDict):
     stride: List[int]
     storage_offset: int
     nbytes: int
-    requires_grad: bool
     temp_key: str
+    requires_grad: NotRequired[bool]
 
 
 def get_tensor_id(tensor: torch.Tensor) -> int:
@@ -91,6 +90,28 @@ def dtype_to_str(dtype: torch.dtype) -> str:
         String representation without prefix (e.g., "float32")
     """
     return str(dtype).replace("torch.", "")
+
+
+def create_mycelya_tensor_from_metadata(
+    metadata: TensorMetadata, device: torch.device
+) -> torch.Tensor:
+    """Create a mycelya tensor from metadata that will be linked to remote storage.
+
+    Args:
+        metadata: Tensor metadata containing shape, dtype, stride, storage_offset, nbytes
+        device: Mycelya device where the tensor should appear to be located
+
+    Returns:
+        Mycelya tensor ready for linking to remote storage
+    """
+    storage = torch.UntypedStorage(metadata["nbytes"], device=device)
+    tensor = torch.empty(0, dtype=getattr(torch, metadata["dtype"]), device=device)
+    tensor.set_(storage, metadata["storage_offset"], metadata["shape"], metadata["stride"])
+    
+    if "requires_grad" in metadata:
+        tensor.requires_grad_(metadata["requires_grad"])
+
+    return tensor
 
 
 def map_args_kwargs(

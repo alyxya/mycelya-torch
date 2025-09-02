@@ -13,7 +13,7 @@ This module handles all Modal-specific functionality including:
 Part of: mycelya_torch PyTorch extension
 """
 
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
 
 import modal
 
@@ -69,8 +69,8 @@ def create_modal_app_for_gpu(
             stride: List[int]
             storage_offset: int
             nbytes: int
-            requires_grad: bool
             temp_key: str
+            requires_grad: NotRequired[bool]
 
         @staticmethod
         def _dtype_to_str(dtype) -> str:
