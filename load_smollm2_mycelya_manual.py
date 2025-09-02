@@ -21,9 +21,6 @@ state_dict = mycelya_torch.load_huggingface_state_dict(model_name, device)
 # Use strict=False to allow missing tied weights, then let model.tie_weights() handle them
 model.load_state_dict(state_dict, strict=False, assign=True)
 
-# Move model to mycelya device after loading state dict
-model = model.to(device)
-
 # Let HuggingFace handle tied word embeddings properly
 model.tie_weights()
 
