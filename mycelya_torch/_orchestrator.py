@@ -581,8 +581,6 @@ class Orchestrator:
         self,
         device_index: int,
         checkpoint: str,
-        torch_dtype: str = "auto",
-        trust_remote_code: bool = False,
         path: str = "",
     ):
         """Prepare a HuggingFace model on the remote machine associated with device_index.
@@ -590,8 +588,6 @@ class Orchestrator:
         Args:
             device_index: Local mycelya device index
             checkpoint: HuggingFace model checkpoint
-            torch_dtype: Data type for model weights (ignored)
-            trust_remote_code: Whether to trust remote code (ignored)
             path: Path within the repository to load from (default: whole repo)
 
         Returns:
