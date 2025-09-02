@@ -478,11 +478,11 @@ def create_modal_app_for_gpu(
 
             # Download and determine available weight files
             repo_files = list_repo_files(repo)
-            
+
             # Filter files by path if specified
             if path:
                 repo_files = [f for f in repo_files if f.startswith(path)]
-            
+
             safetensor_files = [f for f in repo_files if f.endswith(".safetensors")]
             pytorch_files = [
                 f for f in repo_files if f.endswith(".bin") and "pytorch_model" in f
@@ -518,8 +518,6 @@ def create_modal_app_for_gpu(
 
                 state_dict.update(file_state_dict)
 
-
-
             # Create temporary keys and store tensors in temporary registry
             state_dict_metadata = {}
             temp_tensor_registry = self._temp_tensor_registry
@@ -529,7 +527,7 @@ def create_modal_app_for_gpu(
                 temp_key = f"hf_{repo}_{name}_{uuid.uuid4().hex[:8]}"
 
                 # Store tensor in temporary registry for linking
-                temp_tensor_registry[temp_key] = tensor.detach().contiguous()
+                temp_tensor_registry[temp_key] = tensor
 
                 # Collect metadata for client with temp_key
                 state_dict_metadata[name] = {
