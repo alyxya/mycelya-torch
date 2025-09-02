@@ -582,7 +582,7 @@ class Orchestrator:
         device_index: int,
         checkpoint: str,
         path: str = "",
-    ):
+    ) -> Future[Dict[str, TensorMetadata]]:
         """Load a HuggingFace state dict on the remote machine associated with device_index.
 
         Args:
