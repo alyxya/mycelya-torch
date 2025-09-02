@@ -20,7 +20,7 @@ log = get_logger(__name__)
 
 
 def _create_remote_tensor_from_metadata(
-    metadata: TensorMetadata, device: torch.device, requires_grad: bool = False
+    metadata: TensorMetadata, device: torch.device
 ) -> torch.Tensor:
     """Create a local tensor stub that will be linked to remote storage.
 
@@ -28,9 +28,8 @@ def _create_remote_tensor_from_metadata(
     be used as a stub before linking to actual remote tensor data.
 
     Args:
-        metadata: Tensor metadata containing shape, dtype, stride, storage_offset
+        metadata: Tensor metadata containing shape, dtype, stride, storage_offset, requires_grad
         device: Mycelya device where the tensor should appear to be located
-        requires_grad: Whether the tensor requires gradients
 
     Returns:
         Local tensor stub ready for linking to remote storage
@@ -66,7 +65,7 @@ def _create_remote_tensor_from_metadata(
 
     # Create tensor view with exact shape/stride/offset
     remote_tensor = torch.as_strided(base_tensor, shape, stride, storage_offset)
-    remote_tensor.requires_grad_(requires_grad)
+    remote_tensor.requires_grad_(metadata.get("requires_grad", False))
 
     return remote_tensor
 
@@ -122,10 +121,7 @@ def load_huggingface_state_dict(
 
     for param_name, metadata in state_dict_metadata.items():
         # Create local tensor stub with proper shape/stride/dtype
-        requires_grad = metadata.get("requires_grad", False)
-        local_tensor = _create_remote_tensor_from_metadata(
-            metadata, device, requires_grad
-        )
+        local_tensor = _create_remote_tensor_from_metadata(metadata, device)
 
         state_dict[param_name] = local_tensor
         local_tensors.append(local_tensor)
