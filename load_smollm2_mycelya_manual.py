@@ -6,7 +6,7 @@ import mycelya_torch
 
 model_name = "HuggingFaceTB/SmolLM2-135M-Instruct"
 
-# Create mock machine and device
+# Create modal machine and device
 # machine = mycelya_torch.RemoteMachine("mock")
 machine = mycelya_torch.RemoteMachine("modal", "T4")
 device = machine.device()
@@ -16,11 +16,16 @@ config = AutoConfig.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_config(config)
 
 # Load state dict directly onto mycelya device
-state_dict = mycelya_torch.load_huggingface_state_dict(
-    model_name, device, torch_dtype="float32"
-)
+state_dict = mycelya_torch.load_huggingface_state_dict(model_name, device)
 
+# Use strict=False to allow missing tied weights, then let model.tie_weights() handle them
 model.load_state_dict(state_dict, strict=False, assign=True)
+
+# Move model to mycelya device after loading state dict
+model = model.to(device)
+
+# Let HuggingFace handle tied word embeddings properly
+model.tie_weights()
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -35,7 +40,7 @@ model.eval()
 generated_tokens = inputs["input_ids"].clone()
 
 # Generate 30 tokens manually
-for _ in range(30):
+for _ in range(50):
     with torch.no_grad():
         logits = model(generated_tokens).logits[0, -1]  # Get last token logits
         next_token = torch.argmax(logits, dim=-1, keepdim=True).unsqueeze(0)

@@ -480,7 +480,9 @@ def create_modal_app_for_gpu(
             if safetensor_files:
                 for weight_file in safetensor_files:
                     file_path = hf_hub_download(repo, weight_file)
-                    file_state_dict = load_safetensors(file_path, device=str(device))
+                    file_state_dict = load_safetensors(file_path, device="cpu")
+                    # Move tensors to target device
+                    file_state_dict = {k: v.to(device) for k, v in file_state_dict.items()}
                     state_dict.update(file_state_dict)
             elif pytorch_files:
                 for weight_file in pytorch_files:
