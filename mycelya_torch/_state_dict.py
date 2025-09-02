@@ -122,9 +122,7 @@ def load_huggingface_state_dict(
 
     for param_name, metadata in state_dict_metadata.items():
         # Create local tensor stub with proper shape/stride/dtype
-        requires_grad = (
-            "weight" in param_name
-        )  # Only weights require gradients by default
+        requires_grad = metadata.get("requires_grad", False)
         local_tensor = _create_remote_tensor_from_metadata(
             metadata, device, requires_grad
         )

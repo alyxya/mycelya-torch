@@ -501,6 +501,7 @@ def create_modal_app_for_gpu(
                     "dtype": self._dtype_to_str(tensor.dtype),
                     "storage_offset": tensor.storage_offset(),
                     "nbytes": tensor.numel() * tensor.element_size(),
+                    "requires_grad": tensor.requires_grad,
                     "temp_key": temp_key,
                 }
 
