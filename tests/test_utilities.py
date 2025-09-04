@@ -163,7 +163,7 @@ class ErrorTestUtils:
         tensor1: torch.Tensor,
         tensor2: torch.Tensor,
         operation_fn: callable,
-        expected_error_message: str = "(Cross-device remote transfers are not supported|Expected all tensors to be on the same device|Cannot perform operation.*between tensors on different remote devices)",
+        expected_error_message: str = "(Cross-device remote transfers are not supported|Cross-machine remote transfers are not supported|Expected all tensors to be on the same device|Cannot perform operation.*between different devices)",
     ) -> None:
         """Assert that an operation fails when using tensors from different devices."""
         with pytest.raises(RuntimeError, match=expected_error_message):
