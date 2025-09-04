@@ -5,6 +5,7 @@
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 #include <ATen/ops/as_strided_cpu_dispatch.h>
 #include <ATen/ops/set_cpu_dispatch.h>
+#include <ATen/native/ResizeCommon.h>
 #include <c10/core/Allocator.h>
 #include <torch/library.h>
 
@@ -58,7 +59,6 @@ at::Tensor empty_mycelya(at::IntArrayRef size,
 
   const c10::DeviceGuard device_guard(target_device);
 
-  // Use PyTorch helper for element count calculation
   int64_t nelements = c10::multiply_integers(size);
   auto dtype_meta = c10::scalarTypeToTypeMeta(resolved_dtype);
   int64_t size_bytes = nelements * dtype_meta.itemsize();
@@ -73,7 +73,6 @@ at::Tensor empty_mycelya(at::IntArrayRef size,
   auto tensor = at::detail::make_tensor<MycelyaTensorImpl>(
       c10::Storage(storage_impl), dtype_meta);
 
-  // Use PyTorch helper for contiguous strides, set sizes
   if (size.size() != 1 || size[0] != 0) {
     tensor.unsafeGetTensorImpl()->set_sizes_and_strides(
         size, c10::contiguous_strides(size));
@@ -115,6 +114,15 @@ at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "as_strided_mycelya expects a mycelya tensor");
 
+  int64_t offset = storage_offset.value_or(self.storage_offset());
+  
+  int64_t storage_size_needed = at::native::storage_size_for(size, stride);
+  int64_t required_storage = storage_size_needed + offset;
+  int64_t available_storage = self.storage().nbytes() / self.dtype().itemsize();
+  TORCH_CHECK(required_storage <= available_storage,
+              "as_strided would access out-of-bounds storage: required ", required_storage, 
+              " but only ", available_storage, " elements available");
+
   // Create a new mycelya tensor with the same storage but different view
   // parameters This preserves the custom MycelyaTensorImpl unlike the CPU
   // fallback
@@ -122,7 +130,6 @@ at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
       at::detail::make_tensor<MycelyaTensorImpl>(self.storage(), self.dtype());
 
   // Set the new sizes and strides for the view
-  int64_t offset = storage_offset.value_or(self.storage_offset());
   auto *impl = result.unsafeGetTensorImpl();
   impl->set_sizes_and_strides(size, stride, offset);
   return result;
@@ -133,8 +140,6 @@ at::Tensor view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "view_mycelya expects a mycelya tensor");
 
-  // Use PyTorch's built-in inference and stride computation (same as native
-  // impl)
   at::DimVector inferred_size = at::infer_size_dv(size, self.numel());
   auto stride =
       at::detail::computeStride(self.sizes(), self.strides(), inferred_size);
@@ -143,7 +148,6 @@ at::Tensor view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
               "(at least one dimension spans across two contiguous subspaces). "
               "Use .reshape(...) instead.");
 
-  // Use as_strided for the actual view creation (same as native impl)
   return as_strided_mycelya(self, inferred_size, *stride,
                             self.storage_offset());
 }
@@ -153,7 +157,6 @@ at::Tensor _unsafe_view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "_unsafe_view_mycelya expects a mycelya tensor");
 
-  // Use the same logic as view_mycelya to preserve MycelyaTensorImpl
   at::DimVector inferred_size = at::infer_size_dv(size, self.numel());
   auto stride =
       at::detail::computeStride(self.sizes(), self.strides(), inferred_size);
@@ -161,7 +164,6 @@ at::Tensor _unsafe_view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
               "_unsafe_view size is not compatible with input tensor's size and stride "
               "(at least one dimension spans across two contiguous subspaces).");
 
-  // Use as_strided to preserve MycelyaTensorImpl
   return as_strided_mycelya(self, inferred_size, *stride,
                             self.storage_offset());
 }
@@ -199,6 +201,8 @@ at::Tensor &set_source_storage_mycelya(at::Tensor &self, at::Storage source) {
 
   // Calculate size based on storage bytes and element size
   size_t element_size = self.dtype().itemsize();
+  TORCH_CHECK(source.nbytes() % element_size == 0, 
+              "Storage size (", source.nbytes(), ") not divisible by element size (", element_size, ")");
   int64_t numel = source.nbytes() / element_size;
   
   // Delegate to the general set_ function with 1D shape and contiguous stride
@@ -209,11 +213,7 @@ at::Tensor &set_source_storage_mycelya(at::Tensor &self, at::Storage source) {
 const at::Tensor &resize_mycelya_(
     const at::Tensor &self, at::IntArrayRef size,
     c10::optional<at::MemoryFormat> memory_format) {
-  // Calculate required storage size for new shape
-  int64_t new_numel = 1;
-  for (auto s : size) {
-    new_numel *= s;
-  }
+  int64_t new_numel = c10::multiply_integers(size);
 
   size_t element_size = self.dtype().itemsize();
   size_t required_bytes = new_numel * element_size;
@@ -222,16 +222,11 @@ const at::Tensor &resize_mycelya_(
   // Get storage reference for potential resize
   auto storage = self.storage();
 
-  // Only resize storage if we need MORE space (growth)
-  // For shrinking, keep existing storage and just change tensor view
   if (required_bytes > current_bytes) {
-    // Directly call the resize hook through PrivateUse1HooksInterface
     at::detail::getPrivateUse1Hooks().resizePrivateUse1Bytes(storage,
                                                              required_bytes);
   }
 
-  // Calculate new strides for contiguous layout (assuming contiguous memory
-  // format)
   std::vector<int64_t> new_stride(size.size());
   if (size.size() > 0) {
     new_stride[size.size() - 1] = 1;
@@ -240,9 +235,6 @@ const at::Tensor &resize_mycelya_(
     }
   }
 
-  // Update tensor metadata using set_ operation
-  // This updates shape, stride, and storage_offset without allocating new
-  // storage
   const_cast<at::Tensor &>(self).set_(storage, 0, size, new_stride);
 
   return self;
@@ -253,8 +245,6 @@ at::Tensor alias_mycelya(const at::Tensor &self) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "alias_mycelya expects a mycelya tensor");
 
-  // alias should return the same tensor (or a view that shares storage)
-  // Use as_strided with current shape/stride to preserve MycelyaTensorImpl
   return as_strided_mycelya(self, self.sizes(), self.strides(), 
                             self.storage_offset());
 }
@@ -264,16 +254,10 @@ at::Tensor _lazy_clone_mycelya(const at::Tensor &self) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "_lazy_clone_mycelya expects a mycelya tensor");
 
-  // _lazy_clone should return a clone-like tensor with new storage
-  // For mycelya tensors, create an empty tensor with same shape and copy data
-  // This preserves MycelyaTensorImpl unlike the default implementation
-  
-  // Create empty tensor with same shape and dtype
   auto scalar_type = c10::typeMetaToScalarType(self.dtype());
   auto result = empty_mycelya(self.sizes(), scalar_type, c10::Layout::Strided,
                               self.device(), c10::nullopt, c10::nullopt);
   
-  // Copy data from original tensor (this will go through remote execution)
   result.copy_(self);
   
   return result;

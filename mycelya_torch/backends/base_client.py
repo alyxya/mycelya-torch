@@ -582,7 +582,7 @@ class Client(ABC):
         Load HuggingFace state dicts organized by directory on the remote machine.
 
         This method downloads the model weights directly on the remote GPU,
-        loads them into GPU memory organized by directory structure, and returns 
+        loads them into GPU memory organized by directory structure, and returns
         metadata needed to create local tensor stubs.
 
         Args:

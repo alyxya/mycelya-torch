@@ -14,7 +14,7 @@ import torch
 
 from ._logging import get_logger
 from ._orchestrator import orchestrator
-from ._utils import TensorMetadata, create_mycelya_tensor_from_metadata
+from ._utils import create_mycelya_tensor_from_metadata
 
 log = get_logger(__name__)
 
@@ -59,23 +59,23 @@ def load_huggingface_state_dicts(
     all_tensors = []
     all_temp_keys = []
     result_structure = {}
-    
+
     # Process each directory's state dict
     for directory, state_dict_metadata in hierarchical_metadata.items():
         dir_state_dict = {}
-        
+
         for param_name, metadata in state_dict_metadata.items():
             # Create local tensor stub with proper shape/stride/dtype
             tensor = create_mycelya_tensor_from_metadata(metadata, device)
-            
+
             dir_state_dict[param_name] = tensor
             all_tensors.append(tensor)
             all_temp_keys.append(metadata["temp_key"])
-        
+
         result_structure[directory] = dir_state_dict
-    
+
     # Step 3: Link all tensors at once using the orchestrator
     orchestrator.link_tensors(all_tensors, all_temp_keys)
-    
+
     # Step 4: Return hierarchical structure consistently
     return result_structure

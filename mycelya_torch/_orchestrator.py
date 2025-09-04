@@ -598,7 +598,7 @@ class Orchestrator:
 
         # Delegate to client's load_huggingface_state_dicts method
         return client.load_huggingface_state_dicts(
-            repo=checkpoint, 
+            repo=checkpoint,
             path=path,
             device_type=remote_device_type,
             device_index=remote_device_index

@@ -8,7 +8,11 @@ import torch
 from .._device import device_manager
 from .._logging import get_logger
 from .._orchestrator import orchestrator
-from .._utils import get_storage_id, map_args_kwargs, create_mycelya_tensor_from_metadata
+from .._utils import (
+    create_mycelya_tensor_from_metadata,
+    get_storage_id,
+    map_args_kwargs,
+)
 
 log = get_logger(__name__)
 
