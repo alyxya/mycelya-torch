@@ -126,12 +126,14 @@ _remote_lib_aten.impl("upsample_bilinear2d", _upsample_bilinear2d_mycelya, dispa
 ### 4. Scalar Operation Enhancements
 
 **File**: `mycelya_torch/aten/scalar_ops.py` (new file)
+**Modified**: `mycelya_torch/aten/__init__.py` (import and registration)
 
 **Problem**: CPU scalar operations with mycelya tensors needed better handling for common arithmetic operations.
 
-**Solution**: Created dedicated scalar operation handlers:
+**Solution**: Created dedicated scalar operation handlers in a new module:
 
 ```python
+# mycelya_torch/aten/scalar_ops.py
 def _mul_tensor_mycelya(input, other):
     """Handle tensor multiplication with proper scalar handling."""
     from .dispatch import _remote_kernel_fallback
@@ -155,6 +157,21 @@ def _sub_tensor_mycelya(input, other):
     from .dispatch import _remote_kernel_fallback
     op = torch.ops.aten.sub.Tensor
     return _remote_kernel_fallback(op, input, other)
+
+# Then import and register in mycelya_torch/aten/__init__.py
+from .scalar_ops import _mul_tensor_mycelya, _div_tensor_mycelya, _add_tensor_mycelya, _sub_tensor_mycelya
+
+# Register scalar operation implementations for CPU scalar promotion
+_remote_lib_aten.impl("mul.Tensor", _mul_tensor_mycelya, dispatch_key="PrivateUse1")
+_remote_lib_aten.impl("div.Tensor", _div_tensor_mycelya, dispatch_key="PrivateUse1")
+_remote_lib_aten.impl("add.Tensor", _add_tensor_mycelya, dispatch_key="PrivateUse1")
+_remote_lib_aten.impl("sub.Tensor", _sub_tensor_mycelya, dispatch_key="PrivateUse1")
+
+# Also register for autograd backend
+_remote_lib_aten.impl("mul.Tensor", _mul_tensor_mycelya, dispatch_key="AutogradPrivateUse1")
+_remote_lib_aten.impl("div.Tensor", _div_tensor_mycelya, dispatch_key="AutogradPrivateUse1")
+_remote_lib_aten.impl("add.Tensor", _add_tensor_mycelya, dispatch_key="AutogradPrivateUse1")
+_remote_lib_aten.impl("sub.Tensor", _sub_tensor_mycelya, dispatch_key="AutogradPrivateUse1")
 ```
 
 **Rationale**: Stable Diffusion involves many scalar operations (guidance scale multiplication, noise scheduling, etc.). Proper scalar handling ensures these operations work correctly with remote tensors.
