@@ -206,15 +206,31 @@ _remote_lib_aten.impl("repeat", _repeat_mycelya, dispatch_key="AutogradPrivateUs
 
 **Rationale**: The `repeat` operation is used for tensor replication in attention mechanisms. The `expand` operation was correctly identified as a metadata-only operation that shouldn't require remote execution.
 
-### 6. C++ Backend Memory Management Fix
+### 6. C++ Backend Storage Offset Fix
 
 **File**: `mycelya_torch/csrc/MycelyaMem.cpp`
 
-**Problem**: Core data corruption in C++ memory management system was causing accumulated errors throughout inference.
+**Problem**: The `as_strided_mycelya` function was incorrectly defaulting storage_offset to 0 when not explicitly provided, instead of preserving the original tensor's storage_offset. This caused data corruption in view operations and tensor reshaping.
 
-**Solution**: Fixed memory management and data integrity issues in the C++ backend.
+**Solution**: Fixed storage offset preservation in the `as_strided` implementation:
 
-**Rationale**: This was the root cause - despite Python-level operations appearing correct, the underlying C++ implementation had data corruption bugs that manifested as completely wrong final results.
+```cpp
+// Before (buggy):
+int64_t offset = storage_offset.value_or(0);
+
+// After (fixed):
+int64_t offset = storage_offset.value_or(self.storage_offset());
+```
+
+**Rationale**: This was the root cause of data corruption. When PyTorch operations created views with non-zero storage offsets (e.g., tensor slices), the `as_strided` function would reset the offset to 0, causing the tensor to read from the wrong memory locations. This accumulated throughout the inference pipeline, causing completely incorrect final results despite individual operations appearing to work correctly.
+
+**Test Case**: The fix ensures operations like this work correctly:
+```python
+base = torch.tensor([1, 2, 3, 4, 5, 6], device=mycelya_device)
+view = base[2:]  # offset=2, values=[3,4,5,6]
+result = torch.as_strided(view, (2, 2), (2, 1))  # Should preserve offset=2
+# Result correctly uses base[2:6] = [[3,4], [5,6]], not base[0:4] = [[1,2], [3,4]]
+```
 
 ## Debugging Methodology
 

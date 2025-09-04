@@ -122,7 +122,7 @@ at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
       at::detail::make_tensor<MycelyaTensorImpl>(self.storage(), self.dtype());
 
   // Set the new sizes and strides for the view
-  int64_t offset = storage_offset.value_or(0);
+  int64_t offset = storage_offset.value_or(self.storage_offset());
   auto *impl = result.unsafeGetTensorImpl();
   impl->set_sizes_and_strides(size, stride, offset);
   return result;
