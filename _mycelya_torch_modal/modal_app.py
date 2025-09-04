@@ -239,6 +239,11 @@ def create_modal_app_for_gpu(
             # Create writable buffer to avoid PyTorch warnings
             writable_data = bytearray(raw_data)
 
+            # Handle empty buffer as noop - no data to transfer
+            if len(writable_data) == 0:
+                # Empty buffer means no actual data to transfer, so this is a noop
+                return
+
             # Reconstruct source tensor from raw data using provided metadata
             flat_tensor = torch.frombuffer(writable_data, dtype=torch_dtype)
 
