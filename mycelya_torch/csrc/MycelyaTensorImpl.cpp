@@ -58,7 +58,6 @@ c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
   if (!impl->is_inference()) {
     impl->set_version_counter(version_counter);
   }
-  
   impl->set_allow_tensor_metadata_change(allow_tensor_metadata_change);
 
   impl->refresh_numel();
@@ -82,7 +81,6 @@ c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
   if (!impl->is_inference()) {
     impl->set_version_counter(std::move(version_counter));
   }
-  
   impl->set_allow_tensor_metadata_change(allow_tensor_metadata_change);
 
   impl->refresh_numel();

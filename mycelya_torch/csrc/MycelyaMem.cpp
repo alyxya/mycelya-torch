@@ -115,13 +115,6 @@ at::Tensor as_strided_mycelya(const at::Tensor &self, at::IntArrayRef size,
               "as_strided_mycelya expects a mycelya tensor");
 
   int64_t offset = storage_offset.value_or(self.storage_offset());
-  
-  int64_t storage_size_needed = at::native::storage_size_for(size, stride);
-  int64_t required_storage = storage_size_needed + offset;
-  int64_t available_storage = self.storage().nbytes() / self.dtype().itemsize();
-  TORCH_CHECK(required_storage <= available_storage,
-              "as_strided would access out-of-bounds storage: required ", required_storage, 
-              " but only ", available_storage, " elements available");
 
   // Create a new mycelya tensor with the same storage but different view
   // parameters This preserves the custom MycelyaTensorImpl unlike the CPU
