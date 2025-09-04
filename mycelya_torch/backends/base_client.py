@@ -396,9 +396,9 @@ class Client(ABC):
             None
         """
         if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+            # During cleanup/garbage collection, machine may already be shut down
+            # This is expected and should not raise an exception
+            return
 
         if self.batching:
             # Add to batch
