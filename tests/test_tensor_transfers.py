@@ -198,7 +198,7 @@ class TestCrossDeviceTransferRestrictions:
         # Try to transfer directly to another remote device (should fail)
         with pytest.raises(
             RuntimeError,
-            match="Cross-device remote transfers are not supported",
+            match="Cross-machine remote transfers are not supported",
         ):
             tensor_device1.to(shared_devices[device2_key].device())
 
