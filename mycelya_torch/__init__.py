@@ -172,6 +172,14 @@ def _create_module() -> types.ModuleType:
         mycelya_torch._C._init()
         module._initialized = True
 
+    def _is_in_bad_fork() -> bool:
+        """Check if we're in a bad fork state for multiprocessing.
+
+        Returns:
+            False
+        """
+        return False
+
     def get_amp_supported_dtype():
         """Get the list of supported dtypes for AMP (Automatic Mixed Precision).
 
@@ -192,6 +200,7 @@ def _create_module() -> types.ModuleType:
     module.initial_seed = initial_seed  # type: ignore[assignment]
     module.manual_seed = manual_seed  # type: ignore[assignment]
     module.manual_seed_all = manual_seed_all  # type: ignore[assignment]
+    module._is_in_bad_fork = _is_in_bad_fork  # type: ignore[assignment]
     module.get_amp_supported_dtype = get_amp_supported_dtype  # type: ignore[assignment]
 
     return module
