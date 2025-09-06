@@ -17,27 +17,29 @@ from .._utils import (
 log = get_logger(__name__)
 
 
-def _create_meta_tensor_from_mycelya(mycelya_tensor: torch.Tensor, meta_storage_cache: Dict[int, torch.UntypedStorage]) -> torch.Tensor:
+def _create_meta_tensor_from_mycelya(
+    mycelya_tensor: torch.Tensor, meta_storage_cache: Dict[int, torch.UntypedStorage]
+) -> torch.Tensor:
     """Create a meta tensor that closely mirrors a mycelya tensor, including storage sharing."""
     storage_id = get_storage_id(mycelya_tensor)
-    
+
     # Create or reuse meta storage to preserve storage sharing relationships
     if storage_id not in meta_storage_cache:
         # Create meta storage with same nbytes as the original
         nbytes = mycelya_tensor.untyped_storage().nbytes()
         meta_storage_cache[storage_id] = torch.UntypedStorage(nbytes, device="meta")
-    
+
     meta_storage = meta_storage_cache[storage_id]
-    
+
     # Create meta tensor with same metadata as mycelya tensor
     meta_tensor = torch.empty(0, dtype=mycelya_tensor.dtype, device="meta")
     meta_tensor.set_(
         meta_storage,
         mycelya_tensor.storage_offset(),
         mycelya_tensor.shape,
-        mycelya_tensor.stride()
+        mycelya_tensor.stride(),
     )
-    
+
     return meta_tensor
 
 
@@ -90,16 +92,19 @@ def _create_output_tensors(
 
     for meta_output in meta_outputs:
         meta_storage = meta_output.untyped_storage()
-        
+
         if meta_storage in original_tensors:
             # This output uses storage from an existing tensor
             original_tensor = original_tensors[meta_storage]
-            if original_tensor.shape != meta_output.shape:
+
+            # Resize if the original tensor is uninitialized (has 0 elements)
+            if original_tensor.numel() == 0:
                 original_tensor.resize_(meta_output.shape)
+
             tensor = original_tensor.as_strided(
                 meta_output.shape,
                 meta_output.stride(),
-                meta_output.storage_offset()
+                meta_output.storage_offset(),
             )
             output_tensors.append(tensor)
         else:
