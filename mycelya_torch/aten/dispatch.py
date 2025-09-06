@@ -17,6 +17,30 @@ from .._utils import (
 log = get_logger(__name__)
 
 
+def _create_meta_tensor_from_mycelya(mycelya_tensor: torch.Tensor, meta_storage_cache: Dict[int, torch.UntypedStorage]) -> torch.Tensor:
+    """Create a meta tensor that closely mirrors a mycelya tensor, including storage sharing."""
+    storage_id = get_storage_id(mycelya_tensor)
+    
+    # Create or reuse meta storage to preserve storage sharing relationships
+    if storage_id not in meta_storage_cache:
+        # Create meta storage with same nbytes as the original
+        nbytes = mycelya_tensor.untyped_storage().nbytes()
+        meta_storage_cache[storage_id] = torch.UntypedStorage(nbytes, device="meta")
+    
+    meta_storage = meta_storage_cache[storage_id]
+    
+    # Create meta tensor with same metadata as mycelya tensor
+    meta_tensor = torch.empty(0, dtype=mycelya_tensor.dtype, device="meta")
+    meta_tensor.set_(
+        meta_storage,
+        mycelya_tensor.storage_offset(),
+        mycelya_tensor.shape,
+        mycelya_tensor.stride()
+    )
+    
+    return meta_tensor
+
+
 def _execute_meta_operation(
     op: torch._ops.OpOverload,
     args: Tuple[Any, ...],
@@ -24,7 +48,9 @@ def _execute_meta_operation(
     device_container: List[torch.device],
 ) -> tuple[Any, Dict]:
     """Execute operation on meta tensors for shape inference and device resolution."""
-    original_tensors = {}
+    # Map from meta storage to original tensor for preserving storage relationships
+    original_tensors = {}  # meta_storage -> original_tensor
+    meta_storage_cache = {}  # storage_id -> meta storage for preserving sharing
 
     if "device" in kwargs:
         device_container.append(kwargs["device"])
@@ -44,8 +70,8 @@ def _execute_meta_operation(
 
         # Convert tensor to meta for shape inference
         if isinstance(obj, torch.Tensor):
-            meta_tensor = obj.to("meta")
-            original_tensors[meta_tensor] = obj
+            meta_tensor = _create_meta_tensor_from_mycelya(obj, meta_storage_cache)
+            original_tensors[meta_tensor.untyped_storage()] = obj
             return meta_tensor
 
         return obj
@@ -59,21 +85,28 @@ def _execute_meta_operation(
 def _create_output_tensors(
     meta_outputs: List, original_tensors: Dict, remote_device: torch.device
 ) -> List[torch.Tensor]:
-    """Create output tensors based on meta execution results."""
+    """Create output tensors based on meta execution results with proper alias detection."""
     output_tensors = []
 
     for meta_output in meta_outputs:
-        if meta_output in original_tensors:
-            # Reuse original tensor (in-place operation) and correct shape if needed
-            tensor = original_tensors[meta_output]
-            if tensor.shape != meta_output.shape:
-                tensor.resize_(meta_output.shape)
+        meta_storage = meta_output.untyped_storage()
+        
+        if meta_storage in original_tensors:
+            # This output uses storage from an existing tensor
+            original_tensor = original_tensors[meta_storage]
+            tensor = original_tensor.as_strided(
+                meta_output.shape,
+                meta_output.stride(),
+                meta_output.storage_offset()
+            )
             output_tensors.append(tensor)
         else:
-            # Create new tensor
+            # Create new tensor with new storage
             tensor = torch.empty(
                 meta_output.shape, dtype=meta_output.dtype, device=remote_device
             )
+            # Record the storage mapping for future outputs that might alias
+            original_tensors[meta_storage] = tensor
             output_tensors.append(tensor)
 
     return output_tensors
