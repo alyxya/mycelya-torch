@@ -94,6 +94,8 @@ def _create_output_tensors(
         if meta_storage in original_tensors:
             # This output uses storage from an existing tensor
             original_tensor = original_tensors[meta_storage]
+            if original_tensor.shape != meta_output.shape:
+                original_tensor.resize_(meta_output.shape)
             tensor = original_tensor.as_strided(
                 meta_output.shape,
                 meta_output.stride(),
