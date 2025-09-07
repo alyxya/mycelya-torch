@@ -50,7 +50,16 @@ class DeviceTestUtils:
         dtype: torch.dtype = torch.float32,
     ) -> torch.Tensor:
         """Create a tensor on a remote device."""
-        x_cpu = torch.randn(shape, dtype=dtype, requires_grad=requires_grad)
+        # Use appropriate tensor creation method based on dtype
+        if dtype.is_floating_point or dtype.is_complex:
+            # For floating point and complex types, use randn
+            x_cpu = torch.randn(shape, dtype=dtype, requires_grad=requires_grad)
+        else:
+            # For integer types, use randint with reasonable range
+            x_cpu = torch.randint(
+                0, 10, shape, dtype=dtype, requires_grad=requires_grad
+            )
+
         return x_cpu.to(shared_devices[device_key].device())
 
     @staticmethod

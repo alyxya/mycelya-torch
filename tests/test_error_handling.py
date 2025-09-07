@@ -266,22 +266,14 @@ class TestTypeErrorHandling:
             (2, 2), shared_devices, dtype=torch.float32
         )
 
-        try:
-            int_tensor = DeviceTestUtils.create_remote_tensor(
-                (2, 2), shared_devices, dtype=torch.int32
-            )
+        int_tensor = DeviceTestUtils.create_remote_tensor(
+            (2, 2), shared_devices, dtype=torch.int32
+        )
 
-            # Some mixed dtype operations might not be supported
-            try:
-                result = float_tensor + int_tensor
-                # If it works, verify the result type
-                assert result.dtype in [torch.float32, torch.int32]
-            except (RuntimeError, TypeError):
-                # Mixed dtype operations might not be supported
-                pass
-        except (RuntimeError, NotImplementedError):
-            # int32 dtype might not be supported
-            pytest.skip("int32 dtype not supported on remote device")
+        # Test mixed dtype operation
+        result = float_tensor + int_tensor
+        # Verify the result type is reasonable
+        assert result.dtype in [torch.float32, torch.int32]
 
 
 class TestOperationNotImplementedHandling:

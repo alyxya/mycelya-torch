@@ -80,7 +80,7 @@ def create_modal_app_for_gpu(
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
-            import torch  # Preload torch import for better performance
+            import torch  # noqa: F401  # Preload torch import for better performance
 
             # Initialize registries only (device detection done per-method to avoid serialization issues)
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
@@ -467,50 +467,55 @@ def create_modal_app_for_gpu(
             """Load HuggingFace model weights organized by directory and store with temporary keys."""
             import os
             import uuid
+
             import torch
-            from safetensors.torch import load_file as load_safetensors
             from huggingface_hub import hf_hub_download, list_repo_files
+            from safetensors.torch import load_file as load_safetensors
 
             device = torch.device(device_type, device_index)
-            
+
             # Find weight files
             files = list_repo_files(repo)
             if path:
                 files = [f for f in files if f.startswith(path)]
-            
+
             safetensor_files = [f for f in files if f.endswith(".safetensors")]
-            pytorch_files = [f for f in files if f.endswith(".bin") and "pytorch_model" in f]
-            
+            pytorch_files = [
+                f for f in files if f.endswith(".bin") and "pytorch_model" in f
+            ]
+
             # Group files by directory
             file_dirs = {}  # directory -> list of files
             all_weight_files = safetensor_files if safetensor_files else pytorch_files
-            
+
             if not all_weight_files:
                 path_info = f" in path '{path}'" if path else ""
                 raise RuntimeError(f"No weight files found in {repo}{path_info}")
-            
+
             for weight_file in all_weight_files:
                 file_dir = os.path.dirname(weight_file) or ""  # Empty string for root
                 if file_dir not in file_dirs:
                     file_dirs[file_dir] = []
                 file_dirs[file_dir].append(weight_file)
-            
+
             # Always return hierarchical structure for consistency
             hierarchical_metadata = {}
-            
+
             for directory, dir_files in file_dirs.items():
                 dir_state_dict = {}
-                
+
                 # Load all files in this directory
                 for weight_file in dir_files:
                     file_path = hf_hub_download(repo, weight_file)
                     if weight_file.endswith(".safetensors"):
                         file_state_dict = load_safetensors(file_path, device="cpu")
-                        file_state_dict = {k: v.to(device) for k, v in file_state_dict.items()}
+                        file_state_dict = {
+                            k: v.to(device) for k, v in file_state_dict.items()
+                        }
                     else:  # pytorch files
                         file_state_dict = torch.load(file_path, map_location=device)
                     dir_state_dict.update(file_state_dict)
-                
+
                 # Create metadata for this directory's tensors
                 dir_metadata = {}
                 for name, tensor in dir_state_dict.items():
@@ -525,10 +530,10 @@ def create_modal_app_for_gpu(
                         "requires_grad": tensor.requires_grad,
                         "temp_key": temp_key,
                     }
-                
+
                 # Use directory name as key (empty string for root)
                 hierarchical_metadata[directory] = dir_metadata
-            
+
             return hierarchical_metadata
 
         @modal.method()
@@ -540,7 +545,9 @@ def create_modal_app_for_gpu(
             device_index: int,
         ):
             """Download and prepare HuggingFace model weights organized by directory."""
-            return self._load_huggingface_state_dicts_impl(repo, path, device_type, device_index)
+            return self._load_huggingface_state_dicts_impl(
+                repo, path, device_type, device_index
+            )
 
         def _link_tensors_impl(
             self,
