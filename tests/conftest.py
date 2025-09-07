@@ -41,33 +41,33 @@ def shared_devices(provider):
     Automatically parameterized to test with both modal and mock providers.
     Returns a dict with common device configurations that tests can use.
     """
-    devices = {}
+    machines = {}
 
-    # Create devices with the parameterized provider
+    # Create machines with the parameterized provider
     if provider == "mock":
-        devices["t4"] = mycelya_torch.RemoteMachine(provider)
-        devices["l4"] = mycelya_torch.RemoteMachine(provider)
+        machines["t4"] = mycelya_torch.RemoteMachine(provider)
+        machines["l4"] = mycelya_torch.RemoteMachine(provider)
     else:
-        devices["t4"] = mycelya_torch.RemoteMachine(provider, "T4")
-        devices["l4"] = mycelya_torch.RemoteMachine(provider, "L4")
+        machines["t4"] = mycelya_torch.RemoteMachine(provider, "T4")
+        machines["l4"] = mycelya_torch.RemoteMachine(provider, "L4")
 
-    # Start the devices
-    for device in devices.values():
+    # Start the machines
+    for machine in machines.values():
         try:
-            device.start()
-            log.info(f"Started device: {device.machine_id} (provider: {provider})")
+            machine.start()
+            log.info(f"Started machine: {machine.machine_id} (provider: {provider})")
         except Exception as e:
-            log.warning(f"Failed to start device {device.machine_id}: {e}")
+            log.warning(f"Failed to start machine {machine.machine_id}: {e}")
 
-    yield devices
+    yield machines
 
-    # Clean up devices
-    for device in devices.values():
+    # Clean up machines
+    for machine in machines.values():
         try:
-            device.stop()
-            log.info(f"Stopped device: {device.machine_id} (provider: {provider})")
+            machine.stop()
+            log.info(f"Stopped machine: {machine.machine_id} (provider: {provider})")
         except Exception as e:
-            log.warning(f"Failed to stop device {device.machine_id}: {e}")
+            log.warning(f"Failed to stop machine {machine.machine_id}: {e}")
 
 
 # Test configuration hooks

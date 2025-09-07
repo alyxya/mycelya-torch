@@ -75,12 +75,12 @@ class DeviceTestUtils:
         ]
 
     @staticmethod
-    def verify_device_properties(
-        tensor: torch.Tensor, expected_device: "RemoteMachine"
+    def verify_machine_properties(
+        tensor: torch.Tensor, expected_machine: "RemoteMachine"
     ) -> None:
-        """Verify that a tensor has expected device properties."""
+        """Verify that a tensor has expected machine properties."""
         assert tensor.device.type == "mycelya"
-        assert tensor.device.index == expected_device.device().index
+        assert tensor.device.index == expected_machine.device().index
 
     @staticmethod
     def create_cpu_and_remote_pair(
