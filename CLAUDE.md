@@ -15,7 +15,7 @@ A production-ready PyTorch extension that enables transparent remote execution o
 
 ### Production-Scale Features  
 - **Thread-Safe Operations**: Background processing with proper synchronization and error handling
-- **Comprehensive Test Coverage**: 18 test files with 3-tier test strategy (critical/fast/comprehensive)
+- **Comprehensive Test Coverage**: Complete test suite with 3-tier test strategy (critical/fast/comprehensive)
 - **Enterprise Error Handling**: Clear error messages, graceful failure modes, and automatic resource cleanup
 - **Memory Efficiency**: Zero local tensor data storage, raw bytes transfer, metadata caching with automatic invalidation
 - **Performance Optimizations**: Meta tensor inference, view operation handling, dynamic output support
@@ -64,24 +64,22 @@ To run type checking:
 - **Pytest**: Configuration in `pytest.ini` with custom markers
 - **Build artifacts**: Compiled extensions in `build/` directory
 
-## Key Components
-
 ## Codebase Structure
 
 ### Project Scale
-- **54 total source files**: 44 Python files, 10 C++ files across modular architecture
-- **18 comprehensive test files** with 3-tier testing strategy
-- **4 example applications** demonstrating HuggingFace integration and performance comparisons
+- **Modular architecture** with Python and C++ components across comprehensive test coverage
+- **Example applications** demonstrating HuggingFace integration and performance comparisons
 - **Production-ready codebase** with enterprise-level code quality and documentation
 
 ### Core Python Modules (mycelya_torch/)
 - `__init__.py` - Public API and PyTorch PrivateUse1 backend registration with tensor ID utilities
-- `_orchestrator.py` (709 lines) - Central coordination with RPC batching, cache management, and background thread processing
+- `_orchestrator.py` - Central coordination with RPC batching, cache management, and background thread processing
 - `_machine.py` - RemoteMachine abstraction with multi-provider support and context management  
 - `_device.py` - DeviceManager for mapping local device indices to remote GPU configurations
 - `_storage.py` - Sequential storage ID system with atomic counter and thread-safe generation (1, 2, 3...)
 - `_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge for transparent integration
-- `_huggingface_utils.py` - Direct remote model loading with parameter linking and tensor ID management
+- `_state_dict.py` - HuggingFace integration utilities for direct remote model loading
+- `_utils.py` - Internal tensor utilities and metadata handling
 - `_logging.py` - Hierarchical logging configuration with tensor hash IDs for debugging
 
 ### ATen Operation System (aten/)
@@ -89,12 +87,10 @@ Modular operation dispatch with clean separation of concerns:
 - `__init__.py` - PyTorch library registrations for comprehensive ATen operation coverage
 - `dispatch.py` - Main fallback kernel for unimplemented operations with meta tensor inference
 - `copy.py` - Cross-device copy and transfer operations with raw bytes optimization
-- `meta.py` - Meta tensor inference and shape computation without data transfer
 - `scalar.py` - Scalar operations with local execution optimization
-- `utils.py` - Operation handling utilities, view management, and dynamic output support
 
 ### Provider Backend System (backends/)
-- `base_client.py` (684 lines) - Abstract client interface with RPC batching, caching, and standardized provider API
+- `base_client.py` - Abstract client interface with RPC batching, caching, and standardized provider API
 - `modal/client.py` - Modal cloud provider implementation with multi-GPU support and connection management
 - `mock/client.py` - Local execution provider using Modal's .local() for development and testing
 
@@ -112,11 +108,11 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 - `mycelya_extension.cpp` - Python bindings, C++ extensions, and API exposure
 
 ### Development Resources
-- `examples/` (4 files) - SmolLM2 inference, Modal integration testing, performance comparisons, HuggingFace loading
-- `tests/` (18 files) - Comprehensive test coverage with critical/fast/comprehensive markers
+- `examples/` - SmolLM2 inference, Modal integration testing, performance comparisons, HuggingFace loading
+- `tests/` - Comprehensive test coverage with critical/fast/comprehensive markers
 - Modern build system with `pyproject.toml`, `setup.py` for C++ extensions, and ruff configuration
 
-## Current Architecture (2025-08-28)
+## Current Architecture
 
 ### Key Design Principles
 - **Sequential Tensor ID Architecture**: Atomic counter generates unique storage IDs (1, 2, 3...) with FNV-1a metadata hash computation for debugging
@@ -265,7 +261,7 @@ print(f"Generated response: {response}")
 - **Memory Management Errors**: Clear errors for storage allocation failures and cleanup issues
 
 ### Multi-Provider Architecture
-- **Standardized Client Interface**: Abstract base client with consistent API across providers (684 lines)
+- **Standardized Client Interface**: Abstract base client with consistent API across providers
 - **Modal Production Backend**: Complete cloud provider with multi-GPU support, dynamic app creation, connection pooling
 - **Mock Development Backend**: Local execution using Modal's .local() for testing without cloud dependencies  
 - **Extensible Provider System**: Clean interfaces ready for RunPod, Lambda Labs, AWS/GCP integration

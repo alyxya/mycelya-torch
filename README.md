@@ -264,34 +264,33 @@ ruff format .
 
 ### Project Structure
 
-The codebase is organized into 54 source files across a modular architecture:
+The codebase is organized into 56 source files across a modular architecture:
 
 ```
 mycelya_torch/ (44 Python files)
 ├── Core Components
 │   ├── __init__.py                  # Public API and PyTorch PrivateUse1 backend registration
-│   ├── _orchestrator.py (709 lines) # Central coordination with RPC batching and cache management
+│   ├── _orchestrator.py (764 lines) # Central coordination with RPC batching and cache management
 │   ├── _machine.py                  # RemoteMachine abstraction with multi-provider support
 │   ├── _device.py                   # DeviceManager for local-to-remote device index mapping
 │   ├── _storage.py                  # Sequential storage ID system (atomic counter: 1, 2, 3...)
 │   ├── _backend_hooks.py            # PyTorch backend hooks and C++ interface bridge
-│   ├── _huggingface_utils.py        # Direct remote model loading with parameter linking
+│   ├── _state_dict.py               # HuggingFace integration utilities
+│   ├── _utils.py                    # Internal tensor utilities and metadata handling
 │   └── _logging.py                  # Hierarchical logging configuration
 │
 ├── ATen Operation System (aten/)
 │   ├── __init__.py                  # PyTorch library registrations for ATen operations
 │   ├── dispatch.py                  # Main fallback kernel for unimplemented operations  
 │   ├── copy.py                      # Cross-device copy and transfer operations
-│   ├── meta.py                      # Meta tensor inference and shape computation
-│   ├── scalar.py                    # Scalar operations with local execution
-│   └── utils.py                     # Operation handling utilities and view management
+│   └── scalar.py                    # Scalar operations with local execution
 │
 ├── Provider Backend System (backends/)
-│   ├── base_client.py (684 lines)   # Abstract client interface with RPC batching support
+│   ├── base_client.py (683 lines)   # Abstract client interface with RPC batching support
 │   ├── modal/client.py              # Modal cloud provider implementation  
 │   └── mock/client.py               # Local execution provider for development
 │
-└── C++ Backend Integration (csrc/) (10 C++ files)
+└── C++ Backend Integration (csrc/) (12 C++ files)
     ├── MycelyaTensorImpl.cpp/.h     # Custom tensor with metadata hash computation
     ├── MycelyaStorageImpl.cpp/.h    # Custom storage with sequential ID tracking
     ├── MycelyaAllocator.cpp/.h      # Enhanced allocator with storage ID management
@@ -310,7 +309,7 @@ examples/ (4 files)
 ├── smollm2_comparison.py            # Performance comparison Local vs Remote
 └── gravity_hf_loader.py             # HuggingFace model loading example
 
-Comprehensive Testing (18 test files)
+Comprehensive Testing (19 test files)
 tests/
 ├── test_regression.py               # Critical regression tests (<30 seconds)
 ├── test_basic_operations.py         # Core functionality validation
@@ -339,7 +338,7 @@ tests/
 
 ### Stability & Testing
 - **3-Tier Test Suite** - Critical regression (<30s), fast functional (~2-5min), comprehensive (~10-30min)
-- **18 Test Files** - Covering core operations, autograd, device management, error handling
+- **19 Test Files** - Covering core operations, autograd, device management, error handling
 - **Mock Provider** - Complete local testing without cloud dependencies
 - **Continuous Integration** - Automated testing on every commit with performance benchmarks
 
@@ -379,7 +378,7 @@ machine = mycelya_torch.RemoteMachine("mock")  # No cloud dependencies
 
 ## License
 
-Copyright (C) 2025 alyxya
+Copyright (C) 2025 alyxya  
 SPDX-License-Identifier: AGPL-3.0-or-later
 
 This project is licensed under the GNU Affero General Public License v3.0 or later.
