@@ -44,17 +44,16 @@ print(f"Result computed on {result.device}: {result.shape}")
 - PyTorch 2.1+
 - Modal account (free tier available)
 
+**Note**: Modal is currently the only supported GPU cloud provider. Support for other providers (AWS, etc.) will be added in future releases.
+
 ### Install
 ```bash
-pip install torch>=2.1.0 modal>=1.0.0 numpy
 pip install git+https://github.com/alyxya/mycelya-torch.git
 ```
 
 ### Setup Modal
 ```bash
-# Install Modal CLI and authenticate
-pip install modal
-modal token new
+modal setup
 ```
 
 ## Quick Start
