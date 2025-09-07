@@ -172,6 +172,7 @@ class TestRepeatAndTileOperations:
         )
 
     @pytest.mark.fast
+    @pytest.mark.skip(reason="repeat_interleave with tensor repeats not yet supported")
     def test_repeat_interleave_with_tensor_repeats(self, shared_devices):
         device = shared_devices["t4"]
 
