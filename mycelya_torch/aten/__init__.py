@@ -15,13 +15,13 @@ from .dispatch import _remote_kernel_fallback
 from .scalar import _equal, _local_scalar_dense
 
 # Register the fallback kernel for all unspecified operations
-_remote_lib = torch.library.Library("_", "IMPL")
-_remote_lib.fallback(_remote_kernel_fallback, dispatch_key="PrivateUse1")
+_mycelya_lib = torch.library.Library("_", "IMPL")
+_mycelya_lib.fallback(_remote_kernel_fallback, dispatch_key="PrivateUse1")
 
 # Register specific ATen operation implementations
-_remote_lib_aten = torch.library.Library("aten", "IMPL")
-_remote_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
-_remote_lib_aten.impl(
+_mycelya_lib_aten = torch.library.Library("aten", "IMPL")
+_mycelya_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
 )
-_remote_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
