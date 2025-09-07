@@ -95,11 +95,11 @@ class Orchestrator:
         if provider == "modal":
             from .backends.modal.client import ModalClient
 
-            client = ModalClient(gpu_type, machine_id, 300, batching)
+            client = ModalClient(gpu_type, machine_id, 3600, batching)
         elif provider == "mock":
             from .backends.mock.client import MockClient
 
-            client = MockClient(gpu_type, machine_id, 300, batching)
+            client = MockClient(gpu_type, machine_id, 3600, batching)
         else:
             raise ValueError(f"Provider {provider} not implemented yet")
 
