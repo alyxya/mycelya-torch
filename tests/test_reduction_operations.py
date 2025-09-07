@@ -6,19 +6,36 @@ import torch
 from test_utilities import NumericalTestUtils
 
 
+def generate_valid_shape_dim_combinations(shapes, include_none=True, include_negative=True):
+    """Generate only valid (shape, dim) combinations to eliminate test skips."""
+    combinations = []
+    
+    if include_none:
+        for shape in shapes:
+            combinations.append((shape, None))
+    
+    for shape in shapes:
+        ndim = len(shape)
+        # Generate valid positive dimensions: 0 to ndim-1
+        for dim in range(ndim):
+            combinations.append((shape, dim))
+        
+        # Generate valid negative dimensions: -ndim to -1    
+        if include_negative:
+            for dim in range(-ndim, 0):
+                combinations.append((shape, dim))
+    
+    return combinations
+
+
 class TestBasicReductions:
     """Test sum and mean operations comprehensively."""
 
-    @pytest.mark.parametrize("shape", [(10,), (5, 5), (3, 4, 5), (2, 3, 4, 5)])
-    @pytest.mark.parametrize("dim", [None, 0, 1, -1])
+    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4, 5), (2, 3, 4, 5)]))
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_sum_variations(self, shared_devices, shape, dim, keepdim):
         device = shared_devices["t4"]
-
-        # Skip invalid dimension combinations
-        if dim is not None and abs(dim) >= len(shape):
-            pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
         remote_tensor = cpu_tensor.to(device.device())
@@ -30,15 +47,11 @@ class TestBasicReductions:
             remote_result.cpu(), cpu_result, rtol=1e-5, atol=1e-6
         )
 
-    @pytest.mark.parametrize("shape", [(10,), (4, 4), (2, 3, 4)])
-    @pytest.mark.parametrize("dim", [None, 0, 1, -1])
+    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (4, 4), (2, 3, 4)]))
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_mean_variations(self, shared_devices, shape, dim, keepdim):
         device = shared_devices["t4"]
-
-        if dim is not None and abs(dim) >= len(shape):
-            pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
         remote_tensor = cpu_tensor.to(device.device())
@@ -61,7 +74,7 @@ class TestStatisticalReductions:
     def test_std_operations(self, shared_devices, shape, unbiased, dim):
         device = shared_devices["t4"]
 
-        if dim is not None and dim >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
@@ -81,7 +94,7 @@ class TestStatisticalReductions:
     def test_var_operations(self, shared_devices, shape, unbiased, dim):
         device = shared_devices["t4"]
 
-        if dim is not None and dim >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
@@ -100,7 +113,7 @@ class TestStatisticalReductions:
     def test_std_mean_combined(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
 
-        if dim is not None and dim >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
@@ -127,7 +140,7 @@ class TestMinMaxOperations:
     def test_min_operations(self, shared_devices, shape, dim, keepdim):
         device = shared_devices["t4"]
 
-        if dim is not None and abs(dim) >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
@@ -158,7 +171,7 @@ class TestMinMaxOperations:
     def test_max_operations(self, shared_devices, shape, dim, keepdim):
         device = shared_devices["t4"]
 
-        if dim is not None and abs(dim) >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
@@ -188,7 +201,7 @@ class TestMinMaxOperations:
     def test_argmin_argmax(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
 
-        if dim is not None and dim >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
@@ -250,7 +263,7 @@ class TestProductReductions:
     def test_prod_operations(self, shared_devices, shape, dim, keepdim):
         device = shared_devices["t4"]
 
-        if dim is not None and dim >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         # Use smaller values to avoid overflow
@@ -268,14 +281,10 @@ class TestProductReductions:
 class TestCumulativeOperations:
     """Test cumulative sum and product operations."""
 
-    @pytest.mark.parametrize("shape", [(10,), (5, 5), (3, 4)])
-    @pytest.mark.parametrize("dim", [0, 1, -1])
+    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4)], include_none=False))
     @pytest.mark.fast
     def test_cumsum_operations(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
-
-        if abs(dim) >= len(shape):
-            pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
         remote_tensor = cpu_tensor.to(device.device())
@@ -293,7 +302,7 @@ class TestCumulativeOperations:
     def test_cumprod_operations(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
 
-        if abs(dim) >= len(shape):
+        if dim < -len(shape) or dim >= len(shape):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         # Use smaller values to avoid overflow
@@ -317,7 +326,7 @@ class TestSpecializedReductions:
     def test_norm_operations(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
 
-        if dim is not None and dim >= len(shape):
+        if dim is not None and (dim < -len(shape) or dim >= len(shape)):
             pytest.skip(f"Dimension {dim} invalid for shape {shape}")
 
         cpu_tensor = torch.randn(*shape)
