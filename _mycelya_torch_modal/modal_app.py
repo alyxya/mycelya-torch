@@ -17,9 +17,9 @@ from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
 
 import modal
 
-# Create image with PyTorch, CUDA support, and transformers for HuggingFace models
+# Create image with PyTorch, CUDA support, and HuggingFace integration
 image = modal.Image.debian_slim().pip_install(
-    "numpy", "torch", "transformers", "huggingface_hub", "safetensors", "accelerate"
+    "numpy", "torch", "huggingface_hub", "safetensors"
 )
 
 
