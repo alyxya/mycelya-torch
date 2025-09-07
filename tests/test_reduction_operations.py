@@ -6,32 +6,37 @@ import torch
 from test_utilities import NumericalTestUtils
 
 
-def generate_valid_shape_dim_combinations(shapes, include_none=True, include_negative=True):
+def generate_valid_shape_dim_combinations(
+    shapes, include_none=True, include_negative=True
+):
     """Generate only valid (shape, dim) combinations to eliminate test skips."""
     combinations = []
-    
+
     if include_none:
         for shape in shapes:
             combinations.append((shape, None))
-    
+
     for shape in shapes:
         ndim = len(shape)
         # Generate valid positive dimensions: 0 to ndim-1
         for dim in range(ndim):
             combinations.append((shape, dim))
-        
-        # Generate valid negative dimensions: -ndim to -1    
+
+        # Generate valid negative dimensions: -ndim to -1
         if include_negative:
             for dim in range(-ndim, 0):
                 combinations.append((shape, dim))
-    
+
     return combinations
 
 
 class TestBasicReductions:
     """Test sum and mean operations comprehensively."""
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4, 5), (2, 3, 4, 5)]))
+    @pytest.mark.parametrize(
+        "shape,dim",
+        generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4, 5), (2, 3, 4, 5)]),
+    )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_sum_variations(self, shared_devices, shape, dim, keepdim):
@@ -47,7 +52,9 @@ class TestBasicReductions:
             remote_result.cpu(), cpu_result, rtol=1e-5, atol=1e-6
         )
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (4, 4), (2, 3, 4)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(10,), (4, 4), (2, 3, 4)])
+    )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_mean_variations(self, shared_devices, shape, dim, keepdim):
@@ -281,7 +288,12 @@ class TestProductReductions:
 class TestCumulativeOperations:
     """Test cumulative sum and product operations."""
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4)], include_none=False))
+    @pytest.mark.parametrize(
+        "shape,dim",
+        generate_valid_shape_dim_combinations(
+            [(10,), (5, 5), (3, 4)], include_none=False
+        ),
+    )
     @pytest.mark.fast
     def test_cumsum_operations(self, shared_devices, shape, dim):
         device = shared_devices["t4"]

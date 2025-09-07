@@ -106,7 +106,9 @@ def create_mycelya_tensor_from_metadata(
     """
     storage = torch.UntypedStorage(metadata["nbytes"], device=device)
     tensor = torch.empty(0, dtype=getattr(torch, metadata["dtype"]), device=device)
-    tensor.set_(storage, metadata["storage_offset"], metadata["shape"], metadata["stride"])
+    tensor.set_(
+        storage, metadata["storage_offset"], metadata["shape"], metadata["stride"]
+    )
 
     if "requires_grad" in metadata:
         tensor.requires_grad_(metadata["requires_grad"])

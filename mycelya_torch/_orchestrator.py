@@ -593,7 +593,9 @@ class Orchestrator:
             Future that resolves to model metadata with temp_keys
         """
         # Get machine info from device index using device manager
-        machine_id, remote_device_type, remote_device_index = device_manager.get_remote_device_info(device_index)
+        machine_id, remote_device_type, remote_device_index = (
+            device_manager.get_remote_device_info(device_index)
+        )
         client = self._clients[machine_id]
 
         # Delegate to client's load_huggingface_state_dicts method
@@ -601,7 +603,7 @@ class Orchestrator:
             repo=checkpoint,
             path=path,
             device_type=remote_device_type,
-            device_index=remote_device_index
+            device_index=remote_device_index,
         )
 
     def load_huggingface_state_dicts(
@@ -621,7 +623,9 @@ class Orchestrator:
             Dict[str, Dict[str, TensorMetadata]] mapping directory names to state dicts
         """
         # Go through async method
-        result_future = self.load_huggingface_state_dicts_future(device_index, checkpoint, path)
+        result_future = self.load_huggingface_state_dicts_future(
+            device_index, checkpoint, path
+        )
 
         # Wait for result while signaling background thread to continue
         self._main_thread_waiting.set()

@@ -30,10 +30,10 @@ model.tie_weights()
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Test generation using chat template
-messages = [
-    {"role": "user", "content": "What is gravity?"}
-]
-input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+messages = [{"role": "user", "content": "What is gravity?"}]
+input_text = tokenizer.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=True
+)
 inputs = tokenizer(input_text, return_tensors="pt").to(device)
 
 model.eval()
@@ -46,6 +46,8 @@ for _ in range(50):
         next_token = torch.argmax(logits, dim=-1, keepdim=True).unsqueeze(0)
         generated_tokens = torch.cat([generated_tokens, next_token], dim=1)
 
-response = tokenizer.decode(generated_tokens[0][len(inputs["input_ids"][0]):], skip_special_tokens=True)
+response = tokenizer.decode(
+    generated_tokens[0][len(inputs["input_ids"][0]) :], skip_special_tokens=True
+)
 
 print(f"Response: {response}")

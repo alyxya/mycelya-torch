@@ -51,10 +51,14 @@ def load_model_remote(machine):
     )
 
     # Load remote state dict into model - should have all parameters now
-    missing_keys, unexpected_keys = model.load_state_dict(remote_state_dict, strict=True)
+    missing_keys, unexpected_keys = model.load_state_dict(
+        remote_state_dict, strict=True
+    )
 
     # Check if we still need model.to(device) - ideally this should do nothing now
-    cpu_params_before = sum(1 for _, p in model.named_parameters() if p.device.type == 'cpu')
+    cpu_params_before = sum(
+        1 for _, p in model.named_parameters() if p.device.type == "cpu"
+    )
     if cpu_params_before > 0:
         print(f"   ⚠️  Still have {cpu_params_before} CPU parameters, moving to device")
         model = model.to(machine.device())

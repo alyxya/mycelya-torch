@@ -46,7 +46,7 @@ def main():
     missing_keys, _ = model.load_state_dict(remote_state_dict, strict=True)
 
     # Check if any parameters are still on CPU (shouldn't happen now)
-    cpu_params = sum(1 for _, p in model.named_parameters() if p.device.type == 'cpu')
+    cpu_params = sum(1 for _, p in model.named_parameters() if p.device.type == "cpu")
     if cpu_params > 0:
         print(f"⚠️  Still have {cpu_params} CPU parameters, moving to device")
         model = model.to(machine.device())
