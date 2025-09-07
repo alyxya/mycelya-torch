@@ -116,18 +116,28 @@ for epoch in range(10):
 
 ### Load HuggingFace Models
 ```python
+import torch
 import mycelya_torch
-from transformers import AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Create remote machine
 machine = mycelya_torch.RemoteMachine("modal", "A100-80GB")
 
-# Load model directly on remote GPU (no local download!)
-model = mycelya_torch.load_huggingface_model(
+# Load model architecture (no weights yet)
+model = AutoModelForCausalLM.from_pretrained(
     "microsoft/DialoGPT-medium",
-    machine,
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
+    device_map=None  # Don't load weights yet
 )
+
+# Load weights directly on remote GPU (no local download!)
+remote_state_dicts = mycelya_torch.load_huggingface_state_dicts(
+    "microsoft/DialoGPT-medium",
+    machine.device()
+)
+
+# Load the remote weights into the model
+model.load_state_dict(remote_state_dicts[""], strict=True)  # "" is root directory
 
 tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
 
