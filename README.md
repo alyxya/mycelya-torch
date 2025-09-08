@@ -24,18 +24,9 @@ print(f"Result computed on {result.device}: {result.shape}")
 - **⚡ Smart Batching** - Automatically batches operations to minimize network overhead
 - **🤖 HuggingFace Ready** - Load models directly on remote GPUs without downloading
 
-## Supported GPUs
+## Supported GPUs (Modal)
 
-| GPU | Memory | Best For |
-|-----|--------|----------|
-| T4 | 16GB | Development, small models |
-| L4 | 24GB | Inference, medium models |
-| A10G | 24GB | Training, inference |
-| A100-40GB | 40GB | Large model training |
-| A100-80GB | 80GB | Very large models |
-| H100 | 80GB | Latest generation, fastest |
-| H200 | 141GB | Extreme memory requirements |
-| B200 | 192GB | Next-gen AI workloads |
+T4, L4, A10G, A100, L40S, H100, H200, B200
 
 ## Installation
 
