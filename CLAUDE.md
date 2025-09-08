@@ -8,7 +8,7 @@ A production-ready PyTorch extension that enables transparent remote execution o
 - **Sequential Tensor ID Architecture**: Atomic counter generates unique storage IDs (1, 2, 3...) with metadata-based FNV-1a hash identification
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns with zero local memory overhead
 - **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution with clean separation of concerns
-- **Multi-GPU Cloud Support**: 10 GPU types supported (T4, L4, A10G, A100-40GB, A100-80GB, L40S, H100, H200, B200) across cloud providers
+- **Multi-GPU Cloud Support**: 10 GPU types supported (T4, L4, A10G, A100, L40S, H100, H200, B200) across cloud providers
 - **Provider Abstraction**: Pluggable backend system with Modal (production), Mock (development), extensible for RunPod/Lambda Labs
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
 - **HuggingFace Integration**: Direct remote model loading with parameter linking, bypassing data transfer entirely
@@ -148,7 +148,7 @@ import torch
 import mycelya_torch
 
 # Create remote machine with cloud GPU
-machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100")
 
 # Operations automatically execute on remote GPU with RPC batching
 x = torch.randn(1000, 1000, device=machine.device())  # Storage ID: 1
@@ -165,7 +165,7 @@ import torch.nn as nn
 import mycelya_torch
 
 # Create remote machine with high-memory GPU
-machine = mycelya_torch.RemoteMachine("modal", "A100-80GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100")
 device = machine.device()
 
 # Model automatically uses sequential tensor IDs for all parameters
