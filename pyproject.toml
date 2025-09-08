@@ -2,7 +2,7 @@
 requires = [
     "setuptools>=61.0",
     "wheel",
-    "torch>=2.1.0",
+    "torch>=2.0.0",
     "numpy",
 ]
 build-backend = "setuptools.build_meta"
@@ -27,8 +27,8 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "torch>=2.1.0",
-    "modal>=1.0.0",
+    "torch>=2.0.0",
+    "modal>=1.1.0",
     "numpy",
 ]
 

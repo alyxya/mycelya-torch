@@ -55,7 +55,7 @@ To run type checking:
 ### Modern Python Packaging
 - **`pyproject.toml`**: Modern build system using setuptools with PyTorch C++ extensions
 - **`setup.py`**: C++ extension compilation with platform-specific compiler flags
-- **Dependencies**: torch>=2.1.0, modal>=1.0.0, numpy
+- **Dependencies**: torch>=2.0.0, modal>=1.1.0, numpy
 - **License**: AGPL-3.0-or-later
 - **Python Support**: 3.8+
 
