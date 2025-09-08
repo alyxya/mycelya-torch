@@ -7,7 +7,7 @@ import torch
 import mycelya_torch
 
 # Create a remote machine with cloud GPU
-machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100")
 
 # Your existing PyTorch code just works
 x = torch.randn(1000, 1000, device=machine.device())
@@ -55,7 +55,7 @@ import torch
 import mycelya_torch
 
 # Create remote machine
-machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100")
 device = machine.device()
 
 # Your PyTorch code runs on remote GPU
@@ -75,7 +75,7 @@ import torch.nn as nn
 import mycelya_torch
 
 # Set up remote machine
-machine = mycelya_torch.RemoteMachine("modal", "A100-40GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100")
 device = machine.device()
 
 # Define your model (works exactly like normal PyTorch)
@@ -112,7 +112,7 @@ import mycelya_torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Create remote machine
-machine = mycelya_torch.RemoteMachine("modal", "A100-80GB")
+machine = mycelya_torch.RemoteMachine("modal", "A100")
 
 # Load model architecture (no weights yet)
 model = AutoModelForCausalLM.from_pretrained(
@@ -169,7 +169,7 @@ final_result = result.cpu()  # Move back to local CPU
 ### Working with Multiple GPUs
 ```python
 # Different machines for different tasks
-training_machine = mycelya_torch.RemoteMachine("modal", "A100-80GB")
+training_machine = mycelya_torch.RemoteMachine("modal", "A100")
 inference_machine = mycelya_torch.RemoteMachine("modal", "T4")
 
 # Train on powerful GPU
@@ -184,7 +184,6 @@ predictions = model(test_data.to(inference_machine.device()))
 
 - **Examples**: Check the `examples/` directory for complete working examples
 - **Issues**: Report bugs at [GitHub Issues](https://github.com/alyxya/mycelya-torch/issues)
-- **Documentation**: See `CLAUDE.md` for technical details
 
 ## Local Development
 
@@ -204,6 +203,3 @@ pytest tests/test_regression.py::TestCriticalRegression -v
 
 AGPL-3.0-or-later - See LICENSE file for details.
 
----
-
-**Ready to accelerate your PyTorch workflows?** Install Mycelya and start computing on cloud GPUs in minutes!
