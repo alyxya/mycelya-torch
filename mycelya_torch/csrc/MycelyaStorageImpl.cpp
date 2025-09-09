@@ -3,8 +3,6 @@
 
 #include "MycelyaStorageImpl.h"
 
-#include <iostream>
-
 namespace mycelya {
 
 // MycelyaStorageImpl implementation
@@ -13,15 +11,9 @@ MycelyaStorageImpl::MycelyaStorageImpl(
     c10::DataPtr data_ptr, c10::Allocator* allocator, bool resizable)
     : c10::StorageImpl(use_byte_size, size_bytes, std::move(data_ptr),
                        allocator, resizable) {
-  // Simple verification: log creation for debugging
-  if (std::getenv("MYCELYA_DEBUG_TENSORIMPL")) {
-    std::cout << "[MycelyaStorageImpl] Created with storage_id="
-              << get_storage_id() << std::endl;
-  }
 }
 
 storage_id_t MycelyaStorageImpl::get_storage_id() const {
-  accessed_via_custom_impl = true;
   return reinterpret_cast<storage_id_t>(data_ptr().get());
 }
 

@@ -10,7 +10,7 @@ def _generate_valid_shape_dim_keepdim_combinations():
     shapes = [(10,), (5, 5), (3, 4)]
     dims = [None, 0, 1]
     keepdims = [False, True]
-    
+
     combinations = []
     for shape in shapes:
         for dim in dims:
@@ -19,7 +19,7 @@ def _generate_valid_shape_dim_keepdim_combinations():
                 if dim is not None and dim >= len(shape):
                     continue
                 combinations.append((shape, dim, keepdim))
-    
+
     return combinations
 
 
@@ -269,7 +269,9 @@ class TestLogicalOperations:
 class TestBooleanReductions:
     """Test boolean reduction operations (all, any)."""
 
-    @pytest.mark.parametrize("shape_dim_keepdim", _generate_valid_shape_dim_keepdim_combinations())
+    @pytest.mark.parametrize(
+        "shape_dim_keepdim", _generate_valid_shape_dim_keepdim_combinations()
+    )
     @pytest.mark.fast
     def test_all_operations(self, shared_devices, shape_dim_keepdim):
         device = shared_devices["t4"]
@@ -283,7 +285,9 @@ class TestBooleanReductions:
 
         assert torch.equal(remote_result.cpu(), cpu_result)
 
-    @pytest.mark.parametrize("shape_dim_keepdim", _generate_valid_shape_dim_keepdim_combinations())
+    @pytest.mark.parametrize(
+        "shape_dim_keepdim", _generate_valid_shape_dim_keepdim_combinations()
+    )
     @pytest.mark.fast
     def test_any_operations(self, shared_devices, shape_dim_keepdim):
         device = shared_devices["t4"]

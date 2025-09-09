@@ -74,7 +74,9 @@ class TestBasicReductions:
 class TestStatisticalReductions:
     """Test standard deviation, variance, and related operations."""
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4, 5)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4, 5)])
+    )
     @pytest.mark.parametrize("unbiased", [True, False])
     @pytest.mark.fast
     def test_std_operations(self, shared_devices, shape, dim, unbiased):
@@ -90,7 +92,9 @@ class TestStatisticalReductions:
             remote_result.cpu(), cpu_result, rtol=1e-4, atol=1e-5
         )
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (4, 4), (2, 3, 4)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(10,), (4, 4), (2, 3, 4)])
+    )
     @pytest.mark.parametrize("unbiased", [True, False])
     @pytest.mark.fast
     def test_var_operations(self, shared_devices, shape, dim, unbiased):
@@ -106,7 +110,9 @@ class TestStatisticalReductions:
             remote_result.cpu(), cpu_result, rtol=1e-4, atol=1e-5
         )
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(8,), (4, 4)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(8,), (4, 4)])
+    )
     @pytest.mark.fast
     def test_std_mean_combined(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
@@ -128,7 +134,9 @@ class TestStatisticalReductions:
 class TestMinMaxOperations:
     """Test min, max, argmin, argmax operations."""
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4, 5)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4, 5)])
+    )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_min_operations(self, shared_devices, shape, dim, keepdim):
@@ -155,7 +163,9 @@ class TestMinMaxOperations:
             )
             assert torch.equal(remote_indices.cpu(), cpu_indices)
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (4, 4), (2, 3, 4)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(10,), (4, 4), (2, 3, 4)])
+    )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_max_operations(self, shared_devices, shape, dim, keepdim):
@@ -182,7 +192,9 @@ class TestMinMaxOperations:
             )
             assert torch.equal(remote_indices.cpu(), cpu_indices)
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5)])
+    )
     @pytest.mark.fast
     def test_argmin_argmax(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
@@ -239,7 +251,12 @@ class TestMinMaxOperations:
 class TestProductReductions:
     """Test product reduction operations."""
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(5,), (3, 4), (2, 3, 4)], include_none=False))
+    @pytest.mark.parametrize(
+        "shape,dim",
+        generate_valid_shape_dim_combinations(
+            [(5,), (3, 4), (2, 3, 4)], include_none=False
+        ),
+    )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
     def test_prod_operations(self, shared_devices, shape, dim, keepdim):
@@ -280,7 +297,12 @@ class TestCumulativeOperations:
             remote_result.cpu(), cpu_result, rtol=1e-5, atol=1e-6
         )
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(8,), (4, 4), (2, 3)], include_none=False))
+    @pytest.mark.parametrize(
+        "shape,dim",
+        generate_valid_shape_dim_combinations(
+            [(8,), (4, 4), (2, 3)], include_none=False
+        ),
+    )
     @pytest.mark.fast
     def test_cumprod_operations(self, shared_devices, shape, dim):
         device = shared_devices["t4"]
@@ -300,7 +322,9 @@ class TestCumulativeOperations:
 class TestSpecializedReductions:
     """Test specialized reduction operations."""
 
-    @pytest.mark.parametrize("shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4)]))
+    @pytest.mark.parametrize(
+        "shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4)])
+    )
     @pytest.mark.fast
     def test_norm_operations(self, shared_devices, shape, dim):
         device = shared_devices["t4"]

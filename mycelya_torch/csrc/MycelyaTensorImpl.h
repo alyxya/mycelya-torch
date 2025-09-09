@@ -34,13 +34,7 @@ class MycelyaTensorImpl : public c10::TensorImpl {
   // Get metadata hash based on shape, stride, dtype, offset, and storage ID
   uint64_t get_metadata_hash() const;
 
-  // Simple verification method to test custom behavior
-  void mark_accessed() const;
-  bool was_accessed_via_custom_impl() const;
-
  private:
-  // Simple verification flag to test custom behavior
-  mutable bool accessed_via_custom_impl_ = false;
 };
 
 

@@ -35,9 +35,9 @@ def isolated_machines():
     """Create fresh machines for tests requiring multiple machines."""
     machines = {
         "machine1": mycelya_torch.RemoteMachine("mock"),
-        "machine2": mycelya_torch.RemoteMachine("mock")
+        "machine2": mycelya_torch.RemoteMachine("mock"),
     }
-    
+
     try:
         for machine in machines.values():
             machine.start()
@@ -266,9 +266,7 @@ class TestTypeErrorHandling:
         """Test error handling for unsupported dtype operations."""
         # Try operations that might not be supported for certain dtypes
         try:
-            bool_tensor = torch.tensor(
-                [True, False], device=isolated_machine.device()
-            )
+            bool_tensor = torch.tensor([True, False], device=isolated_machine.device())
             bool_tensor.mm(bool_tensor)
             # If this succeeds, that's fine too
         except (RuntimeError, TypeError, NotImplementedError):
@@ -277,8 +275,12 @@ class TestTypeErrorHandling:
 
     def test_mixed_dtype_operations(self, isolated_machine):
         """Test operations with mixed dtypes."""
-        float_tensor = torch.randn(2, 2, device=isolated_machine.device(), dtype=torch.float32)
-        int_tensor = torch.randint(0, 10, (2, 2), device=isolated_machine.device(), dtype=torch.int32)
+        float_tensor = torch.randn(
+            2, 2, device=isolated_machine.device(), dtype=torch.float32
+        )
+        int_tensor = torch.randint(
+            0, 10, (2, 2), device=isolated_machine.device(), dtype=torch.int32
+        )
 
         # Test mixed dtype operation
         result = float_tensor + int_tensor
@@ -318,9 +320,7 @@ class TestOperationNotImplementedHandling:
         # Some advanced indexing might not be supported
         try:
             # Boolean indexing
-            mask = torch.tensor(
-                [True, False, True], device=isolated_machine.device()
-            )
+            mask = torch.tensor([True, False, True], device=isolated_machine.device())
             tensor[mask]
         except (RuntimeError, NotImplementedError):
             # Advanced indexing might not be implemented

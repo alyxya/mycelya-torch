@@ -19,8 +19,6 @@ struct MycelyaStorageImpl : public c10::StorageImpl {
   // Get the storage ID directly from the stored data pointer
   storage_id_t get_storage_id() const;
 
-  // Simple verification flag to test custom behavior
-  mutable bool accessed_via_custom_impl = false;
 };
 
 // Factory function to create custom storage impl

@@ -8,7 +8,6 @@
 
 #include <atomic>
 #include <functional>
-#include <iostream>
 
 namespace mycelya {
 
@@ -23,17 +22,10 @@ MycelyaTensorImpl::MycelyaTensorImpl(const c10::Storage& storage,
   // Following pytorch-npu pattern
   is_non_overlapping_and_dense_ = false;
 
-  // Simple verification: log creation for debugging
-  if (std::getenv("MYCELYA_DEBUG_TENSORIMPL")) {
-    std::cout << "[MycelyaTensorImpl] Created tensor with storage_id="
-              << get_storage_id() << " dtype=" << data_type.name() << std::endl;
-  }
 }
 
 void MycelyaTensorImpl::shallow_copy_from(
     const c10::intrusive_ptr<c10::TensorImpl>& impl) {
-  mark_accessed();
-
   // Copy metadata from source tensor implementation
   // This is similar to how pytorch-npu handles shallow copy
   set_storage_and_dtype(impl->storage(), impl->dtype());
@@ -46,8 +38,6 @@ void MycelyaTensorImpl::shallow_copy_from(
 c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
     const c10::VariableVersion& version_counter,
     bool allow_tensor_metadata_change) const {
-  mark_accessed();
-
   // Create new MycelyaTensorImpl with same storage
   auto impl = c10::make_intrusive<MycelyaTensorImpl>(storage(), dtype());
 
@@ -69,8 +59,6 @@ c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
 c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
     c10::VariableVersion&& version_counter,
     bool allow_tensor_metadata_change) const {
-  mark_accessed();
-
   // Create new MycelyaTensorImpl with same storage
   auto impl = c10::make_intrusive<MycelyaTensorImpl>(storage(), dtype());
 
@@ -90,13 +78,10 @@ c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
 }
 
 storage_id_t MycelyaTensorImpl::get_storage_id() const {
-  mark_accessed();
   return reinterpret_cast<storage_id_t>(storage().data_ptr().get());
 }
 
 uint64_t MycelyaTensorImpl::get_metadata_hash() const {
-  mark_accessed();
-
   // Simple but effective hash combining shape, strides, dtype, offset, and
   // storage ID Using FNV-1a style hash for fast computation
   uint64_t hash = 14695981039346656037ULL;  // FNV offset basis
@@ -131,21 +116,5 @@ uint64_t MycelyaTensorImpl::get_metadata_hash() const {
 
   return hash;
 }
-
-void MycelyaTensorImpl::mark_accessed() const {
-  accessed_via_custom_impl_ = true;
-
-  // Simple verification: log access for debugging
-  if (std::getenv("MYCELYA_DEBUG_TENSORIMPL")) {
-    std::cout << "[MycelyaTensorImpl] Accessed tensor with storage_id="
-              << reinterpret_cast<storage_id_t>(storage().data_ptr().get())
-              << std::endl;
-  }
-}
-
-bool MycelyaTensorImpl::was_accessed_via_custom_impl() const {
-  return accessed_via_custom_impl_;
-}
-
 
 }  // namespace mycelya
