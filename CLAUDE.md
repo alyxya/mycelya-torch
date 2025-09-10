@@ -9,7 +9,7 @@ A production-ready PyTorch extension that enables transparent remote execution o
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns with zero local memory overhead
 - **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution with clean separation of concerns
 - **Multi-GPU Cloud Support**: 10 GPU types supported (T4, L4, A10G, A100, L40S, H100, H200, B200) across cloud providers
-- **Provider Abstraction**: Pluggable backend system with Modal (production), Mock (development), extensible for RunPod/Lambda Labs
+- **Provider Abstraction**: Pluggable client system with Modal (production), Mock (development), extensible for RunPod/Lambda Labs
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
 - **HuggingFace Integration**: Direct remote model loading with parameter linking, bypassing data transfer entirely
 
@@ -89,7 +89,7 @@ Modular operation dispatch with clean separation of concerns:
 - `copy.py` - Cross-device copy and transfer operations with raw bytes optimization
 - `scalar.py` - Scalar operations with local execution optimization
 
-### Provider Backend System (backends/)
+### Provider Client System (clients/)
 - `base_client.py` - Abstract client interface with RPC batching, caching, and standardized provider API
 - `modal/client.py` - Modal cloud provider implementation with multi-GPU support and connection management
 - `mock/client.py` - Local execution provider using Modal's .local() for development and testing
@@ -120,7 +120,7 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 - **Clean Input/Output Separation**: Raw bytes transfer with numpy serialization, eliminating torch.save/load overhead (~2-5x faster)
 - **Zero Local Memory**: No tensor data stored locally for remote tensors, only metadata maintained in custom implementations  
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
-- **Multi-Provider Support**: Extensible backend system with Modal (production), Mock (development), ready for RunPod/Lambda Labs
+- **Multi-Provider Support**: Extensible client system with Modal (production), Mock (development), ready for RunPod/Lambda Labs
 
 ### Memory Management Excellence
 - **Zero local memory overhead**: Custom TensorImpl/StorageImpl store no tensor data locally, only metadata maintained
@@ -271,8 +271,8 @@ print(f"Generated response: {response}")
 
 ### Multi-Provider Architecture
 - **Standardized Client Interface**: Abstract base client with consistent API across providers
-- **Modal Production Backend**: Complete cloud provider with multi-GPU support, dynamic app creation, connection pooling
-- **Mock Development Backend**: Local execution using Modal's .local() for testing without cloud dependencies  
+- **Modal Production Client**: Complete cloud provider with multi-GPU support, dynamic app creation, connection pooling
+- **Mock Development Client**: Local execution using Modal's .local() for testing without cloud dependencies  
 - **Extensible Provider System**: Clean interfaces ready for RunPod, Lambda Labs, AWS/GCP integration
 - **Provider-Agnostic Features**: RPC batching, caching, error handling work across all providers
 - **Connection Management**: Proper initialization, cleanup, and resource management per provider
@@ -285,7 +285,7 @@ print(f"Generated response: {response}")
 ### Update This File When:
 - Adding new core modules or changing module responsibilities
 - Modifying the sequential tensor ID architecture or metadata hash system  
-- Adding/removing provider backends (RunPod, Lambda Labs, etc.) or GPU types
+- Adding/removing provider clients (RunPod, Lambda Labs, etc.) or GPU types
 - Changing development commands (test, lint, typecheck) or build configuration
 - Making breaking changes to the public API or internal architecture
 - Major performance optimizations or C++ implementation changes
@@ -311,7 +311,7 @@ print(f"Generated response: {response}")
 - **Custom PyTorch integration** following pytorch-npu patterns with complete TensorImpl/StorageImpl/Allocator
 - **Process-scoped uniqueness** for storage IDs enabling efficient cross-device validation
 
-#### Multi-Provider Backend Implementation
+#### Multi-Provider Client Implementation
 - Follow Modal implementation pattern in `_mycelya_torch_modal/` for new providers
 - Implement standardized client interface (base_client.py) with RPC batching support
 - Support multi-GPU configuration with lazy/realized storage architecture
@@ -326,7 +326,7 @@ print(f"Generated response: {response}")
 - **Test Markers**: Use `@pytest.mark.critical`, `@pytest.mark.fast`, `@pytest.mark.slow` for categorization
 - **Comprehensive Error Handling**: Clear RuntimeError messages, graceful failure modes, proper error propagation
 - **Thread-Safe Operations**: Background processing with proper synchronization and future-based error handling
-- **Modular Organization**: Clean separation between ATen operation handlers, provider backends, and core coordination
+- **Modular Organization**: Clean separation between ATen operation handlers, provider clients, and core coordination
 
 #### Performance and Memory Optimization
 - **RPC Batching**: Background thread reduces network calls by ~10-100x with queue-based dispatch

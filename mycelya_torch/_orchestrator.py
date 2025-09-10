@@ -28,7 +28,7 @@ from ._utils import (
     get_tensor_id,
     map_args_kwargs,
 )
-from .backends.base_client import Client
+from .clients.base_client import Client
 
 log = get_logger(__name__)
 
@@ -93,11 +93,11 @@ class Orchestrator:
             batching: Whether to enable batching
         """
         if provider == "modal":
-            from .backends.modal.client import ModalClient
+            from .clients.modal.client import ModalClient
 
             client = ModalClient(gpu_type, machine_id, 3600, batching)
         elif provider == "mock":
-            from .backends.mock.client import MockClient
+            from .clients.mock.client import MockClient
 
             client = MockClient(gpu_type, machine_id, 3600, batching)
         else:
