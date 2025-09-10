@@ -17,15 +17,12 @@ from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
 
 import modal
 
-# Create image with PyTorch, CUDA support, and HuggingFace integration
-image = modal.Image.debian_slim().uv_pip_install(
-    "numpy", "torch", "huggingface_hub", "safetensors"
-)
-
 
 def create_modal_app_for_gpu(
     gpu_type: str,
     timeout: int,
+    packages: List[str],
+    python_version: str,
 ) -> Tuple[modal.App, Any]:
     """
     Create a Modal app and class for a specific GPU type.
@@ -33,11 +30,16 @@ def create_modal_app_for_gpu(
     Args:
         gpu_type: The GPU type (e.g., "T4", "A100-40GB")
         timeout: Function timeout in seconds
+        packages: List of versioned packages to install (e.g., ["torch==2.0.0", "numpy==1.24.0"])
+        python_version: Python version for base image (e.g., "3.11")
 
     Returns:
         Tuple of (modal_app, server_class) for the specified GPU type
     """
     app = modal.App("mycelya-torch")
+
+    # Create image with synchronized packages and Python version
+    image = modal.Image.debian_slim(python_version=python_version).uv_pip_install(*packages)
 
     # Create HuggingFace cache volume and mount at cache directory
     hf_cache_volume = modal.Volume.from_name("mycelya-torch-huggingface-cache", create_if_missing=True)
