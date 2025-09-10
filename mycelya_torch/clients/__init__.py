@@ -9,8 +9,7 @@ Currently supports:
 - Modal (mycelya_torch.clients.modal)
 
 Future clients may include:
-- RunPod (mycelya_torch.clients.runpod)
-- Lambda Labs (mycelya_torch.clients.lambda_labs)
+- AWS (mycelya_torch.clients.aws)
 """
 
 # Import standardized interface components

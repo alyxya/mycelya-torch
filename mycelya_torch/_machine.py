@@ -43,8 +43,7 @@ class CloudProvider(Enum):
     MODAL = "modal"
     MOCK = "mock"
     # Future providers can be added here
-    # RUNPOD = "runpod"
-    # LAMBDA = "lambda"
+    # AWS = "aws"
 
 
 class RemoteMachine:
