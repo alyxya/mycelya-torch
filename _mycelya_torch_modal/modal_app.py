@@ -97,12 +97,11 @@ def create_modal_app_for_gpu(
             import os
             import torch  # noqa: F401  # Preload torch import for better performance
 
-            # Set HuggingFace cache directory to mounted volume
-            os.environ["HF_HOME"] = "/huggingface-cache"
-            
-            # Change to data directory if it exists (only available on Modal, not in mock/local mode)
+            # Change to data directory and set HF cache if available (only on Modal, not in mock/local mode)
             if os.path.exists("/data"):
                 os.chdir("/data")
+                # Set HuggingFace cache directory to mounted volume
+                os.environ["HF_HOME"] = "/huggingface-cache"
 
             # Initialize registries only (device detection done per-method to avoid serialization issues)
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
