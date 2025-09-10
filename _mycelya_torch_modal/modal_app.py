@@ -39,6 +39,10 @@ def create_modal_app_for_gpu(
     """
     app = modal.App("mycelya-torch")
 
+    # Create HuggingFace cache volume and mount at cache directory
+    volume = modal.Volume.from_name("mycelya-torch-huggingface-cache", create_if_missing=True)
+    volumes = {"/huggingface-cache": volume}
+
     @app.cls(
         image=image,
         gpu=gpu_type,
@@ -47,6 +51,7 @@ def create_modal_app_for_gpu(
         serialized=True,
         max_containers=1,
         min_containers=1,
+        volumes=volumes,
     )
     class PytorchServer:
         class BatchCall(TypedDict):
@@ -80,7 +85,11 @@ def create_modal_app_for_gpu(
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
+            import os
             import torch  # noqa: F401  # Preload torch import for better performance
+
+            # Set HuggingFace cache directory to mounted volume
+            os.environ["HF_HOME"] = "/huggingface-cache"
 
             # Initialize registries only (device detection done per-method to avoid serialization issues)
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
