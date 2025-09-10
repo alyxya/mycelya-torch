@@ -40,8 +40,15 @@ def create_modal_app_for_gpu(
     app = modal.App("mycelya-torch")
 
     # Create HuggingFace cache volume and mount at cache directory
-    volume = modal.Volume.from_name("mycelya-torch-huggingface-cache", create_if_missing=True)
-    volumes = {"/huggingface-cache": volume}
+    hf_cache_volume = modal.Volume.from_name("mycelya-torch-huggingface-cache", create_if_missing=True)
+    
+    # Create data volume and mount at data directory
+    data_volume = modal.Volume.from_name("mycelya-torch-data", create_if_missing=True)
+    
+    volumes = {
+        "/huggingface-cache": hf_cache_volume,
+        "/data": data_volume
+    }
 
     @app.cls(
         image=image,
@@ -90,6 +97,10 @@ def create_modal_app_for_gpu(
 
             # Set HuggingFace cache directory to mounted volume
             os.environ["HF_HOME"] = "/huggingface-cache"
+            
+            # Change to data directory if it exists (only available on Modal, not in mock/local mode)
+            if os.path.exists("/data"):
+                os.chdir("/data")
 
             # Initialize registries only (device detection done per-method to avoid serialization issues)
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
