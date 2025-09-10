@@ -5,10 +5,11 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 import mycelya_torch
 
 model_name = "HuggingFaceTB/SmolLM2-135M-Instruct"
+model_name = "HuggingFaceTB/SmolLM3-3B"
 
 # Create modal machine and device
 # machine = mycelya_torch.RemoteMachine("mock")
-machine = mycelya_torch.RemoteMachine("modal", "T4")
+machine = mycelya_torch.RemoteMachine("modal", "A100")
 device = machine.device()
 
 # Load model config and create model architecture
