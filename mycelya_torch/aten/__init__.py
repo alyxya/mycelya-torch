@@ -27,7 +27,7 @@ _mycelya_lib_aten.impl(
 _mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
 
 # Core ATen operators with automatic wrappers around _remote_kernel_fallback
-# Total: 436 operators (base + inplace + out variants)
+# Total: 434 operators (base + inplace + out variants)
 # All operations sorted alphabetically
 
 def __adaptive_avg_pool2d_wrapper(*args, **kwargs):
@@ -102,12 +102,6 @@ def __softmax_wrapper(*args, **kwargs):
 def __softmax_out_wrapper(*args, **kwargs):
     """Wrapper for aten._softmax.out"""
     return _remote_kernel_fallback(torch.ops.aten._softmax.out, *args, **kwargs)
-def __to_copy_wrapper(*args, **kwargs):
-    """Wrapper for aten._to_copy"""
-    return _remote_kernel_fallback(torch.ops.aten._to_copy, *args, **kwargs)
-def __to_copy_out_wrapper(*args, **kwargs):
-    """Wrapper for aten._to_copy.out"""
-    return _remote_kernel_fallback(torch.ops.aten._to_copy.out, *args, **kwargs)
 def _abs_wrapper(*args, **kwargs):
     """Wrapper for aten.abs"""
     return _remote_kernel_fallback(torch.ops.aten.abs, *args, **kwargs)
@@ -1364,8 +1358,6 @@ _mycelya_lib_aten.impl("_pdist_forward", __pdist_forward_wrapper, dispatch_key="
 _mycelya_lib_aten.impl("_pdist_forward.out", __pdist_forward_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("_softmax", __softmax_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("_softmax.out", __softmax_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_to_copy", __to_copy_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_to_copy.out", __to_copy_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("abs", _abs_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("abs.out", _abs_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("abs_", _abs__wrapper, dispatch_key="PrivateUse1")
