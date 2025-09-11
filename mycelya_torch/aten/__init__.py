@@ -27,7 +27,7 @@ _mycelya_lib_aten.impl(
 _mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
 
 # Core ATen operators with automatic wrappers around _remote_kernel_fallback
-# Total: 434 operators (base + inplace + out variants)
+# Total: 431 operators (base + inplace + out variants)
 # All operations sorted alphabetically
 
 def __adaptive_avg_pool2d_wrapper(*args, **kwargs):
@@ -405,15 +405,6 @@ def _convolution_backward_wrapper(*args, **kwargs):
 def _convolution_backward_out_wrapper(*args, **kwargs):
     """Wrapper for aten.convolution_backward.out"""
     return _remote_kernel_fallback(torch.ops.aten.convolution_backward.out, *args, **kwargs)
-def _copy_wrapper(*args, **kwargs):
-    """Wrapper for aten.copy"""
-    return _remote_kernel_fallback(torch.ops.aten.copy, *args, **kwargs)
-def _copy_out_wrapper(*args, **kwargs):
-    """Wrapper for aten.copy.out"""
-    return _remote_kernel_fallback(torch.ops.aten.copy.out, *args, **kwargs)
-def _copy__wrapper(*args, **kwargs):
-    """Wrapper for aten.copy_"""
-    return _remote_kernel_fallback(torch.ops.aten.copy_, *args, **kwargs)
 def _cos_wrapper(*args, **kwargs):
     """Wrapper for aten.cos"""
     return _remote_kernel_fallback(torch.ops.aten.cos, *args, **kwargs)
@@ -1459,9 +1450,6 @@ _mycelya_lib_aten.impl("convolution", _convolution_wrapper, dispatch_key="Privat
 _mycelya_lib_aten.impl("convolution.out", _convolution_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("convolution_backward", _convolution_backward_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("convolution_backward.out", _convolution_backward_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("copy", _copy_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("copy.out", _copy_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("copy_", _copy__wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("cos", _cos_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("cos.out", _cos_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("cos_", _cos__wrapper, dispatch_key="PrivateUse1")
