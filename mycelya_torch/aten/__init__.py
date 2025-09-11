@@ -27,7 +27,7 @@ _mycelya_lib_aten.impl(
 _mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
 
 # Core ATen operators with automatic wrappers around _remote_kernel_fallback
-# Total: 429 operators (base + inplace + out variants)
+# Total: 425 operators (base + inplace + out variants)
 # All operations sorted alphabetically
 
 def __adaptive_avg_pool2d_wrapper(*args, **kwargs):
@@ -1233,18 +1233,6 @@ def _sum_dim_IntList_wrapper(*args, **kwargs):
 def _sum_out_wrapper(*args, **kwargs):
     """Wrapper for aten.sum.out"""
     return _remote_kernel_fallback(torch.ops.aten.sum.out, *args, **kwargs)
-def _sym_numel_wrapper(*args, **kwargs):
-    """Wrapper for aten.sym_numel"""
-    return _remote_kernel_fallback(torch.ops.aten.sym_numel, *args, **kwargs)
-def _sym_size_int_wrapper(*args, **kwargs):
-    """Wrapper for aten.sym_size.int"""
-    return _remote_kernel_fallback(torch.ops.aten.sym_size.int, *args, **kwargs)
-def _sym_storage_offset_wrapper(*args, **kwargs):
-    """Wrapper for aten.sym_storage_offset"""
-    return _remote_kernel_fallback(torch.ops.aten.sym_storage_offset, *args, **kwargs)
-def _sym_stride_int_wrapper(*args, **kwargs):
-    """Wrapper for aten.sym_stride.int"""
-    return _remote_kernel_fallback(torch.ops.aten.sym_stride.int, *args, **kwargs)
 def _tan_wrapper(*args, **kwargs):
     """Wrapper for aten.tan"""
     return _remote_kernel_fallback(torch.ops.aten.tan, *args, **kwargs)
@@ -1720,10 +1708,6 @@ _mycelya_lib_aten.impl("sub_.Scalar", _sub__Scalar_wrapper, dispatch_key="Privat
 _mycelya_lib_aten.impl("sub_.Tensor", _sub__Tensor_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("sum.dim_IntList", _sum_dim_IntList_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("sum.out", _sum_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sym_numel", _sym_numel_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sym_size.int", _sym_size_int_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sym_storage_offset", _sym_storage_offset_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sym_stride.int", _sym_stride_int_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("tan", _tan_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("tan.out", _tan_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("tan_", _tan__wrapper, dispatch_key="PrivateUse1")
