@@ -27,7 +27,7 @@ _mycelya_lib_aten.impl(
 _mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
 
 # Core ATen operators with automatic wrappers around _remote_kernel_fallback
-# Total: 445 operators (base + inplace + out variants)
+# Total: 436 operators (base + inplace + out variants)
 # All operations sorted alphabetically
 
 def __adaptive_avg_pool2d_wrapper(*args, **kwargs):
@@ -168,9 +168,6 @@ def _addmm_out_wrapper(*args, **kwargs):
 def _addmm__wrapper(*args, **kwargs):
     """Wrapper for aten.addmm_"""
     return _remote_kernel_fallback(torch.ops.aten.addmm_, *args, **kwargs)
-def _alias_wrapper(*args, **kwargs):
-    """Wrapper for aten.alias"""
-    return _remote_kernel_fallback(torch.ops.aten.alias, *args, **kwargs)
 def _amax_wrapper(*args, **kwargs):
     """Wrapper for aten.amax"""
     return _remote_kernel_fallback(torch.ops.aten.amax, *args, **kwargs)
@@ -216,12 +213,6 @@ def _argmin_wrapper(*args, **kwargs):
 def _argmin_out_wrapper(*args, **kwargs):
     """Wrapper for aten.argmin.out"""
     return _remote_kernel_fallback(torch.ops.aten.argmin.out, *args, **kwargs)
-def _as_strided_wrapper(*args, **kwargs):
-    """Wrapper for aten.as_strided"""
-    return _remote_kernel_fallback(torch.ops.aten.as_strided, *args, **kwargs)
-def _as_strided__wrapper(*args, **kwargs):
-    """Wrapper for aten.as_strided_"""
-    return _remote_kernel_fallback(torch.ops.aten.as_strided_, *args, **kwargs)
 def _asin_wrapper(*args, **kwargs):
     """Wrapper for aten.asin"""
     return _remote_kernel_fallback(torch.ops.aten.asin, *args, **kwargs)
@@ -513,18 +504,6 @@ def _embedding_dense_backward_wrapper(*args, **kwargs):
 def _embedding_dense_backward_out_wrapper(*args, **kwargs):
     """Wrapper for aten.embedding_dense_backward.out"""
     return _remote_kernel_fallback(torch.ops.aten.embedding_dense_backward.out, *args, **kwargs)
-def _empty_memory_format_wrapper(*args, **kwargs):
-    """Wrapper for aten.empty.memory_format"""
-    return _remote_kernel_fallback(torch.ops.aten.empty.memory_format, *args, **kwargs)
-def _empty_out_wrapper(*args, **kwargs):
-    """Wrapper for aten.empty.out"""
-    return _remote_kernel_fallback(torch.ops.aten.empty.out, *args, **kwargs)
-def _empty_strided_wrapper(*args, **kwargs):
-    """Wrapper for aten.empty_strided"""
-    return _remote_kernel_fallback(torch.ops.aten.empty_strided, *args, **kwargs)
-def _empty_strided_out_wrapper(*args, **kwargs):
-    """Wrapper for aten.empty_strided.out"""
-    return _remote_kernel_fallback(torch.ops.aten.empty_strided.out, *args, **kwargs)
 def _eq_Scalar_wrapper(*args, **kwargs):
     """Wrapper for aten.eq.Scalar"""
     return _remote_kernel_fallback(torch.ops.aten.eq.Scalar, *args, **kwargs)
@@ -1110,9 +1089,6 @@ def _replication_pad3d_wrapper(*args, **kwargs):
 def _replication_pad3d_out_wrapper(*args, **kwargs):
     """Wrapper for aten.replication_pad3d.out"""
     return _remote_kernel_fallback(torch.ops.aten.replication_pad3d.out, *args, **kwargs)
-def _resize__wrapper(*args, **kwargs):
-    """Wrapper for aten.resize_"""
-    return _remote_kernel_fallback(torch.ops.aten.resize_, *args, **kwargs)
 def _round_wrapper(*args, **kwargs):
     """Wrapper for aten.round"""
     return _remote_kernel_fallback(torch.ops.aten.round, *args, **kwargs)
@@ -1356,9 +1332,6 @@ def _var_dim_wrapper(*args, **kwargs):
 def _var_out_wrapper(*args, **kwargs):
     """Wrapper for aten.var.out"""
     return _remote_kernel_fallback(torch.ops.aten.var.out, *args, **kwargs)
-def _view_wrapper(*args, **kwargs):
-    """Wrapper for aten.view"""
-    return _remote_kernel_fallback(torch.ops.aten.view, *args, **kwargs)
 def _where_self_wrapper(*args, **kwargs):
     """Wrapper for aten.where.self"""
     return _remote_kernel_fallback(torch.ops.aten.where.self, *args, **kwargs)
@@ -1413,7 +1386,6 @@ _mycelya_lib_aten.impl("add_.Tensor", _add__Tensor_wrapper, dispatch_key="Privat
 _mycelya_lib_aten.impl("addmm", _addmm_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("addmm.out", _addmm_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("addmm_", _addmm__wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("alias", _alias_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("amax", _amax_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("amax.out", _amax_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("amin", _amin_wrapper, dispatch_key="PrivateUse1")
@@ -1429,8 +1401,6 @@ _mycelya_lib_aten.impl("argmax", _argmax_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("argmax.out", _argmax_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("argmin", _argmin_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("argmin.out", _argmin_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("as_strided", _as_strided_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("as_strided_", _as_strided__wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("asin", _asin_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("asin.out", _asin_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("asin_", _asin__wrapper, dispatch_key="PrivateUse1")
@@ -1528,10 +1498,6 @@ _mycelya_lib_aten.impl("embedding", _embedding_wrapper, dispatch_key="PrivateUse
 _mycelya_lib_aten.impl("embedding.out", _embedding_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("embedding_dense_backward", _embedding_dense_backward_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("embedding_dense_backward.out", _embedding_dense_backward_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("empty.memory_format", _empty_memory_format_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("empty.out", _empty_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("empty_strided", _empty_strided_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("empty_strided.out", _empty_strided_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("eq.Scalar", _eq_Scalar_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("eq.Scalar_out", _eq_Scalar_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("eq.Tensor", _eq_Tensor_wrapper, dispatch_key="PrivateUse1")
@@ -1727,7 +1693,6 @@ _mycelya_lib_aten.impl("replication_pad2d", _replication_pad2d_wrapper, dispatch
 _mycelya_lib_aten.impl("replication_pad2d.out", _replication_pad2d_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("replication_pad3d", _replication_pad3d_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("replication_pad3d.out", _replication_pad3d_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("resize_", _resize__wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("round", _round_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("round.out", _round_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("round_", _round__wrapper, dispatch_key="PrivateUse1")
@@ -1809,6 +1774,5 @@ _mycelya_lib_aten.impl("var.correction", _var_correction_wrapper, dispatch_key="
 _mycelya_lib_aten.impl("var.correction_out", _var_correction_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("var.dim", _var_dim_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("var.out", _var_out_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("view", _view_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("where.self", _where_self_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("where.self_out", _where_self_out_wrapper, dispatch_key="PrivateUse1")
