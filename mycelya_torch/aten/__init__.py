@@ -27,7 +27,7 @@ _mycelya_lib_aten.impl(
 _mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
 
 # Core ATen operators with automatic wrappers around _remote_kernel_fallback
-# Total: 431 operators (base + inplace + out variants)
+# Total: 429 operators (base + inplace + out variants)
 # All operations sorted alphabetically
 
 def __adaptive_avg_pool2d_wrapper(*args, **kwargs):
@@ -375,12 +375,6 @@ def _clamp__wrapper(*args, **kwargs):
 def _clamp__Tensor_wrapper(*args, **kwargs):
     """Wrapper for aten.clamp_.Tensor"""
     return _remote_kernel_fallback(torch.ops.aten.clamp_.Tensor, *args, **kwargs)
-def _clone_wrapper(*args, **kwargs):
-    """Wrapper for aten.clone"""
-    return _remote_kernel_fallback(torch.ops.aten.clone, *args, **kwargs)
-def _clone_out_wrapper(*args, **kwargs):
-    """Wrapper for aten.clone.out"""
-    return _remote_kernel_fallback(torch.ops.aten.clone.out, *args, **kwargs)
 def _col2im_wrapper(*args, **kwargs):
     """Wrapper for aten.col2im"""
     return _remote_kernel_fallback(torch.ops.aten.col2im, *args, **kwargs)
@@ -1440,8 +1434,6 @@ _mycelya_lib_aten.impl("clamp.Tensor_out", _clamp_Tensor_out_wrapper, dispatch_k
 _mycelya_lib_aten.impl("clamp.out", _clamp_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("clamp_", _clamp__wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("clamp_.Tensor", _clamp__Tensor_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clone", _clone_wrapper, dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clone.out", _clone_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("col2im", _col2im_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("col2im.out", _col2im_out_wrapper, dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("constant_pad_nd", _constant_pad_nd_wrapper, dispatch_key="PrivateUse1")
