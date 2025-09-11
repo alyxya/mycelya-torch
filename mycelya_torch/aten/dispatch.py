@@ -75,6 +75,10 @@ def _execute_meta_operation(
             meta_tensor = _create_meta_tensor_from_mycelya(obj, meta_storage_cache)
             original_tensors[meta_tensor.untyped_storage()] = obj
             return meta_tensor
+        
+        # Convert device arguments to meta device
+        if isinstance(obj, torch.device):
+            return torch.device("meta")
 
         return obj
 

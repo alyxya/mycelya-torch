@@ -429,6 +429,23 @@ class Orchestrator:
                 self._maybe_create_tensor(obj)
                 return get_tensor_id(obj)
 
+            # Convert mycelya device arguments to corresponding remote device
+            if isinstance(obj, torch.device) and obj.type == "mycelya":
+                tensor_mask.append(False)
+                device_info = device_manager.get_remote_device_info(obj.index)
+
+                # Update remote_device_info tracking if not already set
+                if remote_device_info is None:
+                    remote_device_info = device_info
+                elif remote_device_info != device_info:
+                    raise RuntimeError(
+                        f"Cannot perform operation {op_name} with mixed devices. "
+                        f"Expected device {remote_device_info}, got device argument for {device_info}"
+                    )
+
+                _, remote_type, remote_index = device_info
+                return torch.device(remote_type, remote_index)
+
             tensor_mask.append(False)
             return obj
 
