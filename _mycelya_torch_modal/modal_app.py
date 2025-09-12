@@ -38,6 +38,30 @@ def create_modal_app_for_gpu(
     Returns:
         Tuple of (modal_app, server_class) for the specified GPU type
     """
+
+    class BatchCall(TypedDict):
+        """Structure for a single batched RPC call."""
+
+        method_name: str
+        args: Tuple[Any, ...]
+        kwargs: Dict[str, Any]
+
+    class TensorMetadata(TypedDict):
+        """Structure for tensor metadata with temp key.
+
+        This TypedDict defines the structure returned by dynamic operations
+        that need to pass tensor metadata along with a temporary key for
+        linking local tensors to remote tensors.
+        """
+
+        shape: List[int]
+        dtype: str
+        stride: List[int]
+        storage_offset: int
+        nbytes: int
+        temp_key: str
+        requires_grad: NotRequired[bool]
+
     app = modal.App("mycelya-torch")
 
     # Create image with synchronized packages and Python version
@@ -73,28 +97,6 @@ def create_modal_app_for_gpu(
 
     @app.cls(**cls_kwargs)
     class PytorchServer:
-        class BatchCall(TypedDict):
-            """Structure for a single batched RPC call."""
-
-            method_name: str
-            args: Tuple[Any, ...]
-            kwargs: Dict[str, Any]
-
-        class TensorMetadata(TypedDict):
-            """Structure for tensor metadata with temp key.
-
-            This TypedDict defines the structure returned by dynamic operations
-            that need to pass tensor metadata along with a temporary key for
-            linking local tensors to remote tensors.
-            """
-
-            shape: List[int]
-            dtype: str
-            stride: List[int]
-            storage_offset: int
-            nbytes: int
-            temp_key: str
-            requires_grad: NotRequired[bool]
 
         @staticmethod
         def _dtype_to_str(dtype) -> str:
@@ -450,7 +452,7 @@ def create_modal_app_for_gpu(
                     temp_key = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
                     temp_registry[temp_key] = t
                     output_metadata.append(
-                        self.TensorMetadata(
+                        TensorMetadata(
                             shape=list(t.shape),
                             dtype=self._dtype_to_str(t.dtype),
                             stride=list(t.stride()),
@@ -630,7 +632,7 @@ def create_modal_app_for_gpu(
             self._link_tensors_impl(local_tensor_ids, temp_keys)
 
         @modal.method()
-        def execute_batch(self, batch_calls: List["PytorchServer.BatchCall"]):
+        def execute_batch(self, batch_calls: List[BatchCall]):
             """
             Execute a batch of RPCs in sequence.
 
