@@ -23,7 +23,7 @@ class TestBasicTensorCreation:
     def test_backend_tensor_creation(self, shared_machines):
         """Test backend tensor creation via .to() method."""
         x = torch.randn(2, 2)
-        y = x.to(shared_machines["t4"].device())
+        y = x.to(shared_machines["T4"].device())
         assert y is not None and y.shape == x.shape
 
     def test_tensor_creation_various_shapes(self, shared_machines):
@@ -66,8 +66,8 @@ class TestBasicArithmeticOperations:
         x = torch.randn(2, 2)
         y = torch.randn(2, 2)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         # Test addition
         z_remote = x_remote + y_remote
@@ -80,8 +80,8 @@ class TestBasicArithmeticOperations:
         x = torch.randn(3, 3)
         y = torch.randn(3, 3)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         z_remote = x_remote - y_remote
         z_expected = x - y
@@ -93,8 +93,8 @@ class TestBasicArithmeticOperations:
         x = torch.randn(2, 3)
         y = torch.randn(2, 3)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         z_remote = x_remote * y_remote
         z_expected = x * y
@@ -106,8 +106,8 @@ class TestBasicArithmeticOperations:
         x = torch.randn(2, 2) + 1.0  # Add 1 to avoid division by zero
         y = torch.randn(2, 2) + 1.0
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         z_remote = x_remote / y_remote
         z_expected = x / y
@@ -117,7 +117,7 @@ class TestBasicArithmeticOperations:
     def test_scalar_operations(self, shared_machines):
         """Test operations with scalars."""
         x = torch.randn(2, 2)
-        x_remote = x.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
         scalar = 2.5
 
         # Addition with scalar
@@ -139,8 +139,8 @@ class TestMatrixOperations:
         x = torch.randn(2, 2)
         y = torch.randn(2, 2)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         w_remote = x_remote.mm(y_remote)
         w_expected = x.mm(y)
@@ -153,8 +153,8 @@ class TestMatrixOperations:
         x = torch.randn(3, 4)
         y = torch.randn(4, 5)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         result_remote = x_remote.mm(y_remote)
         result_expected = x.mm(y)
@@ -167,8 +167,8 @@ class TestMatrixOperations:
         x = torch.randn(2, 3, 4)
         y = torch.randn(2, 4, 5)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         try:
             result_remote = torch.bmm(x_remote, y_remote)
@@ -186,29 +186,29 @@ class TestTensorConversions:
     def test_dtype_conversion(self, shared_machines):
         """Test remote conversion with dtype parameter."""
         x = torch.randn(2, 2, dtype=torch.float32)
-        y = x.to(shared_machines["t4"].device(), dtype=torch.float64)
+        y = x.to(shared_machines["T4"].device(), dtype=torch.float64)
         assert y.dtype == torch.float64
 
     def test_copy_parameter(self, shared_machines):
         """Test remote conversion with copy parameter."""
         x = torch.randn(2, 2)
-        y = x.to(shared_machines["t4"].device(), copy=True)
-        z = x.to(shared_machines["t4"].device(), copy=False)
+        y = x.to(shared_machines["T4"].device(), copy=True)
+        z = x.to(shared_machines["T4"].device(), copy=False)
         assert y is not None and z is not None
 
     def test_cpu_to_remote_conversion(self, shared_machines):
         """Test converting CPU tensors to remote devices."""
         cpu_tensor = torch.randn(3, 3)
-        remote_tensor = cpu_tensor.to(shared_machines["t4"].device())
+        remote_tensor = cpu_tensor.to(shared_machines["T4"].device())
 
-        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["T4"])
         assert cpu_tensor.shape == remote_tensor.shape
         assert cpu_tensor.dtype == remote_tensor.dtype
 
     def test_remote_to_cpu_conversion(self, shared_machines):
         """Test converting remote tensors back to CPU."""
         original_cpu = torch.randn(2, 2)
-        remote_tensor = original_cpu.to(shared_machines["t4"].device())
+        remote_tensor = original_cpu.to(shared_machines["T4"].device())
         back_to_cpu = remote_tensor.cpu()
 
         assert back_to_cpu.device.type == "cpu"
@@ -269,9 +269,9 @@ class TestTensorComparisons:
         y = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
         z = torch.tensor([[1.0, 2.0], [3.0, 5.0]])
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
-        z_remote = z.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
+        z_remote = z.to(shared_machines["T4"].device())
 
         try:
             # Test equality
@@ -295,8 +295,8 @@ class TestTensorConcatenation:
         x = torch.randn(2, 3)
         y = torch.randn(3, 3)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         # Concatenate along dim 0
         result_remote = torch.cat([x_remote, y_remote], dim=0)
@@ -311,8 +311,8 @@ class TestTensorConcatenation:
         x = torch.randn(2, 2)
         y = torch.randn(2, 3)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         # Concatenate along dim 1
         result_remote = torch.cat([x_remote, y_remote], dim=1)
@@ -328,9 +328,9 @@ class TestTensorConcatenation:
         y = torch.randn(2, 2)
         z = torch.randn(2, 2)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
-        z_remote = z.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
+        z_remote = z.to(shared_machines["T4"].device())
 
         # Concatenate 3 tensors along dim 0
         result_remote = torch.cat([x_remote, y_remote, z_remote], dim=0)
@@ -345,8 +345,8 @@ class TestTensorConcatenation:
         x = torch.randn(2, 2, requires_grad=True)
         y = torch.randn(3, 2, requires_grad=True)
 
-        x_remote = x.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Concatenate and compute loss
         cat_remote = torch.cat([x_remote, y_remote], dim=0)
@@ -376,8 +376,8 @@ class TestTensorConcatenation:
         x = torch.randn(2, 2, dtype=torch.float32)
         y = torch.randn(3, 2, dtype=torch.float32)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         result_remote = torch.cat([x_remote, y_remote], dim=0)
         result_expected = torch.cat([x, y], dim=0)
@@ -389,7 +389,7 @@ class TestTensorConcatenation:
     def test_cat_single_tensor(self, shared_machines):
         """Test concatenation with a single tensor."""
         x = torch.randn(2, 3)
-        x_remote = x.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
 
         # Cat with single tensor should return the same tensor
         result_remote = torch.cat([x_remote], dim=0)
@@ -410,8 +410,8 @@ class TestTensorConcatenation:
             y = torch.randn(2, 4)
             expected_shape = (2, 7)
 
-        x_remote = x.to(shared_machines["t4"].device())
-        y_remote = y.to(shared_machines["t4"].device())
+        x_remote = x.to(shared_machines["T4"].device())
+        y_remote = y.to(shared_machines["T4"].device())
 
         result_remote = torch.cat([x_remote, y_remote], dim=dim)
         result_expected = torch.cat([x, y], dim=dim)
@@ -434,8 +434,8 @@ def test_parametrized_operations(shared_machines, operation, expected_shape):
     x = torch.randn(2, 2)
     y = torch.randn(2, 2)
 
-    x_remote = x.to(shared_machines["t4"].device())
-    y_remote = y.to(shared_machines["t4"].device())
+    x_remote = x.to(shared_machines["T4"].device())
+    y_remote = y.to(shared_machines["T4"].device())
 
     try:
         result_remote = operation(x_remote, y_remote)

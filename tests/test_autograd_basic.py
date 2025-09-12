@@ -20,7 +20,7 @@ class TestBasicGradientComputation:
         """Test simple backward pass on remote tensors."""
         # Create tensors with gradients
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Simple operation
         y_remote = x_remote.sum()
@@ -38,7 +38,7 @@ class TestBasicGradientComputation:
     def test_scalar_multiplication_grad(self, shared_machines):
         """Test gradients for scalar multiplication."""
         x_cpu = torch.randn(3, 3, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
         scalar = 2.5
 
         # Operation
@@ -58,8 +58,8 @@ class TestBasicGradientComputation:
         x_cpu = torch.randn(2, 2, requires_grad=True)
         y_cpu = torch.randn(2, 2, requires_grad=True)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Operation
         z_remote = x_remote + y_remote
@@ -82,8 +82,8 @@ class TestBasicGradientComputation:
         x_cpu = torch.randn(2, 2, requires_grad=True)
         y_cpu = torch.randn(2, 2, requires_grad=True)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Operation
         z_remote = x_remote * y_remote
@@ -109,8 +109,8 @@ class TestMatrixOperationGradients:
         x_cpu = torch.randn(2, 3, requires_grad=True)
         y_cpu = torch.randn(3, 2, requires_grad=True)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Matrix multiplication
         z_remote = x_remote.mm(y_remote)
@@ -132,8 +132,8 @@ class TestMatrixOperationGradients:
         x_cpu = torch.randn(2, 3, 4, requires_grad=True)
         y_cpu = torch.randn(2, 4, 5, requires_grad=True)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         try:
             # Batch matrix multiplication
@@ -158,7 +158,7 @@ class TestViewOperationGradients:
     def test_view_operation_gradients(self, shared_machines):
         """Test that gradients flow through view operations."""
         x_cpu = torch.randn(2, 6, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # View operation
         y_remote = x_remote.view(3, 4)
@@ -178,7 +178,7 @@ class TestViewOperationGradients:
     def test_transpose_operation_gradients(self, shared_machines):
         """Test that gradients flow through transpose operations."""
         x_cpu = torch.randn(3, 4, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Transpose operation
         y_remote = x_remote.transpose(0, 1)
@@ -196,7 +196,7 @@ class TestViewOperationGradients:
     def test_reshape_operation_gradients(self, shared_machines):
         """Test that gradients flow through reshape operations."""
         x_cpu = torch.randn(2, 3, 4, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Reshape operation
         y_remote = x_remote.reshape(6, 4)
@@ -218,8 +218,8 @@ class TestRetainGradFunctionality:
         x_cpu = torch.randn(3, 3, requires_grad=True)
         y_cpu = torch.randn(3, 3, requires_grad=True)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Intermediate computation - normally gradients wouldn't be retained
         z_remote = x_remote * y_remote
@@ -256,8 +256,8 @@ class TestRetainGradFunctionality:
         x_cpu = torch.randn(2, 2, requires_grad=True)
         y_cpu = torch.randn(2, 2, requires_grad=True)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Multiple intermediate computations
         z1_remote = x_remote + y_remote
@@ -295,10 +295,10 @@ class TestRetainGradFunctionality:
 
         # Remote computation
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
         y_remote = (
-            y_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            y_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
         z_remote = x_remote * y_remote
         z_remote.retain_grad()
@@ -321,8 +321,8 @@ class TestRetainGradFunctionality:
         x_cpu = torch.randn(2, 2, requires_grad=True)
         y_cpu = torch.randn(2, 2, requires_grad=True)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Intermediate computation WITHOUT retain_grad()
         z_remote = x_remote * y_remote
@@ -350,7 +350,7 @@ class TestGradientAccumulation:
     def test_gradient_accumulation_basic(self, shared_machines):
         """Test basic gradient accumulation."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # First backward pass
         y1_remote = x_remote.sum()
@@ -370,7 +370,7 @@ class TestGradientAccumulation:
     def test_gradient_zero_behavior(self, shared_machines):
         """Test gradient zeroing behavior."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # First backward pass
         y_remote = x_remote.sum()
@@ -395,8 +395,8 @@ class TestAutoGradFunction:
         x_cpu = torch.randn(2, 2, requires_grad=True)
         y_cpu = torch.randn(2, 2, requires_grad=False)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
-        y_remote = y_cpu.to(shared_machines["t4"].device()).detach()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
+        y_remote = y_cpu.to(shared_machines["T4"].device()).detach()
 
         # Operations with requires_grad=True tensor
         z_remote = x_remote + y_remote
@@ -409,7 +409,7 @@ class TestAutoGradFunction:
     def test_detach_behavior(self, shared_machines):
         """Test tensor detach behavior."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         # Detach tensor
         x_detached = x_remote.detach()
@@ -422,7 +422,7 @@ class TestAutoGradFunction:
     def test_no_grad_context(self, shared_machines):
         """Test torch.no_grad() context behavior."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
-        x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+        x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
         with torch.no_grad():
             y_remote = x_remote * 2
@@ -436,7 +436,7 @@ class TestGradientNumericalVerification:
         """Test gradient computation against CPU reference."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation
@@ -459,7 +459,7 @@ class TestGradientNumericalVerification:
         """Test chain rule implementation."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation: y = (x^2 + 1) * 3
@@ -483,7 +483,7 @@ class TestGradientNumericalVerification:
 def test_parametrized_gradient_shapes(shared_machines, shape):
     """Test gradient computation with various tensor shapes."""
     x_cpu = torch.randn(shape, requires_grad=True)
-    x_remote = x_cpu.to(shared_machines["t4"].device()).detach().requires_grad_()
+    x_remote = x_cpu.to(shared_machines["T4"].device()).detach().requires_grad_()
 
     # Simple operation
     y_remote = x_remote.sum()
@@ -508,7 +508,9 @@ def test_parametrized_gradient_shapes(shared_machines, shape):
 def test_parametrized_operations_gradients(shared_machines, operation):
     """Test gradients for various operations."""
     x_cpu = torch.randn(3, 3, requires_grad=True)
-    x_remote = x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+    x_remote = (
+        x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
+    )
 
     try:
         # CPU computation

@@ -24,12 +24,12 @@ class TestCPUToRemoteTransfers:
     def test_basic_cpu_to_remote_transfer(self, shared_machines):
         """Test basic CPU to remote device transfer."""
         cpu_tensor = torch.randn(2, 2)
-        remote_tensor = cpu_tensor.to(shared_machines["t4"].device())
+        remote_tensor = cpu_tensor.to(shared_machines["T4"].device())
 
         assert remote_tensor is not None
         assert remote_tensor.shape == cpu_tensor.shape
         assert remote_tensor.dtype == cpu_tensor.dtype
-        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["T4"])
 
     def test_cpu_to_remote_various_shapes(self, shared_machines):
         """Test CPU to remote transfer with various tensor shapes."""
@@ -41,11 +41,11 @@ class TestCPUToRemoteTransfers:
 
         for shape in test_shapes:
             cpu_tensor = torch.randn(shape)
-            remote_tensor = cpu_tensor.to(shared_machines["t4"].device())
+            remote_tensor = cpu_tensor.to(shared_machines["T4"].device())
 
             assert remote_tensor.shape == shape
             DeviceTestUtils.verify_machine_properties(
-                remote_tensor, shared_machines["t4"]
+                remote_tensor, shared_machines["T4"]
             )
 
     def test_cpu_to_remote_with_dtype_conversion(self, shared_machines):
@@ -54,20 +54,20 @@ class TestCPUToRemoteTransfers:
 
         # Transfer with dtype conversion
         remote_tensor = cpu_tensor.to(
-            shared_machines["t4"].device(), dtype=torch.float64
+            shared_machines["T4"].device(), dtype=torch.float64
         )
 
         assert remote_tensor.dtype == torch.float64
         assert remote_tensor.shape == cpu_tensor.shape
-        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["T4"])
 
     def test_cpu_to_remote_with_requires_grad(self, shared_machines):
         """Test CPU to remote transfer preserving requires_grad."""
         cpu_tensor = torch.randn(2, 2, requires_grad=True)
-        remote_tensor = cpu_tensor.to(shared_machines["t4"].device())
+        remote_tensor = cpu_tensor.to(shared_machines["T4"].device())
 
         assert remote_tensor.requires_grad == cpu_tensor.requires_grad
-        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["T4"])
 
     @pytest.mark.parametrize(
         "dtype", [torch.float32, torch.float64, torch.int32, torch.int64]
@@ -76,11 +76,11 @@ class TestCPUToRemoteTransfers:
         """Test CPU to remote transfer with various data types."""
         try:
             cpu_tensor = torch.randn(2, 2).to(dtype)
-            remote_tensor = cpu_tensor.to(shared_machines["t4"].device())
+            remote_tensor = cpu_tensor.to(shared_machines["T4"].device())
 
             assert remote_tensor.dtype == dtype
             DeviceTestUtils.verify_machine_properties(
-                remote_tensor, shared_machines["t4"]
+                remote_tensor, shared_machines["T4"]
             )
         except (RuntimeError, NotImplementedError):
             pytest.skip(f"dtype {dtype} not supported on remote device")
@@ -92,7 +92,7 @@ class TestRemoteToCPUTransfers:
     def test_basic_remote_to_cpu_transfer(self, shared_machines):
         """Test basic remote to CPU transfer."""
         original_cpu = torch.randn(2, 2)
-        remote_tensor = original_cpu.to(shared_machines["t4"].device())
+        remote_tensor = original_cpu.to(shared_machines["T4"].device())
         back_to_cpu = remote_tensor.cpu()
 
         assert back_to_cpu.device.type == "cpu"
@@ -108,7 +108,7 @@ class TestRemoteToCPUTransfers:
 
         for shape in test_shapes:
             original_cpu = torch.randn(shape)
-            remote_tensor = original_cpu.to(shared_machines["t4"].device())
+            remote_tensor = original_cpu.to(shared_machines["T4"].device())
             back_to_cpu = remote_tensor.cpu()
 
             assert back_to_cpu.device.type == "cpu"
@@ -118,7 +118,7 @@ class TestRemoteToCPUTransfers:
     def test_remote_to_cpu_preserves_gradients(self, shared_machines):
         """Test that remote to CPU transfer preserves gradient information."""
         original_cpu = torch.randn(2, 2, requires_grad=True)
-        remote_tensor = original_cpu.to(shared_machines["t4"].device())
+        remote_tensor = original_cpu.to(shared_machines["T4"].device())
 
         # Retain gradients for non-leaf tensor
         remote_tensor.retain_grad()
@@ -140,8 +140,8 @@ class TestRemoteToCPUTransfers:
         x_cpu = torch.randn(2, 2)
         y_cpu = torch.randn(2, 2)
 
-        x_remote = x_cpu.to(shared_machines["t4"].device())
-        y_remote = y_cpu.to(shared_machines["t4"].device())
+        x_remote = x_cpu.to(shared_machines["T4"].device())
+        y_remote = y_cpu.to(shared_machines["T4"].device())
 
         # Perform operations on remote
         result_remote = x_remote + y_remote
@@ -234,17 +234,19 @@ class TestTransferWithConversions:
         cpu_tensor = torch.randn(2, 2)
 
         # Transfer with copy=True
-        remote_tensor_copy = cpu_tensor.to(shared_machines["t4"].device(), copy=True)
+        remote_tensor_copy = cpu_tensor.to(shared_machines["T4"].device(), copy=True)
         assert remote_tensor_copy is not None
         DeviceTestUtils.verify_machine_properties(
-            remote_tensor_copy, shared_machines["t4"]
+            remote_tensor_copy, shared_machines["T4"]
         )
 
         # Transfer with copy=False
-        remote_tensor_no_copy = cpu_tensor.to(shared_machines["t4"].device(), copy=False)
+        remote_tensor_no_copy = cpu_tensor.to(
+            shared_machines["T4"].device(), copy=False
+        )
         assert remote_tensor_no_copy is not None
         DeviceTestUtils.verify_machine_properties(
-            remote_tensor_no_copy, shared_machines["t4"]
+            remote_tensor_no_copy, shared_machines["T4"]
         )
 
     def test_transfer_with_non_blocking(self, shared_machines):
@@ -254,11 +256,11 @@ class TestTransferWithConversions:
         try:
             # Transfer with non_blocking=True
             remote_tensor = cpu_tensor.to(
-                shared_machines["t4"].device(), non_blocking=True
+                shared_machines["T4"].device(), non_blocking=True
             )
             assert remote_tensor is not None
             DeviceTestUtils.verify_machine_properties(
-                remote_tensor, shared_machines["t4"]
+                remote_tensor, shared_machines["T4"]
             )
         except (RuntimeError, NotImplementedError):
             pytest.skip("non_blocking parameter not supported")
@@ -268,11 +270,11 @@ class TestTransferWithConversions:
         cpu_tensor = torch.randn(2, 2, dtype=torch.float32)
 
         remote_tensor = cpu_tensor.to(
-            device=shared_machines["t4"].device(), dtype=torch.float64
+            device=shared_machines["T4"].device(), dtype=torch.float64
         )
 
         assert remote_tensor.dtype == torch.float64
-        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines["T4"])
         assert remote_tensor.shape == cpu_tensor.shape
 
 
@@ -292,10 +294,12 @@ class TestTransferErrorHandling:
         try:
             # Create a moderately large tensor
             large_tensor = torch.randn(100, 100, 10)
-            remote_large = large_tensor.to(shared_machines["t4"].device())
+            remote_large = large_tensor.to(shared_machines["T4"].device())
 
             assert remote_large.shape == large_tensor.shape
-            DeviceTestUtils.verify_machine_properties(remote_large, shared_machines["t4"])
+            DeviceTestUtils.verify_machine_properties(
+                remote_large, shared_machines["T4"]
+            )
 
             # Transfer back and verify
             back_to_cpu = remote_large.cpu()
@@ -306,10 +310,10 @@ class TestTransferErrorHandling:
     def test_transfer_empty_tensors(self, shared_machines):
         """Test transfer of empty tensors."""
         empty_tensor = torch.empty(0, 2)
-        remote_empty = empty_tensor.to(shared_machines["t4"].device())
+        remote_empty = empty_tensor.to(shared_machines["T4"].device())
 
         assert remote_empty.shape == (0, 2)
-        DeviceTestUtils.verify_machine_properties(remote_empty, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(remote_empty, shared_machines["T4"])
 
         # Transfer back
         back_to_cpu = remote_empty.cpu()
@@ -326,7 +330,7 @@ class TestTransferMemoryEfficiency:
 
         # Perform multiple transfer cycles
         for _i in range(10):
-            remote_tensor = base_tensor.to(shared_machines["t4"].device())
+            remote_tensor = base_tensor.to(shared_machines["T4"].device())
             back_to_cpu = remote_tensor.cpu()
 
             # Verify consistency
@@ -340,7 +344,7 @@ class TestTransferMemoryEfficiency:
         base_tensor = torch.randn(5, 5, requires_grad=True)
 
         # Transfer and perform operations
-        remote_tensor = base_tensor.to(shared_machines["t4"].device())
+        remote_tensor = base_tensor.to(shared_machines["T4"].device())
 
         # Retain gradients for non-leaf tensor
         remote_tensor.retain_grad()
@@ -363,8 +367,8 @@ class TestTransferMemoryEfficiency:
 @pytest.mark.parametrize(
     "transfer_chain",
     [
-        ["cpu", "t4", "cpu"],
-        ["cpu", "t4", "cpu", "t4", "cpu"],
+        ["cpu", "T4", "cpu"],
+        ["cpu", "T4", "cpu", "T4", "cpu"],
     ],
 )
 def test_parametrized_transfer_chains(shared_machines, transfer_chain):
@@ -403,7 +407,9 @@ def test_parametrized_device_transfers(shared_machines, machine_key):
     cpu_tensor = torch.randn(2, 2)
     remote_tensor = cpu_tensor.to(shared_machines[machine_key].device())
 
-    DeviceTestUtils.verify_machine_properties(remote_tensor, shared_machines[machine_key])
+    DeviceTestUtils.verify_machine_properties(
+        remote_tensor, shared_machines[machine_key]
+    )
 
     # Transfer back and verify
     back_to_cpu = remote_tensor.cpu()

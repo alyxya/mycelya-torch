@@ -31,7 +31,7 @@ class TestConstants:
     TENSOR_4D_SHAPES = [(2, 3, 4, 5), (1, 2, 3, 4)]
 
     # Common device keys
-    DEVICE_KEYS = ["t4", "l4"]
+    DEVICE_KEYS = ["T4", "L4"]
 
     # Classification test parameters
     DEFAULT_BATCH_SIZE = 3
@@ -45,7 +45,7 @@ class DeviceTestUtils:
     def create_remote_tensor(
         shape: Tuple[int, ...],
         shared_machines: Dict[str, "RemoteMachine"],
-        machine_key: str = "t4",
+        machine_key: str = "T4",
         requires_grad: bool = False,
         dtype: torch.dtype = torch.float32,
     ) -> torch.Tensor:
@@ -66,7 +66,7 @@ class DeviceTestUtils:
     def create_test_tensors(
         shapes: List[Tuple[int, ...]],
         shared_machines: Dict[str, "RemoteMachine"],
-        machine_key: str = "t4",
+        machine_key: str = "T4",
     ) -> List[torch.Tensor]:
         """Create multiple test tensors on the same remote machine."""
         return [
@@ -86,7 +86,7 @@ class DeviceTestUtils:
     def create_cpu_and_remote_pair(
         shape: Tuple[int, ...],
         shared_machines: Dict[str, "RemoteMachine"],
-        machine_key: str = "t4",
+        machine_key: str = "T4",
         dtype: torch.dtype = torch.float32,
         requires_grad: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -203,7 +203,7 @@ class TestDataGenerator:
         batch_size: int = TestConstants.DEFAULT_BATCH_SIZE,
         num_classes: int = TestConstants.DEFAULT_NUM_CLASSES,
         shared_machines: Optional[Dict[str, "RemoteMachine"]] = None,
-        machine_key: str = "t4",
+        machine_key: str = "T4",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Generate data for classification tests."""
         # Create input data
@@ -243,7 +243,7 @@ class TestDataGenerator:
 
     @staticmethod
     def create_gradient_test_setup(
-        shape: Tuple[int, ...], shared_machines: Dict[str, Any], machine_key: str = "t4"
+        shape: Tuple[int, ...], shared_machines: Dict[str, Any], machine_key: str = "T4"
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create a standard setup for gradient testing."""
         # Create a leaf tensor that requires gradients
@@ -299,7 +299,7 @@ class IntegrationTestUtils:
         input_size: int,
         output_size: int,
         shared_machines: Dict[str, "RemoteMachine"],
-        machine_key: str = "t4",
+        machine_key: str = "T4",
     ) -> torch.nn.Module:
         """Create a simple linear model on a remote device."""
         model = torch.nn.Linear(input_size, output_size)

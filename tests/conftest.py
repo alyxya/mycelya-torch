@@ -45,11 +45,11 @@ def shared_machines(provider):
 
     # Create machines with the parameterized provider
     if provider == "mock":
-        machines["t4"] = mycelya_torch.RemoteMachine(provider)
-        machines["l4"] = mycelya_torch.RemoteMachine(provider)
+        machines["T4"] = mycelya_torch.RemoteMachine(provider)
+        machines["L4"] = mycelya_torch.RemoteMachine(provider)
     else:
-        machines["t4"] = mycelya_torch.RemoteMachine(provider, "T4")
-        machines["l4"] = mycelya_torch.RemoteMachine(provider, "L4")
+        machines["T4"] = mycelya_torch.RemoteMachine(provider, "T4")
+        machines["L4"] = mycelya_torch.RemoteMachine(provider, "L4")
 
     # Start the machines
     for machine in machines.values():
@@ -68,7 +68,6 @@ def shared_machines(provider):
             log.info(f"Stopped machine: {machine.machine_id} (provider: {provider})")
         except Exception as e:
             log.warning(f"Failed to stop machine {machine.machine_id}: {e}")
-
 
 
 # Test configuration hooks

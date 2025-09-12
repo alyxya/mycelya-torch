@@ -27,9 +27,9 @@ class TestMSELoss:
         targets_cpu = torch.randn(3, 4)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         # CPU computation
         loss_cpu = F.mse_loss(inputs_cpu, targets_cpu)
@@ -54,9 +54,9 @@ class TestMSELoss:
         targets_cpu = torch.randn(2, 3)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         reductions = ["mean", "sum", "none"]
 
@@ -102,11 +102,11 @@ class TestMSELoss:
             targets_cpu = torch.randn(shape)
 
             inputs_remote = (
-                inputs_cpu.to(shared_machines["t4"].device())
+                inputs_cpu.to(shared_machines["T4"].device())
                 .detach()
                 .requires_grad_(True)
             )
-            targets_remote = targets_cpu.to(shared_machines["t4"].device())
+            targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
             # CPU computation
             loss_cpu = F.mse_loss(inputs_cpu, targets_cpu)
@@ -134,9 +134,9 @@ class TestCrossEntropyLoss:
         targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         # CPU computation
         loss_cpu = F.cross_entropy(inputs_cpu, targets_cpu)
@@ -167,10 +167,10 @@ class TestCrossEntropyLoss:
         weights_cpu = torch.randn(num_classes)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
-        weights_remote = weights_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
+        weights_remote = weights_cpu.to(shared_machines["T4"].device())
 
         try:
             # CPU computation
@@ -208,11 +208,11 @@ class TestCrossEntropyLoss:
             targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
             inputs_remote = (
-                inputs_cpu.to(shared_machines["t4"].device())
+                inputs_cpu.to(shared_machines["T4"].device())
                 .detach()
                 .requires_grad_(True)
             )
-            targets_remote = targets_cpu.to(shared_machines["t4"].device())
+            targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
             # Remote computation
             loss_remote = F.cross_entropy(inputs_remote, targets_remote)
@@ -237,11 +237,11 @@ class TestNLLLoss:
         targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
         log_probs_remote = (
-            log_probs_cpu.to(shared_machines["t4"].device())
+            log_probs_cpu.to(shared_machines["T4"].device())
             .detach()
             .requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         try:
             # CPU computation
@@ -275,9 +275,9 @@ class TestCustomLossFunctions:
         targets_cpu = torch.randn(3, 4)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         try:
             # CPU computation
@@ -305,9 +305,9 @@ class TestCustomLossFunctions:
         targets_cpu = torch.randn(2, 3)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         try:
             # CPU computation
@@ -337,9 +337,9 @@ class TestCustomLossFunctions:
         targets_cpu = torch.randn(2, 2)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         # Custom loss: squared difference with regularization
         def custom_loss(pred, target):
@@ -381,14 +381,14 @@ class TestLossWithNeuralNetworks:
 
         # Copy weights to remote model and move to device
         model_remote.load_state_dict(model_cpu.state_dict())
-        model_remote = model_remote.to(shared_machines["t4"].device())
+        model_remote = model_remote.to(shared_machines["T4"].device())
 
         # Create data
         inputs_cpu = torch.randn(batch_size, input_size)
         targets_cpu = torch.randn(batch_size, output_size)
 
-        inputs_remote = inputs_cpu.to(shared_machines["t4"].device())
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        inputs_remote = inputs_cpu.to(shared_machines["T4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         # CPU computation
         outputs_cpu = model_cpu(inputs_cpu)
@@ -432,14 +432,14 @@ class TestLossWithNeuralNetworks:
 
         # Copy weights to remote model and move to device
         model_remote.load_state_dict(model_cpu.state_dict())
-        model_remote = model_remote.to(shared_machines["t4"].device())
+        model_remote = model_remote.to(shared_machines["T4"].device())
 
         # Create data
         inputs_cpu = torch.randn(batch_size, input_size)
         targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
-        inputs_remote = inputs_cpu.to(shared_machines["t4"].device())
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        inputs_remote = inputs_cpu.to(shared_machines["T4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         # CPU computation
         outputs_cpu = model_cpu(inputs_cpu)
@@ -479,9 +479,9 @@ class TestLossNumericalStability:
         targets_cpu = torch.tensor([0, 1], dtype=torch.long)
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         try:
             # CPU computation
@@ -513,9 +513,9 @@ class TestLossNumericalStability:
         targets_cpu = torch.tensor([[1.1e-8, 1.9e-8], [3.1e-8, 3.9e-8]])
 
         inputs_remote = (
-            inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+            inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
         )
-        targets_remote = targets_cpu.to(shared_machines["t4"].device())
+        targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
         # CPU computation
         loss_cpu = F.mse_loss(inputs_cpu, targets_cpu)
@@ -549,9 +549,9 @@ def test_parametrized_loss_functions(shared_machines, loss_fn, reduction):
     targets_cpu = torch.randn(3, 4)
 
     inputs_remote = (
-        inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+        inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
     )
-    targets_remote = targets_cpu.to(shared_machines["t4"].device())
+    targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
     try:
         # CPU computation
@@ -586,15 +586,17 @@ def test_parametrized_loss_functions(shared_machines, loss_fn, reduction):
         (5, 10),
     ],
 )
-def test_parametrized_cross_entropy_dimensions(shared_machines, batch_size, num_classes):
+def test_parametrized_cross_entropy_dimensions(
+    shared_machines, batch_size, num_classes
+):
     """Test cross entropy loss with various batch sizes and class counts."""
     inputs_cpu = torch.randn(batch_size, num_classes, requires_grad=True)
     targets_cpu = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
     inputs_remote = (
-        inputs_cpu.to(shared_machines["t4"].device()).detach().requires_grad_(True)
+        inputs_cpu.to(shared_machines["T4"].device()).detach().requires_grad_(True)
     )
-    targets_remote = targets_cpu.to(shared_machines["t4"].device())
+    targets_remote = targets_cpu.to(shared_machines["T4"].device())
 
     # Remote computation
     loss_remote = F.cross_entropy(inputs_remote, targets_remote)

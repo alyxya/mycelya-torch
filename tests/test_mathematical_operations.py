@@ -13,7 +13,7 @@ class TestTrigonometricOperations:
     @pytest.mark.parametrize("shape", [(10,), (5, 5), (2, 3, 4)])
     @pytest.mark.fast
     def test_basic_trigonometric(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Create test tensor with values in reasonable range for trig functions
         cpu_tensor = torch.randn(*shape) * 2  # Range roughly [-6, 6]
@@ -31,7 +31,7 @@ class TestTrigonometricOperations:
     @pytest.mark.parametrize("shape", [(10,), (3, 3)])
     @pytest.mark.fast
     def test_inverse_trigonometric(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Create test tensor with values in valid domain
         if operation in ["asin", "acos"]:
@@ -53,7 +53,7 @@ class TestTrigonometricOperations:
     @pytest.mark.parametrize("shape", [(8,), (4, 4)])
     @pytest.mark.fast
     def test_hyperbolic_functions(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Create test tensor with moderate values to avoid overflow
         cpu_tensor = torch.randn(*shape) * 2
@@ -69,7 +69,7 @@ class TestTrigonometricOperations:
 
     @pytest.mark.fast
     def test_atan2(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         y_cpu = torch.randn(5, 5)
         x_cpu = torch.randn(5, 5)
@@ -91,7 +91,7 @@ class TestExponentialLogarithmicOperations:
     @pytest.mark.parametrize("shape", [(10,), (3, 4), (2, 2, 2)])
     @pytest.mark.fast
     def test_exponential_functions(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Use smaller values to avoid overflow
         cpu_tensor = torch.randn(*shape) * 2
@@ -109,7 +109,7 @@ class TestExponentialLogarithmicOperations:
     @pytest.mark.parametrize("shape", [(10,), (3, 4)])
     @pytest.mark.fast
     def test_logarithmic_functions(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Use positive values for log functions
         if operation == "log1p":
@@ -130,7 +130,7 @@ class TestExponentialLogarithmicOperations:
     @pytest.mark.parametrize("shape", [(8,), (4, 4)])
     @pytest.mark.fast
     def test_power_operations(self, shared_machines, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         base_cpu = torch.abs(torch.randn(*shape)) + 0.1  # Positive base
         exp_cpu = torch.randn(*shape) * 2  # Moderate exponents
@@ -163,7 +163,7 @@ class TestRootOperations:
     @pytest.mark.parametrize("shape", [(10,), (5, 5), (2, 3, 4)])
     @pytest.mark.fast
     def test_root_operations(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Use positive values for sqrt operations
         cpu_tensor = torch.rand(*shape) * 10 + 0.01  # Range [0.01, 10.01]
@@ -185,7 +185,7 @@ class TestRoundingOperations:
     @pytest.mark.parametrize("shape", [(10,), (3, 4), (2, 2, 3)])
     @pytest.mark.fast
     def test_rounding_operations(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Create tensor with fractional values
         cpu_tensor = torch.randn(*shape) * 10  # Range roughly [-30, 30]
@@ -201,7 +201,7 @@ class TestRoundingOperations:
 
     @pytest.mark.fast
     def test_frac(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(5, 5) * 10
         remote_tensor = cpu_tensor.to(machine.device())
@@ -220,7 +220,7 @@ class TestMiscellaneousMathOperations:
     @pytest.mark.parametrize("shape", [(10,), (4, 4)])
     @pytest.mark.fast
     def test_abs(self, shared_machines, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(*shape) * 10
         remote_tensor = cpu_tensor.to(machine.device())
@@ -235,7 +235,7 @@ class TestMiscellaneousMathOperations:
     @pytest.mark.parametrize("shape", [(8,), (3, 3)])
     @pytest.mark.fast
     def test_clamp(self, shared_machines, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(*shape) * 10
         remote_tensor = cpu_tensor.to(machine.device())
@@ -252,7 +252,7 @@ class TestMiscellaneousMathOperations:
     @pytest.mark.parametrize("shape", [(10,), (5, 5)])
     @pytest.mark.fast
     def test_sign(self, shared_machines, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(*shape) * 10
         remote_tensor = cpu_tensor.to(machine.device())
@@ -271,7 +271,7 @@ class TestMathOperationsWithGradients:
     @pytest.mark.parametrize("operation", ["sin", "cos", "exp", "log", "sqrt"])
     @pytest.mark.fast
     def test_math_operations_with_gradients(self, shared_machines, operation):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Create tensors requiring gradients
         if operation == "log":
@@ -302,7 +302,7 @@ class TestMathOperationsWithGradients:
 
     @pytest.mark.fast
     def test_complex_math_expression_with_gradients(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_x = torch.randn(4, 4, requires_grad=True)
         remote_x = cpu_x.to(machine.device()).detach().requires_grad_()
@@ -330,7 +330,7 @@ class TestMathOperationsEdgeCases:
 
     @pytest.mark.fast
     def test_operations_with_special_values(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test with values that might cause numerical issues
         cpu_tensor = torch.tensor([0.0, 1.0, -1.0, float("inf"), -float("inf")])
@@ -353,7 +353,7 @@ class TestMathOperationsEdgeCases:
 
     @pytest.mark.fast
     def test_operations_with_zero_tensors(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_zeros = torch.zeros(3, 3)
         remote_zeros = cpu_zeros.to(machine.device())
@@ -369,7 +369,7 @@ class TestMathOperationsEdgeCases:
 
     @pytest.mark.fast
     def test_operations_with_single_element_tensors(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test various operations
         for operation in ["sin", "exp", "log", "sqrt", "abs"]:

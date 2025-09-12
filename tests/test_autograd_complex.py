@@ -24,7 +24,7 @@ class TestComplexComputationalGraphs:
         """Test gradients through multiple chained operations."""
         x_cpu = torch.randn(3, 3, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation: complex chain
@@ -45,7 +45,7 @@ class TestComplexComputationalGraphs:
         """Test gradients with branching computational graph."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation: branching
@@ -74,10 +74,10 @@ class TestComplexComputationalGraphs:
         y_cpu = torch.randn(2, 2, requires_grad=True)
 
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
         y_remote = (
-            y_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            y_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation
@@ -113,13 +113,13 @@ class TestAdvancedMatrixOperations:
         C_cpu = torch.randn(4, 2, requires_grad=True)
 
         A_remote = (
-            A_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            A_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
         B_remote = (
-            B_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            B_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
         C_remote = (
-            C_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            C_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation: A @ B @ C
@@ -149,10 +149,10 @@ class TestAdvancedMatrixOperations:
         Y_cpu = torch.randn(3, 3, requires_grad=True)
 
         X_remote = (
-            X_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            X_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
         Y_remote = (
-            Y_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            Y_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation: (X @ Y) * (X + Y)
@@ -189,7 +189,7 @@ class TestHigherOrderGradients:
         """Test second-order gradient computation."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         try:
@@ -220,7 +220,7 @@ class TestGradientWithViewOperations:
         """Test gradients through multiple view operations."""
         x_cpu = torch.randn(2, 3, 4, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation with multiple views
@@ -246,7 +246,7 @@ class TestGradientWithViewOperations:
         """Test gradients with permute operations."""
         x_cpu = torch.randn(2, 3, 4, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # CPU computation with permute
@@ -279,7 +279,7 @@ class TestNeuralNetworkGradients:
         # Inputs
         x_cpu = torch.randn(batch_size, input_size, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # Parameters
@@ -288,12 +288,15 @@ class TestNeuralNetworkGradients:
 
         weight_remote = (
             weight_cpu.clone()
-            .to(shared_machines["t4"].device())
+            .to(shared_machines["T4"].device())
             .detach()
             .requires_grad_()
         )
         bias_remote = (
-            bias_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            bias_cpu.clone()
+            .to(shared_machines["T4"].device())
+            .detach()
+            .requires_grad_()
         )
 
         # CPU computation: y = x @ W.T + b
@@ -327,7 +330,7 @@ class TestNeuralNetworkGradients:
         """Test gradients through activation functions."""
         x_cpu = torch.randn(3, 4, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         activation_functions = [
@@ -372,7 +375,7 @@ class TestMultipleBackwardPasses:
         """Test multiple backward passes on the same computational graph."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # Create computational graph
@@ -397,7 +400,7 @@ class TestMultipleBackwardPasses:
         """Test gradient accumulation from different operations."""
         x_cpu = torch.randn(2, 2, requires_grad=True)
         x_remote = (
-            x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+            x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
         )
 
         # First operation and backward
@@ -427,7 +430,9 @@ class TestCrossDeviceGradientRestrictions:
             pytest.skip("Need at least 2 devices for cross-device testing")
 
         # Get two different devices
-        machine_keys = [k for k in TestConstants.DEVICE_KEYS if k in shared_machines][:2]
+        machine_keys = [k for k in TestConstants.DEVICE_KEYS if k in shared_machines][
+            :2
+        ]
         machine1_key, machine2_key = machine_keys[0], machine_keys[1]
 
         x_remote1 = DeviceTestUtils.create_remote_tensor(
@@ -463,12 +468,14 @@ def test_parametrized_linear_gradients(
     weight_cpu = torch.randn(output_size, input_size, requires_grad=True)
     bias_cpu = torch.randn(output_size, requires_grad=True)
 
-    x_remote = x_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+    x_remote = (
+        x_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
+    )
     weight_remote = (
-        weight_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+        weight_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
     )
     bias_remote = (
-        bias_cpu.clone().to(shared_machines["t4"].device()).detach().requires_grad_()
+        bias_cpu.clone().to(shared_machines["T4"].device()).detach().requires_grad_()
     )
 
     # CPU computation

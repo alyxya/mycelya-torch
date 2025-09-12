@@ -13,7 +13,7 @@ class TestSplittingOperations:
     @pytest.mark.parametrize("dim", [0, 1, -1])
     @pytest.mark.fast
     def test_split_operations(self, shared_machines, split_size, dim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(6, 6)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -36,7 +36,7 @@ class TestSplittingOperations:
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
     def test_chunk_operations(self, shared_machines, num_chunks, dim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(8, 6)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -53,7 +53,7 @@ class TestSplittingOperations:
 
     @pytest.mark.fast
     def test_split_with_list_sizes(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(10, 5)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -77,7 +77,7 @@ class TestStackingOperations:
     @pytest.mark.parametrize("dim", [0, 1, 2, -1])
     @pytest.mark.fast
     def test_stack_operations(self, shared_machines, dim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensors = [torch.randn(3, 4) for _ in range(3)]
         remote_tensors = [t.to(machine.device()) for t in cpu_tensors]
@@ -96,7 +96,7 @@ class TestStackingOperations:
 
     @pytest.mark.fast
     def test_hstack_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensors = [torch.randn(3, 2) for _ in range(3)]
         remote_tensors = [t.to(machine.device()) for t in cpu_tensors]
@@ -110,7 +110,7 @@ class TestStackingOperations:
 
     @pytest.mark.fast
     def test_vstack_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensors = [torch.randn(2, 4) for _ in range(3)]
         remote_tensors = [t.to(machine.device()) for t in cpu_tensors]
@@ -124,7 +124,7 @@ class TestStackingOperations:
 
     @pytest.mark.fast
     def test_dstack_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensors = [torch.randn(3, 4) for _ in range(3)]
         remote_tensors = [t.to(machine.device()) for t in cpu_tensors]
@@ -143,7 +143,7 @@ class TestRepeatAndTileOperations:
     @pytest.mark.parametrize("repeats", [(2, 3), (1, 4), (3, 1, 2)])
     @pytest.mark.fast
     def test_repeat_operations(self, shared_machines, repeats):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(2, 3)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -159,7 +159,7 @@ class TestRepeatAndTileOperations:
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
     def test_repeat_interleave_operations(self, shared_machines, repeats, dim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(4, 5)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -174,7 +174,7 @@ class TestRepeatAndTileOperations:
     @pytest.mark.fast
     @pytest.mark.skip(reason="repeat_interleave with tensor repeats not yet supported")
     def test_repeat_interleave_with_tensor_repeats(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(4, 3)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -192,7 +192,7 @@ class TestRepeatAndTileOperations:
     @pytest.mark.parametrize("tiles", [(2, 3), (1, 4), (3, 1)])
     @pytest.mark.fast
     def test_tile_operations(self, shared_machines, tiles):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(2, 3)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -212,7 +212,7 @@ class TestSortingOperations:
     @pytest.mark.parametrize("descending", [False, True])
     @pytest.mark.fast
     def test_sort_operations(self, shared_machines, dim, descending):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(5, 4)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -235,7 +235,7 @@ class TestSortingOperations:
     @pytest.mark.parametrize("descending", [False, True])
     @pytest.mark.fast
     def test_argsort_operations(self, shared_machines, dim, descending):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(4, 5)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -249,7 +249,7 @@ class TestSortingOperations:
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
     def test_topk_operations(self, shared_machines, k, dim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(6, 8)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -270,7 +270,7 @@ class TestSortingOperations:
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
     def test_kthvalue_operations(self, shared_machines, k, dim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(6, 8)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -295,7 +295,7 @@ class TestPaddingOperations:
     @pytest.mark.parametrize("mode", ["constant", "reflect", "replicate"])
     @pytest.mark.fast
     def test_pad_operations(self, shared_machines, pad, mode):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Choose tensor size based on padding requirements
         if len(pad) == 2:
@@ -322,7 +322,7 @@ class TestPaddingOperations:
     @pytest.mark.parametrize("value", [0.0, 1.5, -2.0])
     @pytest.mark.fast
     def test_constant_pad_with_value(self, shared_machines, pad, value):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(4, 5)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -345,7 +345,7 @@ class TestReshapingOperations:
     @pytest.mark.parametrize("size", [(3, 4), (2, 6), (12,), (1, 12)])
     @pytest.mark.fast
     def test_expand_operations(self, shared_machines, size):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(1, 4)  # Expandable tensor
         remote_tensor = cpu_tensor.to(machine.device())
@@ -365,7 +365,7 @@ class TestReshapingOperations:
 
     @pytest.mark.fast
     def test_expand_as_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(1, 4)
         cpu_other = torch.randn(3, 4)
@@ -383,7 +383,7 @@ class TestReshapingOperations:
     @pytest.mark.parametrize("length", [2, 3])
     @pytest.mark.fast
     def test_narrow_operations(self, shared_machines, start, length):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(5, 6)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -406,7 +406,7 @@ class TestReshapingOperations:
     @pytest.mark.parametrize("step", [1, 2])
     @pytest.mark.fast
     def test_unfold_operations(self, shared_machines, dimension, size, step):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(8, 6)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -428,7 +428,7 @@ class TestTensorManipulationWithGradients:
 
     @pytest.mark.fast
     def test_split_with_gradients(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(6, 4, requires_grad=True)
         remote_tensor = cpu_tensor.to(machine.device()).detach().requires_grad_()
@@ -449,7 +449,7 @@ class TestTensorManipulationWithGradients:
 
     @pytest.mark.fast
     def test_stack_with_gradients(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensors = [torch.randn(3, 4, requires_grad=True) for _ in range(3)]
         remote_tensors = [
@@ -472,7 +472,7 @@ class TestTensorManipulationWithGradients:
 
     @pytest.mark.fast
     def test_repeat_with_gradients(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(2, 3, requires_grad=True)
         remote_tensor = cpu_tensor.to(machine.device()).detach().requires_grad_()
@@ -496,7 +496,7 @@ class TestTensorManipulationEdgeCases:
 
     @pytest.mark.fast
     def test_empty_tensor_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_empty = torch.empty(0, 5)
         remote_empty = cpu_empty.to(machine.device())
@@ -511,7 +511,7 @@ class TestTensorManipulationEdgeCases:
 
     @pytest.mark.fast
     def test_single_element_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.tensor([[1.5]])
         remote_tensor = cpu_tensor.to(machine.device())
@@ -526,7 +526,7 @@ class TestTensorManipulationEdgeCases:
 
     @pytest.mark.fast
     def test_large_dimension_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test with larger tensors
         cpu_tensor = torch.randn(100, 50)
@@ -544,7 +544,7 @@ class TestTensorManipulationEdgeCases:
 
     @pytest.mark.fast
     def test_mixed_dimension_stacking(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test stacking tensors with different dimensions
         cpu_tensors = [torch.randn(3, 4), torch.randn(3, 4), torch.randn(3, 4)]
@@ -561,7 +561,7 @@ class TestTensorManipulationEdgeCases:
 
     @pytest.mark.fast
     def test_dtype_preservation(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test with different dtypes
         for dtype in [torch.float32, torch.float64, torch.int32, torch.int64]:

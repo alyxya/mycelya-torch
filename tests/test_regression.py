@@ -35,7 +35,7 @@ class TestCriticalRegression:
 
     def test_device_creation(self, shared_machines):
         """Test basic device creation and properties."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
         assert machine is not None
         assert hasattr(machine, "device")
         assert hasattr(machine, "machine_id")
@@ -45,7 +45,7 @@ class TestCriticalRegression:
 
     def test_tensor_creation_on_device(self, shared_machines):
         """Test basic tensor creation on remote device."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test various tensor creation methods
         x = torch.randn(2, 3, device=machine.device())
@@ -58,7 +58,7 @@ class TestCriticalRegression:
 
     def test_tensor_addition(self, shared_machines):
         """Test basic tensor addition operation."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.ones(2, 2, device=machine.device())
         y = torch.ones(2, 2, device=machine.device())
@@ -74,7 +74,7 @@ class TestCriticalRegression:
 
     def test_matrix_multiplication(self, shared_machines):
         """Test basic matrix multiplication."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.randn(3, 4, device=machine.device())
         y = torch.randn(4, 5, device=machine.device())
@@ -85,7 +85,7 @@ class TestCriticalRegression:
 
     def test_cpu_to_remote_transfer(self, shared_machines):
         """Test basic CPU to remote transfer."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(2, 3)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -97,7 +97,7 @@ class TestCriticalRegression:
 
     def test_remote_to_cpu_transfer(self, shared_machines):
         """Test basic remote to CPU transfer."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         remote_tensor = torch.randn(2, 3, device=machine.device())
         cpu_tensor = remote_tensor.cpu()
@@ -109,7 +109,7 @@ class TestCriticalRegression:
 
     def test_simple_gradient_computation(self, shared_machines):
         """Test basic gradient computation."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.randn(2, 2, device=machine.device(), requires_grad=True)
         y = x.sum()
@@ -122,7 +122,7 @@ class TestCriticalRegression:
 
     def test_tensor_view_operation(self, shared_machines):
         """Test basic view operations."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.randn(4, 6, device=machine.device())
         y = x.view(2, 12)
@@ -150,7 +150,7 @@ class TestCriticalRegression:
 
     def test_scalar_operations(self, shared_machines):
         """Test operations with scalars."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.ones(2, 2, device=machine.device())
         result = x * 2.0
@@ -160,7 +160,7 @@ class TestCriticalRegression:
 
     def test_tensor_properties_access(self, shared_machines):
         """Test accessing basic tensor properties."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.randn(3, 4, dtype=torch.float32, device=machine.device())
 
@@ -178,7 +178,7 @@ class TestFastFunctional:
 
     def test_multiple_arithmetic_operations(self, shared_machines):
         """Test combination of arithmetic operations."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.ones(2, 2, device=machine.device())
         y = torch.ones(2, 2, device=machine.device())
@@ -189,7 +189,7 @@ class TestFastFunctional:
 
     def test_tensor_creation_various_dtypes(self, shared_machines):
         """Test tensor creation with different dtypes."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test float32
         x = torch.randn(2, 2, dtype=torch.float32, device=machine.device())
@@ -201,7 +201,7 @@ class TestFastFunctional:
 
     def test_transfer_with_dtype_conversion(self, shared_machines):
         """Test transfer with dtype conversion."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(2, 2, dtype=torch.float64)
         remote_tensor = cpu_tensor.to(machine.device(), dtype=torch.float32)
@@ -211,7 +211,7 @@ class TestFastFunctional:
 
     def test_basic_loss_computation(self, shared_machines):
         """Test basic loss function computation."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         pred = torch.randn(4, 3, device=machine.device())
         target = torch.randn(4, 3, device=machine.device())
@@ -223,7 +223,7 @@ class TestFastFunctional:
 
     def test_gradient_with_operations(self, shared_machines):
         """Test gradient computation with multiple operations."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         x = torch.randn(3, 3, device=machine.device(), requires_grad=True)
         y = torch.randn(3, 3, device=machine.device(), requires_grad=True)

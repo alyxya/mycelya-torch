@@ -30,7 +30,7 @@ class TestComparisonOperations:
     @pytest.mark.parametrize("shape", [(10,), (5, 5), (3, 4)])
     @pytest.mark.fast
     def test_tensor_tensor_comparisons(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.randn(*shape)
         cpu_b = torch.randn(*shape)
@@ -47,7 +47,7 @@ class TestComparisonOperations:
     @pytest.mark.parametrize("scalar", [0.0, 1.5, -2.0])
     @pytest.mark.fast
     def test_tensor_scalar_comparisons(self, shared_machines, operation, scalar):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(4, 4)
         remote_tensor = cpu_tensor.to(machine.device())
@@ -61,7 +61,7 @@ class TestComparisonOperations:
     @pytest.mark.parametrize("operation", ["eq", "ne", "lt", "le", "gt", "ge"])
     @pytest.mark.fast
     def test_broadcasting_comparisons(self, shared_machines, operation):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.randn(3, 1)
         cpu_b = torch.randn(1, 4)
@@ -75,7 +75,7 @@ class TestComparisonOperations:
 
     @pytest.mark.fast
     def test_comparison_operators(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.randn(3, 3)
         cpu_b = torch.randn(3, 3)
@@ -106,7 +106,7 @@ class TestSpecialValueComparisons:
 
     @pytest.mark.fast
     def test_isnan_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.tensor([1.0, float("nan"), 2.0, float("nan")])
         remote_tensor = cpu_tensor.to(machine.device())
@@ -118,7 +118,7 @@ class TestSpecialValueComparisons:
 
     @pytest.mark.fast
     def test_isinf_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.tensor([1.0, float("inf"), -float("inf"), 2.0])
         remote_tensor = cpu_tensor.to(machine.device())
@@ -130,7 +130,7 @@ class TestSpecialValueComparisons:
 
     @pytest.mark.fast
     def test_isfinite_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.tensor([1.0, float("inf"), float("nan"), -2.0])
         remote_tensor = cpu_tensor.to(machine.device())
@@ -142,7 +142,7 @@ class TestSpecialValueComparisons:
 
     @pytest.mark.fast
     def test_isposinf_isneginf(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.tensor([1.0, float("inf"), -float("inf"), 0.0])
         remote_tensor = cpu_tensor.to(machine.device())
@@ -165,7 +165,7 @@ class TestApproximateComparisons:
     @pytest.mark.parametrize("atol", [1e-8, 1e-6, 1e-4])
     @pytest.mark.fast
     def test_allclose_operations(self, shared_machines, rtol, atol):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.randn(4, 4)
         # Create slightly different tensor
@@ -181,7 +181,7 @@ class TestApproximateComparisons:
 
     @pytest.mark.fast
     def test_equal_operations(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.randn(3, 3)
         cpu_b = cpu_a.clone()
@@ -205,7 +205,7 @@ class TestLogicalOperations:
     @pytest.mark.parametrize("shape", [(10,), (4, 4), (2, 3, 4)])
     @pytest.mark.fast
     def test_binary_logical_operations(self, shared_machines, operation, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Create boolean tensors
         cpu_a = torch.rand(*shape) > 0.5
@@ -222,7 +222,7 @@ class TestLogicalOperations:
     @pytest.mark.parametrize("shape", [(8,), (3, 3), (2, 2, 2)])
     @pytest.mark.fast
     def test_logical_not(self, shared_machines, shape):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.rand(*shape) > 0.5
         remote_tensor = cpu_tensor.to(machine.device())
@@ -235,7 +235,7 @@ class TestLogicalOperations:
 
     @pytest.mark.fast
     def test_logical_operations_with_numeric_tensors(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test logical operations with numeric tensors (non-zero = True)
         cpu_a = torch.tensor([0.0, 1.0, -1.0, 2.5])
@@ -252,7 +252,7 @@ class TestLogicalOperations:
 
     @pytest.mark.fast
     def test_logical_broadcasting(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.rand(3, 1) > 0.5
         cpu_b = torch.rand(1, 4) > 0.5
@@ -274,7 +274,7 @@ class TestBooleanReductions:
     )
     @pytest.mark.fast
     def test_all_operations(self, shared_machines, shape_dim_keepdim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
         shape, dim, keepdim = shape_dim_keepdim
 
         cpu_tensor = torch.rand(*shape) > 0.3  # Mixed true/false
@@ -290,7 +290,7 @@ class TestBooleanReductions:
     )
     @pytest.mark.fast
     def test_any_operations(self, shared_machines, shape_dim_keepdim):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
         shape, dim, keepdim = shape_dim_keepdim
 
         cpu_tensor = torch.rand(*shape) > 0.7  # Mostly false with some true
@@ -303,7 +303,7 @@ class TestBooleanReductions:
 
     @pytest.mark.fast
     def test_all_any_with_numeric_tensors(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test with numeric tensors (zero = False, non-zero = True)
         cpu_tensor = torch.tensor([[0.0, 1.0, 2.0], [0.0, 0.0, 1.0]])
@@ -326,7 +326,7 @@ class TestComparisonLogicalWithGradients:
     @pytest.mark.fast
     def test_comparison_no_gradients(self, shared_machines):
         """Comparison operations should not propagate gradients."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.randn(3, 3, requires_grad=True)
         cpu_b = torch.randn(3, 3, requires_grad=True)
@@ -343,7 +343,7 @@ class TestComparisonLogicalWithGradients:
     @pytest.mark.fast
     def test_logical_no_gradients(self, shared_machines):
         """Logical operations should not propagate gradients."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_a = torch.randn(3, 3, requires_grad=True) > 0
         remote_a = cpu_a.to(machine.device())
@@ -355,7 +355,7 @@ class TestComparisonLogicalWithGradients:
     @pytest.mark.fast
     def test_gradients_through_where_operation(self, shared_machines):
         """Test gradients flow through conditional operations using comparison results."""
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_x = torch.randn(3, 3, requires_grad=True)
         cpu_condition = cpu_x > 0
@@ -381,7 +381,7 @@ class TestComparisonLogicalEdgeCases:
 
     @pytest.mark.fast
     def test_comparison_with_special_values(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.tensor([1.0, float("nan"), float("inf"), -float("inf")])
         remote_tensor = cpu_tensor.to(machine.device())
@@ -394,7 +394,7 @@ class TestComparisonLogicalEdgeCases:
 
     @pytest.mark.fast
     def test_logical_with_empty_tensors(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_empty = torch.empty(0, dtype=torch.bool)
         remote_empty = cpu_empty.to(machine.device())
@@ -411,7 +411,7 @@ class TestComparisonLogicalEdgeCases:
 
     @pytest.mark.fast
     def test_comparison_dtype_consistency(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         # Test with different input dtypes
         dtypes = [torch.float32, torch.float64, torch.int32, torch.int64]
@@ -430,7 +430,7 @@ class TestComparisonLogicalEdgeCases:
 
     @pytest.mark.fast
     def test_chained_comparisons(self, shared_machines):
-        machine = shared_machines["t4"]
+        machine = shared_machines["T4"]
 
         cpu_tensor = torch.randn(4, 4)
         remote_tensor = cpu_tensor.to(machine.device())

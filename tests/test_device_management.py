@@ -44,11 +44,11 @@ def test_device_creation_and_properties(shared_machines):
 def test_device_tensor_creation(shared_machines):
     """Test creating tensors on remote devices."""
     tensor = DeviceTestUtils.create_remote_tensor(
-        (2, 2), shared_machines, machine_key="t4"
+        (2, 2), shared_machines, machine_key="T4"
     )
     assert tensor is not None
     assert tensor.shape == (2, 2)
-    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
+    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["T4"])
 
 
 def test_device_tensor_creation_various_shapes(shared_machines):
@@ -58,7 +58,7 @@ def test_device_tensor_creation_various_shapes(shared_machines):
     for shape in test_shapes:
         tensor = DeviceTestUtils.create_remote_tensor(shape, shared_machines)
         assert tensor.shape == shape
-        DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(tensor, shared_machines["T4"])
 
 
 def test_device_tensor_with_grad(shared_machines):
@@ -67,7 +67,7 @@ def test_device_tensor_with_grad(shared_machines):
         (3, 3), shared_machines, requires_grad=True
     )
     assert tensor.requires_grad
-    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
+    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["T4"])
 
 
 def test_device_tensor_dtype_conversion(shared_machines):
@@ -80,7 +80,7 @@ def test_device_tensor_dtype_conversion(shared_machines):
                 (2, 2), shared_machines, dtype=dtype
             )
             assert tensor.dtype == dtype
-            DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
+            DeviceTestUtils.verify_machine_properties(tensor, shared_machines["T4"])
         except (RuntimeError, NotImplementedError):
             # Some dtypes might not be supported, which is acceptable
             pass
@@ -145,7 +145,7 @@ def test_device_cleanup_behavior(shared_machines):
     # All tensors should be valid
     for tensor in tensors:
         assert tensor is not None
-        DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
+        DeviceTestUtils.verify_machine_properties(tensor, shared_machines["T4"])
 
     # Clear references (Python garbage collection will handle cleanup)
     del tensors
@@ -172,7 +172,7 @@ def test_parametrized_device_tensor_creation(shared_machines, shape):
     """Test device tensor creation with parametrized shapes."""
     tensor = DeviceTestUtils.create_remote_tensor(shape, shared_machines)
     assert tensor.shape == shape
-    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
+    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["T4"])
 
 
 @pytest.mark.parametrize("machine_key", TestConstants.DEVICE_KEYS)
