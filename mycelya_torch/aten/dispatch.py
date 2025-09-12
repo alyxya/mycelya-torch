@@ -89,7 +89,7 @@ def _execute_meta_operation(
 
 
 def _create_output_tensors(
-    meta_outputs: List, original_tensors: Dict, remote_device: torch.device
+    meta_outputs: List, original_tensors: Dict, mycelya_device: torch.device
 ) -> List[torch.Tensor]:
     """Create output tensors based on meta execution results with proper alias detection."""
     output_tensors = []
@@ -117,7 +117,7 @@ def _create_output_tensors(
                 meta_output.shape,
                 meta_output.stride(),
                 dtype=meta_output.dtype,
-                device=remote_device
+                device=mycelya_device
             )
             # Record the storage mapping for future outputs that might alias
             original_tensors[meta_storage] = tensor
@@ -130,7 +130,7 @@ def _execute_with_static_outputs(
     op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-    remote_device: torch.device,
+    mycelya_device: torch.device,
     meta_result: Any,
     original_tensors: Dict,
 ) -> Any:
@@ -146,7 +146,7 @@ def _execute_with_static_outputs(
 
     # Create output tensors
     output_tensors = (
-        _create_output_tensors(meta_outputs, original_tensors, remote_device)
+        _create_output_tensors(meta_outputs, original_tensors, mycelya_device)
         if meta_outputs
         else []
     )
@@ -166,7 +166,7 @@ def _execute_with_dynamic_outputs(
     op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
-    remote_device: torch.device,
+    mycelya_device: torch.device,
 ) -> Any:
     """Execute operation with dynamic output shapes."""
     # Execute remotely and get metadata
@@ -182,7 +182,7 @@ def _execute_with_dynamic_outputs(
     output_tensors = []
     temp_keys = []
     for metadata in result:
-        output_tensor = create_mycelya_tensor_from_metadata(metadata, remote_device)
+        output_tensor = create_mycelya_tensor_from_metadata(metadata, mycelya_device)
         output_tensors.append(output_tensor)
         temp_keys.append(metadata["temp_key"])
 
@@ -192,10 +192,10 @@ def _execute_with_dynamic_outputs(
     return output_tensors[0] if len(output_tensors) == 1 else tuple(output_tensors)
 
 
-def _remote_kernel_fallback(
+def _mycelya_kernel_fallback(
     op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket], *args: Any, **kwargs: Any
 ) -> Any:
-    """Execute PyTorch operations on remote devices using simple dispatch logic."""
+    """Execute PyTorch operations on mycelya devices using simple dispatch logic."""
 
     device_container = []
 

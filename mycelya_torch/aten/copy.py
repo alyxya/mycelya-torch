@@ -7,18 +7,18 @@ from .._orchestrator import orchestrator
 
 
 def copy_from_device(from_: torch.Tensor) -> torch.Tensor:
-    """Copy data from remote tensor to CPU tensor using tensor-based execution"""
+    """Copy data from mycelya tensor to CPU tensor using tensor-based execution"""
     if from_.device.type != "mycelya":
-        raise ValueError("copy_from_device requires a remote tensor")
+        raise ValueError("copy_from_device requires a mycelya tensor")
 
     # Use orchestrator's synchronous copy method
     return orchestrator.copy_tensor_to_cpu(from_)
 
 
 def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Tensor:
-    """Copy data from CPU tensor to remote tensor using tensor-based execution"""
+    """Copy data from CPU tensor to mycelya tensor using tensor-based execution"""
     if to_.device.type != "mycelya":
-        raise ValueError("copy_from_host_to_device requires a remote target tensor")
+        raise ValueError("copy_from_host_to_device requires a mycelya target tensor")
     if from_.device.type != "cpu":
         raise ValueError("copy_from_host_to_device requires a CPU source tensor")
 
@@ -30,11 +30,11 @@ def copy_from_host_to_device(from_: torch.Tensor, to_: torch.Tensor) -> torch.Te
 def _copy_from(
     from_: torch.Tensor, to_: torch.Tensor, non_blocking: bool = False
 ) -> torch.Tensor:
-    """Copy data from one tensor to another, handling remote device transfers.
+    """Copy data from one tensor to another, handling mycelya device transfers.
 
-    This function implements the core copy operation for remote tensors,
-    supporting CPU↔remote transfers and same-device remote copies.
-    Cross-device remote transfers and non-remote device copies are blocked.
+    This function implements the core copy operation for mycelya tensors,
+    supporting CPU↔mycelya transfers and same-device mycelya copies.
+    Cross-device mycelya transfers and non-mycelya device copies are blocked.
 
     Args:
         from_: Source tensor to copy from
@@ -47,24 +47,24 @@ def _copy_from(
     Raises:
         RuntimeError: If attempting unsupported copy operations
     """
-    # Only support CPU ↔ remote transfers
+    # Only support CPU ↔ mycelya transfers
 
     if from_.device.type == "mycelya" and to_.device.type == "cpu":
-        # Remote to CPU - supported
+        # Mycelya to CPU - supported
         host_mem = copy_from_device(from_)
         result = to_.copy_(host_mem)
     elif from_.device.type == "cpu" and to_.device.type == "mycelya":
-        # CPU to remote - supported
+        # CPU to mycelya - supported
         result = copy_from_host_to_device(from_, to_)
     elif from_.device.type == "mycelya" and to_.device.type == "mycelya":
-        # Remote to remote transfers - use orchestrator for validation and execution
+        # Mycelya to mycelya transfers - use orchestrator for validation and execution
         orchestrator.copy_tensor(from_, to_)
         result = to_
     else:
-        # All other cases (non-remote device copies) - blocked
+        # All other cases (non-mycelya device copies) - blocked
         raise RuntimeError(
             f"Copy operation from {from_.device.type} to {to_.device.type} is not supported. "
-            f"Only CPU↔remote transfers are allowed."
+            f"Only CPU↔mycelya transfers are allowed."
         )
 
     return result
