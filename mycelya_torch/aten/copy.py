@@ -33,8 +33,8 @@ def _copy_from(
     """Copy data from one tensor to another, handling mycelya device transfers.
 
     This function implements the core copy operation for mycelya tensors,
-    supporting CPU↔mycelya transfers and same-device mycelya copies.
-    Cross-device mycelya transfers and non-mycelya device copies are blocked.
+    supporting CPU↔mycelya transfers and same-machine mycelya copies.
+    Cross-machine mycelya transfers and non-mycelya device copies are blocked.
 
     Args:
         from_: Source tensor to copy from
@@ -47,7 +47,7 @@ def _copy_from(
     Raises:
         RuntimeError: If attempting unsupported copy operations
     """
-    # Only support CPU ↔ mycelya transfers
+    # Support CPU ↔ mycelya transfers and same-machine mycelya copies
 
     if from_.device.type == "mycelya" and to_.device.type == "cpu":
         # Mycelya to CPU - supported
@@ -57,14 +57,14 @@ def _copy_from(
         # CPU to mycelya - supported
         result = copy_from_host_to_device(from_, to_)
     elif from_.device.type == "mycelya" and to_.device.type == "mycelya":
-        # Mycelya to mycelya transfers - use orchestrator for validation and execution
+        # Same-machine mycelya transfers - use orchestrator for validation and execution
         orchestrator.copy_tensor(from_, to_)
         result = to_
     else:
         # All other cases (non-mycelya device copies) - blocked
         raise RuntimeError(
             f"Copy operation from {from_.device.type} to {to_.device.type} is not supported. "
-            f"Only CPU↔mycelya transfers are allowed."
+            f"Only CPU↔mycelya transfers and same-machine mycelya copies are allowed."
         )
 
     return result
