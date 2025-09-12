@@ -3,9 +3,9 @@
 
 #include <ATen/InferSize.h>
 #include <ATen/detail/PrivateUse1HooksInterface.h>
+#include <ATen/native/ResizeCommon.h>
 #include <ATen/ops/as_strided_cpu_dispatch.h>
 #include <ATen/ops/set_cpu_dispatch.h>
-#include <ATen/native/ResizeCommon.h>
 #include <c10/core/Allocator.h>
 #include <torch/library.h>
 
@@ -50,7 +50,7 @@ at::Tensor empty_mycelya(at::IntArrayRef size,
   // Create custom storage (required for our custom StorageImpl)
   c10::intrusive_ptr<c10::StorageImpl> storage_impl = make_mycelya_storage_impl(
       c10::StorageImpl::use_byte_size_t(), c10::SymInt(size_bytes),
-      c10::DataPtr(),  // Empty DataPtr - let the factory call our allocator
+      c10::DataPtr(), // Empty DataPtr - let the factory call our allocator
       &get_mycelya_allocator(), true);
 
   // Create tensor using custom MycelyaTensorImpl (required for metadata hash)
@@ -137,15 +137,17 @@ at::Tensor _unsafe_view_mycelya(const at::Tensor &self, at::IntArrayRef size) {
   at::DimVector inferred_size = at::infer_size_dv(size, self.numel());
   auto stride =
       at::detail::computeStride(self.sizes(), self.strides(), inferred_size);
-  TORCH_CHECK(stride.has_value(),
-              "_unsafe_view size is not compatible with input tensor's size and stride "
-              "(at least one dimension spans across two contiguous subspaces).");
+  TORCH_CHECK(
+      stride.has_value(),
+      "_unsafe_view size is not compatible with input tensor's size and stride "
+      "(at least one dimension spans across two contiguous subspaces).");
 
   return as_strided_mycelya(self, inferred_size, *stride,
                             self.storage_offset());
 }
 
-// C++ implementation of set_.source_Storage_storage_offset for tensor metadata operations
+// C++ implementation of set_.source_Storage_storage_offset for tensor metadata
+// operations
 at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
                         int64_t storage_offset, at::IntArrayRef size,
                         at::IntArrayRef stride) {
@@ -160,7 +162,8 @@ at::Tensor &set_mycelya(at::Tensor &result, at::Storage storage,
 }
 
 // C++ implementation of set_.source_Tensor for tensor aliasing operations
-at::Tensor &set_source_tensor_mycelya(at::Tensor &self, const at::Tensor &source) {
+at::Tensor &set_source_tensor_mycelya(at::Tensor &self,
+                                      const at::Tensor &source) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "set_source_tensor_mycelya expects a mycelya tensor");
   TORCH_CHECK(source.device().type() == c10::DeviceType::PrivateUse1,
@@ -178,8 +181,9 @@ at::Tensor &set_source_storage_mycelya(at::Tensor &self, at::Storage source) {
 
   // Calculate size based on storage bytes and element size
   size_t element_size = self.dtype().itemsize();
-  TORCH_CHECK(source.nbytes() % element_size == 0,
-              "Storage size (", source.nbytes(), ") not divisible by element size (", element_size, ")");
+  TORCH_CHECK(source.nbytes() % element_size == 0, "Storage size (",
+              source.nbytes(), ") not divisible by element size (",
+              element_size, ")");
   int64_t numel = source.nbytes() / element_size;
 
   // Delegate to the general set_ function with 1D shape and contiguous stride
@@ -187,9 +191,9 @@ at::Tensor &set_source_storage_mycelya(at::Tensor &self, at::Storage source) {
 }
 
 // C++ implementation of resize_ that explicitly calls storage resize hooks
-const at::Tensor &resize_mycelya_(
-    const at::Tensor &self, at::IntArrayRef size,
-    c10::optional<at::MemoryFormat> memory_format) {
+const at::Tensor &
+resize_mycelya_(const at::Tensor &self, at::IntArrayRef size,
+                c10::optional<at::MemoryFormat> memory_format) {
   int64_t new_numel = c10::multiply_integers(size);
 
   size_t element_size = self.dtype().itemsize();
@@ -227,7 +231,8 @@ at::Tensor alias_mycelya(const at::Tensor &self) {
 }
 
 // C++ implementation of _reshape_alias that calls as_strided_mycelya
-at::Tensor _reshape_alias_mycelya(const at::Tensor &self, at::IntArrayRef size, at::IntArrayRef stride) {
+at::Tensor _reshape_alias_mycelya(const at::Tensor &self, at::IntArrayRef size,
+                                  at::IntArrayRef stride) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "_reshape_alias_mycelya expects a mycelya tensor");
 
@@ -278,4 +283,4 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("_lazy_clone", _lazy_clone_mycelya);
 }
 
-}  // namespace mycelya
+} // namespace mycelya

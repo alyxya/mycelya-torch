@@ -7,10 +7,10 @@
 #include <ATen/Context.h>
 
 #include <torch/csrc/Exceptions.h>
+#include <torch/csrc/autograd/python_variable.h>
 #include <torch/csrc/utils.h>
 #include <torch/csrc/utils/object_ptr.h>
 #include <torch/csrc/utils/python_numbers.h>
-#include <torch/csrc/autograd/python_variable.h>
 
 static PyObject *_initExtension(PyObject *self, PyObject *noargs) {
   HANDLE_TH_ERRORS
@@ -44,7 +44,8 @@ static PyObject *_get_metadata_hash(PyObject *self, PyObject *arg) {
   auto tensor = THPVariable_Unpack(arg);
 
   // Check if tensor is using our custom TensorImpl
-  auto* impl_ptr = dynamic_cast<mycelya::MycelyaTensorImpl*>(tensor.unsafeGetTensorImpl());
+  auto *impl_ptr =
+      dynamic_cast<mycelya::MycelyaTensorImpl *>(tensor.unsafeGetTensorImpl());
   if (impl_ptr) {
     auto metadata_hash = impl_ptr->get_metadata_hash();
     return PyLong_FromUnsignedLongLong(metadata_hash);

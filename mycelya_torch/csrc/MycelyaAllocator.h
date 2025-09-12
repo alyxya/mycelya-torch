@@ -15,14 +15,14 @@ struct MycelyaAllocator final : at::Allocator {
 
   at::DataPtr allocate(size_t nbytes) override;
 
-  static void ReportAndDelete(void* ptr);
+  static void ReportAndDelete(void *ptr);
 
   at::DeleterFnPtr raw_deleter() const override;
 
-  void copy_data(void* dest, const void* src, std::size_t count) const final;
+  void copy_data(void *dest, const void *src, std::size_t count) const final;
 };
 
 // Get the global mycelya allocator instance
-MycelyaAllocator& get_mycelya_allocator();
+MycelyaAllocator &get_mycelya_allocator();
 
-}  // namespace mycelya
+} // namespace mycelya

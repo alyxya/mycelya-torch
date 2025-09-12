@@ -28,7 +28,7 @@ static c10::DeviceIndex current_device_idx() {
 }
 
 class MycelyaGeneratorImpl : public at::CPUGeneratorImpl {
- public:
+public:
   MycelyaGeneratorImpl(c10::DeviceIndex device_index) {
     device_ = c10::Device(c10::DeviceType::PrivateUse1, device_index);
     key_set_ = c10::DispatchKeySet(c10::DispatchKey::PrivateUse1);
@@ -58,8 +58,8 @@ struct MycelyaHooksInterface : public at::PrivateUse1HooksInterface {
 
   bool isPinnedPtr(const void *data) const override { return false; }
 
-  const at::Generator &getDefaultGenerator(
-      c10::DeviceIndex device_index) const override {
+  const at::Generator &
+  getDefaultGenerator(c10::DeviceIndex device_index) const override {
     static bool flag [[maybe_unused]] = []() {
       auto device_nums = device_count();
       default_generators.resize(device_nums);
@@ -96,9 +96,8 @@ struct MycelyaHooksInterface : public at::PrivateUse1HooksInterface {
           reinterpret_cast<storage_id_t>(storage.data_ptr().get());
 
       // Update the local storage's internal size tracking first
-      const_cast<c10::Storage &>(storage)
-          .unsafeGetStorageImpl()
-          ->set_nbytes(new_bytes);
+      const_cast<c10::Storage &>(storage).unsafeGetStorageImpl()->set_nbytes(
+          new_bytes);
 
       // Call Python function to resize remote storage with new byte count
       get_method("resize_storage")(storage_id, static_cast<int64_t>(new_bytes));
@@ -163,8 +162,9 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
     return c10::Stream(c10::Stream::UNSAFE, d, 0);
   }
 
-  c10::Stream getStreamFromGlobalPool(
-      c10::Device d, bool isHighPriority = false) const override {
+  c10::Stream
+  getStreamFromGlobalPool(c10::Device d,
+                          bool isHighPriority = false) const override {
     // Default to stream ID 0 like getDefaultStream
     return c10::Stream(c10::Stream::UNSAFE, d, 0);
   }
@@ -192,8 +192,9 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
     *event = reinterpret_cast<void *>(event_id);
   }
 
-  void destroyEvent(void *event, const c10::DeviceIndex device_index)
-      const noexcept override {
+  void
+  destroyEvent(void *event,
+               const c10::DeviceIndex device_index) const noexcept override {
     py::gil_scoped_acquire acquire;
     get_method("destroy_event")((int64_t)event, device_index);
   }
@@ -255,7 +256,7 @@ struct RemoteGuardImpl final : public c10::impl::DeviceGuardImplInterface {
 // Register our device guard
 C10_REGISTER_GUARD_IMPL(PrivateUse1, RemoteGuardImpl);
 
-}  // namespace
+} // namespace
 
 // Setter for the python factory function
 void set_impl_factory(PyObject *factory) { py_factory = factory; }
@@ -265,4 +266,4 @@ py::function get_method(const char *name) {
   return factory(name);
 }
 
-}  // namespace mycelya
+} // namespace mycelya

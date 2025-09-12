@@ -5,7 +5,7 @@
 
 #include <torch/csrc/utils/pybind.h>
 
-#include "Mycelya.h"  // For get_method
+#include "Mycelya.h" // For get_method
 
 namespace mycelya {
 
@@ -69,7 +69,7 @@ static MycelyaAllocator global_mycelya_alloc;
 
 MycelyaAllocator &get_mycelya_allocator() { return global_mycelya_alloc; }
 
-}  // namespace mycelya
+} // namespace mycelya
 
 // Register the allocator with PyTorch
 REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1,

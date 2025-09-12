@@ -15,11 +15,11 @@
 namespace mycelya {
 
 using mycelya_ptr_t = uint64_t;
-using storage_id_t = uint64_t;  // Changed from string to integer for efficient
-                                // storage as data pointer
+using storage_id_t = uint64_t; // Changed from string to integer for efficient
+                               // storage as data pointer
 
-void set_impl_factory(PyObject* factory);
-py::function get_method(const char* name);
+void set_impl_factory(PyObject *factory);
+py::function get_method(const char *name);
 
 // C++ tensor creation functions
 at::Tensor empty_mycelya(at::IntArrayRef size,
@@ -35,4 +35,4 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
                                  c10::optional<at::Device> device,
                                  c10::optional<bool> pin_memory);
 
-}  // namespace mycelya
+} // namespace mycelya
