@@ -69,8 +69,9 @@ _mycelya_lib_aten.impl("acos_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.
 _mycelya_lib_aten.impl("acosh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("acosh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("acosh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("adaptive_avg_pool1d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.adaptive_avg_pool1d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("adaptive_avg_pool1d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.adaptive_avg_pool1d.out), dispatch_key="PrivateUse1")
+# BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
+# _mycelya_lib_aten.impl("adaptive_avg_pool1d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.adaptive_avg_pool1d), dispatch_key="PrivateUse1")
+# _mycelya_lib_aten.impl("adaptive_avg_pool1d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.adaptive_avg_pool1d.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("add.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Scalar), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("add.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Scalar_out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("add.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Tensor), dispatch_key="PrivateUse1")
@@ -110,8 +111,9 @@ _mycelya_lib_aten.impl("atan_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.
 _mycelya_lib_aten.impl("atanh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("atanh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("atanh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("avg_pool1d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool1d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("avg_pool1d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool1d.out), dispatch_key="PrivateUse1")
+# BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
+# _mycelya_lib_aten.impl("avg_pool1d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool1d), dispatch_key="PrivateUse1")
+# _mycelya_lib_aten.impl("avg_pool1d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool1d.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("avg_pool2d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("avg_pool2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("avg_pool2d_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d_backward), dispatch_key="PrivateUse1")
@@ -355,7 +357,8 @@ _mycelya_lib_aten.impl("prod.out", _mycelya_kernel_fallback_wrapper(torch.ops.at
 _mycelya_lib_aten.impl("rand", _mycelya_kernel_fallback_wrapper(torch.ops.aten.rand), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("rand.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.rand.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("randn", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randn), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("randn.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randn.out), dispatch_key="PrivateUse1")
+# BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
+# _mycelya_lib_aten.impl("randn.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randn.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("randperm", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randperm), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("randperm.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randperm.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("reciprocal", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reciprocal), dispatch_key="PrivateUse1")
@@ -450,14 +453,18 @@ _mycelya_lib_aten.impl("trunc_", _mycelya_kernel_fallback_wrapper(torch.ops.aten
 _mycelya_lib_aten.impl("unsqueeze", _mycelya_kernel_fallback_wrapper(torch.ops.aten.unsqueeze), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("unsqueeze_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.unsqueeze_), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("upsample_bilinear2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("upsample_bilinear2d.vec", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.vec), dispatch_key="PrivateUse1")
+# BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
+# _mycelya_lib_aten.impl("upsample_bilinear2d.vec", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.vec), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("upsample_bilinear2d.vec_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.vec_out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("upsample_nearest2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("upsample_nearest2d.vec", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.vec), dispatch_key="PrivateUse1")
+# BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
+# _mycelya_lib_aten.impl("upsample_nearest2d.vec", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.vec), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("upsample_nearest2d.vec_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.vec_out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("var.correction", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.correction), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("var.correction_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.correction_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("var.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.dim), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("var.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.out), dispatch_key="PrivateUse1")
+# BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
+# _mycelya_lib_aten.impl("var.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.dim), dispatch_key="PrivateUse1")
+# BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
+# _mycelya_lib_aten.impl("var.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.out), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("where.self", _mycelya_kernel_fallback_wrapper(torch.ops.aten.where.self), dispatch_key="PrivateUse1")
 _mycelya_lib_aten.impl("where.self_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.where.self_out), dispatch_key="PrivateUse1")
