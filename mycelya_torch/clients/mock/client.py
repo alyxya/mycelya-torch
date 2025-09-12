@@ -45,9 +45,9 @@ class MockClient(Client):
         versioned_packages = get_versioned_packages(base_packages)
         python_version = get_python_version()
 
-        # Initialize the Modal app and server class with synchronized versions
+        # Initialize the Modal app and server class with synchronized versions (local execution)
         self._app, self._server_class = create_modal_app_for_gpu(
-            self.gpu_type, self.timeout, versioned_packages, python_version
+            self.gpu_type, self.timeout, versioned_packages, python_version, is_local=True
         )
 
     def start(self):
