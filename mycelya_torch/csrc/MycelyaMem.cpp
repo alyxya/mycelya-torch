@@ -242,6 +242,15 @@ at::Tensor alias_mycelya(const at::Tensor &self) {
                             self.storage_offset());
 }
 
+// C++ implementation of _reshape_alias that calls as_strided_mycelya
+at::Tensor _reshape_alias_mycelya(const at::Tensor &self, at::IntArrayRef size, at::IntArrayRef stride) {
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "_reshape_alias_mycelya expects a mycelya tensor");
+
+  // Use as_strided_mycelya to create the alias with provided size and strides
+  return as_strided_mycelya(self, size, stride, self.storage_offset());
+}
+
 // C++ implementation of _lazy_clone that preserves MycelyaTensorImpl  
 at::Tensor _lazy_clone_mycelya(const at::Tensor &self) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
@@ -269,6 +278,7 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("view", view_mycelya);
   m.impl("as_strided", as_strided_mycelya);
   m.impl("_unsafe_view", _unsafe_view_mycelya);
+  m.impl("_reshape_alias", _reshape_alias_mycelya);
   
   // Register set_ operations in C++ following OpenReg pattern
   m.impl("set_.source_Tensor", set_source_tensor_mycelya);
