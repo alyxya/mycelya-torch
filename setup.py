@@ -85,7 +85,7 @@ if __name__ == "__main__":
     ]
 
     setup(
-        packages=(find_packages(exclude=("test",)) + ["_mycelya_torch_modal"]),
+        packages=find_packages(exclude=("test",)),
         ext_modules=ext_modules,
         cmdclass={
             "build_ext": get_build_ext_class(),

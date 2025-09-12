@@ -10,10 +10,9 @@ for development and testing without requiring remote cloud resources.
 
 from typing import Any, Dict, List, Optional
 
-from _mycelya_torch_modal.modal_app import create_modal_app_for_gpu
-
 from ..._logging import get_logger
 from ..._package_version import get_python_version, get_versioned_packages
+from ...servers.modal.modal_app import create_modal_app_for_gpu
 from ..base_client import BatchCall, Client
 
 log = get_logger(__name__)
@@ -47,7 +46,11 @@ class MockClient(Client):
 
         # Initialize the Modal app and server class with synchronized versions (local execution)
         self._app, self._server_class = create_modal_app_for_gpu(
-            self.gpu_type, self.timeout, versioned_packages, python_version, is_local=True
+            self.gpu_type,
+            self.timeout,
+            versioned_packages,
+            python_version,
+            is_local=True,
         )
 
     def start(self):

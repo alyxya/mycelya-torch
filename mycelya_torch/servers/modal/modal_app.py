@@ -78,7 +78,9 @@ def create_modal_app_for_gpu(
         )
 
         # Create data volume and mount at data directory
-        data_volume = modal.Volume.from_name("mycelya-torch-data", create_if_missing=True)
+        data_volume = modal.Volume.from_name(
+            "mycelya-torch-data", create_if_missing=True
+        )
 
         volumes = {"/huggingface-cache": hf_cache_volume, "/data": data_volume}
 
@@ -97,7 +99,6 @@ def create_modal_app_for_gpu(
 
     @app.cls(**cls_kwargs)
     class PytorchServer:
-
         @staticmethod
         def _dtype_to_str(dtype) -> str:
             """Convert torch.dtype to string without 'torch.' prefix."""

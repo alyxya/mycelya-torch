@@ -80,7 +80,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 # Keep imports organized and compatible with existing style
-known-first-party = ["mycelya_torch", "_mycelya_torch_modal"]
+known-first-party = ["mycelya_torch"]
 
 [tool.ruff.format]
 # Use double quotes and standard formatting

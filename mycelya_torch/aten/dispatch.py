@@ -117,7 +117,7 @@ def _create_output_tensors(
                 meta_output.shape,
                 meta_output.stride(),
                 dtype=meta_output.dtype,
-                device=mycelya_device
+                device=mycelya_device,
             )
             # Record the storage mapping for future outputs that might alias
             original_tensors[meta_storage] = tensor
@@ -193,7 +193,9 @@ def _execute_with_dynamic_outputs(
 
 
 def _mycelya_kernel_fallback(
-    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket], *args: Any, **kwargs: Any
+    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
+    *args: Any,
+    **kwargs: Any,
 ) -> Any:
     """Execute PyTorch operations on mycelya devices using simple dispatch logic."""
 

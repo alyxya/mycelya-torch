@@ -95,7 +95,7 @@ Modular operation dispatch with clean separation of concerns:
 - `mock/client.py` - Local execution provider using Modal's .local() for development and testing
 
 ### Remote Execution Infrastructure
-- `_mycelya_torch_modal/modal_app.py` - Modal cloud GPU integration with dynamic app creation and lazy/realized storage
+- `mycelya_torch/servers/modal/modal_app.py` - Modal cloud GPU integration with dynamic app creation and lazy/realized storage
 
 ### C++ Backend Integration (csrc/)
 Complete custom PyTorch integration following pytorch-npu patterns:
@@ -312,7 +312,7 @@ print(f"Generated response: {response}")
 - **Process-scoped uniqueness** for storage IDs enabling efficient cross-device validation
 
 #### Multi-Provider Client Implementation
-- Follow Modal implementation pattern in `_mycelya_torch_modal/` for new providers
+- Follow Modal implementation pattern in `mycelya_torch/servers/modal/` for new providers
 - Implement standardized client interface (base_client.py) with RPC batching support
 - Support multi-GPU configuration with lazy/realized storage architecture
 - Handle connection lifecycle, authentication, and background thread processing

@@ -28,443 +28,2119 @@ _mycelya_lib_aten.impl(
 )
 _mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
 
+
 # Helper function to create wrappers for ATen operations
-def _mycelya_kernel_fallback_wrapper(op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket]) -> Callable[..., Any]:
+def _mycelya_kernel_fallback_wrapper(
+    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
+) -> Callable[..., Any]:
     """Create a wrapper function that calls _mycelya_kernel_fallback with the specified ATen op."""
+
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         return _mycelya_kernel_fallback(op, *args, **kwargs)
+
     return wrapper
 
+
 # Register all core ATen operators (sorted alphabetically)
-_mycelya_lib_aten.impl("_adaptive_avg_pool2d", _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_adaptive_avg_pool2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_adaptive_avg_pool2d_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d_backward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_adaptive_avg_pool2d_backward.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d_backward.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_adaptive_avg_pool3d", _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool3d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_adaptive_avg_pool3d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool3d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_cdist_forward", _mycelya_kernel_fallback_wrapper(torch.ops.aten._cdist_forward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_cdist_forward.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._cdist_forward.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_embedding_bag", _mycelya_kernel_fallback_wrapper(torch.ops.aten._embedding_bag), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_embedding_bag.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._embedding_bag.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_fft_r2c", _mycelya_kernel_fallback_wrapper(torch.ops.aten._fft_r2c), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_fft_r2c.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._fft_r2c.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_log_softmax", _mycelya_kernel_fallback_wrapper(torch.ops.aten._log_softmax), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_log_softmax.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._log_softmax.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_native_batch_norm_legit", _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_native_batch_norm_legit.no_stats", _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit.no_stats), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_native_batch_norm_legit.no_stats_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit.no_stats_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_native_batch_norm_legit.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_native_batch_norm_legit_no_training", _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit_no_training), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_native_batch_norm_legit_no_training.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit_no_training.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_pdist_forward", _mycelya_kernel_fallback_wrapper(torch.ops.aten._pdist_forward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_pdist_forward.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._pdist_forward.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_softmax", _mycelya_kernel_fallback_wrapper(torch.ops.aten._softmax), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("_softmax.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten._softmax.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("abs", _mycelya_kernel_fallback_wrapper(torch.ops.aten.abs), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("abs.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.abs.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("abs_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.abs_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("acos", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acos), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("acos.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acos.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("acos_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acos_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("acosh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("acosh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("acosh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh_), dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
+    "_adaptive_avg_pool2d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_adaptive_avg_pool2d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_adaptive_avg_pool2d_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_adaptive_avg_pool2d_backward.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool2d_backward.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_adaptive_avg_pool3d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool3d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_adaptive_avg_pool3d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._adaptive_avg_pool3d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_cdist_forward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._cdist_forward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_cdist_forward.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._cdist_forward.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_embedding_bag",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._embedding_bag),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_embedding_bag.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._embedding_bag.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_fft_r2c",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._fft_r2c),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_fft_r2c.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._fft_r2c.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_log_softmax",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._log_softmax),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_log_softmax.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._log_softmax.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_native_batch_norm_legit",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_native_batch_norm_legit.no_stats",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit.no_stats),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_native_batch_norm_legit.no_stats_out",
+    _mycelya_kernel_fallback_wrapper(
+        torch.ops.aten._native_batch_norm_legit.no_stats_out
+    ),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_native_batch_norm_legit.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._native_batch_norm_legit.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_native_batch_norm_legit_no_training",
+    _mycelya_kernel_fallback_wrapper(
+        torch.ops.aten._native_batch_norm_legit_no_training
+    ),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_native_batch_norm_legit_no_training.out",
+    _mycelya_kernel_fallback_wrapper(
+        torch.ops.aten._native_batch_norm_legit_no_training.out
+    ),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_pdist_forward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._pdist_forward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_pdist_forward.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._pdist_forward.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_softmax",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._softmax),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "_softmax.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten._softmax.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "abs",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.abs),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "abs.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.abs.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "abs_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.abs_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "acos",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.acos),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "acos.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.acos.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "acos_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.acos_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "acosh",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "acosh.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "acosh_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.acosh_),
+    dispatch_key="PrivateUse1",
+)
 # BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
 # _mycelya_lib_aten.impl("adaptive_avg_pool1d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.adaptive_avg_pool1d), dispatch_key="PrivateUse1")
 # _mycelya_lib_aten.impl("adaptive_avg_pool1d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.adaptive_avg_pool1d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("add.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("add.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("add.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("add.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("add_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("add_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.add_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("addmm", _mycelya_kernel_fallback_wrapper(torch.ops.aten.addmm), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("addmm.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.addmm.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("addmm_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.addmm_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("amax", _mycelya_kernel_fallback_wrapper(torch.ops.aten.amax), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("amax.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.amax.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("amin", _mycelya_kernel_fallback_wrapper(torch.ops.aten.amin), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("amin.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.amin.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("any", _mycelya_kernel_fallback_wrapper(torch.ops.aten.any), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("any.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.dim), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("any.dims", _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.dims), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("any.dims_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.dims_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("any.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("arange.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.arange.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("arange.start_step", _mycelya_kernel_fallback_wrapper(torch.ops.aten.arange.start_step), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("argmax", _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmax), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("argmax.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmax.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("argmin", _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmin), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("argmin.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmin.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("asin", _mycelya_kernel_fallback_wrapper(torch.ops.aten.asin), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("asin.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.asin.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("asin_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.asin_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("asinh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.asinh), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("asinh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.asinh.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("asinh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.asinh_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atan", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atan.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atan2", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan2), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atan2.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan2.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atan2_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan2_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atan_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atanh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atanh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("atanh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh_), dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
+    "add.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "add.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "add.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "add.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.add.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "add_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.add_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "add_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.add_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "addmm",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.addmm),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "addmm.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.addmm.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "addmm_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.addmm_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "amax",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.amax),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "amax.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.amax.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "amin",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.amin),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "amin.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.amin.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "any",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.any),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "any.dim",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.dim),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "any.dims",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.dims),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "any.dims_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.dims_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "any.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.any.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "arange.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.arange.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "arange.start_step",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.arange.start_step),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "argmax",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmax),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "argmax.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmax.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "argmin",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmin),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "argmin.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.argmin.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "asin",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.asin),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "asin.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.asin.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "asin_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.asin_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "asinh",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.asinh),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "asinh.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.asinh.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "asinh_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.asinh_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atan",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atan.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atan2",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan2),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atan2.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan2.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atan2_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan2_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atan_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atan_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atanh",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atanh.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "atanh_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.atanh_),
+    dispatch_key="PrivateUse1",
+)
 # BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
 # _mycelya_lib_aten.impl("avg_pool1d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool1d), dispatch_key="PrivateUse1")
 # _mycelya_lib_aten.impl("avg_pool1d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool1d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("avg_pool2d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("avg_pool2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("avg_pool2d_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d_backward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("avg_pool3d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool3d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("avg_pool3d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool3d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_and.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_and.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_and.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_and.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_and_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_and_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_not", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_not), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_not.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_not.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_not_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_not_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_or.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_or.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_or.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_or.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_or_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_or_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_xor.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_xor.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_xor.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_xor.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_xor_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bitwise_xor_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bmm", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bmm), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("bmm.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.bmm.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cat", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cat), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cat.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cat.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ceil", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ceil), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ceil.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ceil.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ceil_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ceil_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clamp", _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clamp.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clamp.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clamp.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clamp_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("clamp_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("col2im", _mycelya_kernel_fallback_wrapper(torch.ops.aten.col2im), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("col2im.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.col2im.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("constant_pad_nd", _mycelya_kernel_fallback_wrapper(torch.ops.aten.constant_pad_nd), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("constant_pad_nd.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.constant_pad_nd.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("convolution", _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("convolution.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("convolution_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution_backward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("convolution_backward.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution_backward.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cos", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cos), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cos.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cos.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cos_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cos_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cosh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cosh), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cosh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cosh.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cosh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cosh_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cumsum", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cumsum), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cumsum.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cumsum.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("cumsum_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.cumsum_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("diagonal", _mycelya_kernel_fallback_wrapper(torch.ops.aten.diagonal), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div.Scalar_mode", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar_mode), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div.Scalar_mode_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar_mode_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div.Tensor_mode", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Tensor_mode), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div_.Scalar_mode", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Scalar_mode), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("div_.Tensor_mode", _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Tensor_mode), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("elu", _mycelya_kernel_fallback_wrapper(torch.ops.aten.elu), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("elu.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.elu.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("elu_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.elu_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("embedding", _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("embedding.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("embedding_dense_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding_dense_backward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("embedding_dense_backward.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding_dense_backward.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("eq.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("eq.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("eq.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("eq.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("eq_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("eq_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("erf", _mycelya_kernel_fallback_wrapper(torch.ops.aten.erf), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("erf.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.erf.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("erf_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.erf_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("exp", _mycelya_kernel_fallback_wrapper(torch.ops.aten.exp), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("exp.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.exp.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("exp_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.exp_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("expand", _mycelya_kernel_fallback_wrapper(torch.ops.aten.expand), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("expm1", _mycelya_kernel_fallback_wrapper(torch.ops.aten.expm1), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("expm1.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.expm1.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("expm1_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.expm1_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fill.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fill.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fill.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fill.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fill_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fill_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("flip", _mycelya_kernel_fallback_wrapper(torch.ops.aten.flip), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("flip.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.flip.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("floor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.floor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("floor.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.floor.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("floor_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.floor_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fmod.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fmod.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fmod.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fmod.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fmod_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("fmod_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("full", _mycelya_kernel_fallback_wrapper(torch.ops.aten.full), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("full.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.full.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("full_like", _mycelya_kernel_fallback_wrapper(torch.ops.aten.full_like), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("full_like.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.full_like.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gather", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gather), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gather.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gather.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ge.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ge.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ge.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ge.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ge_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ge_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gelu", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gelu), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gelu.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gelu.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gelu_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gelu_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("grid_sampler_2d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.grid_sampler_2d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("grid_sampler_2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.grid_sampler_2d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gt.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gt.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gt.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gt.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gt_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("gt_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("hardtanh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.hardtanh), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("hardtanh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.hardtanh.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("hardtanh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.hardtanh_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("index.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.index.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("index.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.index.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("index_put", _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_put), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("index_put.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_put.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("index_put_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_put_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("index_select", _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_select), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("index_select.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_select.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("isinf", _mycelya_kernel_fallback_wrapper(torch.ops.aten.isinf), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("isinf.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.isinf.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("isnan", _mycelya_kernel_fallback_wrapper(torch.ops.aten.isnan), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("isnan.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.isnan.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("le.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("le.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("le.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("le.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("le_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.le_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("le_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.le_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("leaky_relu", _mycelya_kernel_fallback_wrapper(torch.ops.aten.leaky_relu), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("leaky_relu.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.leaky_relu.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("leaky_relu_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.leaky_relu_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log10", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log10), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log10.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log10.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log10_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log10_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log1p", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log1p), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log1p.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log1p.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log1p_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log1p_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log2", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log2), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log2.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log2.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log2_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log2_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("log_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.log_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_and", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_and), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_and.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_and.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_and_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_and_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_not", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_not), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_not.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_not.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_not_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_not_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_or", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_or), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_or.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_or.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_or_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_or_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_xor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_xor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_xor.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_xor.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("logical_xor_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_xor_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("lt.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("lt.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("lt.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("lt.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("lt_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("lt_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("masked_scatter", _mycelya_kernel_fallback_wrapper(torch.ops.aten.masked_scatter), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("masked_scatter.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.masked_scatter.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("masked_scatter_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.masked_scatter_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("max.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.max.dim), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("max.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.max.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("max_pool2d_with_indices", _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool2d_with_indices), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("max_pool2d_with_indices.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool2d_with_indices.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("max_pool2d_with_indices_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool2d_with_indices_backward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("max_pool3d_with_indices", _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool3d_with_indices), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("max_pool3d_with_indices.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool3d_with_indices.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("maximum", _mycelya_kernel_fallback_wrapper(torch.ops.aten.maximum), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("maximum.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.maximum.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mean", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mean), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mean.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mean.dim), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mean.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mean.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("min.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.min.dim), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("min.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.min.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("minimum", _mycelya_kernel_fallback_wrapper(torch.ops.aten.minimum), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("minimum.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.minimum.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mm", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mm), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mm.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mm.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mul.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mul.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mul.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mul.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mul_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("mul_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_dropout", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_dropout), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_dropout.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_dropout.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_group_norm", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_group_norm.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_group_norm_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm_backward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_group_norm_backward.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm_backward.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_layer_norm", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_layer_norm.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_layer_norm_backward", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm_backward), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("native_layer_norm_backward.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm_backward.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ne.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ne.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ne.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ne.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ne_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("ne_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("neg", _mycelya_kernel_fallback_wrapper(torch.ops.aten.neg), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("neg.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.neg.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("neg_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.neg_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("nonzero", _mycelya_kernel_fallback_wrapper(torch.ops.aten.nonzero), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("nonzero.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.nonzero.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("permute", _mycelya_kernel_fallback_wrapper(torch.ops.aten.permute), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("pow.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("pow.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("pow.Tensor_Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("pow.Tensor_Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("pow.Tensor_Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("pow.Tensor_Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("pow_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("prod", _mycelya_kernel_fallback_wrapper(torch.ops.aten.prod), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("prod.dim_int", _mycelya_kernel_fallback_wrapper(torch.ops.aten.prod.dim_int), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("prod.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.prod.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("rand", _mycelya_kernel_fallback_wrapper(torch.ops.aten.rand), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("rand.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.rand.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("randn", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randn), dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
+    "avg_pool2d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "avg_pool2d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "avg_pool2d_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool2d_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "avg_pool3d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool3d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "avg_pool3d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.avg_pool3d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_and.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_and.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_and.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_and.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_and_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_and_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_and_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_not",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_not),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_not.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_not.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_not_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_not_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_or.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_or.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_or.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_or.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_or_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_or_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_or_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_xor.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_xor.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_xor.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_xor.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_xor_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bitwise_xor_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bitwise_xor_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bmm",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bmm),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "bmm.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.bmm.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cat",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cat),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cat.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cat.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ceil",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ceil),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ceil.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ceil.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ceil_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ceil_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "clamp",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "clamp.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "clamp.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "clamp.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "clamp_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "clamp_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.clamp_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "col2im",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.col2im),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "col2im.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.col2im.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "constant_pad_nd",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.constant_pad_nd),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "constant_pad_nd.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.constant_pad_nd.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "convolution",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "convolution.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "convolution_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "convolution_backward.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.convolution_backward.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cos",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cos),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cos.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cos.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cos_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cos_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cosh",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cosh),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cosh.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cosh.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cosh_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cosh_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cumsum",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cumsum),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cumsum.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cumsum.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "cumsum_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.cumsum_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "diagonal",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.diagonal),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div.Scalar_mode",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar_mode),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div.Scalar_mode_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar_mode_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div.Tensor_mode",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.Tensor_mode),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div_.Scalar_mode",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Scalar_mode),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "div_.Tensor_mode",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.div_.Tensor_mode),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "elu",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.elu),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "elu.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.elu.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "elu_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.elu_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "embedding",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "embedding.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "embedding_dense_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding_dense_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "embedding_dense_backward.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.embedding_dense_backward.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "eq.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "eq.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "eq.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "eq.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "eq_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "eq_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.eq_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "erf",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.erf),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "erf.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.erf.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "erf_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.erf_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "exp",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.exp),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "exp.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.exp.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "exp_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.exp_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "expand",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.expand),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "expm1",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.expm1),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "expm1.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.expm1.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "expm1_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.expm1_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fill.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fill.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fill.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fill.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fill_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fill_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "flip",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.flip),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "flip.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.flip.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "floor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.floor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "floor.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.floor.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "floor_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.floor_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fmod.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fmod.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fmod.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fmod.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fmod_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "fmod_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.fmod_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "full",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.full),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "full.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.full.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "full_like",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.full_like),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "full_like.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.full_like.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gather",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gather),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gather.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gather.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ge.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ge.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ge.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ge.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ge_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ge_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ge_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gelu",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gelu),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gelu.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gelu.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gelu_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gelu_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "grid_sampler_2d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.grid_sampler_2d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "grid_sampler_2d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.grid_sampler_2d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gt.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gt.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gt.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gt.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gt_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "gt_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.gt_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "hardtanh",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.hardtanh),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "hardtanh.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.hardtanh.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "hardtanh_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.hardtanh_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "index.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.index.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "index.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.index.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "index_put",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_put),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "index_put.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_put.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "index_put_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_put_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "index_select",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_select),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "index_select.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.index_select.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "isinf",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.isinf),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "isinf.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.isinf.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "isnan",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.isnan),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "isnan.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.isnan.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "le.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "le.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "le.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "le.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.le.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "le_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.le_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "le_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.le_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "leaky_relu",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.leaky_relu),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "leaky_relu.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.leaky_relu.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "leaky_relu_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.leaky_relu_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log10",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log10),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log10.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log10.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log10_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log10_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log1p",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log1p),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log1p.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log1p.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log1p_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log1p_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log2",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log2),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log2.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log2.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log2_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log2_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "log_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.log_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_and",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_and),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_and.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_and.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_and_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_and_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_not",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_not),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_not.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_not.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_not_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_not_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_or",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_or),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_or.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_or.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_or_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_or_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_xor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_xor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_xor.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_xor.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "logical_xor_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.logical_xor_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "lt.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "lt.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "lt.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "lt.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "lt_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "lt_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.lt_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "masked_scatter",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.masked_scatter),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "masked_scatter.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.masked_scatter.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "masked_scatter_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.masked_scatter_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "max.dim",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.max.dim),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "max.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.max.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "max_pool2d_with_indices",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool2d_with_indices),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "max_pool2d_with_indices.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool2d_with_indices.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "max_pool2d_with_indices_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool2d_with_indices_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "max_pool3d_with_indices",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool3d_with_indices),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "max_pool3d_with_indices.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.max_pool3d_with_indices.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "maximum",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.maximum),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "maximum.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.maximum.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mean",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mean),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mean.dim",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mean.dim),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mean.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mean.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "min.dim",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.min.dim),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "min.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.min.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "minimum",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.minimum),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "minimum.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.minimum.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mm",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mm),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mm.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mm.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mul.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mul.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mul.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mul.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mul_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mul_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_dropout",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_dropout),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_dropout.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_dropout.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_group_norm",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_group_norm.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_group_norm_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_group_norm_backward.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_group_norm_backward.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_layer_norm",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_layer_norm.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_layer_norm_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "native_layer_norm_backward.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.native_layer_norm_backward.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ne.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ne.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ne.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ne.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ne_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "ne_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.ne_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "neg",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.neg),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "neg.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.neg.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "neg_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.neg_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "nonzero",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.nonzero),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "nonzero.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.nonzero.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "permute",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.permute),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "pow.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "pow.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "pow.Tensor_Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "pow.Tensor_Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "pow.Tensor_Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "pow.Tensor_Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow.Tensor_Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "pow_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.pow_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "prod",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.prod),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "prod.dim_int",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.prod.dim_int),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "prod.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.prod.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "rand",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.rand),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "rand.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.rand.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "randn",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.randn),
+    dispatch_key="PrivateUse1",
+)
 # BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
 # _mycelya_lib_aten.impl("randn.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randn.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("randperm", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randperm), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("randperm.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.randperm.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reciprocal", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reciprocal), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reciprocal.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reciprocal.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reciprocal_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reciprocal_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reflection_pad1d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad1d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reflection_pad1d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad1d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reflection_pad2d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad2d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reflection_pad2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad2d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reflection_pad3d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad3d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("reflection_pad3d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad3d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("relu", _mycelya_kernel_fallback_wrapper(torch.ops.aten.relu), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("relu.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.relu.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("relu_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.relu_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("remainder.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("remainder.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("remainder.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("remainder.Tensor_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Tensor_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("remainder_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("remainder_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("repeat", _mycelya_kernel_fallback_wrapper(torch.ops.aten.repeat), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("repeat.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.repeat.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("replication_pad2d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad2d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("replication_pad2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad2d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("replication_pad3d", _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad3d), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("replication_pad3d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad3d.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("round", _mycelya_kernel_fallback_wrapper(torch.ops.aten.round), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("round.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.round.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("round_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.round_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("rsqrt", _mycelya_kernel_fallback_wrapper(torch.ops.aten.rsqrt), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("rsqrt.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.rsqrt.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("rsqrt_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.rsqrt_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scalar_tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scalar_tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scalar_tensor.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scalar_tensor.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter.src", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.src), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter.src_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.src_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter.value", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.value), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter.value_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.value_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_.src", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_.src), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_.value", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_.value), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_add", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_add), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_add.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_add.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_add_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_add_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_reduce.two", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_reduce.two), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_reduce.two_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_reduce.two_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("scatter_reduce_.two", _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_reduce_.two), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("select.int", _mycelya_kernel_fallback_wrapper(torch.ops.aten.select.int), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("select_scatter", _mycelya_kernel_fallback_wrapper(torch.ops.aten.select_scatter), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("select_scatter.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.select_scatter.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sigmoid", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sigmoid), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sigmoid.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sigmoid.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sigmoid_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sigmoid_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sign", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sign), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sign.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sign.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sign_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sign_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sin", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sin), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sin.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sin.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sin_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sin_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sinh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sinh), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sinh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sinh.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sinh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sinh_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("slice.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.slice.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("slice_scatter", _mycelya_kernel_fallback_wrapper(torch.ops.aten.slice_scatter), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("slice_scatter.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.slice_scatter.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sort", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sort), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("split_with_sizes", _mycelya_kernel_fallback_wrapper(torch.ops.aten.split_with_sizes), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sqrt", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sqrt), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sqrt.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sqrt.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sqrt_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sqrt_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("squeeze.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze.dim), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("squeeze.dims", _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze.dims), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("squeeze_.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze_.dim), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("squeeze_.dims", _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze_.dims), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sub.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sub.Scalar_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.Scalar_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sub.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sub.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sub_.Scalar", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub_.Scalar), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sub_.Tensor", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub_.Tensor), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sum.dim_IntList", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sum.dim_IntList), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("sum.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.sum.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("tan", _mycelya_kernel_fallback_wrapper(torch.ops.aten.tan), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("tan.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.tan.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("tan_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.tan_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("tanh", _mycelya_kernel_fallback_wrapper(torch.ops.aten.tanh), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("tanh.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.tanh.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("tanh_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.tanh_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("topk", _mycelya_kernel_fallback_wrapper(torch.ops.aten.topk), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("trunc", _mycelya_kernel_fallback_wrapper(torch.ops.aten.trunc), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("trunc.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.trunc.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("trunc_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.trunc_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("unsqueeze", _mycelya_kernel_fallback_wrapper(torch.ops.aten.unsqueeze), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("unsqueeze_", _mycelya_kernel_fallback_wrapper(torch.ops.aten.unsqueeze_), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("upsample_bilinear2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.out), dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
+    "randperm",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.randperm),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "randperm.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.randperm.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reciprocal",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reciprocal),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reciprocal.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reciprocal.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reciprocal_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reciprocal_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reflection_pad1d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad1d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reflection_pad1d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad1d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reflection_pad2d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad2d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reflection_pad2d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad2d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reflection_pad3d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad3d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "reflection_pad3d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.reflection_pad3d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "relu",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.relu),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "relu.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.relu.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "relu_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.relu_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "remainder.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "remainder.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "remainder.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "remainder.Tensor_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder.Tensor_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "remainder_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "remainder_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.remainder_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "repeat",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.repeat),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "repeat.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.repeat.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "replication_pad2d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad2d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "replication_pad2d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad2d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "replication_pad3d",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad3d),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "replication_pad3d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.replication_pad3d.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "round",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.round),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "round.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.round.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "round_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.round_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "rsqrt",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.rsqrt),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "rsqrt.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.rsqrt.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "rsqrt_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.rsqrt_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scalar_tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scalar_tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scalar_tensor.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scalar_tensor.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter.src",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.src),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter.src_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.src_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter.value",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.value),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter.value_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter.value_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_.src",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_.src),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_.value",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_.value),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_add",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_add),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_add.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_add.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_add_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_add_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_reduce.two",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_reduce.two),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_reduce.two_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_reduce.two_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "scatter_reduce_.two",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.scatter_reduce_.two),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "select.int",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.select.int),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "select_scatter",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.select_scatter),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "select_scatter.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.select_scatter.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sigmoid",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sigmoid),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sigmoid.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sigmoid.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sigmoid_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sigmoid_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sign",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sign),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sign.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sign.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sign_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sign_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sin",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sin),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sin.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sin.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sin_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sin_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sinh",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sinh),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sinh.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sinh.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sinh_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sinh_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "slice.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.slice.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "slice_scatter",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.slice_scatter),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "slice_scatter.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.slice_scatter.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sort",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sort),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "split_with_sizes",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.split_with_sizes),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sqrt",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sqrt),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sqrt.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sqrt.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sqrt_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sqrt_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "squeeze.dim",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze.dim),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "squeeze.dims",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze.dims),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "squeeze_.dim",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze_.dim),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "squeeze_.dims",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.squeeze_.dims),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sub.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sub.Scalar_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.Scalar_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sub.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sub.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sub_.Scalar",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub_.Scalar),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sub_.Tensor",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sub_.Tensor),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sum.dim_IntList",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sum.dim_IntList),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "sum.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.sum.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "tan",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.tan),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "tan.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.tan.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "tan_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.tan_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "tanh",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.tanh),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "tanh.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.tanh.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "tanh_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.tanh_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "topk",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.topk),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "trunc",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.trunc),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "trunc.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.trunc.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "trunc_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.trunc_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "unsqueeze",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.unsqueeze),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "unsqueeze_",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.unsqueeze_),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "upsample_bilinear2d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.out),
+    dispatch_key="PrivateUse1",
+)
 # BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
 # _mycelya_lib_aten.impl("upsample_bilinear2d.vec", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.vec), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("upsample_bilinear2d.vec_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.vec_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("upsample_nearest2d.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.out), dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
+    "upsample_bilinear2d.vec_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_bilinear2d.vec_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "upsample_nearest2d.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.out),
+    dispatch_key="PrivateUse1",
+)
 # BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
 # _mycelya_lib_aten.impl("upsample_nearest2d.vec", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.vec), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("upsample_nearest2d.vec_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.vec_out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("var.correction", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.correction), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("var.correction_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.correction_out), dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
+    "upsample_nearest2d.vec_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.upsample_nearest2d.vec_out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "var.correction",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.correction),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "var.correction_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.correction_out),
+    dispatch_key="PrivateUse1",
+)
 # BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
 # _mycelya_lib_aten.impl("var.dim", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.dim), dispatch_key="PrivateUse1")
 # BROKEN: Missing autograd backend registration - causes failures with gradient-enabled tensors
 # _mycelya_lib_aten.impl("var.out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.var.out), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("where.self", _mycelya_kernel_fallback_wrapper(torch.ops.aten.where.self), dispatch_key="PrivateUse1")
-_mycelya_lib_aten.impl("where.self_out", _mycelya_kernel_fallback_wrapper(torch.ops.aten.where.self_out), dispatch_key="PrivateUse1")
+_mycelya_lib_aten.impl(
+    "where.self",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.where.self),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "where.self_out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.where.self_out),
+    dispatch_key="PrivateUse1",
+)
