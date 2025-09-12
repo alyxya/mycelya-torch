@@ -24,16 +24,6 @@ namespace {
 
 }  // namespace
 
-// Validate device index
-bool validate_device_index(c10::DeviceIndex device_index) {
-  py::gil_scoped_acquire acquire;
-  try {
-    auto device_count = get_method("device_count")().cast<c10::DeviceIndex>();
-    return device_index >= 0 && device_index < device_count;
-  } catch (...) {
-    return false;
-  }
-}
 
 // C++ implementation of empty_mycelya using custom TensorImpl (simplified from
 // NPU pattern)
