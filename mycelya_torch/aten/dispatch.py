@@ -112,9 +112,12 @@ def _create_output_tensors(
             )
             output_tensors.append(tensor)
         else:
-            # Create new tensor with new storage
-            tensor = torch.empty(
-                meta_output.shape, dtype=meta_output.dtype, device=remote_device
+            # Create new tensor with new storage, preserving stride from meta tensor
+            tensor = torch.empty_strided(
+                meta_output.shape,
+                meta_output.stride(),
+                dtype=meta_output.dtype,
+                device=remote_device
             )
             # Record the storage mapping for future outputs that might alias
             original_tensors[meta_storage] = tensor
