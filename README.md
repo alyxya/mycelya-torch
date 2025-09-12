@@ -32,7 +32,7 @@ T4, L4, A10G, A100, L40S, H100, H200, B200
 
 ### Requirements
 - Python 3.8+
-- PyTorch 2.1+
+- PyTorch 2.0+
 - Modal account (free tier available)
 
 **Note**: Modal is currently the only supported GPU cloud provider. Support for other providers (AWS, etc.) will be added in future releases.
@@ -182,7 +182,11 @@ predictions = model(test_data.to(inference_machine.device()))
 
 ## Getting Help
 
-- **Examples**: Check the `examples/` directory for complete working examples
+- **Examples**: Check the `examples/` directory for complete working examples:
+  - `smollm2_comparison.py` - Performance comparison between local and remote execution
+  - `gravity_hf_loader.py` - HuggingFace model loading and inference
+  - `smollm2.py` - Basic SmolLM2 model usage
+  - `modal_smollm2_test.py` - Modal integration testing
 - **Issues**: Report bugs at [GitHub Issues](https://github.com/alyxya/mycelya-torch/issues)
 
 ## Local Development
@@ -196,7 +200,25 @@ cd mycelya-torch
 python setup.py build_ext --inplace
 
 # Run tests
-pytest tests/test_regression.py::TestCriticalRegression -v
+pytest tests/test_regression.py::TestCriticalRegression -v  # Critical tests (<30s)
+pytest tests/test_regression.py -v                         # Fast tests (~2-5min)  
+pytest tests/ -v                                           # Full test suite (~10-30min)
+```
+
+### Mock Client for Testing
+
+For development and testing without cloud resources, use the mock client:
+
+```python
+import mycelya_torch
+
+# Use mock client - runs locally using Modal's .local() execution
+machine = mycelya_torch.RemoteMachine("mock", "A100")
+device = machine.device()
+
+# All operations run locally but through the same API
+x = torch.randn(100, 100, device=device)
+y = x @ x  # Executed locally
 ```
 
 ## License

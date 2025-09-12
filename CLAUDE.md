@@ -7,7 +7,7 @@ A production-ready PyTorch extension that enables transparent remote execution o
 ### Core Architectural Principles
 - **Sequential Tensor ID Architecture**: Atomic counter generates unique storage IDs (1, 2, 3...) with metadata-based FNV-1a hash identification
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns with zero local memory overhead
-- **Three-Layer Architecture**: C++ Backend, Python Coordination, Remote Execution with clean separation of concerns
+- **Four-Layer Architecture**: C++ Backend, Python Coordination, Client Interface, Server Implementation with clean separation of concerns
 - **Multi-GPU Cloud Support**: 10 GPU types supported (T4, L4, A10G, A100, L40S, H100, H200, B200) across cloud providers
 - **Provider Abstraction**: Pluggable client system with Modal (production), Mock (development), extensible for AWS
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
@@ -94,8 +94,15 @@ Modular operation dispatch with clean separation of concerns:
 - `modal/client.py` - Modal cloud provider implementation with multi-GPU support and connection management
 - `mock/client.py` - Local execution provider using Modal's .local() for development and testing
 
-### Remote Execution Infrastructure
-- `mycelya_torch/servers/modal/modal_app.py` - Modal cloud GPU integration with dynamic app creation and lazy/realized storage
+### Server Implementation System (servers/)
+Pluggable server architecture for different cloud providers with clean client-server separation:
+- `__init__.py` - Server system package initialization and provider discovery
+- `modal/modal_app.py` - Modal cloud GPU server implementation with dynamic app creation and lazy/realized storage
+- `modal/__init__.py` - Modal server module exports and API
+
+The servers directory mirrors the clients directory structure, providing a clear separation between:
+- **Client Layer** (`clients/`): Interface, connection management, RPC batching, local coordination
+- **Server Layer** (`servers/`): Remote execution, GPU management, tensor operations, storage handling
 
 ### C++ Backend Integration (csrc/)
 Complete custom PyTorch integration following pytorch-npu patterns:
@@ -311,13 +318,14 @@ print(f"Generated response: {response}")
 - **Custom PyTorch integration** following pytorch-npu patterns with complete TensorImpl/StorageImpl/Allocator
 - **Process-scoped uniqueness** for storage IDs enabling efficient cross-device validation
 
-#### Multi-Provider Client Implementation
-- Follow Modal implementation pattern in `mycelya_torch/servers/modal/` for new providers
-- Implement standardized client interface (base_client.py) with RPC batching support
-- Support multi-GPU configuration with lazy/realized storage architecture
-- Handle connection lifecycle, authentication, and background thread processing
-- Integrate with hierarchical logging system using tensor hash IDs for debugging
-- Provide Mock provider equivalent for local development and testing
+#### Multi-Provider Architecture Implementation
+- **Client-Server Separation**: Clean separation between client interfaces (`clients/`) and server implementations (`servers/`)
+- **Standardized Client Interface**: Follow base_client.py pattern with RPC batching support for all providers
+- **Server Implementation Pattern**: Follow Modal server structure in `mycelya_torch/servers/modal/` for new providers
+- **Multi-GPU Configuration**: Support lazy/realized storage architecture across all server implementations
+- **Connection Management**: Handle lifecycle, authentication, and background thread processing in client layer
+- **Hierarchical Logging**: Integrate with tensor hash IDs for debugging across client-server boundaries
+- **Development Support**: Provide Mock client equivalent using server .local() execution for testing
 
 #### Enterprise-Level Code Quality
 - **Ruff linting/formatting**: Line length 88, comprehensive rule selection (E,W,F,I,B,C4,UP)
