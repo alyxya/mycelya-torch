@@ -31,121 +31,121 @@ def test_tensor_to_method() -> None:
     assert hasattr(x, "to") and callable(x.to)
 
 
-def test_device_creation_and_properties(shared_devices):
+def test_device_creation_and_properties(shared_machines):
     """Test that devices are created properly and have correct properties."""
-    for device_key in TestConstants.DEVICE_KEYS:
-        if device_key in shared_devices:
-            device = shared_devices[device_key]
-            assert device is not None
-            assert hasattr(device, "device")
-            assert callable(device.device)
+    for machine_key in TestConstants.DEVICE_KEYS:
+        if machine_key in shared_machines:
+            machine = shared_machines[machine_key]
+            assert machine is not None
+            assert hasattr(machine, "device")
+            assert callable(machine.device)
 
 
-def test_device_tensor_creation(shared_devices):
+def test_device_tensor_creation(shared_machines):
     """Test creating tensors on remote devices."""
     tensor = DeviceTestUtils.create_remote_tensor(
-        (2, 2), shared_devices, device_key="t4"
+        (2, 2), shared_machines, machine_key="t4"
     )
     assert tensor is not None
     assert tensor.shape == (2, 2)
-    DeviceTestUtils.verify_device_properties(tensor, shared_devices["t4"])
+    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
 
 
-def test_device_tensor_creation_various_shapes(shared_devices):
+def test_device_tensor_creation_various_shapes(shared_machines):
     """Test creating tensors with various shapes on remote devices."""
     test_shapes = TestConstants.SMALL_SHAPES + TestConstants.TENSOR_3D_SHAPES
 
     for shape in test_shapes:
-        tensor = DeviceTestUtils.create_remote_tensor(shape, shared_devices)
+        tensor = DeviceTestUtils.create_remote_tensor(shape, shared_machines)
         assert tensor.shape == shape
-        DeviceTestUtils.verify_device_properties(tensor, shared_devices["t4"])
+        DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
 
 
-def test_device_tensor_with_grad(shared_devices):
+def test_device_tensor_with_grad(shared_machines):
     """Test creating tensors with gradients on remote devices."""
     tensor = DeviceTestUtils.create_remote_tensor(
-        (3, 3), shared_devices, requires_grad=True
+        (3, 3), shared_machines, requires_grad=True
     )
     assert tensor.requires_grad
-    DeviceTestUtils.verify_device_properties(tensor, shared_devices["t4"])
+    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
 
 
-def test_device_tensor_dtype_conversion(shared_devices):
+def test_device_tensor_dtype_conversion(shared_machines):
     """Test creating tensors with different dtypes on remote devices."""
     dtypes_to_test = [torch.float32, torch.float64, torch.int32, torch.int64]
 
     for dtype in dtypes_to_test:
         try:
             tensor = DeviceTestUtils.create_remote_tensor(
-                (2, 2), shared_devices, dtype=dtype
+                (2, 2), shared_machines, dtype=dtype
             )
             assert tensor.dtype == dtype
-            DeviceTestUtils.verify_device_properties(tensor, shared_devices["t4"])
+            DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
         except (RuntimeError, NotImplementedError):
             # Some dtypes might not be supported, which is acceptable
             pass
 
 
-def test_multiple_devices_availability(shared_devices):
+def test_multiple_devices_availability(shared_machines):
     """Test that multiple device types are available if configured."""
     available_devices = []
-    for device_key in TestConstants.DEVICE_KEYS:
-        if device_key in shared_devices:
-            available_devices.append(device_key)
+    for machine_key in TestConstants.DEVICE_KEYS:
+        if machine_key in shared_machines:
+            available_devices.append(machine_key)
 
     # Should have at least one device available for testing
     assert len(available_devices) >= 1
 
 
-def test_device_index_consistency(shared_devices):
+def test_device_index_consistency(shared_machines):
     """Test that device indices are consistent."""
-    for device_key in TestConstants.DEVICE_KEYS:
-        if device_key in shared_devices:
-            device = shared_devices[device_key]
+    for machine_key in TestConstants.DEVICE_KEYS:
+        if machine_key in shared_machines:
+            machine = shared_machines[machine_key]
             tensor = DeviceTestUtils.create_remote_tensor(
-                (2, 2), shared_devices, device_key
+                (2, 2), shared_machines, machine_key
             )
 
             # Device index should be consistent
-            assert tensor.device.index == device.device().index
-            assert isinstance(device.device().index, int)
+            assert tensor.device.index == machine.device().index
+            assert isinstance(machine.device().index, int)
 
 
-def test_device_type_consistency(shared_devices):
+def test_device_type_consistency(shared_machines):
     """Test that all remote devices have consistent type."""
-    for device_key in TestConstants.DEVICE_KEYS:
-        if device_key in shared_devices:
+    for machine_key in TestConstants.DEVICE_KEYS:
+        if machine_key in shared_machines:
             tensor = DeviceTestUtils.create_remote_tensor(
-                (2, 2), shared_devices, device_key
+                (2, 2), shared_machines, machine_key
             )
             assert tensor.device.type == "mycelya"
 
 
-def test_device_registry_state(shared_devices):
+def test_device_registry_state(shared_machines):
     """Test that device registry maintains proper state."""
     initial_count = torch.mycelya.device_count()
 
     # Creating tensors shouldn't change device count
-    DeviceTestUtils.create_remote_tensor((2, 2), shared_devices)
+    DeviceTestUtils.create_remote_tensor((2, 2), shared_machines)
     assert torch.mycelya.device_count() == initial_count
 
     # Multiple tensors on same device shouldn't change count
-    DeviceTestUtils.create_remote_tensor((3, 3), shared_devices)
+    DeviceTestUtils.create_remote_tensor((3, 3), shared_machines)
     assert torch.mycelya.device_count() == initial_count
 
 
-def test_device_cleanup_behavior(shared_devices):
+def test_device_cleanup_behavior(shared_machines):
     """Test that device cleanup works properly."""
     # Create multiple tensors
     tensors = []
     for _i in range(5):
-        tensor = DeviceTestUtils.create_remote_tensor((2, 2), shared_devices)
+        tensor = DeviceTestUtils.create_remote_tensor((2, 2), shared_machines)
         tensors.append(tensor)
 
     # All tensors should be valid
     for tensor in tensors:
         assert tensor is not None
-        DeviceTestUtils.verify_device_properties(tensor, shared_devices["t4"])
+        DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
 
     # Clear references (Python garbage collection will handle cleanup)
     del tensors
@@ -168,19 +168,19 @@ def test_device_error_handling_graceful():
 
 
 @pytest.mark.parametrize("shape", TestConstants.SMALL_SHAPES)
-def test_parametrized_device_tensor_creation(shared_devices, shape):
+def test_parametrized_device_tensor_creation(shared_machines, shape):
     """Test device tensor creation with parametrized shapes."""
-    tensor = DeviceTestUtils.create_remote_tensor(shape, shared_devices)
+    tensor = DeviceTestUtils.create_remote_tensor(shape, shared_machines)
     assert tensor.shape == shape
-    DeviceTestUtils.verify_device_properties(tensor, shared_devices["t4"])
+    DeviceTestUtils.verify_machine_properties(tensor, shared_machines["t4"])
 
 
-@pytest.mark.parametrize("device_key", TestConstants.DEVICE_KEYS)
-def test_parametrized_device_types(shared_devices, device_key):
+@pytest.mark.parametrize("machine_key", TestConstants.DEVICE_KEYS)
+def test_parametrized_device_types(shared_machines, machine_key):
     """Test tensor creation on different device types if available."""
-    if device_key not in shared_devices:
-        pytest.skip(f"Device {device_key} not available in test environment")
+    if machine_key not in shared_machines:
+        pytest.skip(f"Device {machine_key} not available in test environment")
 
-    tensor = DeviceTestUtils.create_remote_tensor((2, 2), shared_devices, device_key)
+    tensor = DeviceTestUtils.create_remote_tensor((2, 2), shared_machines, machine_key)
     assert tensor is not None
-    DeviceTestUtils.verify_device_properties(tensor, shared_devices[device_key])
+    DeviceTestUtils.verify_machine_properties(tensor, shared_machines[machine_key])

@@ -44,12 +44,12 @@ class DeviceTestUtils:
     @staticmethod
     def create_remote_tensor(
         shape: Tuple[int, ...],
-        shared_devices: Dict[str, "RemoteMachine"],
-        device_key: str = "t4",
+        shared_machines: Dict[str, "RemoteMachine"],
+        machine_key: str = "t4",
         requires_grad: bool = False,
         dtype: torch.dtype = torch.float32,
     ) -> torch.Tensor:
-        """Create a tensor on a remote device."""
+        """Create a tensor on a remote machine."""
         # Use appropriate tensor creation method based on dtype
         if dtype.is_floating_point or dtype.is_complex:
             # For floating point and complex types, use randn
@@ -60,17 +60,17 @@ class DeviceTestUtils:
                 0, 10, shape, dtype=dtype, requires_grad=requires_grad
             )
 
-        return x_cpu.to(shared_devices[device_key].device())
+        return x_cpu.to(shared_machines[machine_key].device())
 
     @staticmethod
     def create_test_tensors(
         shapes: List[Tuple[int, ...]],
-        shared_devices: Dict[str, "RemoteMachine"],
-        device_key: str = "t4",
+        shared_machines: Dict[str, "RemoteMachine"],
+        machine_key: str = "t4",
     ) -> List[torch.Tensor]:
-        """Create multiple test tensors on the same remote device."""
+        """Create multiple test tensors on the same remote machine."""
         return [
-            DeviceTestUtils.create_remote_tensor(shape, shared_devices, device_key)
+            DeviceTestUtils.create_remote_tensor(shape, shared_machines, machine_key)
             for shape in shapes
         ]
 
@@ -85,14 +85,14 @@ class DeviceTestUtils:
     @staticmethod
     def create_cpu_and_remote_pair(
         shape: Tuple[int, ...],
-        shared_devices: Dict[str, "RemoteMachine"],
-        device_key: str = "t4",
+        shared_machines: Dict[str, "RemoteMachine"],
+        machine_key: str = "t4",
         dtype: torch.dtype = torch.float32,
         requires_grad: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create a CPU tensor and its remote counterpart."""
         cpu_tensor = torch.randn(shape, dtype=dtype, requires_grad=requires_grad)
-        remote_tensor = cpu_tensor.to(shared_devices[device_key].device())
+        remote_tensor = cpu_tensor.to(shared_machines[machine_key].device())
         return cpu_tensor, remote_tensor
 
 
@@ -202,8 +202,8 @@ class TestDataGenerator:
     def generate_classification_data(
         batch_size: int = TestConstants.DEFAULT_BATCH_SIZE,
         num_classes: int = TestConstants.DEFAULT_NUM_CLASSES,
-        shared_devices: Optional[Dict[str, "RemoteMachine"]] = None,
-        device_key: str = "t4",
+        shared_machines: Optional[Dict[str, "RemoteMachine"]] = None,
+        machine_key: str = "t4",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Generate data for classification tests."""
         # Create input data
@@ -213,9 +213,9 @@ class TestDataGenerator:
         targets = torch.randint(0, num_classes, (batch_size,), dtype=torch.long)
 
         # Move to remote device if requested
-        if shared_devices is not None:
-            inputs = inputs.to(shared_devices[device_key].device())
-            targets = targets.to(shared_devices[device_key].device())
+        if shared_machines is not None:
+            inputs = inputs.to(shared_machines[machine_key].device())
+            targets = targets.to(shared_machines[machine_key].device())
 
         return inputs, targets
 
@@ -243,12 +243,12 @@ class TestDataGenerator:
 
     @staticmethod
     def create_gradient_test_setup(
-        shape: Tuple[int, ...], shared_devices: Dict[str, Any], device_key: str = "t4"
+        shape: Tuple[int, ...], shared_machines: Dict[str, Any], machine_key: str = "t4"
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create a standard setup for gradient testing."""
         # Create a leaf tensor that requires gradients
         x = torch.randn(shape, requires_grad=True)
-        x_remote = x.to(shared_devices[device_key].device())
+        x_remote = x.to(shared_machines[machine_key].device())
 
         return x, x_remote
 
@@ -298,12 +298,12 @@ class IntegrationTestUtils:
     def create_simple_linear_model(
         input_size: int,
         output_size: int,
-        shared_devices: Dict[str, "RemoteMachine"],
-        device_key: str = "t4",
+        shared_machines: Dict[str, "RemoteMachine"],
+        machine_key: str = "t4",
     ) -> torch.nn.Module:
         """Create a simple linear model on a remote device."""
         model = torch.nn.Linear(input_size, output_size)
-        return model.to(shared_devices[device_key].device())
+        return model.to(shared_machines[machine_key].device())
 
     @staticmethod
     def verify_model_forward_backward(

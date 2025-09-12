@@ -34,12 +34,12 @@ def provider(request):
 
 
 @pytest.fixture(scope="session")
-def shared_devices(provider):
+def shared_machines(provider):
     """
-    Session-scoped fixture providing a dictionary of shared devices.
+    Session-scoped fixture providing a dictionary of shared machines.
 
     Automatically parameterized to test with both modal and mock providers.
-    Returns a dict with common device configurations that tests can use.
+    Returns a dict with common machine configurations that tests can use.
     """
     machines = {}
 
@@ -68,6 +68,7 @@ def shared_devices(provider):
             log.info(f"Stopped machine: {machine.machine_id} (provider: {provider})")
         except Exception as e:
             log.warning(f"Failed to stop machine {machine.machine_id}: {e}")
+
 
 
 # Test configuration hooks

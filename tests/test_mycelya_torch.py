@@ -29,7 +29,7 @@ import torch
 # =============================================================================
 
 
-def test_basic_tensor_creation_debug(shared_devices):
+def test_basic_tensor_creation_debug(shared_machines):
     """Debug function: Basic tensor creation with detailed output."""
     print("\n=== Debug: Basic Tensor Creation ===")
 
@@ -38,7 +38,7 @@ def test_basic_tensor_creation_debug(shared_devices):
     print(f"Created CPU tensor: {x.shape}, {x.dtype}, device: {x.device}")
 
     # Transfer to remote
-    x_remote = x.to(shared_devices["t4"].device())
+    x_remote = x.to(shared_machines["t4"].device())
     print(
         f"Remote tensor: {x_remote.shape}, {x_remote.dtype}, device: {x_remote.device}"
     )
@@ -57,7 +57,7 @@ def test_basic_tensor_creation_debug(shared_devices):
     print("✓ Numerical consistency verified")
 
 
-def test_long_dtype_debug(shared_devices):
+def test_long_dtype_debug(shared_machines):
     """Debug function: Long dtype handling."""
     print("\n=== Debug: Long Dtype ===")
 
@@ -67,7 +67,7 @@ def test_long_dtype_debug(shared_devices):
         print(f"CPU long tensor: {targets.shape}, {targets.dtype}")
 
         # Transfer to remote
-        targets_remote = targets.to(shared_devices["t4"].device())
+        targets_remote = targets.to(shared_machines["t4"].device())
         print(f"Remote long tensor: {targets_remote.shape}, {targets_remote.dtype}")
 
         # Transfer back
@@ -82,7 +82,7 @@ def test_long_dtype_debug(shared_devices):
         print(f"Long dtype not supported: {e}")
 
 
-def test_cross_entropy_dtype_debug(shared_devices):
+def test_cross_entropy_dtype_debug(shared_machines):
     """Debug function: Cross entropy with dtype analysis."""
     print("\n=== Debug: Cross Entropy Dtypes ===")
 
@@ -97,8 +97,8 @@ def test_cross_entropy_dtype_debug(shared_devices):
     print(f"Targets: {targets.shape}, {targets.dtype}")
 
     # Transfer to remote
-    inputs_remote = inputs.to(shared_devices["t4"].device())
-    targets_remote = targets.to(shared_devices["t4"].device())
+    inputs_remote = inputs.to(shared_machines["t4"].device())
+    targets_remote = targets.to(shared_machines["t4"].device())
 
     print(f"Remote inputs: {inputs_remote.shape}, {inputs_remote.dtype}")
     print(f"Remote targets: {targets_remote.shape}, {targets_remote.dtype}")
@@ -117,7 +117,7 @@ def test_cross_entropy_dtype_debug(shared_devices):
         print(f"Cross entropy failed: {e}")
 
 
-def test_mse_loss_shape_debug(shared_devices):
+def test_mse_loss_shape_debug(shared_machines):
     """Debug function: MSE loss shape analysis."""
     print("\n=== Debug: MSE Loss Shapes ===")
 
@@ -133,8 +133,8 @@ def test_mse_loss_shape_debug(shared_devices):
         print(f"Inputs: {inputs.shape}, Targets: {targets.shape}")
 
         # Transfer to remote
-        inputs_remote = inputs.to(shared_devices["t4"].device())
-        targets_remote = targets.to(shared_devices["t4"].device())
+        inputs_remote = inputs.to(shared_machines["t4"].device())
+        targets_remote = targets.to(shared_machines["t4"].device())
 
         try:
             # Compute MSE loss
@@ -150,11 +150,11 @@ def test_mse_loss_shape_debug(shared_devices):
             print(f"MSE loss failed for shape {shape}: {e}")
 
 
-def test_direct_tensor_creation(shared_devices):
+def test_direct_tensor_creation(shared_machines):
     """Debug function: Direct tensor creation methods."""
     print("\n=== Debug: Direct Tensor Creation ===")
 
-    device = shared_devices["t4"].device()
+    device = shared_machines["t4"].device()
     print(f"Target device: {device}")
 
     # Test various creation methods
@@ -176,11 +176,11 @@ def test_direct_tensor_creation(shared_devices):
             print(f"{name}: Failed - {e}")
 
 
-def test_various_tensor_creation_functions(shared_devices):
+def test_various_tensor_creation_functions(shared_machines):
     """Debug function: Test various tensor creation functions."""
     print("\n=== Debug: Tensor Creation Functions ===")
 
-    device = shared_devices["t4"].device()
+    device = shared_machines["t4"].device()
 
     # Test tensor creation functions
     functions = [
@@ -205,7 +205,7 @@ def test_various_tensor_creation_functions(shared_devices):
 # =============================================================================
 
 
-def test_gradient_propagation_cpu_to_remote(shared_devices):
+def test_gradient_propagation_cpu_to_remote(shared_machines):
     """Integration test: Gradient propagation from CPU through remote operations."""
     print("\n=== Integration: CPU->Remote Gradient Flow ===")
 
@@ -214,7 +214,7 @@ def test_gradient_propagation_cpu_to_remote(shared_devices):
     print(f"Starting tensor: {x_cpu.shape}, requires_grad: {x_cpu.requires_grad}")
 
     # Transfer to remote
-    x_remote = x_cpu.to(shared_devices["t4"].device())
+    x_remote = x_cpu.to(shared_machines["t4"].device())
     print(f"Remote tensor requires_grad: {x_remote.requires_grad}")
 
     # Perform operations on remote
@@ -237,13 +237,13 @@ def test_gradient_propagation_cpu_to_remote(shared_devices):
     print("✓ Gradient propagation verified")
 
 
-def test_gradient_propagation_remote_to_cpu(shared_devices):
+def test_gradient_propagation_remote_to_cpu(shared_machines):
     """Integration test: Operations spanning remote and CPU with gradients."""
     print("\n=== Integration: Remote->CPU Gradient Flow ===")
 
     # Create tensors
     x_cpu = torch.randn(2, 2, requires_grad=True)
-    x_remote = x_cpu.to(shared_devices["t4"].device())
+    x_remote = x_cpu.to(shared_machines["t4"].device())
 
     # Remote operations
     y_remote = x_remote**2
@@ -267,7 +267,7 @@ def test_gradient_propagation_remote_to_cpu(shared_devices):
     print("✓ Remote->CPU gradient flow verified")
 
 
-def test_mixed_device_gradient_computation(shared_devices):
+def test_mixed_device_gradient_computation(shared_machines):
     """Integration test: Complex mixed device gradient computation."""
     print("\n=== Integration: Mixed Device Gradients ===")
 
@@ -276,8 +276,8 @@ def test_mixed_device_gradient_computation(shared_devices):
     b_cpu = torch.randn(2, 2, requires_grad=True)
 
     # Transfer to remote
-    a_remote = a_cpu.to(shared_devices["t4"].device())
-    b_remote = b_cpu.to(shared_devices["t4"].device())
+    a_remote = a_cpu.to(shared_machines["t4"].device())
+    b_remote = b_cpu.to(shared_machines["t4"].device())
 
     # Remote operations
     c_remote = a_remote + b_remote
@@ -316,14 +316,14 @@ def test_mixed_device_gradient_computation(shared_devices):
     print("✓ Mixed device gradient computation verified")
 
 
-def test_gradient_accumulation_across_transfers(shared_devices):
+def test_gradient_accumulation_across_transfers(shared_machines):
     """Integration test: Gradient accumulation with device transfers."""
     print("\n=== Integration: Gradient Accumulation ===")
 
     x_cpu = torch.randn(2, 2, requires_grad=True)
 
     # First operation and backward
-    x_remote1 = x_cpu.to(shared_devices["t4"].device())
+    x_remote1 = x_cpu.to(shared_machines["t4"].device())
     y1 = (x_remote1 * 2).sum()
     y1.backward(retain_graph=True)
 
@@ -331,7 +331,7 @@ def test_gradient_accumulation_across_transfers(shared_devices):
     print(f"First gradient sum: {first_grad.sum().item():.4f}")
 
     # Second operation and backward (should accumulate)
-    x_remote2 = x_cpu.to(shared_devices["t4"].device())
+    x_remote2 = x_cpu.to(shared_machines["t4"].device())
     y2 = (x_remote2 + 1).sum()
     y2.backward()
 
@@ -343,13 +343,13 @@ def test_gradient_accumulation_across_transfers(shared_devices):
     print("✓ Gradient accumulation across transfers verified")
 
 
-def test_view_operations_with_gradients(shared_devices):
+def test_view_operations_with_gradients(shared_machines):
     """Integration test: View operations preserving gradient flow."""
     print("\n=== Integration: View Operations + Gradients ===")
 
     # Create tensor with specific shape for view operations
     x_cpu = torch.randn(2, 3, 4, requires_grad=True)
-    x_remote = x_cpu.to(shared_devices["t4"].device())
+    x_remote = x_cpu.to(shared_machines["t4"].device())
 
     # Chain of view operations
     y = x_remote.view(6, 4)  # Reshape
@@ -377,7 +377,7 @@ def test_view_operations_with_gradients(shared_devices):
     print("✓ View operations preserve gradients correctly")
 
 
-def test_custom_loss_function_gradients(shared_devices):
+def test_custom_loss_function_gradients(shared_machines):
     """Integration test: Custom loss function with device transfers."""
     print("\n=== Integration: Custom Loss Function ===")
 
@@ -386,7 +386,7 @@ def test_custom_loss_function_gradients(shared_devices):
     target = torch.tensor([0, 1, 2, 1])  # Classification targets
 
     # Transfer prediction to remote
-    pred_remote = pred_cpu.to(shared_devices["t4"].device())
+    pred_remote = pred_cpu.to(shared_machines["t4"].device())
 
     # Apply softmax on remote
     prob_remote = torch.softmax(pred_remote, dim=1)
@@ -425,7 +425,7 @@ def test_custom_loss_function_gradients(shared_devices):
 # =============================================================================
 
 
-def test_neural_network_training_simulation(shared_devices):
+def test_neural_network_training_simulation(shared_machines):
     """Integration test: Simulate a simple neural network training step."""
     print("\n=== Integration: Neural Network Training ===")
 
@@ -449,12 +449,12 @@ def test_neural_network_training_simulation(shared_devices):
     print(f"W1: {W1.shape}, W2: {W2.shape}")
 
     # Transfer to remote
-    inputs_remote = inputs.to(shared_devices["t4"].device())
-    targets_remote = targets.to(shared_devices["t4"].device())
-    W1_remote = W1.to(shared_devices["t4"].device())
-    b1_remote = b1.to(shared_devices["t4"].device())
-    W2_remote = W2.to(shared_devices["t4"].device())
-    b2_remote = b2.to(shared_devices["t4"].device())
+    inputs_remote = inputs.to(shared_machines["t4"].device())
+    targets_remote = targets.to(shared_machines["t4"].device())
+    W1_remote = W1.to(shared_machines["t4"].device())
+    b1_remote = b1.to(shared_machines["t4"].device())
+    W2_remote = W2.to(shared_machines["t4"].device())
+    b2_remote = b2.to(shared_machines["t4"].device())
 
     # Forward pass on remote
     h1 = torch.mm(inputs_remote, W1_remote) + b1_remote

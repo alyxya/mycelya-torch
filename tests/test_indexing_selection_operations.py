@@ -11,11 +11,11 @@ class TestBasicIndexing:
 
     @pytest.mark.parametrize("shape", [(10,), (5, 5), (3, 4, 5)])
     @pytest.mark.fast
-    def test_basic_slice_indexing(self, shared_devices, shape):
-        device = shared_devices["t4"]
+    def test_basic_slice_indexing(self, shared_machines, shape):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test various slice patterns
         slice_patterns = [
@@ -41,11 +41,11 @@ class TestBasicIndexing:
             )
 
     @pytest.mark.fast
-    def test_integer_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_integer_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(5, 5)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test single integer indexing
         for i in range(5):
@@ -57,11 +57,11 @@ class TestBasicIndexing:
             )
 
     @pytest.mark.fast
-    def test_multidimensional_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_multidimensional_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(3, 4, 5)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test various indexing patterns
         indexing_patterns = [
@@ -83,15 +83,15 @@ class TestAdvancedIndexing:
     """Test advanced indexing with tensor indices."""
 
     @pytest.mark.fast
-    def test_tensor_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_tensor_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(5, 5)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create index tensors
         cpu_indices = torch.tensor([0, 2, 4])
-        remote_indices = cpu_indices.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
 
         # Test tensor indexing
         cpu_result = cpu_tensor[cpu_indices]
@@ -102,11 +102,11 @@ class TestAdvancedIndexing:
         )
 
     @pytest.mark.fast
-    def test_boolean_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_boolean_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create boolean mask
         cpu_mask = cpu_tensor > 0
@@ -121,15 +121,15 @@ class TestAdvancedIndexing:
         )
 
     @pytest.mark.fast
-    def test_multidimensional_tensor_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_multidimensional_tensor_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(3, 4, 5)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create 2D index tensor
         cpu_indices = torch.tensor([[0, 1], [2, 0]])
-        remote_indices = cpu_indices.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
 
         # Test multidimensional tensor indexing
         cpu_result = cpu_tensor[cpu_indices]
@@ -145,11 +145,11 @@ class TestSelectionOperations:
 
     @pytest.mark.parametrize("dim", [0, 1, -1])
     @pytest.mark.fast
-    def test_index_select(self, shared_devices, dim):
-        device = shared_devices["t4"]
+    def test_index_select(self, shared_machines, dim):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(4, 5, 6)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Skip invalid dimensions
         if abs(dim) >= len(cpu_tensor.shape):
@@ -158,7 +158,7 @@ class TestSelectionOperations:
         # Create index tensor
         size = cpu_tensor.shape[dim]
         cpu_indices = torch.randint(0, size, (3,))
-        remote_indices = cpu_indices.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
 
         cpu_result = torch.index_select(cpu_tensor, dim, cpu_indices)
         remote_result = torch.index_select(remote_tensor, dim, remote_indices)
@@ -169,11 +169,11 @@ class TestSelectionOperations:
 
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
-    def test_gather_operations(self, shared_devices, dim):
-        device = shared_devices["t4"]
+    def test_gather_operations(self, shared_machines, dim):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(3, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create index tensor for gather
         if dim == 0:
@@ -181,7 +181,7 @@ class TestSelectionOperations:
         else:
             cpu_indices = torch.randint(0, 4, (3, 2))
 
-        remote_indices = cpu_indices.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
 
         cpu_result = torch.gather(cpu_tensor, dim, cpu_indices)
         remote_result = torch.gather(remote_tensor, dim, remote_indices)
@@ -192,13 +192,13 @@ class TestSelectionOperations:
 
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
-    def test_scatter_operations(self, shared_devices, dim):
-        device = shared_devices["t4"]
+    def test_scatter_operations(self, shared_machines, dim):
+        machine = shared_machines["t4"]
 
         # Create separate base tensors for CPU and remote operations
         # This avoids in-place modification affecting both tests
         cpu_tensor = torch.zeros(3, 4)
-        remote_tensor = torch.zeros(3, 4).to(device.device())
+        remote_tensor = torch.zeros(3, 4).to(machine.device())
 
         # Create index tensor and source tensor for scatter
         # Use deterministic indices to avoid undefined behavior with duplicates
@@ -212,8 +212,8 @@ class TestSelectionOperations:
             cpu_src = torch.randn(3, 2)
 
         # Transfer the same data to remote device
-        remote_indices = cpu_indices.to(device.device())
-        remote_src = cpu_src.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
+        remote_src = cpu_src.to(machine.device())
 
         cpu_result = cpu_tensor.scatter(dim, cpu_indices, cpu_src)
         remote_result = remote_tensor.scatter(dim, remote_indices, remote_src)
@@ -223,15 +223,15 @@ class TestSelectionOperations:
         )
 
     @pytest.mark.fast
-    def test_take_operations(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_take_operations(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(3, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create flat indices for take operation
         cpu_indices = torch.tensor([0, 5, 10, 11])
-        remote_indices = cpu_indices.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
 
         cpu_result = torch.take(cpu_tensor, cpu_indices)
         remote_result = torch.take(remote_tensor, remote_indices)
@@ -242,11 +242,11 @@ class TestSelectionOperations:
 
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
-    def test_take_along_dim(self, shared_devices, dim):
-        device = shared_devices["t4"]
+    def test_take_along_dim(self, shared_machines, dim):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(4, 5)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create indices for take_along_dim
         if dim == 0:
@@ -254,7 +254,7 @@ class TestSelectionOperations:
         else:
             cpu_indices = torch.randint(0, 5, (4, 3))
 
-        remote_indices = cpu_indices.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
 
         cpu_result = torch.take_along_dim(cpu_tensor, cpu_indices, dim)
         remote_result = torch.take_along_dim(remote_tensor, remote_indices, dim)
@@ -268,11 +268,11 @@ class TestMaskedOperations:
     """Test masked selection and filling operations."""
 
     @pytest.mark.fast
-    def test_masked_select(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_masked_select(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create mask
         cpu_mask = cpu_tensor > 0
@@ -287,11 +287,11 @@ class TestMaskedOperations:
 
     @pytest.mark.parametrize("fill_value", [0.0, 1.5, -2.0])
     @pytest.mark.fast
-    def test_masked_fill(self, shared_devices, fill_value):
-        device = shared_devices["t4"]
+    def test_masked_fill(self, shared_machines, fill_value):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create mask
         cpu_mask = cpu_tensor > 0
@@ -305,11 +305,11 @@ class TestMaskedOperations:
         )
 
     @pytest.mark.fast
-    def test_masked_scatter(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_masked_scatter(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Create mask and source tensor
         cpu_mask = cpu_tensor > 0
@@ -317,7 +317,7 @@ class TestMaskedOperations:
 
         num_true = cpu_mask.sum().item()
         cpu_source = torch.randn(num_true)
-        remote_source = cpu_source.to(device.device())
+        remote_source = cpu_source.to(machine.device())
 
         cpu_result = cpu_tensor.masked_scatter(cpu_mask, cpu_source)
         remote_result = remote_tensor.masked_scatter(remote_mask, remote_source)
@@ -331,16 +331,16 @@ class TestConditionalOperations:
     """Test conditional selection operations."""
 
     @pytest.mark.fast
-    def test_where_three_args(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_where_three_args(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_condition = torch.rand(4, 4) > 0.5
         cpu_x = torch.randn(4, 4)
         cpu_y = torch.randn(4, 4)
 
-        remote_condition = cpu_condition.to(device.device())
-        remote_x = cpu_x.to(device.device())
-        remote_y = cpu_y.to(device.device())
+        remote_condition = cpu_condition.to(machine.device())
+        remote_x = cpu_x.to(machine.device())
+        remote_y = cpu_y.to(machine.device())
 
         cpu_result = torch.where(cpu_condition, cpu_x, cpu_y)
         remote_result = torch.where(remote_condition, remote_x, remote_y)
@@ -350,11 +350,11 @@ class TestConditionalOperations:
         )
 
     @pytest.mark.fast
-    def test_where_one_arg(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_where_one_arg(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         cpu_condition = cpu_tensor > 0
         remote_condition = remote_tensor > 0
@@ -368,16 +368,16 @@ class TestConditionalOperations:
             assert torch.equal(remote_idx.cpu(), cpu_idx)
 
     @pytest.mark.fast
-    def test_where_broadcasting(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_where_broadcasting(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_condition = torch.rand(4, 1) > 0.5
         cpu_x = torch.randn(1, 5)
         cpu_y = torch.randn(4, 5)
 
-        remote_condition = cpu_condition.to(device.device())
-        remote_x = cpu_x.to(device.device())
-        remote_y = cpu_y.to(device.device())
+        remote_condition = cpu_condition.to(machine.device())
+        remote_x = cpu_x.to(machine.device())
+        remote_y = cpu_y.to(machine.device())
 
         cpu_result = torch.where(cpu_condition, cpu_x, cpu_y)
         remote_result = torch.where(remote_condition, remote_x, remote_y)
@@ -387,11 +387,11 @@ class TestConditionalOperations:
         )
 
     @pytest.mark.fast
-    def test_where_scalar_values(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_where_scalar_values(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_condition = torch.rand(4, 4) > 0.5
-        remote_condition = cpu_condition.to(device.device())
+        remote_condition = cpu_condition.to(machine.device())
 
         # Test with scalar values
         cpu_result = torch.where(cpu_condition, 1.0, 0.0)
@@ -406,13 +406,13 @@ class TestIndexingWithGradients:
     """Test indexing operations maintain gradients properly."""
 
     @pytest.mark.fast
-    def test_basic_indexing_with_gradients(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_basic_indexing_with_gradients(self, shared_machines):
+        machine = shared_machines["t4"]
 
         # Create independent leaf tensors for proper gradient comparison
         tensor_data = torch.randn(5, 5)
         cpu_tensor = tensor_data.clone().requires_grad_(True)
-        remote_tensor = tensor_data.to(device.device()).requires_grad_(True)
+        remote_tensor = tensor_data.to(machine.device()).requires_grad_(True)
 
         # Test slicing with gradients
         cpu_result = cpu_tensor[1:4, 2:5]
@@ -432,16 +432,16 @@ class TestIndexingWithGradients:
         )
 
     @pytest.mark.fast
-    def test_index_select_with_gradients(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_index_select_with_gradients(self, shared_machines):
+        machine = shared_machines["t4"]
 
         # Create independent leaf tensors for proper gradient comparison
         tensor_data = torch.randn(5, 4)
         cpu_tensor = tensor_data.clone().requires_grad_(True)
-        remote_tensor = tensor_data.to(device.device()).requires_grad_(True)
+        remote_tensor = tensor_data.to(machine.device()).requires_grad_(True)
 
         cpu_indices = torch.tensor([0, 2, 4])
-        remote_indices = cpu_indices.to(device.device())
+        remote_indices = cpu_indices.to(machine.device())
 
         cpu_result = torch.index_select(cpu_tensor, 0, cpu_indices)
         remote_result = torch.index_select(remote_tensor, 0, remote_indices)
@@ -460,8 +460,8 @@ class TestIndexingWithGradients:
         )
 
     @pytest.mark.fast
-    def test_where_with_gradients(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_where_with_gradients(self, shared_machines):
+        machine = shared_machines["t4"]
 
         # Create independent leaf tensors for proper gradient comparison
         x_data = torch.randn(4, 4)
@@ -471,9 +471,9 @@ class TestIndexingWithGradients:
         cpu_x = x_data.clone().requires_grad_(True)
         cpu_y = y_data.clone().requires_grad_(True)
 
-        remote_x = x_data.to(device.device()).requires_grad_(True)
-        remote_y = y_data.to(device.device()).requires_grad_(True)
-        remote_condition = cpu_condition.to(device.device())
+        remote_x = x_data.to(machine.device()).requires_grad_(True)
+        remote_y = y_data.to(machine.device()).requires_grad_(True)
+        remote_condition = cpu_condition.to(machine.device())
 
         cpu_result = torch.where(cpu_condition, cpu_x, cpu_y)
         remote_result = torch.where(remote_condition, remote_x, remote_y)
@@ -499,11 +499,11 @@ class TestIndexingEdgeCases:
     """Test edge cases for indexing operations."""
 
     @pytest.mark.fast
-    def test_empty_tensor_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_empty_tensor_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_empty = torch.empty(0, 5)
-        remote_empty = cpu_empty.to(device.device())
+        remote_empty = cpu_empty.to(machine.device())
 
         # Test indexing empty tensor
         cpu_result = cpu_empty[:, 1:3]
@@ -513,11 +513,11 @@ class TestIndexingEdgeCases:
         assert cpu_result.numel() == 0
 
     @pytest.mark.fast
-    def test_negative_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_negative_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(5, 5)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test negative indexing
         cpu_result = cpu_tensor[-1, -2]
@@ -528,11 +528,11 @@ class TestIndexingEdgeCases:
         )
 
     @pytest.mark.fast
-    def test_step_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_step_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(10, 10)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test step indexing
         cpu_result = cpu_tensor[::2, 1::3]
@@ -543,11 +543,11 @@ class TestIndexingEdgeCases:
         )
 
     @pytest.mark.fast
-    def test_single_element_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_single_element_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(3, 3)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test single element indexing
         cpu_result = cpu_tensor[1, 2]
@@ -558,11 +558,11 @@ class TestIndexingEdgeCases:
         )
 
     @pytest.mark.fast
-    def test_ellipsis_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_ellipsis_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(2, 3, 4, 5)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test ellipsis indexing
         indexing_patterns = [
@@ -580,11 +580,11 @@ class TestIndexingEdgeCases:
             )
 
     @pytest.mark.fast
-    def test_none_indexing(self, shared_devices):
-        device = shared_devices["t4"]
+    def test_none_indexing(self, shared_machines):
+        machine = shared_machines["t4"]
 
         cpu_tensor = torch.randn(3, 4)
-        remote_tensor = cpu_tensor.to(device.device())
+        remote_tensor = cpu_tensor.to(machine.device())
 
         # Test None indexing (adds dimension)
         cpu_result = cpu_tensor[None, :, :]
