@@ -101,8 +101,8 @@ def _create_output_tensors(
             # This output uses storage from an existing tensor
             original_tensor = original_tensors[meta_storage]
 
-            # Resize if the original tensor is uninitialized (has 0 elements)
-            if original_tensor.numel() == 0:
+            # Resize if the original tensor is uninitialized (has 0 elements) and output has data
+            if original_tensor.numel() == 0 and meta_output.numel() > 0:
                 original_tensor.resize_(meta_output.shape)
 
             tensor = original_tensor.as_strided(
