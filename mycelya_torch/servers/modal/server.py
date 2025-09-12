@@ -15,8 +15,6 @@ Part of: mycelya_torch PyTorch extension
 
 from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
 
-import modal
-
 
 def create_modal_app_for_gpu(
     gpu_type: str,
@@ -24,7 +22,7 @@ def create_modal_app_for_gpu(
     packages: List[str],
     python_version: str,
     is_local: bool = False,
-) -> Tuple[modal.App, Any]:
+) -> Tuple[Any, Any]:
     """
     Create a Modal app and class for a specific GPU type.
 
@@ -38,6 +36,7 @@ def create_modal_app_for_gpu(
     Returns:
         Tuple of (modal_app, server_class) for the specified GPU type
     """
+    import modal
 
     class BatchCall(TypedDict):
         """Structure for a single batched RPC call."""
