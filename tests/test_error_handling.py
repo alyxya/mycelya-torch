@@ -12,8 +12,9 @@ import warnings
 
 import pytest
 import torch
+from test_utilities import ErrorTestUtils
+
 import mycelya_torch
-from test_utilities import DeviceTestUtils, ErrorTestUtils, TestConstants
 
 
 @pytest.fixture(scope="function")

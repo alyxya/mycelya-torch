@@ -39,18 +39,19 @@ def create_modal_app_for_gpu(
     app = modal.App("mycelya-torch")
 
     # Create image with synchronized packages and Python version
-    image = modal.Image.debian_slim(python_version=python_version).uv_pip_install(*packages)
+    image = modal.Image.debian_slim(python_version=python_version).uv_pip_install(
+        *packages
+    )
 
     # Create HuggingFace cache volume and mount at cache directory
-    hf_cache_volume = modal.Volume.from_name("mycelya-torch-huggingface-cache", create_if_missing=True)
-    
+    hf_cache_volume = modal.Volume.from_name(
+        "mycelya-torch-huggingface-cache", create_if_missing=True
+    )
+
     # Create data volume and mount at data directory
     data_volume = modal.Volume.from_name("mycelya-torch-data", create_if_missing=True)
-    
-    volumes = {
-        "/huggingface-cache": hf_cache_volume,
-        "/data": data_volume
-    }
+
+    volumes = {"/huggingface-cache": hf_cache_volume, "/data": data_volume}
 
     @app.cls(
         image=image,
@@ -95,6 +96,7 @@ def create_modal_app_for_gpu(
         def setup(self):
             """Initialize the server when container starts."""
             import os
+
             import torch  # noqa: F401  # Preload torch import for better performance
 
             # Change to data directory and set HF cache if available (only on Modal, not in mock/local mode)

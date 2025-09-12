@@ -8,9 +8,9 @@ This module provides functionality to detect local package versions and Python v
 to ensure Modal containers use the same versions as the local development environment.
 """
 
-import sys
-from typing import Dict, List, Optional
 import importlib.metadata
+import sys
+from typing import List, Optional
 
 
 def get_python_version() -> str:
