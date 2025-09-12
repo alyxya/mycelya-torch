@@ -35,7 +35,4 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
                                  c10::optional<at::Device> device,
                                  c10::optional<bool> pin_memory);
 
-// Utility functions for storage ID management
-
-
 }  // namespace mycelya

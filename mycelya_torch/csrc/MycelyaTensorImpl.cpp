@@ -30,7 +30,7 @@ void MycelyaTensorImpl::shallow_copy_from(
   // This is similar to how pytorch-npu handles shallow copy
   set_storage_and_dtype(impl->storage(), impl->dtype());
   set_sizes_and_strides(impl->sizes(), impl->strides(), impl->storage_offset());
-  
+
   refresh_numel();
   refresh_contiguous();
 }
@@ -44,7 +44,7 @@ c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
   // Copy metadata from this tensor to the new tensor
   impl->set_storage_and_dtype(storage(), dtype());
   impl->set_sizes_and_strides(sizes(), strides(), storage_offset());
-  
+
   if (!impl->is_inference()) {
     impl->set_version_counter(version_counter);
   }
@@ -65,7 +65,7 @@ c10::intrusive_ptr<c10::TensorImpl> MycelyaTensorImpl::shallow_copy_and_detach(
   // Copy metadata from this tensor to the new tensor
   impl->set_storage_and_dtype(storage(), dtype());
   impl->set_sizes_and_strides(sizes(), strides(), storage_offset());
-  
+
   if (!impl->is_inference()) {
     impl->set_version_counter(std::move(version_counter));
   }

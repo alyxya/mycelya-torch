@@ -34,16 +34,15 @@ static PyObject *_getDefaultGenerator(PyObject *self, PyObject *arg) {
   END_HANDLE_TH_ERRORS
 }
 
-
 // Get the metadata hash for a mycelya tensor
 static PyObject *_get_metadata_hash(PyObject *self, PyObject *arg) {
   HANDLE_TH_ERRORS
   TORCH_CHECK(THPVariable_Check(arg),
               "_get_metadata_hash expects a tensor, but got ",
               THPUtils_typename(arg));
-  
+
   auto tensor = THPVariable_Unpack(arg);
-  
+
   // Check if tensor is using our custom TensorImpl
   auto* impl_ptr = dynamic_cast<mycelya::MycelyaTensorImpl*>(tensor.unsafeGetTensorImpl());
   if (impl_ptr) {
@@ -52,10 +51,9 @@ static PyObject *_get_metadata_hash(PyObject *self, PyObject *arg) {
   } else {
     TORCH_CHECK(false, "Tensor is not a mycelya tensor with custom TensorImpl");
   }
-  
+
   END_HANDLE_TH_ERRORS
 }
-
 
 static PyMethodDef methods[] = {
     {"_init", _initExtension, METH_NOARGS, nullptr},

@@ -18,12 +18,6 @@
 #include "MycelyaTensorImpl.h"
 
 namespace mycelya {
-namespace {
-
-// Always use custom TensorImpl - this is now the default and only option
-
-}  // namespace
-
 
 // C++ implementation of empty_mycelya using custom TensorImpl (simplified from
 // NPU pattern)
@@ -173,21 +167,21 @@ at::Tensor &set_source_tensor_mycelya(at::Tensor &self, const at::Tensor &source
               "set_source_tensor_mycelya expects a mycelya source tensor");
 
   // Delegate to the general set_ function with source tensor's metadata
-  return set_mycelya(self, source.storage(), source.storage_offset(), 
+  return set_mycelya(self, source.storage(), source.storage_offset(),
                      source.sizes(), source.strides());
 }
 
-// C++ implementation of set_.source_Storage for storage aliasing operations  
+// C++ implementation of set_.source_Storage for storage aliasing operations
 at::Tensor &set_source_storage_mycelya(at::Tensor &self, at::Storage source) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "set_source_storage_mycelya expects a mycelya tensor");
 
   // Calculate size based on storage bytes and element size
   size_t element_size = self.dtype().itemsize();
-  TORCH_CHECK(source.nbytes() % element_size == 0, 
+  TORCH_CHECK(source.nbytes() % element_size == 0,
               "Storage size (", source.nbytes(), ") not divisible by element size (", element_size, ")");
   int64_t numel = source.nbytes() / element_size;
-  
+
   // Delegate to the general set_ function with 1D shape and contiguous stride
   return set_mycelya(self, source, 0, {numel}, {1});
 }
@@ -228,7 +222,7 @@ at::Tensor alias_mycelya(const at::Tensor &self) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "alias_mycelya expects a mycelya tensor");
 
-  return as_strided_mycelya(self, self.sizes(), self.strides(), 
+  return as_strided_mycelya(self, self.sizes(), self.strides(),
                             self.storage_offset());
 }
 
@@ -241,7 +235,7 @@ at::Tensor _reshape_alias_mycelya(const at::Tensor &self, at::IntArrayRef size, 
   return as_strided_mycelya(self, size, stride, self.storage_offset());
 }
 
-// C++ implementation of _lazy_clone that preserves MycelyaTensorImpl  
+// C++ implementation of _lazy_clone that preserves MycelyaTensorImpl
 at::Tensor _lazy_clone_mycelya(const at::Tensor &self) {
   TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
               "_lazy_clone_mycelya expects a mycelya tensor");
@@ -249,9 +243,9 @@ at::Tensor _lazy_clone_mycelya(const at::Tensor &self) {
   auto scalar_type = c10::typeMetaToScalarType(self.dtype());
   auto result = empty_mycelya(self.sizes(), scalar_type, c10::Layout::Strided,
                               self.device(), c10::nullopt, c10::nullopt);
-  
+
   result.copy_(self);
-  
+
   return result;
 }
 
@@ -269,7 +263,7 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("as_strided", as_strided_mycelya);
   m.impl("_unsafe_view", _unsafe_view_mycelya);
   m.impl("_reshape_alias", _reshape_alias_mycelya);
-  
+
   // Register set_ operations in C++ following OpenReg pattern
   m.impl("set_.source_Tensor", set_source_tensor_mycelya);
   m.impl("set_.source_Storage", set_source_storage_mycelya);
@@ -278,7 +272,7 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   // Register resize_ following OpenReg pattern - uses default implementation
   // with custom hook
   m.impl("resize_", resize_mycelya_);
-  
+
   // Register alias and _lazy_clone operations in C++
   m.impl("alias", alias_mycelya);
   m.impl("_lazy_clone", _lazy_clone_mycelya);
