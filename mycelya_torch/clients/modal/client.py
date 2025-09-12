@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from ..._logging import get_logger
 from ..._package_version import get_python_version, get_versioned_packages
-from ...servers.modal.modal_app import create_modal_app_for_gpu
+from ...servers.modal.server import create_modal_app_for_gpu
 from ..base_client import BatchCall, Client
 
 log = get_logger(__name__)
