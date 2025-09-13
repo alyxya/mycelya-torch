@@ -26,7 +26,7 @@ print(f"Result computed on {result.device}: {result.shape}")
 
 ## Supported GPUs (Modal)
 
-**10 GPU Types**: T4, L4, A10G, A100, L40S, H100, H200, B200
+**8 GPU Types**: T4, L4, A10G, A100, L40S, H100, H200, B200
 
 ## Installation
 
