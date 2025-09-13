@@ -25,8 +25,7 @@ class TestCriticalRegression:
         """Test that core modules import successfully."""
         # Test that mycelya_torch imports
         assert hasattr(mycelya_torch, "RemoteMachine")
-        assert hasattr(mycelya_torch, "GPUType")
-        assert hasattr(mycelya_torch, "RemoteMachine")
+        assert hasattr(mycelya_torch, "get_all_machines")
 
         # Test that remote device is registered
         device = torch.device("mycelya", 0)
