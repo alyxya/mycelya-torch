@@ -459,9 +459,7 @@ def create_modal_app_for_gpu(
                 return output_metadata
             else:
                 # Static: store in main registry
-                if len(output_tensor_ids) != len(result_tensors):
-                    raise RuntimeError(f"Output tensor count mismatch in {op_name}")
-                for tid, tensor in zip(output_tensor_ids, result_tensors):
+                for tid, tensor in zip(output_tensor_ids, result_tensors, strict=True):
                     tensor_registry[tid] = tensor
 
         @modal.method()
