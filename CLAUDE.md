@@ -57,7 +57,7 @@ To run type checking:
 - **`setup.py`**: C++ extension compilation with platform-specific compiler flags
 - **Dependencies**: torch>=2.0.0, modal>=1.1.0, numpy
 - **License**: AGPL-3.0-or-later
-- **Python Support**: 3.8+
+- **Python Support**: 3.10+
 
 ### Code Quality Configuration
 - **Ruff**: Line length 88, comprehensive rule selection (E, W, F, I, B, C4, UP)
@@ -68,19 +68,23 @@ To run type checking:
 
 ### Project Scale
 - **Modular architecture** with Python and C++ components across comprehensive test coverage
+- **25 Python modules** (~6,500 lines) including core coordination, provider clients, and operation dispatch
+- **10 C++ source files** (~1,000 lines) with custom PyTorch integration following pytorch-npu patterns
+- **18 comprehensive test files** with 3-tier testing strategy and critical/fast/comprehensive markers
 - **Example applications** demonstrating HuggingFace integration and performance comparisons
 - **Production-ready codebase** with enterprise-level code quality and documentation
 
 ### Core Python Modules (mycelya_torch/)
 - `__init__.py` - Public API and PyTorch PrivateUse1 backend registration with tensor ID utilities
 - `_orchestrator.py` - Central coordination with RPC batching, cache management, and background thread processing
-- `_machine.py` - RemoteMachine abstraction with multi-provider support and context management  
+- `_machine.py` - RemoteMachine abstraction with multi-provider support and context management
 - `_device.py` - DeviceManager for mapping local device indices to remote GPU configurations
 - `_storage.py` - Sequential storage ID system with atomic counter and thread-safe generation (1, 2, 3...)
 - `_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge for transparent integration
 - `_state_dict.py` - HuggingFace integration utilities for direct remote model loading
 - `_utils.py` - Internal tensor utilities and metadata handling
 - `_logging.py` - Hierarchical logging configuration with tensor hash IDs for debugging
+- `_package_version.py` - Package version management and version checking utilities
 
 ### ATen Operation System (aten/)
 Modular operation dispatch with clean separation of concerns:
@@ -97,8 +101,10 @@ Modular operation dispatch with clean separation of concerns:
 ### Server Implementation System (servers/)
 Pluggable server architecture for different cloud providers with clean client-server separation:
 - `__init__.py` - Server system package initialization and provider discovery
-- `modal/modal_app.py` - Modal cloud GPU server implementation with dynamic app creation and lazy/realized storage
+- `modal/server.py` - Modal cloud GPU server implementation with dynamic app creation and lazy/realized storage
 - `modal/__init__.py` - Modal server module exports and API
+- `mock/server.py` - Mock server implementation for local testing and development
+- `mock/__init__.py` - Mock server module exports and API
 
 The servers directory mirrors the clients directory structure, providing a clear separation between:
 - **Client Layer** (`clients/`): Interface, connection management, RPC batching, local coordination
@@ -115,8 +121,15 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 - `mycelya_extension.cpp` - Python bindings, C++ extensions, and API exposure
 
 ### Development Resources
-- `examples/` - SmolLM2 inference, Modal integration testing, performance comparisons, HuggingFace loading
-- `tests/` - Comprehensive test coverage with critical/fast/comprehensive markers
+- `examples/` - SmolLM2 inference, Modal integration testing, performance comparisons, HuggingFace loading:
+  - `smollm2_comparison.py` - Performance comparison between local and remote execution
+  - `gravity_hf_loader.py` - HuggingFace model loading and inference
+  - `smollm2.py` - Basic SmolLM2 model usage
+  - `modal_smollm2_test.py` - Modal integration testing
+- `tests/` - Comprehensive test coverage with critical/fast/comprehensive markers (18 test files)
+- Root directory utilities:
+  - `tiny_sd.py` - Stable Diffusion integration example
+  - `load_smollm2_mycelya_manual.py` - Manual SmolLM2 loading script
 - Modern build system with `pyproject.toml`, `setup.py` for C++ extensions, and ruff configuration
 
 ## Current Architecture

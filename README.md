@@ -26,12 +26,12 @@ print(f"Result computed on {result.device}: {result.shape}")
 
 ## Supported GPUs (Modal)
 
-T4, L4, A10G, A100, L40S, H100, H200, B200
+**10 GPU Types**: T4, L4, A10G, A100, L40S, H100, H200, B200
 
 ## Installation
 
 ### Requirements
-- Python 3.8+
+- Python 3.10+
 - PyTorch 2.0+
 - Modal account (free tier available)
 
@@ -187,6 +187,9 @@ predictions = model(test_data.to(inference_machine.device()))
   - `gravity_hf_loader.py` - HuggingFace model loading and inference
   - `smollm2.py` - Basic SmolLM2 model usage
   - `modal_smollm2_test.py` - Modal integration testing
+- **Additional Files**: Root directory includes utility scripts:
+  - `tiny_sd.py` - Stable Diffusion integration example
+  - `load_smollm2_mycelya_manual.py` - Manual SmolLM2 loading script
 - **Issues**: Report bugs at [GitHub Issues](https://github.com/alyxya/mycelya-torch/issues)
 
 ## Local Development
@@ -201,8 +204,12 @@ python setup.py build_ext --inplace
 
 # Run tests
 pytest tests/test_regression.py::TestCriticalRegression -v  # Critical tests (<30s)
-pytest tests/test_regression.py -v                         # Fast tests (~2-5min)  
+pytest tests/test_regression.py -v                         # Fast tests (~2-5min)
 pytest tests/ -v                                           # Full test suite (~10-30min)
+
+# Code quality
+ruff check .     # Linting
+ruff format .    # Formatting
 ```
 
 ### Mock Client for Testing
