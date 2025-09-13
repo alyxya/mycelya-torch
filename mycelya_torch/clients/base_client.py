@@ -36,16 +36,14 @@ class Client(ABC):
     class and implement all abstract methods to ensure consistent API across providers.
     """
 
-    def __init__(self, gpu_type: str, machine_id: str, batching: bool = True):
+    def __init__(self, machine_id: str, batching: bool = True):
         """
-        Initialize the client with GPU type, machine ID, and configuration.
+        Initialize the client with machine ID and configuration.
 
         Args:
-            gpu_type: The GPU type (e.g., "T4", "A100-40GB")
             machine_id: Unique machine identifier
             batching: Whether to enable operation batching (default: True)
         """
-        self.gpu_type = gpu_type
         self.machine_id = machine_id
         self.batching = batching
 

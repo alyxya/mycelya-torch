@@ -11,8 +11,7 @@ for development and testing without requiring remote cloud resources.
 from typing import Any, Dict, List, Optional
 
 from ..._logging import get_logger
-from ..._package_version import get_python_version, get_versioned_packages
-from ...servers.modal.server import create_modal_app_for_gpu
+from ...servers.mock.server import create_mock_modal_app
 from ..base_client import BatchCall, Client
 
 log = get_logger(__name__)
@@ -29,29 +28,15 @@ class MockClient(Client):
 
     def __init__(
         self,
-        gpu_type: str,
         machine_id: str,
-        timeout: int,
         batching: bool = True,
     ):
-        super().__init__(gpu_type, machine_id, batching)
+        super().__init__(machine_id, batching)
         self._server_instance = None
         self._is_running = False
-        self.timeout = timeout
 
-        # Get synchronized package versions and Python version from local environment
-        base_packages = ["numpy", "torch", "huggingface_hub", "safetensors"]
-        versioned_packages = get_versioned_packages(base_packages)
-        python_version = get_python_version()
-
-        # Initialize the Modal app and server class with synchronized versions (local execution)
-        self._app, self._server_class = create_modal_app_for_gpu(
-            self.gpu_type,
-            self.timeout,
-            versioned_packages,
-            python_version,
-            is_local=True,
-        )
+        # Initialize the Mock Modal app and server class (local execution)
+        self._app, self._server_class = create_mock_modal_app()
 
     def start(self):
         """Start the mock execution environment."""
@@ -252,6 +237,5 @@ class MockClient(Client):
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
         return (
-            f'MockClient(gpu_type="{self.gpu_type}", '
-            f'machine_id="{self.machine_id}", status="{status}")'
+            f'MockClient(machine_id="{self.machine_id}", status="{status}")'
         )

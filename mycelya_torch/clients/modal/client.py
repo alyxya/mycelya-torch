@@ -29,15 +29,16 @@ class ModalClient(Client):
 
     def __init__(
         self,
-        gpu_type: str,
         machine_id: str,
-        timeout: int,
+        gpu_type: str,
         batching: bool = True,
+        timeout: Optional[int] = None,
     ):
-        super().__init__(gpu_type, machine_id, batching)
+        super().__init__(machine_id, batching)
+        self.gpu_type = gpu_type
+        self.timeout = timeout
         self._server_instance = None
         self._app_context = None
-        self.timeout = timeout
 
         # Get synchronized package versions and Python version from local environment
         base_packages = ["numpy", "torch", "huggingface_hub", "safetensors"]
@@ -46,7 +47,10 @@ class ModalClient(Client):
 
         # Initialize the Modal app and server class with synchronized versions
         self._app, self._server_class = create_modal_app_for_gpu(
-            self.gpu_type, self.timeout, versioned_packages, python_version
+            gpu_type=self.gpu_type,
+            packages=versioned_packages,
+            python_version=python_version,
+            timeout=self.timeout,
         )
 
     def start(self):

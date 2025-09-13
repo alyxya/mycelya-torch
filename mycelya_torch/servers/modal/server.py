@@ -18,20 +18,18 @@ from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
 
 def create_modal_app_for_gpu(
     gpu_type: str,
-    timeout: int,
     packages: List[str],
     python_version: str,
-    is_local: bool = False,
+    timeout: Optional[int] = None,
 ) -> Tuple[Any, Any]:
     """
     Create a Modal app and class for a specific GPU type.
 
     Args:
-        gpu_type: The GPU type (e.g., "T4", "A100-40GB")
-        timeout: Function timeout in seconds
+        gpu_type: The GPU type (e.g., "T4", "A100-40GB", "local" for local execution)
+        timeout: Function timeout in seconds (defaults to 3600 if None)
         packages: List of versioned packages to install (e.g., ["torch==2.0.0", "numpy==1.24.0"])
         python_version: Python version for base image (e.g., "3.11")
-        is_local: If True, skip volume mounting for local/mock execution
 
     Returns:
         Tuple of (modal_app, server_class) for the specified GPU type
@@ -68,9 +66,19 @@ def create_modal_app_for_gpu(
         *packages
     )
 
+    cls_kwargs = {
+        "image": image,
+        "gpu": gpu_type,
+        "retries": 0,
+        "serialized": True,
+        "max_containers": 1,
+        "min_containers": 1,
+    }
+    if timeout:
+        cls_kwargs["timeout"] = timeout
+
     # Only create volumes for remote execution
-    volumes = {}
-    if not is_local:
+    if gpu_type != "local":
         # Create HuggingFace cache volume and mount at cache directory
         hf_cache_volume = modal.Volume.from_name(
             "mycelya-torch-huggingface-cache", create_if_missing=True
@@ -81,20 +89,7 @@ def create_modal_app_for_gpu(
             "mycelya-torch-data", create_if_missing=True
         )
 
-        volumes = {"/huggingface-cache": hf_cache_volume, "/data": data_volume}
-
-    # Only pass volumes parameter if we have volumes to mount
-    cls_kwargs = {
-        "image": image,
-        "gpu": gpu_type,
-        "timeout": timeout,
-        "retries": 0,
-        "serialized": True,
-        "max_containers": 1,
-        "min_containers": 1,
-    }
-    if volumes:
-        cls_kwargs["volumes"] = volumes
+        cls_kwargs["volumes"] = {"/huggingface-cache": hf_cache_volume, "/data": data_volume}
 
     @app.cls(**cls_kwargs)
     class PytorchServer:
@@ -111,7 +106,7 @@ def create_modal_app_for_gpu(
             import torch  # noqa: F401  # Preload torch import for better performance
 
             # Change to data directory and set HF cache if available (only when volumes are mounted)
-            if not is_local and os.path.exists("/data"):
+            if gpu_type != "local":
                 os.chdir("/data")
                 # Set HuggingFace cache directory to mounted volume
                 os.environ["HF_HOME"] = "/huggingface-cache"

@@ -10,8 +10,7 @@ machines with different cloud providers and GPU types.
 
 import atexit
 import uuid
-from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import torch
 
@@ -20,30 +19,6 @@ from ._logging import get_logger
 from ._orchestrator import orchestrator
 
 log = get_logger(__name__)
-
-
-class GPUType(Enum):
-    """Supported GPU types across cloud providers."""
-
-    T4 = "T4"
-    L4 = "L4"
-    A10G = "A10G"
-    A100 = "A100"
-    A100_40GB = "A100-40GB"
-    A100_80GB = "A100-80GB"
-    L40S = "L40S"
-    H100 = "H100"
-    H200 = "H200"
-    B200 = "B200"
-
-
-class CloudProvider(Enum):
-    """Supported cloud providers."""
-
-    MODAL = "modal"
-    MOCK = "mock"
-    # Future providers can be added here
-    # AWS = "aws"
 
 
 class RemoteMachine:
@@ -73,65 +48,65 @@ class RemoteMachine:
 
     def __init__(
         self,
-        provider: Union[str, CloudProvider],
-        gpu_type: Optional[Union[str, GPUType]] = None,
+        provider: str,
+        gpu_type: str = "",
+        *,
         start: bool = True,
         _batching: bool = True,
+        timeout: Optional[int] = None,
     ) -> None:
         """
         Initialize a remote machine.
 
         Args:
-            provider: The cloud provider (e.g., "modal")
-            gpu_type: The GPU type (e.g., "A100-40GB").
+            provider: The cloud provider (e.g., "modal", "mock")
+            gpu_type: The GPU type (e.g., "A100-40GB", "T4").
                      Required for modal provider, ignored for mock provider.
             start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
+            timeout: Timeout in seconds for modal provider (default: None)
         """
-        # Parse and validate provider
-        if isinstance(provider, str):
-            try:
-                self.provider = CloudProvider(provider)
-            except ValueError:
-                valid_providers = [p.value for p in CloudProvider]
-                raise ValueError(
-                    f'Invalid provider "{provider}". Valid providers: {valid_providers}'
-                )
-        else:
-            self.provider = provider
+        self.provider = provider
+        self.gpu_type = gpu_type
 
-        # Parse GPU type
-        if self.provider != CloudProvider.MOCK and gpu_type is None:
-            raise ValueError(
-                f"{self.provider.value} provider requires gpu_type to be specified"
-            )
-
-        if gpu_type is None:
-            self.gpu_type = GPUType.T4  # Default for mock provider
-        elif isinstance(gpu_type, str):
-            try:
-                self.gpu_type = GPUType(gpu_type)
-            except ValueError:
-                valid_gpus = [g.value for g in GPUType]
+        # Handle GPU type based on provider
+        if provider == "modal":
+            # Validate GPU type for modal
+            valid_gpu_types = [
+                "T4", "L4", "A10G", "A100", "A100-40GB", "A100-80GB",
+                "L40S", "H100", "H200", "B200"
+            ]
+            if not gpu_type:
                 raise ValueError(
-                    f'Invalid GPU type "{gpu_type}". Valid types: {valid_gpus}'
+                    f"Missing GPU type for modal provider. "
+                    f"Valid types: {valid_gpu_types}"
                 )
+            elif gpu_type not in valid_gpu_types:
+                raise ValueError(
+                    f"Invalid GPU type '{gpu_type}' for modal provider. "
+                    f"Valid types: {valid_gpu_types}"
+                )
+        elif provider == "mock":
+            if gpu_type:
+                log.warning(f"GPU type '{gpu_type}' provided for mock provider but will be ignored")
         else:
-            self.gpu_type = gpu_type
+            raise ValueError(f"Unsupported provider '{provider}'. Supported providers: modal")
 
         # Generate unique machine ID
         short_uuid = str(uuid.uuid4())[:8]
-        gpu_clean = self.gpu_type.value.replace("-", "").replace("_", "").lower()
-        self.machine_id = f"{self.provider.value}-{gpu_clean}-{short_uuid}"
+        gpu_clean = self.gpu_type.replace("-", "").replace("_", "").lower()
+        self.machine_id = f"{self.provider}-{gpu_clean}-{short_uuid}"
 
         self._batching = _batching
+        self.timeout = timeout
 
         # Create and register client with orchestrator
         orchestrator.create_client(
             self.machine_id,
-            self.provider.value,
-            self.gpu_type.value,
+            self.provider,
+            self.gpu_type,
             self._batching,
+            self.timeout,
         )
 
         # Start client if requested and register cleanup
@@ -164,7 +139,7 @@ class RemoteMachine:
         self.stop()
 
     def __str__(self) -> str:
-        return f"RemoteMachine(provider={self.provider.value}, gpu={self.gpu_type.value}, id={self.machine_id})"
+        return f"RemoteMachine(provider={self.provider}, gpu={self.gpu_type}, id={self.machine_id})"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -192,16 +167,16 @@ class RemoteMachine:
             index = int(index)
 
         # Apply defaults
-        type = type or ("cpu" if self.provider == CloudProvider.MOCK else "cuda")
+        type = type or ("cpu" if self.provider == "mock" else "cuda")
         index = index or 0
 
         # Validate device type for provider
         valid_types = (
-            ["cpu", "mps"] if self.provider == CloudProvider.MOCK else ["cuda", "cpu"]
+            ["cpu", "mps"] if self.provider == "mock" else ["cuda", "cpu"]
         )
         if type not in valid_types:
             raise ValueError(
-                f"{self.provider.value} provider only supports {valid_types}, got '{type}'"
+                f"{self.provider} provider only supports {valid_types}, got '{type}'"
             )
 
         return device_manager.get_mycelya_device(

@@ -83,23 +83,25 @@ class Orchestrator:
         provider: str,
         gpu_type: str,
         batching: bool = True,
+        timeout: Optional[int] = None,
     ) -> None:
         """Create and register a client for a machine.
 
         Args:
             machine_id: Unique machine identifier
             provider: Provider type ("modal" or "mock")
-            gpu_type: GPU type string
+            gpu_type: GPU type string (required for modal, ignored for mock)
+            timeout: Timeout in seconds (optional for modal, ignored for mock)
             batching: Whether to enable batching
         """
         if provider == "modal":
             from .clients.modal.client import ModalClient
 
-            client = ModalClient(gpu_type, machine_id, 3600, batching)
+            client = ModalClient(machine_id, gpu_type, batching, timeout)
         elif provider == "mock":
             from .clients.mock.client import MockClient
 
-            client = MockClient(gpu_type, machine_id, 3600, batching)
+            client = MockClient(machine_id, batching)
         else:
             raise ValueError(f"Provider {provider} not implemented yet")
 
