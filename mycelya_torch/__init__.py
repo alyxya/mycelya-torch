@@ -223,8 +223,6 @@ from ._logging import (  # noqa: E402
     set_logging_level,
 )
 from ._machine import (  # noqa: E402
-    CloudProvider,
-    GPUType,
     RemoteMachine,
     get_all_machines,
 )
@@ -238,8 +236,6 @@ from ._state_dict import (  # noqa: E402
 __all__ = [
     # Core machine and device classes
     "RemoteMachine",
-    "CloudProvider",
-    "GPUType",
     "get_all_machines",
     # Remote state dict loading
     "load_huggingface_state_dicts",
