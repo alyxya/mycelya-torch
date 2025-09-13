@@ -153,45 +153,6 @@ response = chat("Hello! How are you today?")
 print(response)
 ```
 
-## Common Patterns
-
-### Mixed Local/Remote Computing
-```python
-# Some operations local, others remote
-local_data = torch.randn(1000, 100)  # On CPU
-remote_weights = torch.randn(100, 10, device=machine.device())  # On remote GPU
-
-# Automatically handles data transfer
-result = local_data @ remote_weights  # local_data moved to remote GPU
-final_result = result.cpu()  # Move back to local CPU
-```
-
-### Working with Multiple GPUs
-```python
-# Different machines for different tasks
-training_machine = mycelya_torch.RemoteMachine("modal", "A100")
-inference_machine = mycelya_torch.RemoteMachine("modal", "T4")
-
-# Train on powerful GPU
-model = train_model(training_machine.device())
-
-# Switch to cheaper GPU for inference
-model = model.to(inference_machine.device())
-predictions = model(test_data.to(inference_machine.device()))
-```
-
-## Getting Help
-
-- **Examples**: Check the `examples/` directory for complete working examples:
-  - `smollm2_comparison.py` - Performance comparison between local and remote execution
-  - `gravity_hf_loader.py` - HuggingFace model loading and inference
-  - `smollm2.py` - Basic SmolLM2 model usage
-  - `modal_smollm2_test.py` - Modal integration testing
-- **Additional Files**: Root directory includes utility scripts:
-  - `tiny_sd.py` - Stable Diffusion integration example
-  - `load_smollm2_mycelya_manual.py` - Manual SmolLM2 loading script
-- **Issues**: Report bugs at [GitHub Issues](https://github.com/alyxya/mycelya-torch/issues)
-
 ## Local Development
 
 ```bash
@@ -220,7 +181,8 @@ For development and testing without cloud resources, use the mock client:
 import mycelya_torch
 
 # Use mock client - runs locally using Modal's .local() execution
-machine = mycelya_torch.RemoteMachine("mock", "A100")
+# GPU type is ignored for mock client
+machine = mycelya_torch.RemoteMachine("mock")
 device = machine.device()
 
 # All operations run locally but through the same API
