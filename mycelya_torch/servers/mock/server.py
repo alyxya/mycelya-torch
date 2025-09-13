@@ -17,4 +17,6 @@ def create_mock_modal_app() -> Tuple[Any, Any]:
     Returns:
         Tuple of (modal_app, server_class) for local execution
     """
-    return create_modal_app_for_gpu(gpu_type="local", packages=[], python_version="3.13")
+    return create_modal_app_for_gpu(
+        gpu_type="local", packages=[], python_version="3.13"
+    )

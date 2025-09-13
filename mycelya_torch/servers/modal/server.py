@@ -89,7 +89,10 @@ def create_modal_app_for_gpu(
             "mycelya-torch-data", create_if_missing=True
         )
 
-        cls_kwargs["volumes"] = {"/huggingface-cache": hf_cache_volume, "/data": data_volume}
+        cls_kwargs["volumes"] = {
+            "/huggingface-cache": hf_cache_volume,
+            "/data": data_volume,
+        }
 
     @app.cls(**cls_kwargs)
     class PytorchServer:

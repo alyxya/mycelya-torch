@@ -236,6 +236,4 @@ class MockClient(Client):
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
-        return (
-            f'MockClient(machine_id="{self.machine_id}", status="{status}")'
-        )
+        return f'MockClient(machine_id="{self.machine_id}", status="{status}")'

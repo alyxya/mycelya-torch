@@ -73,8 +73,16 @@ class RemoteMachine:
         if provider == "modal":
             # Validate GPU type for modal
             valid_gpu_types = [
-                "T4", "L4", "A10G", "A100", "A100-40GB", "A100-80GB",
-                "L40S", "H100", "H200", "B200"
+                "T4",
+                "L4",
+                "A10G",
+                "A100",
+                "A100-40GB",
+                "A100-80GB",
+                "L40S",
+                "H100",
+                "H200",
+                "B200",
             ]
             if not gpu_type:
                 raise ValueError(
@@ -88,9 +96,13 @@ class RemoteMachine:
                 )
         elif provider == "mock":
             if gpu_type:
-                log.warning(f"GPU type '{gpu_type}' provided for mock provider but will be ignored")
+                log.warning(
+                    f"GPU type '{gpu_type}' provided for mock provider but will be ignored"
+                )
         else:
-            raise ValueError(f"Unsupported provider '{provider}'. Supported providers: modal")
+            raise ValueError(
+                f"Unsupported provider '{provider}'. Supported providers: modal"
+            )
 
         # Generate unique machine ID
         short_uuid = str(uuid.uuid4())[:8]
@@ -171,9 +183,7 @@ class RemoteMachine:
         index = index or 0
 
         # Validate device type for provider
-        valid_types = (
-            ["cpu", "mps"] if self.provider == "mock" else ["cuda", "cpu"]
-        )
+        valid_types = ["cpu", "mps"] if self.provider == "mock" else ["cuda", "cpu"]
         if type not in valid_types:
             raise ValueError(
                 f"{self.provider} provider only supports {valid_types}, got '{type}'"
