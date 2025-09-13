@@ -280,7 +280,7 @@ import torch
 from diffusers import DiffusionPipeline
 from mycelya_torch import RemoteMachine
 
-machine = RemoteMachine("mock", "A100-40GB")
+machine = RemoteMachine("mock", "A100")
 device = machine.device()
 
 pipeline = DiffusionPipeline.from_pretrained("segmind/tiny-sd", torch_dtype=torch.float16).to(device)

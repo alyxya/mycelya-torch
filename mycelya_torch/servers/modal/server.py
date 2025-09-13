@@ -26,7 +26,7 @@ def create_modal_app_for_gpu(
     Create a Modal app and class for a specific GPU type.
 
     Args:
-        gpu_type: The GPU type (e.g., "T4", "A100-40GB", "local" for local execution)
+        gpu_type: The GPU type (e.g., "T4", "A100", "local" for local execution)
         timeout: Function timeout in seconds (defaults to 3600 if None)
         packages: List of versioned packages to install (e.g., ["torch==2.0.0", "numpy==1.24.0"])
         python_version: Python version for base image (e.g., "3.11")

@@ -60,7 +60,7 @@ class RemoteMachine:
 
         Args:
             provider: The cloud provider (e.g., "modal", "mock")
-            gpu_type: The GPU type (e.g., "A100-40GB", "T4").
+            gpu_type: The GPU type (e.g., "A100", "T4").
                      Required for modal provider, ignored for mock provider.
             start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
