@@ -136,6 +136,7 @@ def create_modal_app_for_gpu(
                 "execute_aten_operation": self._execute_aten_operation_impl,
                 "load_huggingface_state_dicts": self._load_huggingface_state_dicts_impl,
                 "link_tensors": self._link_tensors_impl,
+                "execute_remote_function": self._execute_remote_function_impl,
             }
 
         @modal.exit()
@@ -626,6 +627,91 @@ def create_modal_app_for_gpu(
                 temp_keys: List of temporary registry keys corresponding to each tensor ID
             """
             self._link_tensors_impl(local_tensor_ids, temp_keys)
+
+        def _execute_remote_function_impl(self, pickled_function: bytes) -> bytes:
+            """Implementation of execute_remote_function without Modal decorators."""
+            import pickle
+
+            tensor_registry = self._tensor_registry
+            temp_tensor_registry = self._temp_tensor_registry
+
+            # Custom unpickler to reconstruct tensors from IDs
+            class RemoteUnpickler(pickle.Unpickler):
+                def persistent_load(self, pid):
+                    type_tag, data = pid
+
+                    if type_tag == "mycelya_tensor":
+                        tensor_id = data
+                        if tensor_id not in tensor_registry:
+                            raise ValueError(f"Tensor ID {tensor_id} not found in remote registry")
+                        return tensor_registry[tensor_id]
+
+                    elif type_tag == "mycelya_device":
+                        import torch
+                        remote_type, remote_index = data
+                        return torch.device(remote_type, remote_index)
+
+                    else:
+                        raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
+
+            # Unpickle the function bundle
+            import io
+            buffer = io.BytesIO(pickled_function)
+            unpickler = RemoteUnpickler(buffer)
+            func_bundle = unpickler.load()
+
+            # Extract function and arguments
+            func = func_bundle["function"]
+            args = func_bundle["args"]
+            kwargs = func_bundle["kwargs"]
+
+            # Execute the function directly (CloudPickle handles the function properly)
+            result = func(*args, **kwargs)
+
+            # Custom pickler to convert results back to metadata
+            class RemotePickler(pickle.Pickler):
+                def persistent_id(self, obj):
+                    import torch
+                    import uuid
+
+                    if isinstance(obj, torch.Tensor):
+                        # Generate unique temp key
+                        temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
+
+                        # Register tensor in temp registry
+                        temp_tensor_registry[temp_key] = obj
+
+                        # Create metadata for client reconstruction
+                        metadata = {
+                            "shape": list(obj.shape),
+                            "dtype": str(obj.dtype).replace("torch.", ""),
+                            "stride": list(obj.stride()),
+                            "storage_offset": obj.storage_offset(),
+                            "nbytes": obj.untyped_storage().nbytes(),
+                            "temp_key": temp_key,
+                        }
+
+                        if obj.requires_grad:
+                            metadata["requires_grad"] = True
+
+                        return ("remote_tensor", metadata)
+
+                    elif isinstance(obj, torch.device):
+                        return ("remote_device", (obj.type, obj.index))
+
+                    return None
+
+            # Pickle the result
+            result_buffer = io.BytesIO()
+            pickler = RemotePickler(result_buffer)
+            pickler.dump(result)
+
+            return result_buffer.getvalue()
+
+        @modal.method()
+        def execute_remote_function(self, pickled_function: bytes) -> bytes:
+            """Execute a pickled function on the remote machine."""
+            return self._execute_remote_function_impl(pickled_function)
 
         @modal.method()
         def execute_batch(self, batch_calls: List[BatchCall]):

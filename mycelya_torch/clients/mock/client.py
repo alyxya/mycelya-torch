@@ -234,6 +234,11 @@ class MockClient(Client):
         """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._server_instance.link_tensors.local(local_tensor_ids, temp_keys)
 
+    def _execute_remote_function_impl(self, pickled_function: bytes) -> None:
+        """Implementation: Execute a pickled function remotely."""
+        result = self._server_instance.execute_remote_function.local(pickled_function)
+        self._pending_results.append(result)
+
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
         return f'MockClient(machine_id="{self.machine_id}", status="{status}")'

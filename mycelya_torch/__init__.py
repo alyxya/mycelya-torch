@@ -232,6 +232,13 @@ from ._state_dict import (  # noqa: E402
     load_huggingface_state_dicts,
 )
 
+# Remote execution utilities
+from ._pickle import (  # noqa: E402
+    remote_exec,
+    mycelya_pickle,
+    mycelya_unpickle,
+)
+
 # Define the public API
 __all__ = [
     # Core machine and device classes
@@ -239,6 +246,10 @@ __all__ = [
     "get_all_machines",
     # Remote state dict loading
     "load_huggingface_state_dicts",
+    # Remote execution utilities
+    "remote_exec",
+    "mycelya_pickle",
+    "mycelya_unpickle",
     # Logging utilities
     "enable_debug_logging",
     "enable_info_logging",

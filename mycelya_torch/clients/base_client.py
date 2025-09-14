@@ -671,6 +671,52 @@ class Client(ABC):
             self._link_tensors_impl(local_tensor_ids, temp_keys)
 
     @abstractmethod
+    def _execute_remote_function_impl(
+        self, pickled_function: bytes
+    ) -> None:
+        """Implementation: Execute a pickled function remotely."""
+        pass
+
+    def execute_remote_function(self, pickled_function: bytes) -> Future[bytes]:
+        """
+        Execute a pickled function on the remote machine.
+
+        This method sends a pickled function (containing code, args, kwargs)
+        to the remote machine for execution and returns a Future for the
+        pickled result.
+
+        Args:
+            pickled_function: Pickled function data containing code and arguments
+
+        Returns:
+            Future that resolves to pickled result bytes
+        """
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
+        # Create a Future for the result
+        future = Future()
+        # Add future to pending futures queue
+        self._pending_futures.append(future)
+
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="execute_remote_function",
+                    args=(pickled_function,),
+                    kwargs={},
+                )
+            )
+        else:
+            # Direct execution
+            self._execute_remote_function_impl(pickled_function)
+
+        return future
+
+    @abstractmethod
     def __repr__(self) -> str:
         """
         String representation of the client.

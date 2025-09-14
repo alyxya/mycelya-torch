@@ -595,6 +595,96 @@ class Orchestrator:
             # Register tensor ID in orchestrator mapping
             self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
+    def execute_pickled_function(self, func, args, kwargs, machine_id: str) -> Any:
+        """
+        Execute a pickled function on the remote machine.
+
+        Args:
+            func: Function to execute remotely
+            args: Function arguments
+            kwargs: Function keyword arguments
+            machine_id: Target machine ID
+
+        Returns:
+            Function result with proper tensor linking
+        """
+        # Get client for the target machine
+        client = self._clients.get(machine_id)
+        if client is None:
+            raise RuntimeError(f"No client found for machine {machine_id}")
+
+        if not client.is_running():
+            raise RuntimeError(f"Client for machine {machine_id} is not running")
+
+        # Import here to avoid circular imports
+        from ._pickle import mycelya_pickle
+
+        # Create function bundle and pickle it
+        func_bundle = {
+            "function": func,
+            "args": args,
+            "kwargs": kwargs,
+        }
+        pickled_func = mycelya_pickle(func_bundle)
+
+        # Execute remotely
+        result_future = client.execute_remote_function(pickled_func)
+        pickled_result = result_future.result()
+
+        # Unpickle result with proper tensor linking
+        import io
+        import pickle
+        result_buffer = io.BytesIO(pickled_result)
+
+        class ResultUnpickler(pickle.Unpickler):
+            def persistent_load(self, pid):
+                type_tag, data = pid
+
+                if type_tag == "remote_tensor":
+                    metadata = data
+                    # Import here to avoid circular imports
+                    from ._machine import RemoteMachine
+                    from ._utils import (
+                        create_mycelya_tensor_from_metadata,
+                        get_tensor_id,
+                    )
+
+                    # Find the appropriate machine for device mapping
+                    for machine in RemoteMachine._all_machines:
+                        if machine.machine_id == machine_id:
+                            device = machine.device()
+                            break
+                    else:
+                        raise RuntimeError(f"No RemoteMachine found for machine_id {machine_id}")
+
+                    # Create mycelya tensor from metadata
+                    tensor = create_mycelya_tensor_from_metadata(metadata, device)
+
+                    # Link the tensor to the remote tensor in temp registry
+                    temp_key = metadata["temp_key"]
+                    tensor_id = get_tensor_id(tensor)
+                    client.link_tensors([tensor_id], [temp_key])
+
+                    return tensor
+
+                elif type_tag == "remote_device":
+                    device_type, device_index = data
+                    # Import here to avoid circular imports
+                    from ._machine import RemoteMachine
+
+                    # Find the appropriate machine for device mapping
+                    for machine in RemoteMachine._all_machines:
+                        if machine.machine_id == machine_id:
+                            return machine.device(type=device_type, index=device_index)
+
+                    raise RuntimeError(f"No RemoteMachine found for machine_id {machine_id}")
+
+                else:
+                    raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
+
+        unpickler = ResultUnpickler(result_buffer)
+        return unpickler.load()
+
     def load_huggingface_state_dicts_future(
         self,
         device_index: int,
