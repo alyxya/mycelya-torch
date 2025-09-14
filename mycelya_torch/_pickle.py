@@ -11,7 +11,7 @@ and devices properly during serialization for remote execution. It includes:
 - MycelyaUnpickler: Reconstructs mycelya tensors from IDs and maps devices back
 - RemotePickler: Server-side pickler that converts tensors to metadata
 - RemoteUnpickler: Server-side unpickler that reconstructs tensors from registry
-- remote_exec decorator: Combines all functionality for remote function execution
+- remote decorator: Combines all functionality for remote function execution
 """
 
 import io
@@ -151,7 +151,7 @@ class MycelyaUnpickler(pickle.Unpickler):
             # which handles tensor metadata properly.
             raise NotImplementedError(
                 "Direct tensor unpickling from tensor ID is not supported. "
-                "Use the remote_exec decorator for proper remote function execution."
+                "Use the remote decorator for proper remote function execution."
             )
 
         elif type_tag == "mycelya_device":
@@ -337,7 +337,7 @@ def remote_unpickle(data: bytes, tensor_registry: Dict[int, torch.Tensor]) -> An
     return unpickler.load()
 
 
-def remote_exec(func: F) -> F:
+def remote(func: F) -> F:
     """
     Decorator that converts a function to execute remotely on mycelya tensors.
 
@@ -354,7 +354,7 @@ def remote_exec(func: F) -> F:
         Wrapped function that executes remotely
 
     Example:
-        @remote_exec
+        @remote
         def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a @ b
 

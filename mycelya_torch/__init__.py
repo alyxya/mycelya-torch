@@ -234,7 +234,7 @@ from ._state_dict import (  # noqa: E402
 
 # Remote execution utilities
 from ._pickle import (  # noqa: E402
-    remote_exec,
+    remote,
     mycelya_pickle,
     mycelya_unpickle,
 )
@@ -247,7 +247,7 @@ __all__ = [
     # Remote state dict loading
     "load_huggingface_state_dicts",
     # Remote execution utilities
-    "remote_exec",
+    "remote",
     "mycelya_pickle",
     "mycelya_unpickle",
     # Logging utilities
