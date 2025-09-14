@@ -41,7 +41,7 @@ class ModalClient(Client):
         self._app_context = None
 
         # Get synchronized package versions and Python version from local environment
-        base_packages = ["numpy", "torch", "huggingface_hub", "safetensors"]
+        base_packages = ["numpy", "torch", "huggingface_hub", "safetensors", "cloudpickle"]
         versioned_packages = get_versioned_packages(base_packages)
         python_version = get_python_version()
 

@@ -44,9 +44,9 @@ log = get_logger(__name__)
 F = TypeVar('F', bound=Callable[..., Any])
 
 
-class MycelyaPickler(cloudpickle.CloudPickler):
+class MycelyaPickler(cloudpickle.Pickler):
     """
-    Custom CloudPickler that handles mycelya tensors and devices for remote execution.
+    Custom Pickler that handles mycelya tensors and devices for remote execution.
 
     This pickler converts:
     - Mycelya tensors -> tensor IDs for remote lookup
@@ -54,7 +54,7 @@ class MycelyaPickler(cloudpickle.CloudPickler):
 
     It maintains internal state about the remote machine being serialized for,
     and validates that all tensors/devices belong to the same machine.
-    Uses CloudPickle for proper function serialization.
+    Uses cloudpickle.Pickler for proper function serialization.
     """
 
     def __init__(self, file: io.BytesIO, protocol: int = None, buffer_callback: Any = None):
@@ -164,9 +164,9 @@ class MycelyaUnpickler(pickle.Unpickler):
             raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
 
 
-class RemotePickler(cloudpickle.CloudPickler):
+class RemotePickler(cloudpickle.Pickler):
     """
-    Server-side CloudPickler that converts torch tensors to metadata for return to client.
+    Server-side Pickler that converts torch tensors to metadata for return to client.
 
     This pickler runs on the remote server and converts:
     - Torch tensors -> tensor metadata with temp registry keys
@@ -265,7 +265,7 @@ class RemoteUnpickler(pickle.Unpickler):
 
 def mycelya_pickle(obj: Any, machine: Optional[RemoteMachine] = None) -> bytes:
     """
-    Pickle an object using MycelyaPickler (based on CloudPickle).
+    Pickle an object using MycelyaPickler (based on cloudpickle.Pickler).
 
     Args:
         obj: Object to pickle
@@ -306,7 +306,7 @@ def mycelya_unpickle(data: bytes, machine: RemoteMachine) -> Any:
 
 def remote_pickle(obj: Any, temp_registry: Dict[str, torch.Tensor]) -> bytes:
     """
-    Server-side pickle using RemotePickler (based on CloudPickle).
+    Server-side pickle using RemotePickler (based on cloudpickle.Pickler).
 
     Args:
         obj: Object to pickle on remote server
@@ -343,7 +343,7 @@ def remote(func: F) -> F:
 
     This decorator:
     1. Analyzes function arguments to determine target remote machine
-    2. Serializes function and arguments using CloudPickle-based MycelyaPickler
+    2. Serializes function and arguments using cloudpickle.Pickler-based MycelyaPickler
     3. Executes function remotely via orchestrator coordination
     4. Deserializes results back to local mycelya tensors with proper linking
 

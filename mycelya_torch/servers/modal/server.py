@@ -631,6 +631,7 @@ def create_modal_app_for_gpu(
         def _execute_remote_function_impl(self, pickled_function: bytes) -> bytes:
             """Implementation of execute_remote_function without Modal decorators."""
             import pickle
+            import cloudpickle
 
             tensor_registry = self._tensor_registry
             temp_tensor_registry = self._temp_tensor_registry
@@ -669,7 +670,7 @@ def create_modal_app_for_gpu(
             result = func(*args, **kwargs)
 
             # Custom pickler to convert results back to metadata
-            class RemotePickler(pickle.Pickler):
+            class RemotePickler(cloudpickle.Pickler):
                 def persistent_id(self, obj):
                     import torch
                     import uuid
