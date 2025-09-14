@@ -2,7 +2,7 @@
 """
 Example demonstrating the mycelya-torch remote execution system with custom pickle.
 
-This example shows how to use the @remote decorator to execute functions
+This example shows how to use the @remote() decorator to execute functions
 remotely on mycelya tensors, with automatic machine inference and tensor handling.
 """
 
@@ -20,7 +20,7 @@ print(f"Machine ID: {machine.machine_id}")
 
 
 # Example 1: Simple matrix operations
-@mycelya_torch.remote
+@mycelya_torch.remote()
 def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Multiply two matrices remotely."""
     print(f"Executing on remote machine - a.shape: {a.shape}, b.shape: {b.shape}")
@@ -30,7 +30,7 @@ def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
 
 # Example 2: More complex function with multiple operations
-@mycelya_torch.remote
+@mycelya_torch.remote()
 def complex_computation(x: torch.Tensor, scale: float = 2.0) -> torch.Tensor:
     """Perform a complex computation involving multiple tensor operations."""
     print(f"Starting complex computation, scale: {scale}")
@@ -48,7 +48,7 @@ def complex_computation(x: torch.Tensor, scale: float = 2.0) -> torch.Tensor:
 
 
 # Example 3: Function returning multiple tensors
-@mycelya_torch.remote
+@mycelya_torch.remote()
 def split_and_process(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """Split tensor and process each half differently."""
     print(f"Processing tensor with shape {tensor.shape}")
@@ -65,7 +65,7 @@ def split_and_process(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]
 
 
 # Example 4: Function with device manipulation
-@mycelya_torch.remote
+@mycelya_torch.remote()
 def device_aware_function(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Function that's aware of the device it's running on."""
     print(f"Is CUDA available in remote context: {torch.cuda.is_available()}")
@@ -181,7 +181,7 @@ def main():
     print("-"*40)
 
     print("Note: The following would fail if tensors were from different machines:")
-    print("@remote")
+    print("@remote()")
     print("def mixed_machine_function(tensor1, tensor2):")
     print("    return tensor1 + tensor2")
     print("")

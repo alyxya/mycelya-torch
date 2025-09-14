@@ -24,7 +24,8 @@ b = b_cpu.to(device)
 print(f"Tensor a: shape={a.shape}, device={a.device}, storage_id={mycelya_torch._utils.get_storage_id(a)}")
 print(f"Tensor b: shape={b.shape}, device={b.device}, storage_id={mycelya_torch._utils.get_storage_id(b)}")
 
-# Define a simple function without decorator first
+# Define a simple function with decorator (no parentheses)
+@mycelya_torch.remote
 def simple_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Add two tensors."""
     print("Executing simple_add remotely")
@@ -32,15 +33,12 @@ def simple_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     print(f"Addition complete, result shape: {result.shape}")
     return result
 
-# Apply the decorator manually to avoid source code issues
-simple_add_remote = mycelya_torch.remote(simple_add)
-
 print("\n" + "="*50)
 print("TESTING SIMPLE REMOTE ADDITION")
 print("="*50)
 
 try:
-    result = simple_add_remote(a, b)
+    result = simple_add(a, b)
     print(f"✅ Remote execution successful!")
     print(f"   Result shape: {result.shape}")
     print(f"   Result device: {result.device}")

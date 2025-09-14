@@ -35,46 +35,45 @@ def main():
     print(f"   Tensor x: {x.shape} on {x.device}")
 
     # Test 1: Simple arithmetic
+    @mycelya_torch.remote
     def simple_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         print("  🚀 Executing simple addition remotely")
         result = x + y
         print(f"  ✨ Result computed: {result.shape}")
         return result
 
-    simple_add_remote = mycelya_torch.remote(simple_add)
-
     print("\n" + "-"*40)
     print("TEST 1: Simple Addition")
     print("-"*40)
 
     try:
-        result1 = simple_add_remote(a, b)
+        result1 = simple_add(a, b)
         print(f"✅ Success! Result shape: {result1.shape}, device: {result1.device}")
         print(f"   Sample values: {result1.flatten()[:3]}")
     except Exception as e:
         print(f"❌ Failed: {e}")
 
     # Test 2: Matrix multiplication
+    @mycelya_torch.remote()
     def matrix_multiply(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         print("  🚀 Executing matrix multiplication remotely")
         result = torch.matmul(x, y)
         print(f"  ✨ MatMul result: {result.shape}")
         return result
 
-    matmul_remote = mycelya_torch.remote(matrix_multiply)
-
     print("\n" + "-"*40)
     print("TEST 2: Matrix Multiplication")
     print("-"*40)
 
     try:
-        result2 = matmul_remote(a, b)
+        result2 = matrix_multiply(a, b)
         print(f"✅ Success! Result shape: {result2.shape}, device: {result2.device}")
         print(f"   Sample values: {result2.flatten()[:3]}")
     except Exception as e:
         print(f"❌ Failed: {e}")
 
     # Test 3: Complex operations with multiple return values
+    @mycelya_torch.remote
     def split_and_transform(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         print(f"  🚀 Processing tensor: {tensor.shape}")
 
@@ -89,14 +88,12 @@ def main():
         print(f"  ✨ Split into: {transformed_first.shape} and {transformed_second.shape}")
         return transformed_first, transformed_second
 
-    split_remote = mycelya_torch.remote(split_and_transform)
-
     print("\n" + "-"*40)
     print("TEST 3: Split and Transform (Multiple Returns)")
     print("-"*40)
 
     try:
-        first_result, second_result = split_remote(x)
+        first_result, second_result = split_and_transform(x)
         print(f"✅ Success!")
         print(f"   First result: {first_result.shape} on {first_result.device}")
         print(f"   Second result: {second_result.shape} on {second_result.device}")
@@ -106,6 +103,7 @@ def main():
         print(f"❌ Failed: {e}")
 
     # Test 4: Function with parameters
+    @mycelya_torch.remote()
     def scaled_operations(tensor: torch.Tensor, scale: float, operation: str = "multiply") -> torch.Tensor:
         print(f"  🚀 {operation} with scale {scale}")
 
@@ -122,20 +120,19 @@ def main():
         print(f"  ✨ Operation complete: {result.shape}")
         return result
 
-    scaled_remote = mycelya_torch.remote(scaled_operations)
-
     print("\n" + "-"*40)
     print("TEST 4: Parameterized Function")
     print("-"*40)
 
     try:
-        result4 = scaled_remote(x, scale=2.5, operation="multiply")
+        result4 = scaled_operations(x, scale=2.5, operation="multiply")
         print(f"✅ Success! Result shape: {result4.shape}, device: {result4.device}")
         print(f"   Sample values: {result4.flatten()[:3]}")
     except Exception as e:
         print(f"❌ Failed: {e}")
 
     # Test 5: Function using torch utilities
+    @mycelya_torch.remote
     def advanced_torch_ops(tensor: torch.Tensor) -> torch.Tensor:
         print("  🚀 Advanced torch operations")
 
@@ -147,14 +144,12 @@ def main():
         print(f"  ✨ Advanced operations complete: {summed.shape}")
         return summed
 
-    advanced_remote = mycelya_torch.remote(advanced_torch_ops)
-
     print("\n" + "-"*40)
     print("TEST 5: Advanced Torch Operations")
     print("-"*40)
 
     try:
-        result5 = advanced_remote(x)
+        result5 = advanced_torch_ops(x)
         print(f"✅ Success! Result shape: {result5.shape}, device: {result5.device}")
         print(f"   Sample values: {result5.flatten()[:3]}")
     except Exception as e:

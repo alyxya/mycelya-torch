@@ -228,9 +228,11 @@ def mycelya_unpickle_result(data: bytes, machine_id: str, client) -> Any:
     return unpickler.load()
 
 
-def remote(func: F) -> F:
+def remote(func_or_none=None, **decorator_kwargs):
     """
-    Decorator that converts a function to execute remotely on mycelya tensors.
+    Dual-mode decorator that converts a function to execute remotely on mycelya tensors.
+
+    Can be used either as @remote or @remote() with identical behavior.
 
     This decorator:
     1. Analyzes function arguments to determine target remote machine
@@ -239,82 +241,102 @@ def remote(func: F) -> F:
     4. Deserializes results back to local mycelya tensors with proper linking
 
     Args:
-        func: Function to make remotely executable
+        func_or_none: Function to decorate (when used as @remote) or None (when used as @remote())
+        **decorator_kwargs: Future configuration options for the decorator
 
     Returns:
-        Wrapped function that executes remotely
+        Decorated function (when used as @remote) or decorator function (when used as @remote())
 
-    Example:
+    Examples:
+        # Both of these work identically:
+
         @remote
         def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a @ b
 
+        @remote()
+        def matrix_add(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            return a + b
+
         machine = RemoteMachine("modal", "A100")
         x = torch.randn(100, 100, device=machine.device())
         y = torch.randn(100, 100, device=machine.device())
-        result = matrix_multiply(x, y)  # Executes remotely
+        result1 = matrix_multiply(x, y)  # Executes remotely
+        result2 = matrix_add(x, y)       # Executes remotely
     """
 
-    def wrapper(*args, **kwargs):
-        # Find mycelya tensors/devices to infer target machine
-        machine_id = None
+    def create_wrapper(func: F) -> F:
+        def wrapper(*args, **kwargs):
+            # Find mycelya tensors/devices to infer target machine
+            machine_id = None
 
-        def check_for_machine(obj):
-            nonlocal machine_id
+            def check_for_machine(obj):
+                nonlocal machine_id
 
-            if isinstance(obj, torch.Tensor) and obj.device.type == "mycelya":
-                storage_id = get_storage_id(obj)
-                obj_machine_id = orchestrator.storage.get_remote_device_info(storage_id)[0]
+                if isinstance(obj, torch.Tensor) and obj.device.type == "mycelya":
+                    storage_id = get_storage_id(obj)
+                    obj_machine_id = orchestrator.storage.get_remote_device_info(storage_id)[0]
 
-                if machine_id is None:
-                    machine_id = obj_machine_id
-                elif machine_id != obj_machine_id:
-                    raise RuntimeError(
-                        f"Function arguments contain tensors from different machines: "
-                        f"{machine_id} and {obj_machine_id}"
-                    )
+                    if machine_id is None:
+                        machine_id = obj_machine_id
+                    elif machine_id != obj_machine_id:
+                        raise RuntimeError(
+                            f"Function arguments contain tensors from different machines: "
+                            f"{machine_id} and {obj_machine_id}"
+                        )
 
-            elif isinstance(obj, torch.device) and obj.type == "mycelya":
-                if obj.index is None:
-                    raise ValueError("Mycelya device must have an index")
-                obj_machine_id = device_manager.get_remote_device_info(obj.index)[0]
+                elif isinstance(obj, torch.device) and obj.type == "mycelya":
+                    if obj.index is None:
+                        raise ValueError("Mycelya device must have an index")
+                    obj_machine_id = device_manager.get_remote_device_info(obj.index)[0]
 
-                if machine_id is None:
-                    machine_id = obj_machine_id
-                elif machine_id != obj_machine_id:
-                    raise RuntimeError(
-                        f"Function arguments contain devices from different machines: "
-                        f"{machine_id} and {obj_machine_id}"
-                    )
+                    if machine_id is None:
+                        machine_id = obj_machine_id
+                    elif machine_id != obj_machine_id:
+                        raise RuntimeError(
+                            f"Function arguments contain devices from different machines: "
+                            f"{machine_id} and {obj_machine_id}"
+                        )
 
-        # Scan all arguments for mycelya objects
-        for arg in args:
-            if isinstance(arg, (list, tuple)):
-                for item in arg:
-                    check_for_machine(item)
-            else:
-                check_for_machine(arg)
+            # Scan all arguments for mycelya objects
+            for arg in args:
+                if isinstance(arg, (list, tuple)):
+                    for item in arg:
+                        check_for_machine(item)
+                else:
+                    check_for_machine(arg)
 
-        for kwarg_value in kwargs.values():
-            if isinstance(kwarg_value, (list, tuple)):
-                for item in kwarg_value:
-                    check_for_machine(item)
-            else:
-                check_for_machine(kwarg_value)
+            for kwarg_value in kwargs.values():
+                if isinstance(kwarg_value, (list, tuple)):
+                    for item in kwarg_value:
+                        check_for_machine(item)
+                else:
+                    check_for_machine(kwarg_value)
 
-        if machine_id is None:
-            raise RuntimeError(
-                "No mycelya tensors or devices found in function arguments. "
-                "Remote execution requires at least one mycelya object to determine target machine."
-            )
+            if machine_id is None:
+                raise RuntimeError(
+                    "No mycelya tensors or devices found in function arguments. "
+                    "Remote execution requires at least one mycelya object to determine target machine."
+                )
 
-        # Execute the function remotely via orchestrator (proper architecture)
-        return orchestrator.execute_pickled_function(func, args, kwargs, machine_id)
+            # Execute the function remotely via orchestrator (proper architecture)
+            return orchestrator.execute_pickled_function(func, args, kwargs, machine_id)
 
-    # Preserve function metadata
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__annotations__ = getattr(func, '__annotations__', {})
+        # Preserve function metadata
+        wrapper.__name__ = func.__name__
+        wrapper.__doc__ = func.__doc__
+        wrapper.__annotations__ = getattr(func, '__annotations__', {})
 
-    return wrapper
+        return wrapper
+
+    # Dual-mode logic: detect if used as @remote or @remote()
+    if func_or_none is None:
+        # Called as @remote() - return decorator function
+        return create_wrapper
+    elif callable(func_or_none):
+        # Called as @remote - directly decorate the function
+        return create_wrapper(func_or_none)
+    else:
+        # This shouldn't happen in normal usage
+        raise TypeError("@remote decorator expects a callable or no arguments")
 
