@@ -637,7 +637,7 @@ def create_modal_app_for_gpu(
             temp_tensor_registry = self._temp_tensor_registry
 
             # Custom unpickler to reconstruct tensors from IDs
-            class RemoteUnpickler(pickle.Unpickler):
+            class Unpickler(pickle.Unpickler):
                 def persistent_load(self, pid):
                     type_tag, data = pid
 
@@ -658,7 +658,7 @@ def create_modal_app_for_gpu(
             # Unpickle the function bundle
             import io
             buffer = io.BytesIO(pickled_function)
-            unpickler = RemoteUnpickler(buffer)
+            unpickler = Unpickler(buffer)
             func_bundle = unpickler.load()
 
             # Extract function and arguments
@@ -670,7 +670,7 @@ def create_modal_app_for_gpu(
             result = func(*args, **kwargs)
 
             # Custom pickler to convert results back to metadata
-            class RemotePickler(cloudpickle.Pickler):
+            class Pickler(cloudpickle.Pickler):
                 def persistent_id(self, obj):
                     import torch
                     import uuid
@@ -704,7 +704,7 @@ def create_modal_app_for_gpu(
 
             # Pickle the result
             result_buffer = io.BytesIO()
-            pickler = RemotePickler(result_buffer)
+            pickler = Pickler(result_buffer)
             pickler.dump(result)
 
             return result_buffer.getvalue()
