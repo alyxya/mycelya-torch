@@ -235,8 +235,6 @@ from ._state_dict import (  # noqa: E402
 # Remote execution utilities
 from ._pickle import (  # noqa: E402
     remote,
-    mycelya_pickle,
-    mycelya_unpickle,
 )
 
 # Define the public API
@@ -248,8 +246,6 @@ __all__ = [
     "load_huggingface_state_dicts",
     # Remote execution utilities
     "remote",
-    "mycelya_pickle",
-    "mycelya_unpickle",
     # Logging utilities
     "enable_debug_logging",
     "enable_info_logging",
