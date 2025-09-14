@@ -19,6 +19,7 @@ import pickle
 import uuid
 from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
 
+import modal
 import torch
 import cloudpickle
 from huggingface_hub import hf_hub_download, list_repo_files
@@ -43,8 +44,6 @@ def create_modal_app_for_gpu(
     Returns:
         Tuple of (modal_app, server_class) for the specified GPU type
     """
-    import modal
-
     class BatchCall(TypedDict):
         """Structure for a single batched RPC call."""
 
