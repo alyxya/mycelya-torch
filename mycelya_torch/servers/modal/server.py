@@ -13,7 +13,9 @@ This module handles all Modal-specific functionality including:
 Part of: mycelya_torch PyTorch extension
 """
 
+import pickle
 from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
+import cloudpickle
 
 
 def create_modal_app_for_gpu(
@@ -58,6 +60,68 @@ def create_modal_app_for_gpu(
         nbytes: int
         temp_key: str
         requires_grad: NotRequired[bool]
+
+    class Unpickler(pickle.Unpickler):
+        """Custom unpickler to reconstruct tensors from IDs."""
+
+        def __init__(self, file, tensor_registry):
+            super().__init__(file)
+            self.tensor_registry = tensor_registry
+
+        def persistent_load(self, pid):
+            type_tag, data = pid
+
+            if type_tag == "mycelya_tensor":
+                tensor_id = data
+                if tensor_id not in self.tensor_registry:
+                    raise ValueError(f"Tensor ID {tensor_id} not found in remote registry")
+                return self.tensor_registry[tensor_id]
+
+            elif type_tag == "mycelya_device":
+                import torch
+                remote_type, remote_index = data
+                return torch.device(remote_type, remote_index)
+
+            else:
+                raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
+
+    class Pickler(cloudpickle.Pickler):
+        """Custom pickler to convert results back to metadata."""
+
+        def __init__(self, file, temp_tensor_registry):
+            super().__init__(file)
+            self.temp_tensor_registry = temp_tensor_registry
+
+        def persistent_id(self, obj):
+            import torch
+            import uuid
+
+            if isinstance(obj, torch.Tensor):
+                # Generate unique temp key
+                temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
+
+                # Register tensor in temp registry
+                self.temp_tensor_registry[temp_key] = obj
+
+                # Create metadata for client reconstruction
+                metadata = {
+                    "shape": list(obj.shape),
+                    "dtype": str(obj.dtype).replace("torch.", ""),
+                    "stride": list(obj.stride()),
+                    "storage_offset": obj.storage_offset(),
+                    "nbytes": obj.untyped_storage().nbytes(),
+                    "temp_key": temp_key,
+                }
+
+                if obj.requires_grad:
+                    metadata["requires_grad"] = True
+
+                return ("remote_tensor", metadata)
+
+            elif isinstance(obj, torch.device):
+                return ("remote_device", (obj.type, obj.index))
+
+            return None
 
     app = modal.App("mycelya-torch")
 
@@ -636,29 +700,10 @@ def create_modal_app_for_gpu(
             tensor_registry = self._tensor_registry
             temp_tensor_registry = self._temp_tensor_registry
 
-            # Custom unpickler to reconstruct tensors from IDs
-            class Unpickler(pickle.Unpickler):
-                def persistent_load(self, pid):
-                    type_tag, data = pid
-
-                    if type_tag == "mycelya_tensor":
-                        tensor_id = data
-                        if tensor_id not in tensor_registry:
-                            raise ValueError(f"Tensor ID {tensor_id} not found in remote registry")
-                        return tensor_registry[tensor_id]
-
-                    elif type_tag == "mycelya_device":
-                        import torch
-                        remote_type, remote_index = data
-                        return torch.device(remote_type, remote_index)
-
-                    else:
-                        raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
-
             # Unpickle the function bundle
             import io
             buffer = io.BytesIO(pickled_function)
-            unpickler = Unpickler(buffer)
+            unpickler = Unpickler(buffer, tensor_registry)
             func_bundle = unpickler.load()
 
             # Extract function and arguments
@@ -669,42 +714,9 @@ def create_modal_app_for_gpu(
             # Execute the function directly (CloudPickle handles the function properly)
             result = func(*args, **kwargs)
 
-            # Custom pickler to convert results back to metadata
-            class Pickler(cloudpickle.Pickler):
-                def persistent_id(self, obj):
-                    import torch
-                    import uuid
-
-                    if isinstance(obj, torch.Tensor):
-                        # Generate unique temp key
-                        temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
-
-                        # Register tensor in temp registry
-                        temp_tensor_registry[temp_key] = obj
-
-                        # Create metadata for client reconstruction
-                        metadata = {
-                            "shape": list(obj.shape),
-                            "dtype": str(obj.dtype).replace("torch.", ""),
-                            "stride": list(obj.stride()),
-                            "storage_offset": obj.storage_offset(),
-                            "nbytes": obj.untyped_storage().nbytes(),
-                            "temp_key": temp_key,
-                        }
-
-                        if obj.requires_grad:
-                            metadata["requires_grad"] = True
-
-                        return ("remote_tensor", metadata)
-
-                    elif isinstance(obj, torch.device):
-                        return ("remote_device", (obj.type, obj.index))
-
-                    return None
-
             # Pickle the result
             result_buffer = io.BytesIO()
-            pickler = Pickler(result_buffer)
+            pickler = Pickler(result_buffer, temp_tensor_registry)
             pickler.dump(result)
 
             return result_buffer.getvalue()
