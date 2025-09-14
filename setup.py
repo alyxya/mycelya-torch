@@ -85,7 +85,7 @@ if __name__ == "__main__":
     ]
 
     setup(
-        packages=find_packages(exclude=("test",)),
+        packages=find_packages(exclude=("tests",)),
         ext_modules=ext_modules,
         cmdclass={
             "build_ext": get_build_ext_class(),

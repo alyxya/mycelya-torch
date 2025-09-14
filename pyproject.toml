@@ -37,7 +37,7 @@ aws = ["boto3>=1.33.0"]
 all = ["boto3>=1.33.0"]
 
 [tool.setuptools.packages.find]
-exclude = ["test*"]
+exclude = ["tests*"]
 
 [tool.setuptools.package-data]
 mycelya_torch = ["*.dll", "*.dylib", "*.so"]
