@@ -228,7 +228,7 @@ def mycelya_unpickle_result(data: bytes, machine_id: str, client) -> Any:
     return unpickler.load()
 
 
-def remote(func_or_none=None, **decorator_kwargs):
+def remote(_func=None, *, run_async: bool = False):
     """
     Dual-mode decorator that converts a function to execute remotely on mycelya tensors.
 
@@ -241,8 +241,8 @@ def remote(func_or_none=None, **decorator_kwargs):
     4. Deserializes results back to local mycelya tensors with proper linking
 
     Args:
-        func_or_none: Function to decorate (when used as @remote) or None (when used as @remote())
-        **decorator_kwargs: Future configuration options for the decorator
+        _func: Function to decorate (when used as @remote) or None (when used as @remote())
+        run_async: Whether to run the function asynchronously (unused for now, defaults to False)
 
     Returns:
         Decorated function (when used as @remote) or decorator function (when used as @remote())
@@ -256,6 +256,11 @@ def remote(func_or_none=None, **decorator_kwargs):
 
         @remote()
         def matrix_add(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            return a + b
+
+        # Future async support:
+        @remote(run_async=True)
+        def async_function(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a + b
 
         machine = RemoteMachine("modal", "A100")
@@ -330,12 +335,12 @@ def remote(func_or_none=None, **decorator_kwargs):
         return wrapper
 
     # Dual-mode logic: detect if used as @remote or @remote()
-    if func_or_none is None:
+    if _func is None:
         # Called as @remote() - return decorator function
         return create_wrapper
-    elif callable(func_or_none):
+    elif callable(_func):
         # Called as @remote - directly decorate the function
-        return create_wrapper(func_or_none)
+        return create_wrapper(_func)
     else:
         # This shouldn't happen in normal usage
         raise TypeError("@remote decorator expects a callable or no arguments")
