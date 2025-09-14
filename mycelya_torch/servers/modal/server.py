@@ -13,9 +13,16 @@ This module handles all Modal-specific functionality including:
 Part of: mycelya_torch PyTorch extension
 """
 
+import io
+import os
 import pickle
+import uuid
 from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
+
+import torch
 import cloudpickle
+from huggingface_hub import hf_hub_download, list_repo_files
+from safetensors.torch import load_file as load_safetensors
 
 
 def create_modal_app_for_gpu(
@@ -78,7 +85,6 @@ def create_modal_app_for_gpu(
                 return self.tensor_registry[tensor_id]
 
             elif type_tag == "mycelya_device":
-                import torch
                 remote_type, remote_index = data
                 return torch.device(remote_type, remote_index)
 
@@ -93,9 +99,6 @@ def create_modal_app_for_gpu(
             self.temp_tensor_registry = temp_tensor_registry
 
         def persistent_id(self, obj):
-            import torch
-            import uuid
-
             if isinstance(obj, torch.Tensor):
                 # Generate unique temp key
                 temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
@@ -168,9 +171,8 @@ def create_modal_app_for_gpu(
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
-            import os
-
-            import torch  # noqa: F401  # Preload torch import for better performance
+            # Cache torch.ops using getattr to avoid serialization issues with _Ops object
+            self.torch_ops = getattr(torch, "ops")
 
             # Change to data directory and set HF cache if available (only when volumes are mounted)
             if gpu_type != "local":
@@ -221,7 +223,6 @@ def create_modal_app_for_gpu(
             device_index: int,
         ):
             """Create an empty tensor with given tensor_id and proper storage layout."""
-            import torch
 
             tensor_registry = self._tensor_registry
 
@@ -280,7 +281,6 @@ def create_modal_app_for_gpu(
             offset: int,
         ):
             """Create a tensor view from existing tensor using as_strided."""
-            import torch
 
             tensor_registry = self._tensor_registry
 
@@ -321,7 +321,6 @@ def create_modal_app_for_gpu(
             source_dtype: str,
         ):
             """Update an existing tensor with new data and source metadata."""
-            import torch
 
             tensor_registry = self._tensor_registry
 
@@ -375,7 +374,6 @@ def create_modal_app_for_gpu(
 
         def _get_storage_data_impl(self, tensor_id: int):
             """Get raw storage data by tensor ID."""
-            import torch
 
             tensor_registry = self._tensor_registry
 
@@ -414,7 +412,6 @@ def create_modal_app_for_gpu(
 
         def _resize_storage_impl(self, tensor_id: int, nbytes: int):
             """Resize the underlying storage for a tensor."""
-            import torch
 
             tensor_registry = self._tensor_registry
 
@@ -471,10 +468,6 @@ def create_modal_app_for_gpu(
             output_tensor_ids: Optional[List[int]] = None,
         ):
             """Implementation of execute_aten_operation without Modal decorators."""
-            import uuid
-
-            import torch
-
             tensor_registry = self._tensor_registry
 
             mask_iter = iter(tensor_mask)
@@ -490,8 +483,8 @@ def create_modal_app_for_gpu(
             processed_args = [process_item(arg) for arg in args]
             processed_kwargs = {k: process_item(v) for k, v in kwargs.items()}
 
-            # Execute operation
-            op = torch.ops
+            # Execute operation using cached torch_ops
+            op = self.torch_ops
             op_parts = op_name.split(".")
             for part in op_parts:
                 op = getattr(op, part)
@@ -560,12 +553,6 @@ def create_modal_app_for_gpu(
             self, repo: str, path: str, device_type: str, device_index: int
         ):
             """Load HuggingFace model weights organized by directory and store with temporary keys."""
-            import os
-            import uuid
-
-            import torch
-            from huggingface_hub import hf_hub_download, list_repo_files
-            from safetensors.torch import load_file as load_safetensors
 
             device = torch.device(device_type, device_index)
 
@@ -694,14 +681,10 @@ def create_modal_app_for_gpu(
 
         def _execute_remote_function_impl(self, pickled_function: bytes) -> bytes:
             """Implementation of execute_remote_function without Modal decorators."""
-            import pickle
-            import cloudpickle
-
             tensor_registry = self._tensor_registry
             temp_tensor_registry = self._temp_tensor_registry
 
             # Unpickle the function bundle
-            import io
             buffer = io.BytesIO(pickled_function)
             unpickler = Unpickler(buffer, tensor_registry)
             func_bundle = unpickler.load()
