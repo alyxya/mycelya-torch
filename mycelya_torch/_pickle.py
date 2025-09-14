@@ -4,20 +4,19 @@
 """
 Custom pickle system for mycelya tensors and remote execution.
 
-This module provides custom pickler/unpickler classes that handle mycelya tensors
-and devices properly during serialization for remote execution. It includes:
+This module provides custom pickler/unpickler classes and remote execution decorator that handle
+mycelya tensors and devices properly during serialization for remote execution. It includes:
 
 - MycelyaPickler: Converts mycelya tensors to tensor IDs and devices to remote info
-- MycelyaUnpickler: Reconstructs mycelya tensors from IDs and maps devices back
-- RemotePickler: Server-side pickler that converts tensors to metadata
-- RemoteUnpickler: Server-side unpickler that reconstructs tensors from registry
-- remote decorator: Combines all functionality for remote function execution
+- ResultUnpickler: Reconstructs remote execution results back to local mycelya tensors
+- mycelya_pickle: Utility function for pickling objects with MycelyaPickler
+- mycelya_unpickle_result: Utility function for unpickling remote execution results
+- remote decorator: Main decorator for remote function execution
 """
 
 import io
 import pickle
-import uuid
-from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
+from typing import Any, Callable, Optional, Tuple, TypeVar
 
 import torch
 
@@ -34,7 +33,6 @@ from ._logging import get_logger
 from ._machine import RemoteMachine
 from ._orchestrator import orchestrator
 from ._utils import (
-    TensorMetadata,
     get_storage_id,
     get_tensor_id,
 )
@@ -119,145 +117,70 @@ class MycelyaPickler(cloudpickle.Pickler):
         return None
 
 
-class MycelyaUnpickler(pickle.Unpickler):
+class ResultUnpickler(pickle.Unpickler):
     """
-    Custom unpickler that reconstructs mycelya tensors and devices from remote info.
+    Unpickler for remote function execution results.
 
-    This unpickler converts:
-    - Tensor IDs -> mycelya tensor stubs that will be linked later
-    - Device info tuples -> mycelya device objects mapped to local indices
+    This unpickler handles the results returned from remote function execution,
+    converting remote_tensor metadata back into local mycelya tensors and
+    remote_device info back into local mycelya devices.
     """
 
-    def __init__(self, file: io.BytesIO, machine: RemoteMachine):
+    def __init__(self, file: io.BytesIO, machine_id: str, client):
         super().__init__(file)
-        self.machine = machine
-        self._tensor_metadata_map: Dict[int, TensorMetadata] = {}
+        self.machine_id = machine_id
+        self.client = client
 
     def persistent_load(self, pid: Tuple[str, Any]) -> Any:
         """
-        Handle reconstruction of mycelya objects during unpickling.
+        Handle reconstruction of remote execution results.
 
         Args:
-            pid: Persistent ID tuple from pickler
+            pid: Persistent ID tuple from remote pickler
 
         Returns:
             Reconstructed mycelya tensor or device
         """
         type_tag, data = pid
 
-        if type_tag == "mycelya_tensor":
-            # Note: This method is primarily for completeness.
-            # In practice, remote execution uses the ResultUnpickler above
-            # which handles tensor metadata properly.
-            raise NotImplementedError(
-                "Direct tensor unpickling from tensor ID is not supported. "
-                "Use the remote decorator for proper remote function execution."
+        if type_tag == "remote_tensor":
+            metadata = data
+            # Import here to avoid circular imports
+            from ._machine import RemoteMachine
+            from ._utils import (
+                create_mycelya_tensor_from_metadata,
+                get_tensor_id,
             )
 
-        elif type_tag == "mycelya_device":
-            remote_type, remote_index = data
+            # Find the appropriate machine for device mapping
+            for machine in RemoteMachine._all_machines:
+                if machine.machine_id == self.machine_id:
+                    device = machine.device()
+                    break
+            else:
+                raise RuntimeError(f"No RemoteMachine found for machine_id {self.machine_id}")
 
-            # Map remote device info back to local mycelya device
-            return self.machine.device(type=remote_type, index=remote_index)
+            # Create mycelya tensor from metadata
+            tensor = create_mycelya_tensor_from_metadata(metadata, device)
 
-        else:
-            raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
+            # Link the tensor to the remote tensor in temp registry
+            temp_key = metadata["temp_key"]
+            tensor_id = get_tensor_id(tensor)
+            self.client.link_tensors([tensor_id], [temp_key])
 
+            return tensor
 
-class RemotePickler(cloudpickle.Pickler):
-    """
-    Server-side Pickler that converts torch tensors to metadata for return to client.
+        elif type_tag == "remote_device":
+            device_type, device_index = data
+            # Import here to avoid circular imports
+            from ._machine import RemoteMachine
 
-    This pickler runs on the remote server and converts:
-    - Torch tensors -> tensor metadata with temp registry keys
-    - Regular devices -> device type/index info for local reconstruction
-    """
+            # Find the appropriate machine for device mapping
+            for machine in RemoteMachine._all_machines:
+                if machine.machine_id == self.machine_id:
+                    return machine.device(type=device_type, index=device_index)
 
-    def __init__(self, file: io.BytesIO, temp_registry: Dict[str, torch.Tensor],
-                 protocol: int = None, buffer_callback: Any = None):
-        super().__init__(file, protocol=protocol, buffer_callback=buffer_callback)
-        self.temp_registry = temp_registry
-
-    def persistent_id(self, obj: Any) -> Optional[Tuple[str, Any]]:
-        """
-        Handle torch tensors and devices during server-side pickling.
-
-        Args:
-            obj: Object being pickled on remote server
-
-        Returns:
-            Tuple of (type_tag, data) for special objects, None for regular objects
-        """
-        # Handle torch tensors - convert to metadata and register in temp registry
-        if isinstance(obj, torch.Tensor):
-            # Generate unique temp key
-            temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
-
-            # Register tensor in temp registry
-            self.temp_registry[temp_key] = obj
-
-            # Create metadata for client reconstruction
-            metadata: TensorMetadata = {
-                "shape": list(obj.shape),
-                "dtype": str(obj.dtype).replace("torch.", ""),
-                "stride": list(obj.stride()),
-                "storage_offset": obj.storage_offset(),
-                "nbytes": obj.untyped_storage().nbytes(),
-                "temp_key": temp_key,
-            }
-
-            if obj.requires_grad:
-                metadata["requires_grad"] = True
-
-            return ("remote_tensor", metadata)
-
-        # Handle regular devices - convert to type/index info
-        elif isinstance(obj, torch.device):
-            return ("remote_device", (obj.type, obj.index))
-
-        # Regular object - use normal pickling
-        return None
-
-
-class RemoteUnpickler(pickle.Unpickler):
-    """
-    Server-side unpickler that reconstructs tensors from IDs for function execution.
-
-    This unpickler runs on the remote server and converts:
-    - Tensor IDs -> actual torch tensors from tensor registry
-    - Device info -> actual torch device objects
-    """
-
-    def __init__(self, file: io.BytesIO, tensor_registry: Dict[int, torch.Tensor]):
-        super().__init__(file)
-        self.tensor_registry = tensor_registry
-
-    def persistent_load(self, pid: Tuple[str, Any]) -> Any:
-        """
-        Handle reconstruction of tensors and devices on remote server.
-
-        Args:
-            pid: Persistent ID tuple from client pickler
-
-        Returns:
-            Reconstructed torch tensor or device
-        """
-        type_tag, data = pid
-
-        if type_tag == "mycelya_tensor":
-            tensor_id = data
-
-            # Look up tensor in registry
-            if tensor_id not in self.tensor_registry:
-                raise ValueError(f"Tensor ID {tensor_id} not found in remote registry")
-
-            return self.tensor_registry[tensor_id]
-
-        elif type_tag == "mycelya_device":
-            remote_type, remote_index = data
-
-            # Reconstruct torch device
-            return torch.device(remote_type, remote_index)
+            raise RuntimeError(f"No RemoteMachine found for machine_id {self.machine_id}")
 
         else:
             raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
@@ -288,52 +211,20 @@ def mycelya_pickle(obj: Any, machine: Optional[RemoteMachine] = None) -> bytes:
     return buffer.getvalue()
 
 
-def mycelya_unpickle(data: bytes, machine: RemoteMachine) -> Any:
+def mycelya_unpickle_result(data: bytes, machine_id: str, client) -> Any:
     """
-    Unpickle an object using MycelyaUnpickler.
+    Unpickle a remote function execution result.
 
     Args:
-        data: Pickled bytes
-        machine: RemoteMachine for tensor/device reconstruction
+        data: Pickled bytes from remote execution
+        machine_id: ID of the machine that executed the function
+        client: Client instance for tensor linking
 
     Returns:
-        Unpickled object
+        Unpickled result with proper tensor/device reconstruction
     """
     buffer = io.BytesIO(data)
-    unpickler = MycelyaUnpickler(buffer, machine)
-    return unpickler.load()
-
-
-def remote_pickle(obj: Any, temp_registry: Dict[str, torch.Tensor]) -> bytes:
-    """
-    Server-side pickle using RemotePickler (based on cloudpickle.Pickler).
-
-    Args:
-        obj: Object to pickle on remote server
-        temp_registry: Temporary tensor registry for metadata keys
-
-    Returns:
-        Pickled bytes
-    """
-    buffer = io.BytesIO()
-    pickler = RemotePickler(buffer, temp_registry)
-    pickler.dump(obj)
-    return buffer.getvalue()
-
-
-def remote_unpickle(data: bytes, tensor_registry: Dict[int, torch.Tensor]) -> Any:
-    """
-    Server-side unpickle using RemoteUnpickler.
-
-    Args:
-        data: Pickled bytes from client
-        tensor_registry: Tensor registry for ID lookup
-
-    Returns:
-        Unpickled object
-    """
-    buffer = io.BytesIO(data)
-    unpickler = RemoteUnpickler(buffer, tensor_registry)
+    unpickler = ResultUnpickler(buffer, machine_id, client)
     return unpickler.load()
 
 

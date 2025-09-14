@@ -632,58 +632,8 @@ class Orchestrator:
         pickled_result = result_future.result()
 
         # Unpickle result with proper tensor linking
-        import io
-        import pickle
-        result_buffer = io.BytesIO(pickled_result)
-
-        class ResultUnpickler(pickle.Unpickler):
-            def persistent_load(self, pid):
-                type_tag, data = pid
-
-                if type_tag == "remote_tensor":
-                    metadata = data
-                    # Import here to avoid circular imports
-                    from ._machine import RemoteMachine
-                    from ._utils import (
-                        create_mycelya_tensor_from_metadata,
-                        get_tensor_id,
-                    )
-
-                    # Find the appropriate machine for device mapping
-                    for machine in RemoteMachine._all_machines:
-                        if machine.machine_id == machine_id:
-                            device = machine.device()
-                            break
-                    else:
-                        raise RuntimeError(f"No RemoteMachine found for machine_id {machine_id}")
-
-                    # Create mycelya tensor from metadata
-                    tensor = create_mycelya_tensor_from_metadata(metadata, device)
-
-                    # Link the tensor to the remote tensor in temp registry
-                    temp_key = metadata["temp_key"]
-                    tensor_id = get_tensor_id(tensor)
-                    client.link_tensors([tensor_id], [temp_key])
-
-                    return tensor
-
-                elif type_tag == "remote_device":
-                    device_type, device_index = data
-                    # Import here to avoid circular imports
-                    from ._machine import RemoteMachine
-
-                    # Find the appropriate machine for device mapping
-                    for machine in RemoteMachine._all_machines:
-                        if machine.machine_id == machine_id:
-                            return machine.device(type=device_type, index=device_index)
-
-                    raise RuntimeError(f"No RemoteMachine found for machine_id {machine_id}")
-
-                else:
-                    raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
-
-        unpickler = ResultUnpickler(result_buffer)
-        return unpickler.load()
+        from ._pickle import mycelya_unpickle_result
+        return mycelya_unpickle_result(pickled_result, machine_id, client)
 
     def load_huggingface_state_dicts_future(
         self,
