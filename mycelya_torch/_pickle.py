@@ -14,9 +14,10 @@ mycelya tensors and devices properly during serialization for remote execution. 
 - remote decorator: Main decorator for remote function execution
 """
 
+import functools
 import io
 import pickle
-from typing import Any, Callable, Optional, Tuple, TypeVar
+from typing import Any, Callable, Optional, Tuple
 
 import torch
 import cloudpickle
@@ -31,8 +32,6 @@ from ._utils import (
 )
 
 log = get_logger(__name__)
-
-F = TypeVar('F', bound=Callable[..., Any])
 
 
 class MycelyaPickler(cloudpickle.Pickler):
@@ -221,7 +220,7 @@ def mycelya_unpickle_result(data: bytes, machine_id: str, client) -> Any:
     return unpickler.load()
 
 
-def remote(_func=None, *, run_async: bool = False):
+def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = False):
     """
     Dual-mode decorator that converts a function to execute remotely on mycelya tensors.
 
@@ -263,7 +262,8 @@ def remote(_func=None, *, run_async: bool = False):
         result2 = matrix_add(x, y)       # Executes remotely
     """
 
-    def create_wrapper(func: F) -> F:
+    def create_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Find mycelya tensors/devices to infer target machine
             machine_id = None
@@ -320,11 +320,6 @@ def remote(_func=None, *, run_async: bool = False):
             # Execute the function remotely via orchestrator (proper architecture)
             return orchestrator.execute_pickled_function(func, args, kwargs, machine_id)
 
-        # Preserve function metadata
-        wrapper.__name__ = func.__name__
-        wrapper.__doc__ = func.__doc__
-        wrapper.__annotations__ = getattr(func, '__annotations__', {})
-
         return wrapper
 
     # Dual-mode logic: detect if used as @remote or @remote()
@@ -337,4 +332,3 @@ def remote(_func=None, *, run_async: bool = False):
     else:
         # This shouldn't happen in normal usage
         raise TypeError("@remote decorator expects a callable or no arguments")
-
