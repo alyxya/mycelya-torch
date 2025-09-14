@@ -19,14 +19,7 @@ import pickle
 from typing import Any, Callable, Optional, Tuple, TypeVar
 
 import torch
-
-try:
-    import cloudpickle
-except ImportError:
-    raise ImportError(
-        "cloudpickle is required for remote function execution. "
-        "Install with: pip install cloudpickle"
-    )
+import cloudpickle
 
 from ._device import device_manager
 from ._logging import get_logger

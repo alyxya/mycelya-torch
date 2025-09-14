@@ -29,6 +29,7 @@ dependencies = [
     "torch>=2.0.0",
     "modal>=1.1.0",
     "numpy",
+    "cloudpickle>=3.1.1",
 ]
 
 [project.optional-dependencies]
