@@ -595,7 +595,7 @@ class Orchestrator:
             # Register tensor ID in orchestrator mapping
             self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
-    def execute_pickled_function(self, func, args, kwargs, machine_id: str) -> Any:
+    def execute_pickled_function(self, func, args, kwargs) -> Any:
         """
         Execute a pickled function on the remote machine.
 
@@ -603,19 +603,10 @@ class Orchestrator:
             func: Function to execute remotely
             args: Function arguments
             kwargs: Function keyword arguments
-            machine_id: Target machine ID
 
         Returns:
             Function result with proper tensor linking
         """
-        # Get client for the target machine
-        client = self._clients.get(machine_id)
-        if client is None:
-            raise RuntimeError(f"No client found for machine {machine_id}")
-
-        if not client.is_running():
-            raise RuntimeError(f"Client for machine {machine_id} is not running")
-
         # Import here to avoid circular imports
         from ._pickle import Pickler
         import io
@@ -630,6 +621,22 @@ class Orchestrator:
         pickler = Pickler(buffer)
         pickler.dump(func_bundle)
         pickled_func = buffer.getvalue()
+
+        # Get machine_id from pickler (inferred during pickling)
+        machine_id = pickler.machine_id
+        if machine_id is None:
+            raise RuntimeError(
+                "No mycelya tensors or devices found in function arguments. "
+                "Remote execution requires at least one mycelya object to determine target machine."
+            )
+
+        # Get client for the target machine
+        client = self._clients.get(machine_id)
+        if client is None:
+            raise RuntimeError(f"No client found for machine {machine_id}")
+
+        if not client.is_running():
+            raise RuntimeError(f"Client for machine {machine_id} is not running")
 
         # Execute remotely
         result_future = client.execute_remote_function(pickled_func)

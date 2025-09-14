@@ -224,60 +224,9 @@ def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = Fals
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            # Find mycelya tensors/devices to infer target machine
-            machine_id = None
-
-            def check_for_machine(obj):
-                nonlocal machine_id
-
-                if isinstance(obj, torch.Tensor) and obj.device.type == "mycelya":
-                    storage_id = get_storage_id(obj)
-                    obj_machine_id = orchestrator.storage.get_remote_device_info(storage_id)[0]
-
-                    if machine_id is None:
-                        machine_id = obj_machine_id
-                    elif machine_id != obj_machine_id:
-                        raise RuntimeError(
-                            f"Function arguments contain tensors from different machines: "
-                            f"{machine_id} and {obj_machine_id}"
-                        )
-
-                elif isinstance(obj, torch.device) and obj.type == "mycelya":
-                    if obj.index is None:
-                        raise ValueError("Mycelya device must have an index")
-                    obj_machine_id = device_manager.get_remote_device_info(obj.index)[0]
-
-                    if machine_id is None:
-                        machine_id = obj_machine_id
-                    elif machine_id != obj_machine_id:
-                        raise RuntimeError(
-                            f"Function arguments contain devices from different machines: "
-                            f"{machine_id} and {obj_machine_id}"
-                        )
-
-            # Scan all arguments for mycelya objects
-            for arg in args:
-                if isinstance(arg, (list, tuple)):
-                    for item in arg:
-                        check_for_machine(item)
-                else:
-                    check_for_machine(arg)
-
-            for kwarg_value in kwargs.values():
-                if isinstance(kwarg_value, (list, tuple)):
-                    for item in kwarg_value:
-                        check_for_machine(item)
-                else:
-                    check_for_machine(kwarg_value)
-
-            if machine_id is None:
-                raise RuntimeError(
-                    "No mycelya tensors or devices found in function arguments. "
-                    "Remote execution requires at least one mycelya object to determine target machine."
-                )
-
-            # Execute the function remotely via orchestrator (proper architecture)
-            return orchestrator.execute_pickled_function(func, args, kwargs, machine_id)
+            # Execute the function remotely via orchestrator
+            # Machine inference happens during pickling via Pickler.machine_id
+            return orchestrator.execute_pickled_function(func, args, kwargs)
 
         return wrapper
 
