@@ -16,9 +16,5 @@ Future clients may include:
 from .base_client import Client
 
 # Import available clients
-try:
-    from . import modal
-
-    __all__ = ["Client", "modal"]
-except ImportError:
-    __all__ = ["Client"]
+from . import modal
+from . import mock
