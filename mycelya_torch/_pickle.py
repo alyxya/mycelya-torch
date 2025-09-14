@@ -20,8 +20,8 @@ import torch
 
 from ._device import device_manager
 from ._logging import get_logger
-from ._orchestrator import orchestrator
 from ._utils import (
+    create_mycelya_tensor_from_metadata,
     get_storage_id,
     get_tensor_id,
 )
@@ -43,10 +43,13 @@ class Pickler(cloudpickle.Pickler):
     """
 
     def __init__(
-        self, file: io.BytesIO, protocol: int = None, buffer_callback: Any = None
+        self, file: io.BytesIO, storage_manager, protocol: int = None, buffer_callback: Any = None
     ):
         super().__init__(file, protocol=protocol, buffer_callback=buffer_callback)
+        self.storage_manager = storage_manager
         self.machine_id: Optional[str] = None
+        # Collect tensors that need _maybe_create_tensor called
+        self.tensors_to_create = []
 
     def persistent_id(self, obj: Any) -> Optional[Tuple[str, Any]]:
         """
@@ -66,7 +69,7 @@ class Pickler(cloudpickle.Pickler):
             # Get tensor's machine information
             storage_id = get_storage_id(obj)
             machine_id, remote_type, remote_index = (
-                orchestrator.storage.get_remote_device_info(storage_id)
+                self.storage_manager.get_remote_device_info(storage_id)
             )
 
             # Validate machine consistency
@@ -78,9 +81,8 @@ class Pickler(cloudpickle.Pickler):
                     f"current machine {self.machine_id}, tensor machine {machine_id}"
                 )
 
-            # Return tensor ID for remote lookup
-            # First ensure the tensor exists remotely
-            orchestrator._maybe_create_tensor(obj)
+            # Collect tensor for orchestrator to call _maybe_create_tensor on
+            self.tensors_to_create.append(obj)
             tensor_id = get_tensor_id(obj)  # Use metadata hash as tensor ID
             return ("mycelya_tensor", tensor_id)
 
@@ -119,10 +121,11 @@ class Unpickler(pickle.Unpickler):
     remote_device info back into local mycelya devices.
     """
 
-    def __init__(self, file: io.BytesIO, machine_id: str, client):
+    def __init__(self, file: io.BytesIO, machine_id: str):
         super().__init__(file)
         self.machine_id = machine_id
-        self.client = client
+        # Collect tensor linking info for orchestrator to handle
+        self.tensors_to_link = []  # List of (tensor_id, temp_key) tuples
 
     def persistent_load(self, pid: Tuple[str, Any]) -> Any:
         """
@@ -138,45 +141,28 @@ class Unpickler(pickle.Unpickler):
 
         if type_tag == "remote_tensor":
             metadata = data
-            # Import here to avoid circular imports
-            from ._machine import RemoteMachine
-            from ._utils import (
-                create_mycelya_tensor_from_metadata,
-                get_tensor_id,
-            )
 
-            # Find the appropriate machine for device mapping
-            for machine in RemoteMachine._all_machines:
-                if machine.machine_id == self.machine_id:
-                    device = machine.device()
-                    break
-            else:
-                raise RuntimeError(
-                    f"No RemoteMachine found for machine_id {self.machine_id}"
-                )
+            # Get device using device_manager
+            device = device_manager.get_mycelya_device(
+                self.machine_id, "mycelya", 0  # Default mycelya device index
+            )
 
             # Create mycelya tensor from metadata
             tensor = create_mycelya_tensor_from_metadata(metadata, device)
 
-            # Link the tensor to the remote tensor in temp registry
+            # Collect tensor linking info for orchestrator to handle
             temp_key = metadata["temp_key"]
             tensor_id = get_tensor_id(tensor)
-            self.client.link_tensors([tensor_id], [temp_key])
+            self.tensors_to_link.append((tensor_id, temp_key))
 
             return tensor
 
         elif type_tag == "remote_device":
             device_type, device_index = data
-            # Import here to avoid circular imports
-            from ._machine import RemoteMachine
 
-            # Find the appropriate machine for device mapping
-            for machine in RemoteMachine._all_machines:
-                if machine.machine_id == self.machine_id:
-                    return machine.device(type=device_type, index=device_index)
-
-            raise RuntimeError(
-                f"No RemoteMachine found for machine_id {self.machine_id}"
+            # Get device using device_manager
+            return device_manager.get_mycelya_device(
+                self.machine_id, device_type, device_index
             )
 
         else:

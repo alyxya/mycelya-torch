@@ -10,6 +10,7 @@ Currently supports Modal as the first provider implementation.
 """
 
 import atexit
+import io
 import threading
 import time
 from collections import deque
@@ -20,6 +21,7 @@ import torch
 
 from ._device import device_manager
 from ._logging import get_logger
+from ._pickle import Pickler, Unpickler
 from ._storage import StorageManager
 from ._utils import (
     TensorMetadata,
@@ -96,11 +98,9 @@ class Orchestrator:
         """
         if provider == "modal":
             from .clients.modal.client import ModalClient
-
             client = ModalClient(machine_id, gpu_type, batching, timeout)
         elif provider == "mock":
             from .clients.mock.client import MockClient
-
             client = MockClient(machine_id, batching)
         else:
             raise ValueError(f"Provider {provider} not implemented yet")
@@ -607,20 +607,21 @@ class Orchestrator:
         Returns:
             Function result with proper tensor linking
         """
-        # Import here to avoid circular imports
-        from ._pickle import Pickler
-        import io
-
         # Create function bundle and pickle it
+
         func_bundle = {
             "function": func,
             "args": args,
             "kwargs": kwargs,
         }
         buffer = io.BytesIO()
-        pickler = Pickler(buffer)
+        pickler = Pickler(buffer, self.storage)
         pickler.dump(func_bundle)
         pickled_func = buffer.getvalue()
+
+        # Handle tensor creation for any tensors collected by pickler
+        for tensor in pickler.tensors_to_create:
+            self._maybe_create_tensor(tensor)
 
         # Get machine_id from pickler (inferred during pickling)
         machine_id = pickler.machine_id
@@ -643,10 +644,18 @@ class Orchestrator:
         pickled_result = result_future.result()
 
         # Unpickle result with proper tensor linking
-        from ._pickle import Unpickler
+
         buffer = io.BytesIO(pickled_result)
-        unpickler = Unpickler(buffer, machine_id, client)
-        return unpickler.load()
+        unpickler = Unpickler(buffer, machine_id)
+        result = unpickler.load()
+
+        # Handle tensor linking if any tensors were collected
+        if unpickler.tensors_to_link:
+            tensor_ids = [tid for tid, _ in unpickler.tensors_to_link]
+            temp_keys = [tkey for _, tkey in unpickler.tensors_to_link]
+            client.link_tensors(tensor_ids, temp_keys)
+
+        return result
 
     def load_huggingface_state_dicts_future(
         self,
