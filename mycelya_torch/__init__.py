@@ -228,14 +228,10 @@ from ._machine import (  # noqa: E402
 )
 
 # Remote state dict loading utilities
-from ._state_dict import (  # noqa: E402
-    load_huggingface_state_dicts,
-)
+from ._state_dict import load_huggingface_state_dicts  # noqa: E402
 
 # Remote execution utilities
-from ._pickle import (  # noqa: E402
-    remote,
-)
+from ._pickle import remote  # noqa: E402
 
 # Define the public API
 __all__ = [
