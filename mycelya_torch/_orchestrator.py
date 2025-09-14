@@ -617,7 +617,8 @@ class Orchestrator:
             raise RuntimeError(f"Client for machine {machine_id} is not running")
 
         # Import here to avoid circular imports
-        from ._pickle import mycelya_pickle
+        from ._pickle import Pickler
+        import io
 
         # Create function bundle and pickle it
         func_bundle = {
@@ -625,15 +626,20 @@ class Orchestrator:
             "args": args,
             "kwargs": kwargs,
         }
-        pickled_func = mycelya_pickle(func_bundle)
+        buffer = io.BytesIO()
+        pickler = Pickler(buffer)
+        pickler.dump(func_bundle)
+        pickled_func = buffer.getvalue()
 
         # Execute remotely
         result_future = client.execute_remote_function(pickled_func)
         pickled_result = result_future.result()
 
         # Unpickle result with proper tensor linking
-        from ._pickle import mycelya_unpickle_result
-        return mycelya_unpickle_result(pickled_result, machine_id, client)
+        from ._pickle import Unpickler
+        buffer = io.BytesIO(pickled_result)
+        unpickler = Unpickler(buffer, machine_id, client)
+        return unpickler.load()
 
     def load_huggingface_state_dicts_future(
         self,

@@ -7,10 +7,8 @@ Custom pickle system for mycelya tensors and remote execution.
 This module provides custom pickler/unpickler classes and remote execution decorator that handle
 mycelya tensors and devices properly during serialization for remote execution. It includes:
 
-- MycelyaPickler: Converts mycelya tensors to tensor IDs and devices to remote info
-- ResultUnpickler: Reconstructs remote execution results back to local mycelya tensors
-- mycelya_pickle: Utility function for pickling objects with MycelyaPickler
-- mycelya_unpickle_result: Utility function for unpickling remote execution results
+- Pickler: Converts mycelya tensors to tensor IDs and devices to remote info
+- Unpickler: Reconstructs remote execution results back to local mycelya tensors
 - remote decorator: Main decorator for remote function execution
 """
 
@@ -34,7 +32,7 @@ from ._utils import (
 log = get_logger(__name__)
 
 
-class MycelyaPickler(cloudpickle.Pickler):
+class Pickler(cloudpickle.Pickler):
     """
     Custom Pickler that handles mycelya tensors and devices for remote execution.
 
@@ -109,7 +107,7 @@ class MycelyaPickler(cloudpickle.Pickler):
         return None
 
 
-class ResultUnpickler(pickle.Unpickler):
+class Unpickler(pickle.Unpickler):
     """
     Unpickler for remote function execution results.
 
@@ -178,48 +176,6 @@ class ResultUnpickler(pickle.Unpickler):
             raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
 
 
-def mycelya_pickle(obj: Any, machine: Optional[RemoteMachine] = None) -> bytes:
-    """
-    Pickle an object using MycelyaPickler (based on cloudpickle.Pickler).
-
-    Args:
-        obj: Object to pickle
-        machine: Optional RemoteMachine for validation (inferred if None)
-
-    Returns:
-        Pickled bytes
-    """
-    buffer = io.BytesIO()
-    pickler = MycelyaPickler(buffer)
-    pickler.dump(obj)
-
-    # Validate machine if provided
-    if machine is not None and pickler.machine_id != machine.machine_id:
-        raise RuntimeError(
-            f"Object contains tensors/devices from machine {pickler.machine_id}, "
-            f"but expected machine {machine.machine_id}"
-        )
-
-    return buffer.getvalue()
-
-
-def mycelya_unpickle_result(data: bytes, machine_id: str, client) -> Any:
-    """
-    Unpickle a remote function execution result.
-
-    Args:
-        data: Pickled bytes from remote execution
-        machine_id: ID of the machine that executed the function
-        client: Client instance for tensor linking
-
-    Returns:
-        Unpickled result with proper tensor/device reconstruction
-    """
-    buffer = io.BytesIO(data)
-    unpickler = ResultUnpickler(buffer, machine_id, client)
-    return unpickler.load()
-
-
 def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = False):
     """
     Dual-mode decorator that converts a function to execute remotely on mycelya tensors.
@@ -263,6 +219,9 @@ def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = Fals
     """
 
     def create_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+        if not callable(func):
+            raise TypeError(f"@remote decorator expected a callable function, got {type(func).__name__}")
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Find mycelya tensors/devices to infer target machine
@@ -326,9 +285,6 @@ def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = Fals
     if _func is None:
         # Called as @remote() - return decorator function
         return create_wrapper
-    elif callable(_func):
+    else:
         # Called as @remote - directly decorate the function
         return create_wrapper(_func)
-    else:
-        # This shouldn't happen in normal usage
-        raise TypeError("@remote decorator expects a callable or no arguments")
