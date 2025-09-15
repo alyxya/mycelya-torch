@@ -671,13 +671,13 @@ class Client(ABC):
             self._link_tensors_impl(local_tensor_ids, temp_keys)
 
     @abstractmethod
-    def _execute_remote_function_impl(
+    def _execute_function_impl(
         self, pickled_function: bytes
     ) -> None:
         """Implementation: Execute a pickled function remotely."""
         pass
 
-    def execute_remote_function(self, pickled_function: bytes) -> Future[bytes]:
+    def execute_function(self, pickled_function: bytes) -> Future[bytes]:
         """
         Execute a pickled function on the remote machine.
 
@@ -705,14 +705,14 @@ class Client(ABC):
             # Add to batch
             self._batch_calls.append(
                 BatchCall(
-                    method_name="execute_remote_function",
+                    method_name="execute_function",
                     args=(pickled_function,),
                     kwargs={},
                 )
             )
         else:
             # Direct execution
-            self._execute_remote_function_impl(pickled_function)
+            self._execute_function_impl(pickled_function)
 
         return future
 

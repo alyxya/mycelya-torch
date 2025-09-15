@@ -595,7 +595,7 @@ class Orchestrator:
             # Register tensor ID in orchestrator mapping
             self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
-    def execute_pickled_function(self, func, args, kwargs) -> Any:
+    def execute_function(self, func, args, kwargs) -> Any:
         """
         Execute a pickled function on the remote machine.
 
@@ -640,7 +640,7 @@ class Orchestrator:
             raise RuntimeError(f"Client for machine {machine_id} is not running")
 
         # Execute remotely
-        result_future = client.execute_remote_function(pickled_func)
+        result_future = client.execute_function(pickled_func)
         pickled_result = result_future.result()
 
         # Unpickle result with proper tensor linking

@@ -67,7 +67,7 @@ def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = Fals
         def wrapper(*args, **kwargs):
             # Execute the function remotely via orchestrator
             # Machine inference happens during pickling via Pickler.machine_id
-            return orchestrator.execute_pickled_function(func, args, kwargs)
+            return orchestrator.execute_function(func, args, kwargs)
 
         return wrapper
 

@@ -203,7 +203,7 @@ def create_modal_app_for_gpu(
                 "execute_aten_operation": self._execute_aten_operation_impl,
                 "load_huggingface_state_dicts": self._load_huggingface_state_dicts_impl,
                 "link_tensors": self._link_tensors_impl,
-                "execute_remote_function": self._execute_remote_function_impl,
+                "execute_function": self._execute_function_impl,
             }
 
         @modal.exit()
@@ -685,8 +685,8 @@ def create_modal_app_for_gpu(
             """
             self._link_tensors_impl(local_tensor_ids, temp_keys)
 
-        def _execute_remote_function_impl(self, pickled_function: bytes) -> bytes:
-            """Implementation of execute_remote_function without Modal decorators."""
+        def _execute_function_impl(self, pickled_function: bytes) -> bytes:
+            """Implementation of execute_function without Modal decorators."""
             tensor_registry = self._tensor_registry
             temp_tensor_registry = self._temp_tensor_registry
 
@@ -711,9 +711,9 @@ def create_modal_app_for_gpu(
             return result_buffer.getvalue()
 
         @modal.method()
-        def execute_remote_function(self, pickled_function: bytes) -> bytes:
+        def execute_function(self, pickled_function: bytes) -> bytes:
             """Execute a pickled function on the remote machine."""
-            return self._execute_remote_function_impl(pickled_function)
+            return self._execute_function_impl(pickled_function)
 
         @modal.method()
         def execute_batch(self, batch_calls: List[BatchCall]):
