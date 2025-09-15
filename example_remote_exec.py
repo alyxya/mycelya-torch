@@ -7,13 +7,14 @@ remotely on mycelya tensors, with automatic machine inference and tensor handlin
 """
 
 import torch
+
 import mycelya_torch
 import mycelya_torch._utils  # For get_storage_id function
 
 # Create a remote machine
 print("Creating remote machine...")
 machine = mycelya_torch.RemoteMachine("mock")  # Using mock for local testing
-device = machine.device()
+device = machine.device("cpu")
 
 print(f"Remote device: {device}")
 print(f"Machine ID: {machine.machine_id}")
@@ -81,9 +82,9 @@ def device_aware_function(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
 def main():
     """Run the examples."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("MYCELYA-TORCH REMOTE EXECUTION EXAMPLES")
-    print("="*60)
+    print("=" * 60)
 
     # Create test tensors on the remote device
     print("\n1. Creating test tensors...")
@@ -109,13 +110,13 @@ def main():
     print(f"Tensor x storage ID: {mycelya_torch._utils.get_storage_id(x)}")
 
     # Example 1: Matrix multiplication
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("EXAMPLE 1: Matrix Multiplication")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         result1 = matrix_multiply(a, b)
-        print(f"✅ Matrix multiplication successful!")
+        print("✅ Matrix multiplication successful!")
         print(f"   Result shape: {result1.shape}")
         print(f"   Result device: {result1.device}")
         print(f"   Result sample values: {result1.flatten()[:3]}")
@@ -123,13 +124,13 @@ def main():
         print(f"❌ Matrix multiplication failed: {e}")
 
     # Example 2: Complex computation
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("EXAMPLE 2: Complex Computation")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         result2 = complex_computation(x, scale=3.0)
-        print(f"✅ Complex computation successful!")
+        print("✅ Complex computation successful!")
         print(f"   Result shape: {result2.shape}")
         print(f"   Result device: {result2.device}")
         print(f"   Result sample values: {result2.flatten()[:3]}")
@@ -137,13 +138,13 @@ def main():
         print(f"❌ Complex computation failed: {e}")
 
     # Example 3: Multiple return values
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("EXAMPLE 3: Multiple Return Values")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         first, second = split_and_process(x)
-        print(f"✅ Split and process successful!")
+        print("✅ Split and process successful!")
         print(f"   First result shape: {first.shape}, device: {first.device}")
         print(f"   Second result shape: {second.shape}, device: {second.device}")
         print(f"   First sample: {first.flatten()[:3]}")
@@ -152,13 +153,13 @@ def main():
         print(f"❌ Split and process failed: {e}")
 
     # Example 4: Device-aware function
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("EXAMPLE 4: Device-Aware Function")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         result4 = device_aware_function(a, b)
-        print(f"✅ Device-aware function successful!")
+        print("✅ Device-aware function successful!")
         print(f"   Result shape: {result4.shape}")
         print(f"   Result device: {result4.device}")
         print(f"   Result sample values: {result4.flatten()[:3]}")
@@ -166,9 +167,9 @@ def main():
         print(f"❌ Device-aware function failed: {e}")
 
     # Demonstrate machine inference
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("MACHINE INFERENCE DEMONSTRATION")
-    print("-"*40)
+    print("-" * 40)
 
     # Show that the decorator automatically inferred the machine
     print(f"All operations executed on machine: {machine.machine_id}")
@@ -176,9 +177,9 @@ def main():
     print(f"Machine GPU type: {machine.gpu_type}")
 
     # Test error handling - mixed machines (this would fail in real scenario)
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("ERROR HANDLING EXAMPLE")
-    print("-"*40)
+    print("-" * 40)
 
     print("Note: The following would fail if tensors were from different machines:")
     print("@remote()")
@@ -192,9 +193,9 @@ def main():
 if __name__ == "__main__":
     main()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXAMPLES COMPLETE")
-    print("="*60)
+    print("=" * 60)
     print("\nKey Features Demonstrated:")
     print("✅ Automatic machine inference from tensor arguments")
     print("✅ Remote function execution with source code transfer")

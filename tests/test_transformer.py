@@ -44,7 +44,7 @@ def t4_device():
 
 
 def test_simple_transformer_forward_backward(t4_device):
-    device = t4_device.device()
+    device = t4_device.device("cuda")
 
     d_model = 512
     nhead = 8
@@ -83,7 +83,7 @@ def test_simple_transformer_forward_backward(t4_device):
 
 
 def test_transformer_attention_forward_backward(t4_device):
-    device = t4_device.device()
+    device = t4_device.device("cuda")
 
     d_model = 256
     nhead = 4
@@ -120,7 +120,7 @@ def test_transformer_attention_forward_backward(t4_device):
 
 
 def test_transformer_encoder_layer_forward_backward(t4_device):
-    device = t4_device.device()
+    device = t4_device.device("cuda")
 
     d_model = 128
     nhead = 2
@@ -161,7 +161,7 @@ def test_transformer_encoder_layer_forward_backward(t4_device):
 
 
 def test_linear_layers_forward_backward(t4_device):
-    device = t4_device.device()
+    device = t4_device.device("cuda")
 
     batch_size = 4
     input_dim = 512

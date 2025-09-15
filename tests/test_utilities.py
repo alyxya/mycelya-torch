@@ -48,6 +48,7 @@ class DeviceTestUtils:
         machine_key: str = "T4",
         requires_grad: bool = False,
         dtype: torch.dtype = torch.float32,
+        device_type: str = "cuda",
     ) -> torch.Tensor:
         """Create a tensor on a remote machine."""
         # Use appropriate tensor creation method based on dtype
@@ -60,27 +61,32 @@ class DeviceTestUtils:
                 0, 10, shape, dtype=dtype, requires_grad=requires_grad
             )
 
-        return x_cpu.to(shared_machines[machine_key].device())
+        return x_cpu.to(shared_machines[machine_key].device(device_type))
 
     @staticmethod
     def create_test_tensors(
         shapes: List[Tuple[int, ...]],
         shared_machines: Dict[str, "RemoteMachine"],
         machine_key: str = "T4",
+        device_type: str = "cuda",
     ) -> List[torch.Tensor]:
         """Create multiple test tensors on the same remote machine."""
         return [
-            DeviceTestUtils.create_remote_tensor(shape, shared_machines, machine_key)
+            DeviceTestUtils.create_remote_tensor(
+                shape, shared_machines, machine_key, device_type=device_type
+            )
             for shape in shapes
         ]
 
     @staticmethod
     def verify_machine_properties(
-        tensor: torch.Tensor, expected_machine: "RemoteMachine"
+        tensor: torch.Tensor,
+        expected_machine: "RemoteMachine",
+        device_type: str = "cuda",
     ) -> None:
         """Verify that a tensor has expected machine properties."""
         assert tensor.device.type == "mycelya"
-        assert tensor.device.index == expected_machine.device().index
+        assert tensor.device.index == expected_machine.device(device_type).index
 
     @staticmethod
     def create_cpu_and_remote_pair(
@@ -89,10 +95,11 @@ class DeviceTestUtils:
         machine_key: str = "T4",
         dtype: torch.dtype = torch.float32,
         requires_grad: bool = False,
+        device_type: str = "cuda",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create a CPU tensor and its remote counterpart."""
         cpu_tensor = torch.randn(shape, dtype=dtype, requires_grad=requires_grad)
-        remote_tensor = cpu_tensor.to(shared_machines[machine_key].device())
+        remote_tensor = cpu_tensor.to(shared_machines[machine_key].device(device_type))
         return cpu_tensor, remote_tensor
 
 
@@ -204,6 +211,7 @@ class TestDataGenerator:
         num_classes: int = TestConstants.DEFAULT_NUM_CLASSES,
         shared_machines: Optional[Dict[str, "RemoteMachine"]] = None,
         machine_key: str = "T4",
+        device_type: str = "cuda",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Generate data for classification tests."""
         # Create input data
@@ -214,8 +222,8 @@ class TestDataGenerator:
 
         # Move to remote device if requested
         if shared_machines is not None:
-            inputs = inputs.to(shared_machines[machine_key].device())
-            targets = targets.to(shared_machines[machine_key].device())
+            inputs = inputs.to(shared_machines[machine_key].device(device_type))
+            targets = targets.to(shared_machines[machine_key].device(device_type))
 
         return inputs, targets
 
@@ -243,12 +251,15 @@ class TestDataGenerator:
 
     @staticmethod
     def create_gradient_test_setup(
-        shape: Tuple[int, ...], shared_machines: Dict[str, Any], machine_key: str = "T4"
+        shape: Tuple[int, ...],
+        shared_machines: Dict[str, Any],
+        machine_key: str = "T4",
+        device_type: str = "cuda",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create a standard setup for gradient testing."""
         # Create a leaf tensor that requires gradients
         x = torch.randn(shape, requires_grad=True)
-        x_remote = x.to(shared_machines[machine_key].device())
+        x_remote = x.to(shared_machines[machine_key].device(device_type))
 
         return x, x_remote
 
@@ -300,10 +311,11 @@ class IntegrationTestUtils:
         output_size: int,
         shared_machines: Dict[str, "RemoteMachine"],
         machine_key: str = "T4",
+        device_type: str = "cuda",
     ) -> torch.nn.Module:
         """Create a simple linear model on a remote device."""
         model = torch.nn.Linear(input_size, output_size)
-        return model.to(shared_machines[machine_key].device())
+        return model.to(shared_machines[machine_key].device(device_type))
 
     @staticmethod
     def verify_model_forward_backward(

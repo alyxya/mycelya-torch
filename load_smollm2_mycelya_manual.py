@@ -10,7 +10,7 @@ model_name = "HuggingFaceTB/SmolLM2-135M-Instruct"
 # Create modal machine and device
 machine = mycelya_torch.RemoteMachine("mock")
 # machine = mycelya_torch.RemoteMachine("modal", "A100")
-device = machine.device()
+device = machine.device("cpu")
 
 # Load model config and create model architecture
 config = AutoConfig.from_pretrained(model_name)

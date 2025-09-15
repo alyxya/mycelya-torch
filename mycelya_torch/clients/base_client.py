@@ -671,9 +671,7 @@ class Client(ABC):
             self._link_tensors_impl(local_tensor_ids, temp_keys)
 
     @abstractmethod
-    def _execute_function_impl(
-        self, pickled_function: bytes
-    ) -> None:
+    def _execute_function_impl(self, pickled_function: bytes) -> None:
         """Implementation: Execute a pickled function remotely."""
         pass
 

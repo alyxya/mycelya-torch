@@ -5,8 +5,8 @@ import mycelya_torch
 checkpoint = "HuggingFaceTB/SmolLM2-135M-Instruct"
 
 
-# device = mycelya_torch.RemoteMachine("modal", "T4").device()
-device = mycelya_torch.RemoteMachine("mock").device()
+# device = mycelya_torch.RemoteMachine("modal", "T4").device("cuda")
+device = mycelya_torch.RemoteMachine("mock").device("cpu")
 # device = "cpu"
 
 # device = "mps" # for GPU usage or "cpu" for CPU usage

@@ -4,17 +4,19 @@ Comprehensive test demonstrating the mycelya-torch remote execution system.
 """
 
 import torch
+
 import mycelya_torch
 import mycelya_torch._utils
 
+
 def main():
-    print("="*60)
+    print("=" * 60)
     print("MYCELYA-TORCH REMOTE EXECUTION COMPREHENSIVE TEST")
-    print("="*60)
+    print("=" * 60)
 
     # Create a remote machine
     machine = mycelya_torch.RemoteMachine("mock")
-    device = machine.device()
+    device = machine.device("cpu")
 
     print(f"\n✅ Created remote machine: {machine.machine_id}")
     print(f"   Provider: {machine.provider}")
@@ -42,9 +44,9 @@ def main():
         print(f"  ✨ Result computed: {result.shape}")
         return result
 
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("TEST 1: Simple Addition")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         result1 = simple_add(a, b)
@@ -61,9 +63,9 @@ def main():
         print(f"  ✨ MatMul result: {result.shape}")
         return result
 
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("TEST 2: Matrix Multiplication")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         result2 = matrix_multiply(a, b)
@@ -85,16 +87,18 @@ def main():
         transformed_first = torch.relu(first_half)
         transformed_second = torch.sigmoid(second_half)
 
-        print(f"  ✨ Split into: {transformed_first.shape} and {transformed_second.shape}")
+        print(
+            f"  ✨ Split into: {transformed_first.shape} and {transformed_second.shape}"
+        )
         return transformed_first, transformed_second
 
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("TEST 3: Split and Transform (Multiple Returns)")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         first_result, second_result = split_and_transform(x)
-        print(f"✅ Success!")
+        print("✅ Success!")
         print(f"   First result: {first_result.shape} on {first_result.device}")
         print(f"   Second result: {second_result.shape} on {second_result.device}")
         print(f"   First sample: {first_result.flatten()[:3]}")
@@ -104,7 +108,9 @@ def main():
 
     # Test 4: Function with parameters
     @mycelya_torch.remote()
-    def scaled_operations(tensor: torch.Tensor, scale: float, operation: str = "multiply") -> torch.Tensor:
+    def scaled_operations(
+        tensor: torch.Tensor, scale: float, operation: str = "multiply"
+    ) -> torch.Tensor:
         print(f"  🚀 {operation} with scale {scale}")
 
         if operation == "multiply":
@@ -120,9 +126,9 @@ def main():
         print(f"  ✨ Operation complete: {result.shape}")
         return result
 
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("TEST 4: Parameterized Function")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         result4 = scaled_operations(x, scale=2.5, operation="multiply")
@@ -144,9 +150,9 @@ def main():
         print(f"  ✨ Advanced operations complete: {summed.shape}")
         return summed
 
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("TEST 5: Advanced Torch Operations")
-    print("-"*40)
+    print("-" * 40)
 
     try:
         result5 = advanced_torch_ops(x)
@@ -156,9 +162,9 @@ def main():
         print(f"❌ Failed: {e}")
 
     # Summary
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST SUMMARY")
-    print("="*60)
+    print("=" * 60)
     print("🎉 Remote execution system working successfully!")
     print(f"📍 Machine: {machine.machine_id}")
     print(f"🔧 Provider: {machine.provider}")
@@ -173,9 +179,14 @@ def main():
     print("   • Complex tensor operations and transformations")
     print("   • Temp registry linking for result reconstruction")
 
-    print(f"\n🔍 Technical details:")
-    print(f"   • Storage IDs: {[mycelya_torch._utils.get_storage_id(t) for t in [a, b, x]]}")
-    print(f"   • Tensor IDs: {[mycelya_torch._utils.get_tensor_id(t) for t in [a, b, x]]}")
+    print("\n🔍 Technical details:")
+    print(
+        f"   • Storage IDs: {[mycelya_torch._utils.get_storage_id(t) for t in [a, b, x]]}"
+    )
+    print(
+        f"   • Tensor IDs: {[mycelya_torch._utils.get_tensor_id(t) for t in [a, b, x]]}"
+    )
+
 
 if __name__ == "__main__":
     main()

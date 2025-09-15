@@ -98,9 +98,11 @@ class Orchestrator:
         """
         if provider == "modal":
             from .clients.modal.client import ModalClient
+
             client = ModalClient(machine_id, gpu_type, batching, timeout)
         elif provider == "mock":
             from .clients.mock.client import MockClient
+
             client = MockClient(machine_id, batching)
         else:
             raise ValueError(f"Provider {provider} not implemented yet")
@@ -707,7 +709,6 @@ class Orchestrator:
         result = result_future.result()
         self._main_thread_waiting.clear()
         return result
-
 
     def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
         """Resolve pending CPU tensor futures for a client."""

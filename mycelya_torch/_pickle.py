@@ -43,7 +43,11 @@ class Pickler(cloudpickle.Pickler):
     """
 
     def __init__(
-        self, file: io.BytesIO, storage_manager, protocol: int = None, buffer_callback: Any = None
+        self,
+        file: io.BytesIO,
+        storage_manager,
+        protocol: int = None,
+        buffer_callback: Any = None,
     ):
         super().__init__(file, protocol=protocol, buffer_callback=buffer_callback)
         self.storage_manager = storage_manager

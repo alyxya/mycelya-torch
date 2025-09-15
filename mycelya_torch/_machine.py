@@ -32,14 +32,14 @@ class RemoteMachine:
     Can be used as a context manager for automatic resource cleanup:
 
         >>> with RemoteMachine("modal", "T4") as machine:
-        ...     x = torch.randn(100, 100, device=machine.device())
+        ...     x = torch.randn(100, 100, device=machine.device("cuda"))
         ...     result = x @ x.T
         >>> # Machine automatically stopped when exiting context
 
     Or created directly (starts automatically by default):
 
         >>> machine = RemoteMachine("modal", "T4")
-        >>> x = torch.randn(100, 100, device=machine.device())
+        >>> x = torch.randn(100, 100, device=machine.device("cuda"))
         >>> result = x @ x.T
     """
 
@@ -156,14 +156,11 @@ class RemoteMachine:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def device(
-        self, type: Optional[str] = None, index: Optional[int] = None
-    ) -> torch.device:
+    def device(self, type: str, index: Optional[int] = None) -> torch.device:
         """Get a PyTorch device object for this RemoteMachine.
 
         Args:
-            type: Device type ("cuda", "cpu", "mps", or "cuda:1" format).
-                 Defaults: modal="cuda", mock="cpu".
+            type: Device type ("cuda", "cpu", "mps", or "cuda:1" format). Required.
             index: Device index (default: 0). Cannot be used with "type:index" format.
 
         Returns:
@@ -178,8 +175,7 @@ class RemoteMachine:
             type, index = type.split(":", 1)
             index = int(index)
 
-        # Apply defaults
-        type = type or ("cpu" if self.provider == "mock" else "cuda")
+        # Default index if not specified
         index = index or 0
 
         # Validate device type for provider

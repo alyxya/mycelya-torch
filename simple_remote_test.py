@@ -4,12 +4,13 @@ Simple test for remote execution without decorator source code issues.
 """
 
 import torch
+
 import mycelya_torch
 import mycelya_torch._utils
 
 # Create a remote machine
 machine = mycelya_torch.RemoteMachine("mock")
-device = machine.device()
+device = machine.device("cpu")
 
 print(f"Created machine: {machine.machine_id}")
 print(f"Device: {device}")
@@ -21,8 +22,13 @@ b_cpu = torch.randn(3, 3)
 a = a_cpu.to(device)
 b = b_cpu.to(device)
 
-print(f"Tensor a: shape={a.shape}, device={a.device}, storage_id={mycelya_torch._utils.get_storage_id(a)}")
-print(f"Tensor b: shape={b.shape}, device={b.device}, storage_id={mycelya_torch._utils.get_storage_id(b)}")
+print(
+    f"Tensor a: shape={a.shape}, device={a.device}, storage_id={mycelya_torch._utils.get_storage_id(a)}"
+)
+print(
+    f"Tensor b: shape={b.shape}, device={b.device}, storage_id={mycelya_torch._utils.get_storage_id(b)}"
+)
+
 
 # Define a simple function with decorator (no parentheses)
 @mycelya_torch.remote
@@ -33,19 +39,21 @@ def simple_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     print(f"Addition complete, result shape: {result.shape}")
     return result
 
-print("\n" + "="*50)
+
+print("\n" + "=" * 50)
 print("TESTING SIMPLE REMOTE ADDITION")
-print("="*50)
+print("=" * 50)
 
 try:
     result = simple_add(a, b)
-    print(f"✅ Remote execution successful!")
+    print("✅ Remote execution successful!")
     print(f"   Result shape: {result.shape}")
     print(f"   Result device: {result.device}")
     print(f"   Result sample: {result.flatten()[:3]}")
 except Exception as e:
     print(f"❌ Remote execution failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 print("\nTest complete!")

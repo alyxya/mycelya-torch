@@ -175,8 +175,8 @@ import mycelya_torch
 machine = mycelya_torch.RemoteMachine("modal", "A100")
 
 # Operations automatically execute on remote GPU with RPC batching
-x = torch.randn(1000, 1000, device=machine.device())  # Storage ID: 1
-y = torch.randn(1000, 1000, device=machine.device())  # Storage ID: 2
+x = torch.randn(1000, 1000, device=machine.device("cuda"))  # Storage ID: 1
+y = torch.randn(1000, 1000, device=machine.device("cuda"))  # Storage ID: 2
 result = x @ y  # Matrix multiplication on remote A100, Storage ID: 3
 
 # Each tensor has FNV-1a metadata hash for debugging
@@ -190,7 +190,7 @@ import mycelya_torch
 
 # Create remote machine
 machine = mycelya_torch.RemoteMachine("modal", "A100")
-device = machine.device()
+device = machine.device("cuda")
 
 # Define custom functions that execute remotely
 @mycelya_torch.remote
@@ -223,7 +223,7 @@ import mycelya_torch
 
 # Create remote machine with high-memory GPU
 machine = mycelya_torch.RemoteMachine("modal", "A100")
-device = machine.device()
+device = machine.device("cuda")
 
 # Model automatically uses sequential tensor IDs for all parameters
 model = nn.Sequential(
@@ -269,8 +269,8 @@ model = AutoModelForCausalLM.from_pretrained(
 
 # Load weights directly on remote GPU - no data transfer
 remote_state_dicts = mycelya_torch.load_huggingface_state_dicts(
-    "microsoft/DialoGPT-medium", 
-    machine.device()
+    "microsoft/DialoGPT-medium",
+    machine.device("cuda")
 )
 
 # Load the remote weights into the model
@@ -280,12 +280,12 @@ tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
 
 # All model parameters have sequential tensor IDs and reside remotely  
 total_params = sum(p.numel() for p in model.parameters())
-print(f"Model loaded with {total_params:,} parameters on {machine.device()}")
+print(f"Model loaded with {total_params:,} parameters on {machine.device('cuda')}")
 
 # Inference with automatic RPC batching
 def generate_response(prompt, max_length=50):
     inputs = tokenizer(prompt, return_tensors="pt")
-    inputs = {k: v.to(machine.device()) for k, v in inputs.items()}
+    inputs = {k: v.to(machine.device("cuda")) for k, v in inputs.items()}
     
     with torch.no_grad():
         # Generation entirely on remote H100

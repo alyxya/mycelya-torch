@@ -93,8 +93,8 @@ class TestCrossDeviceErrorHandling:
 
     def test_cross_device_arithmetic_errors(self, isolated_machines):
         """Test errors for arithmetic operations between different devices."""
-        tensor1 = torch.randn(2, 2, device=isolated_machines["machine1"].device())
-        tensor2 = torch.randn(2, 2, device=isolated_machines["machine2"].device())
+        tensor1 = torch.randn(2, 2, device=isolated_machines["machine1"].device("cpu"))
+        tensor2 = torch.randn(2, 2, device=isolated_machines["machine2"].device("cpu"))
 
         # Test various operations that should fail
         operations = [
@@ -110,14 +110,14 @@ class TestCrossDeviceErrorHandling:
 
     def test_cross_device_transfer_error(self, isolated_machines):
         """Test errors for direct cross-device transfers."""
-        tensor = torch.randn(2, 2, device=isolated_machines["machine1"].device())
+        tensor = torch.randn(2, 2, device=isolated_machines["machine1"].device("cpu"))
 
         # Direct transfer between remote devices should fail
         with pytest.raises(
             RuntimeError,
             match="Cross-machine remote transfers are not supported",
         ):
-            tensor.to(isolated_machines["machine2"].device())
+            tensor.to(isolated_machines["machine2"].device("cpu"))
 
 
 @pytest.mark.fast
@@ -126,8 +126,8 @@ class TestTensorOperationErrors:
 
     def test_incompatible_shape_operations(self, isolated_machine):
         """Test error handling for operations with incompatible shapes."""
-        tensor1 = torch.randn(2, 3, device=isolated_machine.device())
-        tensor2 = torch.randn(4, 5, device=isolated_machine.device())
+        tensor1 = torch.randn(2, 3, device=isolated_machine.device("cpu"))
+        tensor2 = torch.randn(4, 5, device=isolated_machine.device("cpu"))
 
         # Matrix multiplication with incompatible shapes
         with pytest.raises((RuntimeError, ValueError)):
@@ -139,7 +139,7 @@ class TestTensorOperationErrors:
 
     def test_view_operation_errors(self, isolated_machine):
         """Test error handling for invalid view operations."""
-        tensor = torch.randn(2, 3, device=isolated_machine.device())
+        tensor = torch.randn(2, 3, device=isolated_machine.device("cpu"))
 
         # Try to view with incompatible size
         with pytest.raises((RuntimeError, ValueError)):
@@ -152,7 +152,7 @@ class TestTensorOperationErrors:
     def test_squeeze_operation_errors(self, isolated_machine):
         """Test error handling for invalid squeeze operations."""
         # Create tensor with a dimension of size 1 for valid squeeze, then test invalid squeeze
-        tensor = torch.randn(2, 1, 4, device=isolated_machine.device())
+        tensor = torch.randn(2, 1, 4, device=isolated_machine.device("cpu"))
 
         # Valid squeeze should work
         squeezed = tensor.squeeze(1)  # Dimension 1 has size 1
@@ -169,7 +169,7 @@ class TestTensorOperationErrors:
 
     def test_transpose_operation_errors(self, isolated_machine):
         """Test error handling for invalid transpose operations."""
-        tensor = torch.randn(2, 3, device=isolated_machine.device())
+        tensor = torch.randn(2, 3, device=isolated_machine.device("cpu"))
 
         # Try to transpose with out-of-bounds dimensions
         with pytest.raises((RuntimeError, IndexError)):
@@ -185,7 +185,7 @@ class TestGradientErrorHandling:
 
     def test_gradient_on_non_leaf_tensor_error(self, isolated_machine):
         """Test error handling when accessing gradients on non-leaf tensors."""
-        x = torch.randn(2, 2, device=isolated_machine.device(), requires_grad=True)
+        x = torch.randn(2, 2, device=isolated_machine.device("cpu"), requires_grad=True)
         y = x + 1  # Non-leaf tensor
 
         loss = y.sum()
@@ -199,7 +199,7 @@ class TestGradientErrorHandling:
 
     def test_backward_without_scalar_error(self, isolated_machine):
         """Test error handling for backward() on non-scalar tensors."""
-        x = torch.randn(2, 2, device=isolated_machine.device(), requires_grad=True)
+        x = torch.randn(2, 2, device=isolated_machine.device("cpu"), requires_grad=True)
         y = x * 2  # Non-scalar result
 
         # Backward on non-scalar without gradient argument should fail
@@ -209,7 +209,7 @@ class TestGradientErrorHandling:
     def test_double_backward_error(self, isolated_machine):
         """Test error handling for double backward without retain_graph."""
         # Create a leaf tensor directly on the remote device
-        x = torch.randn(2, 2, device=isolated_machine.device(), requires_grad=True)
+        x = torch.randn(2, 2, device=isolated_machine.device("cpu"), requires_grad=True)
         y = x.sum()
 
         # First backward
@@ -242,7 +242,7 @@ class TestMemoryErrorHandling:
 
         # Test that we can create a large tensor (this should succeed with lazy allocation)
         huge_size = 10**10
-        large_tensor = torch.randn(huge_size, device=isolated_machine.device())
+        large_tensor = torch.randn(huge_size, device=isolated_machine.device("cpu"))
 
         # Verify the tensor has the expected shape
         assert large_tensor.shape == (huge_size,)
@@ -253,10 +253,10 @@ class TestMemoryErrorHandling:
     def test_negative_tensor_dimensions(self, isolated_machine):
         """Test error handling for negative tensor dimensions."""
         with pytest.raises((RuntimeError, ValueError)):
-            torch.randn(-1, 2, device=isolated_machine.device())
+            torch.randn(-1, 2, device=isolated_machine.device("cpu"))
 
         with pytest.raises((RuntimeError, ValueError)):
-            torch.randn(2, -3, device=isolated_machine.device())
+            torch.randn(2, -3, device=isolated_machine.device("cpu"))
 
 
 @pytest.mark.fast
@@ -267,7 +267,9 @@ class TestTypeErrorHandling:
         """Test error handling for unsupported dtype operations."""
         # Try operations that might not be supported for certain dtypes
         try:
-            bool_tensor = torch.tensor([True, False], device=isolated_machine.device())
+            bool_tensor = torch.tensor(
+                [True, False], device=isolated_machine.device("cpu")
+            )
             bool_tensor.mm(bool_tensor)
             # If this succeeds, that's fine too
         except (RuntimeError, TypeError, NotImplementedError):
@@ -277,10 +279,10 @@ class TestTypeErrorHandling:
     def test_mixed_dtype_operations(self, isolated_machine):
         """Test operations with mixed dtypes."""
         float_tensor = torch.randn(
-            2, 2, device=isolated_machine.device(), dtype=torch.float32
+            2, 2, device=isolated_machine.device("cpu"), dtype=torch.float32
         )
         int_tensor = torch.randint(
-            0, 10, (2, 2), device=isolated_machine.device(), dtype=torch.int32
+            0, 10, (2, 2), device=isolated_machine.device("cpu"), dtype=torch.int32
         )
 
         # Test mixed dtype operation
@@ -295,7 +297,7 @@ class TestOperationNotImplementedHandling:
 
     def test_potentially_unimplemented_operations(self, isolated_machine):
         """Test graceful handling of potentially unimplemented operations."""
-        tensor = torch.randn(3, 3, device=isolated_machine.device())
+        tensor = torch.randn(3, 3, device=isolated_machine.device("cpu"))
 
         # List of operations that might not be implemented yet
         potentially_unimplemented = [
@@ -316,12 +318,14 @@ class TestOperationNotImplementedHandling:
 
     def test_advanced_indexing_errors(self, isolated_machine):
         """Test error handling for advanced indexing operations."""
-        tensor = torch.randn(3, 4, 5, device=isolated_machine.device())
+        tensor = torch.randn(3, 4, 5, device=isolated_machine.device("cpu"))
 
         # Some advanced indexing might not be supported
         try:
             # Boolean indexing
-            mask = torch.tensor([True, False, True], device=isolated_machine.device())
+            mask = torch.tensor(
+                [True, False, True], device=isolated_machine.device("cpu")
+            )
             tensor[mask]
         except (RuntimeError, NotImplementedError):
             # Advanced indexing might not be implemented
@@ -329,7 +333,7 @@ class TestOperationNotImplementedHandling:
 
         try:
             # Fancy indexing
-            indices = torch.tensor([0, 2], device=isolated_machine.device())
+            indices = torch.tensor([0, 2], device=isolated_machine.device("cpu"))
             tensor[indices]
         except (RuntimeError, NotImplementedError):
             # Fancy indexing might not be implemented
@@ -343,7 +347,7 @@ class TestConnectionErrorHandling:
     def test_operation_during_connection_issues(self, isolated_machine):
         """Test behavior during simulated connection issues."""
         # This is more of a resilience test - operations should either succeed or fail gracefully
-        tensor = torch.randn(2, 2, device=isolated_machine.device())
+        tensor = torch.randn(2, 2, device=isolated_machine.device("cpu"))
 
         # Perform operations that should work normally
         try:
@@ -356,7 +360,7 @@ class TestConnectionErrorHandling:
     def test_graceful_degradation(self, isolated_machine):
         """Test that the system degrades gracefully when operations fail."""
         # Create tensor and perform a series of operations
-        tensor = torch.randn(2, 2, device=isolated_machine.device())
+        tensor = torch.randn(2, 2, device=isolated_machine.device("cpu"))
 
         operations_succeeded = 0
         total_operations = 0
@@ -393,20 +397,20 @@ class TestRobustnessAndRecovery:
     def test_error_recovery_sequence(self, isolated_machine):
         """Test that the system can recover from errors and continue working."""
         # Perform a known-good operation
-        tensor1 = torch.randn(2, 2, device=isolated_machine.device())
+        tensor1 = torch.randn(2, 2, device=isolated_machine.device("cpu"))
         good_result1 = tensor1 + tensor1
         assert good_result1 is not None
 
         # Attempt an operation that might fail
         try:
-            bad_tensor = torch.randn(3, 4, device=isolated_machine.device())
+            bad_tensor = torch.randn(3, 4, device=isolated_machine.device("cpu"))
             tensor1.mm(bad_tensor)  # Should fail due to shape mismatch
         except (RuntimeError, ValueError):
             # Expected to fail
             pass
 
         # Verify system still works after the error
-        tensor2 = torch.randn(2, 2, device=isolated_machine.device())
+        tensor2 = torch.randn(2, 2, device=isolated_machine.device("cpu"))
         good_result2 = tensor2 * 3
         assert good_result2 is not None
 
@@ -416,7 +420,7 @@ class TestRobustnessAndRecovery:
 
     def test_multiple_error_scenarios(self, isolated_machine):
         """Test handling of multiple different error scenarios in sequence."""
-        base_tensor = torch.randn(2, 2, device=isolated_machine.device())
+        base_tensor = torch.randn(2, 2, device=isolated_machine.device("cpu"))
 
         # Test sequence of different error types
         error_scenarios = [
@@ -464,7 +468,7 @@ class TestRobustnessAndRecovery:
 def test_parametrized_invalid_shapes(isolated_machine, invalid_shape):
     """Test error handling for various invalid tensor shapes."""
     with pytest.raises((RuntimeError, ValueError)):
-        torch.randn(invalid_shape, device=isolated_machine.device())
+        torch.randn(invalid_shape, device=isolated_machine.device("cpu"))
 
 
 @pytest.mark.fast
@@ -480,8 +484,8 @@ def test_parametrized_incompatible_operations(isolated_machine, incompatible_sha
     """Test error handling for operations with incompatible tensor shapes."""
     shape1, shape2 = incompatible_shapes
 
-    tensor1 = torch.randn(shape1, device=isolated_machine.device())
-    tensor2 = torch.randn(shape2, device=isolated_machine.device())
+    tensor1 = torch.randn(shape1, device=isolated_machine.device("cpu"))
+    tensor2 = torch.randn(shape2, device=isolated_machine.device("cpu"))
 
     # Element-wise operations should fail for incompatible shapes
     with pytest.raises((RuntimeError, ValueError)):

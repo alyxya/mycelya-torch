@@ -39,11 +39,12 @@ class TestBasicReductions:
     )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
-    def test_sum_variations(self, shared_machines, shape, dim, keepdim):
+    def test_sum_variations(self, shared_machines, provider, shape, dim, keepdim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.sum(cpu_tensor, dim=dim, keepdim=keepdim)
         remote_result = torch.sum(remote_tensor, dim=dim, keepdim=keepdim)
@@ -57,11 +58,12 @@ class TestBasicReductions:
     )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
-    def test_mean_variations(self, shared_machines, shape, dim, keepdim):
+    def test_mean_variations(self, shared_machines, provider, shape, dim, keepdim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.mean(cpu_tensor, dim=dim, keepdim=keepdim)
         remote_result = torch.mean(remote_tensor, dim=dim, keepdim=keepdim)
@@ -79,11 +81,12 @@ class TestStatisticalReductions:
     )
     @pytest.mark.parametrize("unbiased", [True, False])
     @pytest.mark.fast
-    def test_std_operations(self, shared_machines, shape, dim, unbiased):
+    def test_std_operations(self, shared_machines, provider, shape, dim, unbiased):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.std(cpu_tensor, dim=dim, unbiased=unbiased)
         remote_result = torch.std(remote_tensor, dim=dim, unbiased=unbiased)
@@ -97,11 +100,12 @@ class TestStatisticalReductions:
     )
     @pytest.mark.parametrize("unbiased", [True, False])
     @pytest.mark.fast
-    def test_var_operations(self, shared_machines, shape, dim, unbiased):
+    def test_var_operations(self, shared_machines, provider, shape, dim, unbiased):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.var(cpu_tensor, dim=dim, unbiased=unbiased)
         remote_result = torch.var(remote_tensor, dim=dim, unbiased=unbiased)
@@ -114,11 +118,12 @@ class TestStatisticalReductions:
         "shape,dim", generate_valid_shape_dim_combinations([(8,), (4, 4)])
     )
     @pytest.mark.fast
-    def test_std_mean_combined(self, shared_machines, shape, dim):
+    def test_std_mean_combined(self, shared_machines, provider, shape, dim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_std, cpu_mean = torch.std_mean(cpu_tensor, dim=dim)
         remote_std, remote_mean = torch.std_mean(remote_tensor, dim=dim)
@@ -139,11 +144,12 @@ class TestMinMaxOperations:
     )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
-    def test_min_operations(self, shared_machines, shape, dim, keepdim):
+    def test_min_operations(self, shared_machines, provider, shape, dim, keepdim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         if dim is None:
             cpu_result = torch.min(cpu_tensor)
@@ -168,11 +174,12 @@ class TestMinMaxOperations:
     )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
-    def test_max_operations(self, shared_machines, shape, dim, keepdim):
+    def test_max_operations(self, shared_machines, provider, shape, dim, keepdim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         if dim is None:
             cpu_result = torch.max(cpu_tensor)
@@ -196,11 +203,12 @@ class TestMinMaxOperations:
         "shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5)])
     )
     @pytest.mark.fast
-    def test_argmin_argmax(self, shared_machines, shape, dim):
+    def test_argmin_argmax(self, shared_machines, provider, shape, dim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         # Test argmin
         cpu_argmin = torch.argmin(cpu_tensor, dim=dim)
@@ -213,11 +221,12 @@ class TestMinMaxOperations:
         assert torch.equal(remote_argmax.cpu(), cpu_argmax)
 
     @pytest.mark.fast
-    def test_aminmax(self, shared_machines):
+    def test_aminmax(self, shared_machines, provider):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(5, 5)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_min, cpu_max = torch.aminmax(cpu_tensor)
         remote_min, remote_max = torch.aminmax(remote_tensor)
@@ -231,11 +240,12 @@ class TestMinMaxOperations:
 
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.fast
-    def test_aminmax_with_dim(self, shared_machines, dim):
+    def test_aminmax_with_dim(self, shared_machines, provider, dim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_min, cpu_max = torch.aminmax(cpu_tensor, dim=dim)
         remote_min, remote_max = torch.aminmax(remote_tensor, dim=dim)
@@ -259,12 +269,13 @@ class TestProductReductions:
     )
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
-    def test_prod_operations(self, shared_machines, shape, dim, keepdim):
+    def test_prod_operations(self, shared_machines, provider, shape, dim, keepdim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         # Use smaller values to avoid overflow
         cpu_tensor = torch.rand(*shape) + 0.1  # Range [0.1, 1.1]
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.prod(cpu_tensor, dim=dim, keepdim=keepdim)
         remote_result = torch.prod(remote_tensor, dim=dim, keepdim=keepdim)
@@ -284,11 +295,12 @@ class TestCumulativeOperations:
         ),
     )
     @pytest.mark.fast
-    def test_cumsum_operations(self, shared_machines, shape, dim):
+    def test_cumsum_operations(self, shared_machines, provider, shape, dim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.cumsum(cpu_tensor, dim=dim)
         remote_result = torch.cumsum(remote_tensor, dim=dim)
@@ -304,12 +316,13 @@ class TestCumulativeOperations:
         ),
     )
     @pytest.mark.fast
-    def test_cumprod_operations(self, shared_machines, shape, dim):
+    def test_cumprod_operations(self, shared_machines, provider, shape, dim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         # Use smaller values to avoid overflow
         cpu_tensor = torch.rand(*shape) * 0.5 + 0.5  # Range [0.5, 1.0]
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.cumprod(cpu_tensor, dim=dim)
         remote_result = torch.cumprod(remote_tensor, dim=dim)
@@ -326,11 +339,12 @@ class TestSpecializedReductions:
         "shape,dim", generate_valid_shape_dim_combinations([(10,), (5, 5), (3, 4)])
     )
     @pytest.mark.fast
-    def test_norm_operations(self, shared_machines, shape, dim):
+    def test_norm_operations(self, shared_machines, provider, shape, dim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(*shape)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         # Test L2 norm (default)
         cpu_result = torch.norm(cpu_tensor, dim=dim)
@@ -342,11 +356,12 @@ class TestSpecializedReductions:
 
     @pytest.mark.parametrize("p", [1, 2, float("inf")])
     @pytest.mark.fast
-    def test_norm_with_p_values(self, shared_machines, p):
+    def test_norm_with_p_values(self, shared_machines, provider, p):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.norm(cpu_tensor, p=p)
         remote_result = torch.norm(remote_tensor, p=p)
@@ -356,11 +371,12 @@ class TestSpecializedReductions:
         )
 
     @pytest.mark.fast
-    def test_logsumexp(self, shared_machines):
+    def test_logsumexp(self, shared_machines, provider):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(5, 5)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         # Test reduction over all dimensions
         cpu_result = torch.logsumexp(cpu_tensor, dim=[0, 1])
@@ -373,11 +389,12 @@ class TestSpecializedReductions:
     @pytest.mark.parametrize("dim", [0, 1])
     @pytest.mark.parametrize("keepdim", [False, True])
     @pytest.mark.fast
-    def test_logsumexp_with_dim(self, shared_machines, dim, keepdim):
+    def test_logsumexp_with_dim(self, shared_machines, provider, dim, keepdim):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.randn(4, 4)
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         cpu_result = torch.logsumexp(cpu_tensor, dim=dim, keepdim=keepdim)
         remote_result = torch.logsumexp(remote_tensor, dim=dim, keepdim=keepdim)
@@ -392,13 +409,16 @@ class TestReductionsWithGradients:
 
     @pytest.mark.parametrize("operation", ["sum", "mean", "std", "var"])
     @pytest.mark.fast
-    def test_reductions_with_gradients(self, shared_machines, operation):
+    def test_reductions_with_gradients(self, shared_machines, provider, operation):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         # Create leaf tensors to maintain gradient capabilities
         data = torch.randn(4, 4)
         cpu_tensor = data.clone().requires_grad_(True)
-        remote_tensor = data.clone().to(machine.device()).requires_grad_(True)
+        remote_tensor = (
+            data.clone().to(machine.device(device_type)).requires_grad_(True)
+        )
 
         # Forward pass
         if operation in ["std", "var"]:
@@ -418,13 +438,16 @@ class TestReductionsWithGradients:
         )
 
     @pytest.mark.fast
-    def test_complex_reduction_expression_with_gradients(self, shared_machines):
+    def test_complex_reduction_expression_with_gradients(
+        self, shared_machines, provider
+    ):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         # Create leaf tensors to maintain gradient capabilities
         data = torch.randn(5, 5)
         cpu_x = data.clone().requires_grad_(True)
-        remote_x = data.clone().to(machine.device()).requires_grad_(True)
+        remote_x = data.clone().to(machine.device(device_type)).requires_grad_(True)
 
         # Complex expression combining multiple reductions
         cpu_result = torch.sum(cpu_x, dim=0) + torch.mean(cpu_x, dim=1)
@@ -448,11 +471,12 @@ class TestReductionEdgeCases:
     """Test edge cases for reduction operations."""
 
     @pytest.mark.fast
-    def test_reductions_with_single_element(self, shared_machines):
+    def test_reductions_with_single_element(self, shared_machines, provider):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_tensor = torch.tensor([[2.5]])
-        remote_tensor = cpu_tensor.to(machine.device())
+        remote_tensor = cpu_tensor.to(machine.device(device_type))
 
         for operation in ["sum", "mean", "min", "max"]:
             cpu_result = getattr(torch, operation)(cpu_tensor)
@@ -472,11 +496,12 @@ class TestReductionEdgeCases:
             )
 
     @pytest.mark.fast
-    def test_reductions_with_zeros(self, shared_machines):
+    def test_reductions_with_zeros(self, shared_machines, provider):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         cpu_zeros = torch.zeros(3, 3)
-        remote_zeros = cpu_zeros.to(machine.device())
+        remote_zeros = cpu_zeros.to(machine.device(device_type))
 
         # Test operations that should work with zeros
         for operation in ["sum", "mean", "min", "max"]:
@@ -488,12 +513,13 @@ class TestReductionEdgeCases:
             )
 
     @pytest.mark.fast
-    def test_reductions_preserve_dtype(self, shared_machines):
+    def test_reductions_preserve_dtype(self, shared_machines, provider):
         machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
 
         # Test with integer tensor
         cpu_int_tensor = torch.randint(0, 10, (3, 3), dtype=torch.int32)
-        remote_int_tensor = cpu_int_tensor.to(machine.device())
+        remote_int_tensor = cpu_int_tensor.to(machine.device(device_type))
 
         cpu_sum = torch.sum(cpu_int_tensor)
         remote_sum = torch.sum(remote_int_tensor)

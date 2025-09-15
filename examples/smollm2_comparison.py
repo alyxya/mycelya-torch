@@ -47,7 +47,9 @@ def load_model_remote(machine):
     # Load weights directly onto remote GPU
     print("   Loading weights onto remote GPU...")
     remote_state_dict = mycelya_torch.load_huggingface_state_dict(
-        "HuggingFaceTB/SmolLM2-135M-Instruct", machine.device(), torch_dtype="float32"
+        "HuggingFaceTB/SmolLM2-135M-Instruct",
+        machine.device("cuda"),
+        torch_dtype="float32",
     )
 
     # Load remote state dict into model - should have all parameters now
@@ -61,7 +63,7 @@ def load_model_remote(machine):
     )
     if cpu_params_before > 0:
         print(f"   ⚠️  Still have {cpu_params_before} CPU parameters, moving to device")
-        model = model.to(machine.device())
+        model = model.to(machine.device("cuda"))
     else:
         print("   ✅ All parameters already on remote device")
 
@@ -74,7 +76,7 @@ def load_model_local(machine):
     print("📦 Loading model locally then transferring to remote...")
     return AutoModelForCausalLM.from_pretrained(
         "HuggingFaceTB/SmolLM2-135M-Instruct"
-    ).to(machine.device())
+    ).to(machine.device("cuda"))
 
 
 def main():
@@ -113,7 +115,9 @@ def main():
 
     # Prepare input
     input_text = "what is gravity?"
-    tokens = tokenizer.encode(input_text, return_tensors="pt").to(machine.device())
+    tokens = tokenizer.encode(input_text, return_tensors="pt").to(
+        machine.device("cuda")
+    )
 
     print(f"Input: '{input_text}'")
     print("Generating 50 tokens manually...")

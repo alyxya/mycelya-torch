@@ -19,9 +19,9 @@ import pickle
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
+import cloudpickle
 import modal
 import torch
-import cloudpickle
 from huggingface_hub import hf_hub_download, list_repo_files
 from safetensors.torch import load_file as load_safetensors
 
@@ -44,6 +44,7 @@ def create_modal_app_for_gpu(
     Returns:
         Tuple of (modal_app, server_class) for the specified GPU type
     """
+
     class BatchCall(TypedDict):
         """Structure for a single batched RPC call."""
 
@@ -82,7 +83,9 @@ def create_modal_app_for_gpu(
             if type_tag == "mycelya_tensor":
                 tensor_id = data
                 if tensor_id not in self.tensor_registry:
-                    raise ValueError(f"Tensor ID {tensor_id} not found in remote registry")
+                    raise ValueError(
+                        f"Tensor ID {tensor_id} not found in remote registry"
+                    )
                 return self.tensor_registry[tensor_id]
 
             elif type_tag == "mycelya_device":
@@ -115,7 +118,9 @@ def create_modal_app_for_gpu(
                     "storage_offset": obj.storage_offset(),
                     "nbytes": obj.untyped_storage().nbytes(),
                     "device_type": obj.device.type,
-                    "device_index": obj.device.index if obj.device.index is not None else 0,
+                    "device_index": obj.device.index
+                    if obj.device.index is not None
+                    else 0,
                     "requires_grad": obj.requires_grad,
                     "temp_key": temp_key,
                 }
@@ -172,7 +177,7 @@ def create_modal_app_for_gpu(
         @modal.enter()
         def setup(self):
             """Initialize the server when container starts."""
-            # Cache torch.ops using getattr to avoid serialization issues with _Ops object
+            # Use getattr to avoid pickling errors - torch.ops is an _Ops object that cannot be pickled
             self.torch_ops = getattr(torch, "ops")
 
             # Change to data directory and set HF cache if available (only when volumes are mounted)
@@ -516,7 +521,9 @@ def create_modal_app_for_gpu(
                             storage_offset=t.storage_offset(),
                             nbytes=t.untyped_storage().nbytes(),
                             device_type=t.device.type,
-                            device_index=t.device.index if t.device.index is not None else 0,
+                            device_index=t.device.index
+                            if t.device.index is not None
+                            else 0,
                             requires_grad=t.requires_grad,
                             temp_key=temp_key,
                         )
@@ -614,7 +621,9 @@ def create_modal_app_for_gpu(
                         "storage_offset": tensor.storage_offset(),
                         "nbytes": tensor.untyped_storage().nbytes(),
                         "device_type": tensor.device.type,
-                        "device_index": tensor.device.index if tensor.device.index is not None else 0,
+                        "device_index": tensor.device.index
+                        if tensor.device.index is not None
+                        else 0,
                         "requires_grad": tensor.requires_grad,
                         "temp_key": temp_key,
                     }

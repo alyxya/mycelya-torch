@@ -51,8 +51,8 @@ def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = Fals
             return a + b
 
         machine = RemoteMachine("modal", "A100")
-        x = torch.randn(100, 100, device=machine.device())
-        y = torch.randn(100, 100, device=machine.device())
+        x = torch.randn(100, 100, device=machine.device("cuda"))
+        y = torch.randn(100, 100, device=machine.device("cuda"))
         result1 = matrix_multiply(x, y)  # Executes remotely
         result2 = matrix_add(x, y)       # Executes remotely
     """

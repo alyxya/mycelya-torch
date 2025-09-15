@@ -36,10 +36,14 @@ def main():
     print("Loading weights remotely...")
     # Load weights directly onto remote GPU as mycelya tensors
     remote_state_dict = mycelya_torch.load_huggingface_state_dict(
-        "HuggingFaceTB/SmolLM2-135M-Instruct", machine.device(), torch_dtype="float32"
+        "HuggingFaceTB/SmolLM2-135M-Instruct",
+        machine.device("cuda"),
+        torch_dtype="float32",
     )
 
-    print(f"Loaded {len(remote_state_dict)} parameters onto remote {machine.device()}")
+    print(
+        f"Loaded {len(remote_state_dict)} parameters onto remote {machine.device('cuda')}"
+    )
 
     # Load the remote state dict into the local model
     # (should now contain all parameters including tied weights)
@@ -49,13 +53,15 @@ def main():
     cpu_params = sum(1 for _, p in model.named_parameters() if p.device.type == "cpu")
     if cpu_params > 0:
         print(f"⚠️  Still have {cpu_params} CPU parameters, moving to device")
-        model = model.to(machine.device())
+        model = model.to(machine.device("cuda"))
     else:
         print("✅ All parameters correctly loaded on remote device")
 
     # Prepare input
     input_text = "what is gravity?"
-    tokens = tokenizer.encode(input_text, return_tensors="pt").to(machine.device())
+    tokens = tokenizer.encode(input_text, return_tensors="pt").to(
+        machine.device("cuda")
+    )
 
     print(f"Input: '{input_text}'")
     print("Generating 50 tokens...")
