@@ -23,6 +23,7 @@ print(f"Result computed on {result.device}: {result.shape}")
 - **🔧 Zero Code Changes** - Your existing PyTorch code works unchanged
 - **⚡ Smart Batching** - Automatically batches operations to minimize network overhead
 - **🤖 HuggingFace Ready** - Load models directly on remote GPUs without downloading
+- **🎯 Remote Functions** - Execute custom functions remotely with the @remote decorator
 
 ## Supported GPUs (Modal)
 
@@ -66,6 +67,39 @@ result = x @ y
 # Transfer result back when needed
 result_local = result.cpu()
 print(f"Computation done on {device}, result shape: {result.shape}")
+```
+
+### Remote Function Execution
+```python
+import torch
+import mycelya_torch
+
+# Create remote machine
+machine = mycelya_torch.RemoteMachine("modal", "A100")
+device = machine.device()
+
+# Define custom functions that execute remotely
+@mycelya_torch.remote
+def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    return a @ b
+
+@mycelya_torch.remote()
+def complex_computation(x: torch.Tensor, scale: float = 2.0) -> torch.Tensor:
+    # Multiple operations executed remotely
+    y = x * scale
+    z = torch.relu(y)
+    w = torch.softmax(z, dim=-1)
+    return w.sum(dim=0)
+
+# Create tensors on remote GPU
+x = torch.randn(1000, 1000, device=device)
+y = torch.randn(1000, 1000, device=device)
+
+# Functions automatically execute on remote GPU
+result1 = matrix_multiply(x, y)  # Executes remotely
+result2 = complex_computation(x, scale=3.0)  # Executes remotely
+
+print(f"Results computed on {result1.device}")
 ```
 
 ### Neural Network Training

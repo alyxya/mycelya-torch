@@ -12,6 +12,7 @@ A production-ready PyTorch extension that enables transparent remote execution o
 - **Provider Abstraction**: Pluggable client system with Modal (production), Mock (development), extensible for AWS
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
 - **HuggingFace Integration**: Direct remote model loading with parameter linking, bypassing data transfer entirely
+- **Remote Function Execution**: @remote decorator enables transparent remote execution of custom functions with automatic serialization
 
 ### Production-Scale Features  
 - **Thread-Safe Operations**: Background processing with proper synchronization and error handling
@@ -82,6 +83,8 @@ To run type checking:
 - `_storage.py` - Sequential storage ID system with atomic counter and thread-safe generation (1, 2, 3...)
 - `_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge for transparent integration
 - `_state_dict.py` - HuggingFace integration utilities for direct remote model loading
+- `_remote.py` - Remote function execution decorator with automatic machine inference and serialization
+- `_pickle.py` - Custom cloudpickle-based serialization system for tensor and function transfer
 - `_utils.py` - Internal tensor utilities and metadata handling
 - `_logging.py` - Hierarchical logging configuration with tensor hash IDs for debugging
 - `_package_version.py` - Package version management and version checking utilities
@@ -153,12 +156,13 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 
 ### Advanced Operation Dispatch Flow
 1. **Meta Tensor Inference**: Shape computation using PyTorch's meta device eliminates data transfer for shape operations
-2. **View Operation Optimization**: Local view creation with remote propagation maximizes memory efficiency  
+2. **View Operation Optimization**: Local view creation with remote propagation maximizes memory efficiency
 3. **Dynamic Output Support**: Special handling for operations with data-dependent output shapes (e.g., nonzero, unique)
 4. **RPC Batching Pipeline**: Operations queued in background thread, reducing network calls by ~10-100x
-5. **Remote Execution**: All compute operations dispatched to cloud GPUs with proper error handling
-6. **Thread-Safe Processing**: Background thread coordination with proper synchronization and error propagation
-7. **Efficient Data Transfer**: Raw untyped storage bytes only when crossing device boundaries, no unnecessary serialization
+5. **Remote Function Execution**: @remote decorator with automatic machine inference and cloudpickle-based serialization
+6. **Remote Execution**: All compute operations dispatched to cloud GPUs with proper error handling
+7. **Thread-Safe Processing**: Background thread coordination with proper synchronization and error propagation
+8. **Efficient Data Transfer**: Raw untyped storage bytes only when crossing device boundaries, no unnecessary serialization
 
 ## Usage Patterns
 
@@ -179,6 +183,39 @@ result = x @ y  # Matrix multiplication on remote A100, Storage ID: 3
 print(f"Result computed on {result.device}: {result.shape}")
 ```
 
+### Remote Function Execution
+```python
+import torch
+import mycelya_torch
+
+# Create remote machine
+machine = mycelya_torch.RemoteMachine("modal", "A100")
+device = machine.device()
+
+# Define custom functions that execute remotely
+@mycelya_torch.remote
+def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    return a @ b
+
+@mycelya_torch.remote()
+def complex_computation(x: torch.Tensor, scale: float = 2.0) -> torch.Tensor:
+    # Multiple operations executed remotely with automatic batching
+    y = x * scale
+    z = torch.relu(y)
+    w = torch.softmax(z, dim=-1)
+    return w.sum(dim=0)
+
+# Create tensors on remote GPU
+x = torch.randn(1000, 1000, device=device)
+y = torch.randn(1000, 1000, device=device)
+
+# Functions automatically execute on remote GPU with machine inference
+result1 = matrix_multiply(x, y)  # Executes remotely on A100
+result2 = complex_computation(x, scale=3.0)  # Executes remotely on A100
+
+print(f"Results computed on {result1.device}")
+```
+
 ### Production Neural Network Training
 ```python
 import torch.nn as nn
@@ -191,7 +228,7 @@ device = machine.device()
 # Model automatically uses sequential tensor IDs for all parameters
 model = nn.Sequential(
     nn.Linear(784, 512),
-    nn.ReLU(), 
+    nn.ReLU(),
     nn.Linear(512, 10)
 ).to(device)
 
@@ -202,14 +239,14 @@ for epoch in range(10):
     for batch_idx, (data, target) in enumerate(dataloader):
         # Efficient data transfer with raw bytes optimization
         data, target = data.to(device), target.to(device)
-        
+
         # All operations batched and executed remotely
         optimizer.zero_grad()
         output = model(data)
         loss = nn.functional.cross_entropy(output, target)
         loss.backward()  # Gradients computed on remote A100
         optimizer.step()
-        
+
         if batch_idx % 100 == 0:
             print(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.item():.4f}")
 ```
