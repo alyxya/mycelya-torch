@@ -17,7 +17,7 @@ import io
 import os
 import pickle
 import uuid
-from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 import modal
 import torch
@@ -60,12 +60,14 @@ def create_modal_app_for_gpu(
         """
 
         shape: List[int]
-        dtype: str
         stride: List[int]
+        dtype: str
         storage_offset: int
         nbytes: int
+        device_type: str
+        device_index: int
+        requires_grad: bool
         temp_key: str
-        requires_grad: NotRequired[bool]
 
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
@@ -108,15 +110,15 @@ def create_modal_app_for_gpu(
                 # Create metadata for client reconstruction
                 metadata = {
                     "shape": list(obj.shape),
-                    "dtype": str(obj.dtype).replace("torch.", ""),
                     "stride": list(obj.stride()),
+                    "dtype": str(obj.dtype).replace("torch.", ""),
                     "storage_offset": obj.storage_offset(),
                     "nbytes": obj.untyped_storage().nbytes(),
+                    "device_type": obj.device.type,
+                    "device_index": obj.device.index if obj.device.index is not None else 0,
+                    "requires_grad": obj.requires_grad,
                     "temp_key": temp_key,
                 }
-
-                if obj.requires_grad:
-                    metadata["requires_grad"] = True
 
                 return ("remote_tensor", metadata)
 
@@ -509,10 +511,13 @@ def create_modal_app_for_gpu(
                     output_metadata.append(
                         TensorMetadata(
                             shape=list(t.shape),
-                            dtype=self._dtype_to_str(t.dtype),
                             stride=list(t.stride()),
+                            dtype=self._dtype_to_str(t.dtype),
                             storage_offset=t.storage_offset(),
                             nbytes=t.untyped_storage().nbytes(),
+                            device_type=t.device.type,
+                            device_index=t.device.index if t.device.index is not None else 0,
+                            requires_grad=t.requires_grad,
                             temp_key=temp_key,
                         )
                     )
@@ -608,6 +613,8 @@ def create_modal_app_for_gpu(
                         "dtype": self._dtype_to_str(tensor.dtype),
                         "storage_offset": tensor.storage_offset(),
                         "nbytes": tensor.untyped_storage().nbytes(),
+                        "device_type": tensor.device.type,
+                        "device_index": tensor.device.index if tensor.device.index is not None else 0,
                         "requires_grad": tensor.requires_grad,
                         "temp_key": temp_key,
                     }

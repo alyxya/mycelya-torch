@@ -144,7 +144,7 @@ class Unpickler(pickle.Unpickler):
 
             # Get device using device_manager
             device = device_manager.get_mycelya_device(
-                self.machine_id, "mycelya", 0  # Default mycelya device index
+                self.machine_id, metadata["device_type"], metadata["device_index"]
             )
 
             # Create mycelya tensor from metadata

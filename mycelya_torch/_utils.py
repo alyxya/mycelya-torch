@@ -8,7 +8,7 @@ from mycelya tensors. These functions are for internal use only and should not b
 used by external users of mycelya_torch.
 """
 
-from typing import Any, Dict, List, NotRequired, Tuple, TypedDict
+from typing import Any, Dict, List, Tuple, TypedDict
 
 import torch
 
@@ -22,12 +22,14 @@ class TensorMetadata(TypedDict):
     """
 
     shape: List[int]
-    dtype: str
     stride: List[int]
+    dtype: str
     storage_offset: int
     nbytes: int
+    device_type: str
+    device_index: int
+    requires_grad: bool
     temp_key: str
-    requires_grad: NotRequired[bool]
 
 
 def get_tensor_id(tensor: torch.Tensor) -> int:
@@ -110,8 +112,7 @@ def create_mycelya_tensor_from_metadata(
         storage, metadata["storage_offset"], metadata["shape"], metadata["stride"]
     )
 
-    if "requires_grad" in metadata:
-        tensor.requires_grad_(metadata["requires_grad"])
+    tensor.requires_grad_(metadata["requires_grad"])
 
     return tensor
 
