@@ -178,7 +178,7 @@ def create_modal_app_for_gpu(
         def setup(self):
             """Initialize the server when container starts."""
             # Use getattr to avoid pickling errors - torch.ops is an _Ops object that cannot be pickled
-            self.torch_ops = getattr(torch, "ops")
+            self.torch_ops = getattr(torch, "ops")  # noqa: B009
 
             # Change to data directory and set HF cache if available (only when volumes are mounted)
             if gpu_type != "local":
