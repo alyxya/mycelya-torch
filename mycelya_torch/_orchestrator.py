@@ -708,26 +708,6 @@ class Orchestrator:
         self._main_thread_waiting.clear()
         return result
 
-    def _unlink_tensor(self, tensor: torch.Tensor) -> None:
-        """Unlink tensor ID from remote storage without freeing the storage.
-
-        This removes the tensor ID mapping but keeps the underlying storage intact.
-        Used when tensor IDs change due to resize operations.
-
-        Args:
-            tensor: Tensor whose ID should be unlinked
-        """
-        tensor_id = get_tensor_id(tensor)
-        storage_id = get_storage_id(tensor)
-
-        # Remove from local tracking
-        if storage_id in self._storage_to_tensors_map:
-            self._storage_to_tensors_map[storage_id].discard(tensor_id)
-
-        # Call client to unlink the ID
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        if machine_id in self._clients:
-            self._clients[machine_id].remove_tensors([tensor_id])
 
     def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
         """Resolve pending CPU tensor futures for a client."""
