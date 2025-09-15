@@ -497,11 +497,20 @@ class TestCrossDeviceGradientRestrictions:
         ]
         machine1_key, machine2_key = machine_keys[0], machine_keys[1]
 
+        device_type = "cpu" if provider == "mock" else "cuda"
         x_remote1 = DeviceTestUtils.create_remote_tensor(
-            (2, 2), shared_machines, machine1_key, requires_grad=True
+            (2, 2),
+            shared_machines,
+            machine1_key,
+            requires_grad=True,
+            device_type=device_type,
         )
         y_remote2 = DeviceTestUtils.create_remote_tensor(
-            (2, 2), shared_machines, machine2_key, requires_grad=True
+            (2, 2),
+            shared_machines,
+            machine2_key,
+            requires_grad=True,
+            device_type=device_type,
         )
 
         # Try cross-device operation (should fail)

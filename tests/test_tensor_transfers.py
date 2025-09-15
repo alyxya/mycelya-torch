@@ -187,10 +187,10 @@ class TestCrossDeviceTransferRestrictions:
         device_type = "cpu" if provider == "mock" else "cuda"
 
         tensor1 = DeviceTestUtils.create_remote_tensor(
-            (2, 2), shared_machines, device1_key, device_type
+            (2, 2), shared_machines, device1_key, device_type=device_type
         )
         tensor2 = DeviceTestUtils.create_remote_tensor(
-            (2, 2), shared_machines, device2_key, device_type
+            (2, 2), shared_machines, device2_key, device_type=device_type
         )
 
         # Test various operations that should fail
@@ -209,7 +209,7 @@ class TestCrossDeviceTransferRestrictions:
         device_type = "cpu" if provider == "mock" else "cuda"
 
         tensor_device1 = DeviceTestUtils.create_remote_tensor(
-            (2, 2), shared_machines, device1_key, device_type
+            (2, 2), shared_machines, device1_key, device_type=device_type
         )
 
         # Try to transfer directly to another remote device (should fail)
