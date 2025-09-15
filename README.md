@@ -150,21 +150,21 @@ machine = mycelya_torch.RemoteMachine("modal", "A100")
 
 # Load model architecture (no weights yet)
 model = AutoModelForCausalLM.from_pretrained(
-    "microsoft/DialoGPT-medium",
+    "HuggingFaceTB/SmolLM2-135M-Instruct",
     torch_dtype=torch.float16,
     device_map=None  # Don't load weights yet
 )
 
 # Load weights directly on remote GPU (no local download!)
 remote_state_dicts = mycelya_torch.load_huggingface_state_dicts(
-    "microsoft/DialoGPT-medium",
+    "HuggingFaceTB/SmolLM2-135M-Instruct",
     machine.device("cuda")
 )
 
 # Load the remote weights into the model
 model.load_state_dict(remote_state_dicts[""], strict=True)  # "" is root directory
 
-tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
+tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M-Instruct")
 
 # Generate text on remote GPU
 def chat(message):

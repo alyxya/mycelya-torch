@@ -31,7 +31,7 @@ def load_huggingface_state_dicts(
     2. Second step creates local tensor stubs and links them to remote tensors
 
     Args:
-        repo_id: HuggingFace repository ID (e.g., "microsoft/DialoGPT-medium")
+        repo_id: HuggingFace repository ID (e.g., "HuggingFaceTB/SmolLM2-135M-Instruct")
         device: Mycelya device where weights should be loaded
         path: Path within repository to load from (default: whole repo)
 

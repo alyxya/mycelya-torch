@@ -584,7 +584,7 @@ class Client(ABC):
         metadata needed to create local tensor stubs.
 
         Args:
-            repo: HuggingFace repository ID (e.g., "microsoft/DialoGPT-medium")
+            repo: HuggingFace repository ID (e.g., "HuggingFaceTB/SmolLM2-135M-Instruct")
             path: Path within repository to load from (default: whole repo)
             device_type: Device type (e.g., "cuda", "cpu")
             device_index: Device index (e.g., 0 for cuda:0)
