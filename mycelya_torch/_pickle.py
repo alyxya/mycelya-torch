@@ -49,7 +49,7 @@ class Pickler(cloudpickle.Pickler):
         self.storage_manager = storage_manager
         self.machine_id: Optional[str] = None
         # Collect tensors that need _maybe_create_tensor called
-        self.tensors_to_create = []
+        self.tensors = []
 
     def persistent_id(self, obj: Any) -> Optional[Tuple[str, Any]]:
         """
@@ -82,7 +82,7 @@ class Pickler(cloudpickle.Pickler):
                 )
 
             # Collect tensor for orchestrator to call _maybe_create_tensor on
-            self.tensors_to_create.append(obj)
+            self.tensors.append(obj)
             tensor_id = get_tensor_id(obj)  # Use metadata hash as tensor ID
             return ("mycelya_tensor", tensor_id)
 

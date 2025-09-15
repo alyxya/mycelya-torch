@@ -208,7 +208,7 @@ class MockClient(Client):
             output_tensor_ids,
         )
         # Only store result if expecting a return value for dynamic operations
-        if output_tensor_ids is None and result is not None:
+        if output_tensor_ids is None:
             self._pending_results.append(result)
 
     # HuggingFace model loading methods

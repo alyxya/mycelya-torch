@@ -620,7 +620,7 @@ class Orchestrator:
         pickled_func = buffer.getvalue()
 
         # Handle tensor creation for any tensors collected by pickler
-        for tensor in pickler.tensors_to_create:
+        for tensor in pickler.tensors:
             self._maybe_create_tensor(tensor)
 
         # Get machine_id from pickler (inferred during pickling)
@@ -632,12 +632,7 @@ class Orchestrator:
             )
 
         # Get client for the target machine
-        client = self._clients.get(machine_id)
-        if client is None:
-            raise RuntimeError(f"No client found for machine {machine_id}")
-
-        if not client.is_running():
-            raise RuntimeError(f"Client for machine {machine_id} is not running")
+        client = self._clients[machine_id]
 
         # Execute remotely
         result_future = client.execute_function(pickled_func)
@@ -651,8 +646,7 @@ class Orchestrator:
 
         # Handle tensor linking if any tensors were collected
         if unpickler.tensors_to_link:
-            tensor_ids = [tid for tid, _ in unpickler.tensors_to_link]
-            temp_keys = [tkey for _, tkey in unpickler.tensors_to_link]
+            tensor_ids, temp_keys = zip(*unpickler.tensors_to_link)
             client.link_tensors(tensor_ids, temp_keys)
 
         return result
