@@ -646,8 +646,8 @@ class Orchestrator:
 
         # Handle tensor linking if any tensors were collected
         if unpickler.tensors_to_link:
-            tensor_ids, temp_keys = zip(*unpickler.tensors_to_link)
-            client.link_tensors(tensor_ids, temp_keys)
+            tensors, temp_keys = zip(*unpickler.tensors_to_link)
+            self.link_tensors(list(tensors), list(temp_keys))
 
         return result
 

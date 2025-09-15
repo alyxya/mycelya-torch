@@ -125,7 +125,7 @@ class Unpickler(pickle.Unpickler):
         super().__init__(file)
         self.machine_id = machine_id
         # Collect tensor linking info for orchestrator to handle
-        self.tensors_to_link = []  # List of (tensor_id, temp_key) tuples
+        self.tensors_to_link = []  # List of (tensor, temp_key) tuples
 
     def persistent_load(self, pid: Tuple[str, Any]) -> Any:
         """
@@ -152,8 +152,7 @@ class Unpickler(pickle.Unpickler):
 
             # Collect tensor linking info for orchestrator to handle
             temp_key = metadata["temp_key"]
-            tensor_id = get_tensor_id(tensor)
-            self.tensors_to_link.append((tensor_id, temp_key))
+            self.tensors_to_link.append((tensor, temp_key))
 
             return tensor
 
