@@ -11,9 +11,11 @@ properly during serialization for remote execution. It includes:
 - Unpickler: Reconstructs remote execution results back to local mycelya tensors
 """
 
+import dis
 import io
 import pickle
-from typing import Any, Optional, Tuple
+import types
+from typing import Any, Optional, Set, Tuple
 
 import cloudpickle
 import torch
@@ -54,10 +56,78 @@ class Pickler(cloudpickle.Pickler):
         self.machine_id: Optional[str] = None
         # Collect tensors that need _maybe_create_tensor called
         self.tensors = []
+        # Collect module dependencies
+        self.module_dependencies: Set[str] = set()
+
+    def _extract_module_from_globals(self, globals_dict: dict) -> None:
+        """
+        Extract module dependencies from function globals.
+
+        Args:
+            globals_dict: Function's __globals__ dictionary
+        """
+        for name, value in globals_dict.items():
+            # Skip dunder attributes and None values
+            if name.startswith("__") or value is None:
+                continue
+
+            # Check if it's a module
+            if isinstance(value, types.ModuleType):
+                module_name = getattr(value, "__name__", None)
+                if module_name:
+                    # Get base module name (e.g. 'torch' from 'torch.nn.functional')
+                    base_module = module_name.split(".")[0]
+                    self.module_dependencies.add(base_module)
+            else:
+                # Check if object has __module__ attribute
+                module_name = getattr(value, "__module__", None)
+                if module_name:
+                    # Get base module name
+                    base_module = module_name.split(".")[0]
+                    self.module_dependencies.add(base_module)
+
+    def _extract_modules_from_code(self, code_obj: types.CodeType) -> None:
+        """
+        Extract module dependencies from code object using bytecode analysis.
+
+        Args:
+            code_obj: Code object to analyze
+        """
+        # Analyze bytecode instructions
+        for instruction in dis.get_instructions(code_obj):
+            # Look for IMPORT_NAME instructions - these are the actual imports
+            if instruction.opname == "IMPORT_NAME":
+                # Direct import statement (import foo, from foo import bar)
+                module_name = instruction.argval
+                if module_name:
+                    base_module = module_name.split(".")[0]
+                    self.module_dependencies.add(base_module)
+
+        # Recursively analyze nested code objects (functions, classes, etc.)
+        for const in code_obj.co_consts:
+            if isinstance(const, types.CodeType):
+                self._extract_modules_from_code(const)
+
+    def _analyze_dependencies(self, obj: Any) -> None:
+        """
+        Analyze object for package dependencies.
+
+        Args:
+            obj: Object to analyze for dependencies
+        """
+        # Handle dictionary objects with __globals__ key (function dictionaries)
+        if isinstance(obj, dict) and "__globals__" in obj:
+            globals_dict = obj["__globals__"]
+            if isinstance(globals_dict, dict):
+                self._extract_module_from_globals(globals_dict)
+
+        # Handle code objects directly
+        elif isinstance(obj, types.CodeType):
+            self._extract_modules_from_code(obj)
 
     def persistent_id(self, obj: Any) -> Optional[Tuple[str, Any]]:
         """
-        Handle mycelya tensors and devices during pickling.
+        Handle mycelya tensors and devices during pickling, and analyze dependencies.
 
         Args:
             obj: Object being pickled
@@ -68,6 +138,8 @@ class Pickler(cloudpickle.Pickler):
         Raises:
             RuntimeError: If tensors/devices from different machines are mixed
         """
+        # Analyze object for package dependencies
+        self._analyze_dependencies(obj)
         # Handle mycelya tensors
         if isinstance(obj, torch.Tensor) and obj.device.type == "mycelya":
             # Get tensor's machine information
