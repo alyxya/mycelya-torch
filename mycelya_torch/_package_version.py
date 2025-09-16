@@ -64,19 +64,19 @@ def get_versioned_packages(package_names: List[str]) -> List[str]:
     return versioned_packages
 
 
-def import_name_to_pip_name(import_name: str) -> Optional[str]:
+def module_name_to_package_name(module_name: str) -> Optional[str]:
     """
-    Convert import name to pip install name using package distribution mapping.
+    Convert module name to package name using package distribution mapping.
 
-    This handles cases where the import name differs from the pip install name
-    (e.g., "PIL" import name from "pillow" pip package, "bs4" import name from "beautifulsoup4" pip package).
+    This handles cases where the module name differs from the package name
+    (e.g., "PIL" module name from "pillow" package, "bs4" module name from "beautifulsoup4" package).
 
     Args:
-        import_name: Name used in import statements (e.g., "PIL")
+        module_name: Name used in import statements (e.g., "PIL")
 
     Returns:
-        Name used for pip install (e.g., "pillow") or None if not found
+        Name used for package installation (e.g., "pillow") or None if not found
     """
     pkg_to_dist = importlib.metadata.packages_distributions()
-    distributions = pkg_to_dist.get(import_name)
+    distributions = pkg_to_dist.get(module_name)
     return distributions[0] if distributions else None
