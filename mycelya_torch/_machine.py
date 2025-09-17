@@ -56,35 +56,6 @@ class RemoteMachine:
         "cloudpickle",
     ]
 
-    @classmethod
-    def _extract_package_name(cls, package_spec: str) -> str:
-        """Extract package name from package specification (e.g., 'torch==2.0.0' -> 'torch')."""
-        return re.split(r"[<>=!~]", package_spec)[0]
-
-    @classmethod
-    def _combine_packages(cls, additional_packages: List[str]) -> List[str]:
-        """
-        Combine default packages with additional packages, removing duplicates.
-
-        Args:
-            additional_packages: Additional packages to include
-
-        Returns:
-            Combined list of packages with duplicates removed
-        """
-        all_packages = cls._default_packages.copy()
-
-        if additional_packages:
-            # Default packages are simple names, additional packages may have versions
-            default_names = set(cls._default_packages)
-
-            # Add additional packages if not already in defaults
-            for pkg in additional_packages:
-                if cls._extract_package_name(pkg) not in default_names:
-                    all_packages.append(pkg)
-
-        return all_packages
-
     def __init__(
         self,
         provider: str,
@@ -113,7 +84,13 @@ class RemoteMachine:
         self.pip_packages = pip_packages
 
         # Combine default packages with additional packages, removing duplicates
-        self.final_packages = self._combine_packages(pip_packages)
+        self.packages = self._default_packages.copy()
+        if pip_packages:
+            default_names = set(self._default_packages)
+            for pkg in pip_packages:
+                pkg_name = re.split(r"[<>=!~]", pkg)[0]
+                if pkg_name not in default_names:
+                    self.packages.append(pkg)
 
         # Handle GPU type based on provider
         if provider == "modal":
@@ -163,7 +140,7 @@ class RemoteMachine:
             self.machine_id,
             self.provider,
             self.gpu_type,
-            self.final_packages,
+            self.packages,
             self._batching,
             self.timeout,
         )
