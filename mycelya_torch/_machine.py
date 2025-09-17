@@ -82,14 +82,21 @@ class RemoteMachine:
         self.provider = provider
         self.gpu_type = gpu_type
 
-        # Combine default packages with additional packages, removing duplicates
-        self.packages = self._default_packages.copy()
+        # Combine default and pip packages, with pip_packages overriding defaults
+        self.packages = []
+        pip_package_names = set()
+
+        # First, add pip packages (these can override defaults)
         if pip_packages:
-            default_names = set(self._default_packages)
             for pkg in pip_packages:
                 pkg_name = re.split(r"[<>=!~]", pkg)[0]
-                if pkg_name not in default_names:
-                    self.packages.append(pkg)
+                pip_package_names.add(pkg_name)
+                self.packages.append(pkg)
+
+        # Then add default packages that aren't overridden
+        for pkg in self._default_packages:
+            if pkg not in pip_package_names:
+                self.packages.append(pkg)
 
         # Handle GPU type based on provider
         if provider == "modal":
