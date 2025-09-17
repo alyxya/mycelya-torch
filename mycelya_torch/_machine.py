@@ -62,9 +62,9 @@ class RemoteMachine:
         gpu_type: str = "",
         *,
         pip_packages: List[str] | None = None,
-        start: bool = True,
+        modal_timeout: int | None = None,
+        _start: bool = True,
         _batching: bool = True,
-        timeout: int | None = None,
     ) -> None:
         """
         Initialize a remote machine.
@@ -75,9 +75,9 @@ class RemoteMachine:
                      Required for modal provider, ignored for mock provider.
             pip_packages: Additional pip packages to install in the modal app.
                          These will be added to the default packages (default: None)
-            start: Whether to start the client immediately (default: True)
+            modal_timeout: Timeout in seconds for modal provider (default: None)
+            _start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
-            timeout: Timeout in seconds for modal provider (default: None)
         """
         self.provider = provider
         self.gpu_type = gpu_type
@@ -139,7 +139,7 @@ class RemoteMachine:
         self.machine_id = f"{self.provider}-{gpu_clean}-{short_uuid}"
 
         self._batching = _batching
-        self.timeout = timeout
+        self.modal_timeout = modal_timeout
 
         # Create and register client with orchestrator
         orchestrator.create_client(
@@ -148,11 +148,11 @@ class RemoteMachine:
             self.gpu_type,
             self.packages,
             self._batching,
-            self.timeout,
+            self.modal_timeout,
         )
 
         # Start client if requested and register cleanup
-        if start:
+        if _start:
             self.start()
         atexit.register(self.stop)
 
