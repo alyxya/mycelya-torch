@@ -9,6 +9,7 @@ machines with different cloud providers and GPU types.
 """
 
 import atexit
+import re
 import uuid
 from typing import Any, List, Optional
 
@@ -56,6 +57,11 @@ class RemoteMachine:
     ]
 
     @classmethod
+    def _extract_package_name(cls, package_spec: str) -> str:
+        """Extract package name from package specification (e.g., 'torch==2.0.0' -> 'torch')."""
+        return re.split(r"[<>=!~]", package_spec)[0]
+
+    @classmethod
     def _combine_packages(cls, additional_packages: List[str]) -> List[str]:
         """
         Combine default packages with additional packages, removing duplicates.
@@ -69,26 +75,13 @@ class RemoteMachine:
         all_packages = cls._default_packages.copy()
 
         if additional_packages:
-            # Extract package names (without version specifiers) for deduplication
-            base_names = {
-                pkg.split("==")[0]
-                .split(">=")[0]
-                .split("<=")[0]
-                .split("~=")[0]
-                .split("!=")[0]
-                for pkg in cls._default_packages
-            }
+            # Default packages are simple names, additional packages may have versions
+            default_names = set(cls._default_packages)
+
+            # Add additional packages if not already in defaults
             for pkg in additional_packages:
-                pkg_name = (
-                    pkg.split("==")[0]
-                    .split(">=")[0]
-                    .split("<=")[0]
-                    .split("~=")[0]
-                    .split("!=")[0]
-                )
-                if pkg_name not in base_names:
+                if cls._extract_package_name(pkg) not in default_names:
                     all_packages.append(pkg)
-                    base_names.add(pkg_name)
 
         return all_packages
 
