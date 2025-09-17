@@ -61,7 +61,7 @@ class RemoteMachine:
         provider: str,
         gpu_type: str = "",
         *,
-        pip_packages: List[str] = [],  # noqa: B006
+        pip_packages: Optional[List[str]] = None,
         start: bool = True,
         _batching: bool = True,
         timeout: Optional[int] = None,
@@ -74,7 +74,7 @@ class RemoteMachine:
             gpu_type: The GPU type (e.g., "A100", "T4").
                      Required for modal provider, ignored for mock provider.
             pip_packages: Additional pip packages to install in the modal app.
-                         These will be added to the default packages (default: [])
+                         These will be added to the default packages (default: None)
             start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
             timeout: Timeout in seconds for modal provider (default: None)
@@ -87,7 +87,7 @@ class RemoteMachine:
         pip_package_names = set()
 
         # First, add pip packages (these can override defaults)
-        if pip_packages:
+        if pip_packages is not None:
             for pkg in pip_packages:
                 pkg_name = re.split(r"[<>=!~]", pkg)[0]
                 pip_package_names.add(pkg_name)
