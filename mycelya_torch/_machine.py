@@ -11,7 +11,7 @@ machines with different cloud providers and GPU types.
 import atexit
 import re
 import uuid
-from typing import Any, List, Optional
+from typing import Any, List
 
 import torch
 
@@ -61,10 +61,10 @@ class RemoteMachine:
         provider: str,
         gpu_type: str = "",
         *,
-        pip_packages: Optional[List[str]] = None,
+        pip_packages: List[str] | None = None,
         start: bool = True,
         _batching: bool = True,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> None:
         """
         Initialize a remote machine.
@@ -186,7 +186,7 @@ class RemoteMachine:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def device(self, type: str, index: Optional[int] = None) -> torch.device:
+    def device(self, type: str, index: int | None = None) -> torch.device:
         """Get a PyTorch device object for this RemoteMachine.
 
         Args:

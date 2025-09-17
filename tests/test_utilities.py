@@ -8,7 +8,7 @@ This module provides common utility functions for test setup, verification,
 and data generation to reduce code duplication across test files.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 if TYPE_CHECKING:
     from mycelya_torch import RemoteMachine
@@ -112,7 +112,7 @@ class NumericalTestUtils:
         expected: torch.Tensor,
         rtol: float = TestConstants.DEFAULT_RTOL,
         atol: float = TestConstants.DEFAULT_ATOL,
-        msg: Optional[str] = None,
+        msg: str | None = None,
     ) -> None:
         """Assert that two tensors are numerically close."""
         # Handle NaN cases: if both tensors have NaN in the same positions, they're equal
@@ -155,7 +155,7 @@ class NumericalTestUtils:
     @staticmethod
     def verify_gradient_flow(
         leaf_tensor: torch.Tensor,
-        expected_grad: Optional[torch.Tensor] = None,
+        expected_grad: torch.Tensor | None = None,
         rtol: float = TestConstants.DEFAULT_RTOL,
         atol: float = TestConstants.DEFAULT_ATOL,
     ) -> None:
@@ -209,7 +209,7 @@ class TestDataGenerator:
     def generate_classification_data(
         batch_size: int = TestConstants.DEFAULT_BATCH_SIZE,
         num_classes: int = TestConstants.DEFAULT_NUM_CLASSES,
-        shared_machines: Optional[Dict[str, "RemoteMachine"]] = None,
+        shared_machines: Dict[str, "RemoteMachine"] | None = None,
         machine_key: str = "T4",
         device_type: str = "cuda",
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -229,7 +229,7 @@ class TestDataGenerator:
 
     @staticmethod
     def generate_tensor_test_cases(
-        base_shapes: Optional[List[Tuple[int, ...]]] = None,
+        base_shapes: List[Tuple[int, ...]] | None = None,
     ) -> List[torch.Tensor]:
         """Generate a variety of tensor test cases."""
         if base_shapes is None:

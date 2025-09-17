@@ -17,7 +17,7 @@ import io
 import os
 import pickle
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Tuple, TypedDict
 
 import cloudpickle
 import modal
@@ -30,7 +30,7 @@ def create_modal_app_for_gpu(
     gpu_type: str,
     packages: List[str],
     python_version: str,
-    timeout: Optional[int] = None,
+    timeout: int | None = None,
 ) -> Tuple[Any, Any]:
     """
     Create a Modal app and class for a specific GPU type.
@@ -471,7 +471,7 @@ def create_modal_app_for_gpu(
             args: List[Any],
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
-            output_tensor_ids: Optional[List[int]] = None,
+            output_tensor_ids: List[int] | None = None,
         ):
             """Implementation of execute_aten_operation without Modal decorators."""
             tensor_registry = self._tensor_registry
@@ -541,7 +541,7 @@ def create_modal_app_for_gpu(
             args: List[Any],
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
-            output_tensor_ids: Optional[List[int]] = None,
+            output_tensor_ids: List[int] | None = None,
         ):
             """Execute an aten operation on the remote machine."""
             result = self._execute_aten_operation_impl(

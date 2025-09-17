@@ -11,7 +11,7 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from collections import deque
 from concurrent.futures import Future
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Tuple, TypedDict
 
 from .._utils import TensorMetadata
 
@@ -493,7 +493,7 @@ class Client(ABC):
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        output_tensor_ids: Optional[List[int]] = None,
+        output_tensor_ids: List[int] | None = None,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         pass
@@ -504,8 +504,8 @@ class Client(ABC):
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        output_tensor_ids: Optional[List[int]] = None,
-    ) -> Optional[Future[List[TensorMetadata]]]:
+        output_tensor_ids: List[int] | None = None,
+    ) -> Future[List[TensorMetadata]] | None:
         """
         Execute an aten operation on the remote machine.
 

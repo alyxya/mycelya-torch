@@ -14,7 +14,7 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 """
 
 from concurrent.futures import Future
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from ._logging import get_logger
 
@@ -98,7 +98,7 @@ class StorageManager:
         """
         self._storage_cache[storage_id] = data_future
 
-    def get_cached_storage(self, storage_id: int) -> Optional[Future[bytes]]:
+    def get_cached_storage(self, storage_id: int) -> Future[bytes] | None:
         """Get cached storage future by storage ID.
 
         Args:

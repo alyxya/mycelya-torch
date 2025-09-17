@@ -15,7 +15,7 @@ import threading
 import time
 from collections import deque
 from concurrent.futures import Future
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import torch
 
@@ -86,7 +86,7 @@ class Orchestrator:
         gpu_type: str,
         packages: List[str],
         batching: bool = True,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> None:
         """Create and register a client for a machine.
 
@@ -390,8 +390,8 @@ class Orchestrator:
         op_name: str,
         args: Tuple[Any, ...],
         kwargs: Dict[str, Any],
-        output_tensors: Optional[List[torch.Tensor]] = None,
-    ) -> Optional[List[TensorMetadata]]:
+        output_tensors: List[torch.Tensor] | None = None,
+    ) -> List[TensorMetadata] | None:
         """Execute remote operation with tensor objects in args/kwargs.
 
         Args:

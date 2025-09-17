@@ -8,7 +8,7 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..._logging import get_logger
 from ...servers.mock.server import create_mock_modal_app
@@ -195,7 +195,7 @@ class MockClient(Client):
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        output_tensor_ids: Optional[List[int]] = None,
+        output_tensor_ids: List[int] | None = None,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
 

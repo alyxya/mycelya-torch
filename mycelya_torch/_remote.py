@@ -10,12 +10,12 @@ orchestrator coordination.
 """
 
 import functools
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from ._orchestrator import orchestrator
 
 
-def remote(_func: Optional[Callable[..., Any]] = None, *, run_async: bool = False):
+def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
     """
     Dual-mode decorator that converts a function to execute remotely on mycelya tensors.
 

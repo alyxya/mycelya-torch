@@ -10,7 +10,7 @@ to ensure Modal containers use the same versions as the local development enviro
 
 import importlib.metadata
 import sys
-from typing import List, Optional
+from typing import List
 
 
 def get_python_version() -> str:
@@ -23,7 +23,7 @@ def get_python_version() -> str:
     return f"{sys.version_info.major}.{sys.version_info.minor}"
 
 
-def get_local_package_version(package_name: str) -> Optional[str]:
+def get_local_package_version(package_name: str) -> str | None:
     """
     Get the version of an installed package.
 
@@ -64,7 +64,7 @@ def get_versioned_packages(package_names: List[str]) -> List[str]:
     return versioned_packages
 
 
-def module_name_to_package_name(module_name: str) -> Optional[str]:
+def module_name_to_package_name(module_name: str) -> str | None:
     """
     Convert module name to package name using package distribution mapping.
 

@@ -8,7 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..._logging import get_logger
 from ..._package_version import get_python_version, get_versioned_packages
@@ -33,7 +33,7 @@ class ModalClient(Client):
         gpu_type: str,
         packages: List[str],
         batching: bool = True,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ):
         super().__init__(machine_id, batching)
         self.gpu_type = gpu_type
@@ -212,7 +212,7 @@ class ModalClient(Client):
         args: List[Any],
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
-        output_tensor_ids: Optional[List[int]] = None,
+        output_tensor_ids: List[int] | None = None,
     ) -> None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         # Call Modal method and capture FunctionCall if returning metadata
