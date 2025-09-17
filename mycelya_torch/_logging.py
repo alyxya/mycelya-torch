@@ -8,7 +8,6 @@ This module provides utilities to configure logging behavior across all mycelya_
 """
 
 import logging
-from typing import Union
 
 # Root logger name for all mycelya_torch modules
 MYCELYA_TORCH_LOGGER = "mycelya_torch"
@@ -63,7 +62,7 @@ def _setup_default_logging():
         root_logger.propagate = False
 
 
-def set_logging_level(level: Union[int, str]) -> None:
+def set_logging_level(level: int | str) -> None:
     """
     Set the logging level for all mycelya_torch modules.
 

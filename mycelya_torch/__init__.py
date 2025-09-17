@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import types
-from typing import Any, Callable, Dict, Union
+from typing import Any, Callable, Dict
 
 import torch
 
@@ -66,7 +66,7 @@ def _create_module() -> types.ModuleType:
         """
         return True
 
-    def get_rng_state(device: Union[int, torch.device]) -> torch.Tensor:
+    def get_rng_state(device: int | torch.device) -> torch.Tensor:
         """Get the random number generator state for a mycelya device.
 
         Args:
@@ -88,7 +88,7 @@ def _create_module() -> types.ModuleType:
         return default_generator.get_state()
 
     def set_rng_state(
-        new_state: torch.Tensor, device: Union[int, torch.device]
+        new_state: torch.Tensor, device: int | torch.device
     ) -> None:
         """Set the random number generator state for a mycelya device.
 
@@ -108,7 +108,7 @@ def _create_module() -> types.ModuleType:
         default_generator = mycelya_torch._C._get_default_generator(idx)
         default_generator.set_state(new_state)
 
-    def initial_seed(device: Union[int, torch.device]) -> int:
+    def initial_seed(device: int | torch.device) -> int:
         """Get the initial seed for a mycelya device.
 
         Args:
@@ -130,7 +130,7 @@ def _create_module() -> types.ModuleType:
         default_generator = mycelya_torch._C._get_default_generator(idx)
         return default_generator.initial_seed()
 
-    def manual_seed(seed: int, device: Union[int, torch.device]) -> None:
+    def manual_seed(seed: int, device: int | torch.device) -> None:
         """Set the random seed for a mycelya device.
 
         Args:

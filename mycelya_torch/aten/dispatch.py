@@ -1,7 +1,7 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 import torch
 
@@ -44,7 +44,7 @@ def _create_meta_tensor_from_mycelya(
 
 
 def _execute_meta_operation(
-    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
+    op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
     device_container: List[torch.device],
@@ -127,7 +127,7 @@ def _create_output_tensors(
 
 
 def _execute_with_static_outputs(
-    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
+    op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
     mycelya_device: torch.device,
@@ -163,7 +163,7 @@ def _execute_with_static_outputs(
 
 
 def _execute_with_dynamic_outputs(
-    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
+    op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
     args: Tuple[Any, ...],
     kwargs: Dict[str, Any],
     mycelya_device: torch.device,
@@ -193,7 +193,7 @@ def _execute_with_dynamic_outputs(
 
 
 def _mycelya_kernel_fallback(
-    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
+    op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
     *args: Any,
     **kwargs: Any,
 ) -> Any:

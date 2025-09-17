@@ -8,7 +8,7 @@ the ATen operations to their mycelya implementations. The actual operation
 implementations are organized in separate modules by functionality.
 """
 
-from typing import Any, Callable, Union
+from typing import Any, Callable
 
 import torch
 
@@ -31,7 +31,7 @@ _mycelya_lib_aten.impl("equal", _equal, dispatch_key="PrivateUse1")
 
 # Helper function to create wrappers for ATen operations
 def _mycelya_kernel_fallback_wrapper(
-    op: Union[torch._ops.OpOverload, torch._ops.OpOverloadPacket],
+    op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
 ) -> Callable[..., Any]:
     """Create a wrapper function that calls _mycelya_kernel_fallback with the specified ATen op."""
 
