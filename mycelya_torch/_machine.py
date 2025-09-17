@@ -81,7 +81,6 @@ class RemoteMachine:
         """
         self.provider = provider
         self.gpu_type = gpu_type
-        self.pip_packages = pip_packages
 
         # Combine default packages with additional packages, removing duplicates
         self.packages = self._default_packages.copy()
