@@ -46,8 +46,8 @@ class RemoteMachine:
     # Class-level tracking of all machine instances
     _all_machines: list["RemoteMachine"] = []
 
-    # Base packages required for modal apps
-    _packages = [
+    # Default packages required for modal apps
+    _default_packages = [
         "numpy",
         "torch",
         "huggingface_hub",
@@ -58,7 +58,7 @@ class RemoteMachine:
     @classmethod
     def _combine_packages(cls, additional_packages: List[str]) -> List[str]:
         """
-        Combine base packages with additional packages, removing duplicates.
+        Combine default packages with additional packages, removing duplicates.
 
         Args:
             additional_packages: Additional packages to include
@@ -66,7 +66,7 @@ class RemoteMachine:
         Returns:
             Combined list of packages with duplicates removed
         """
-        all_packages = cls._packages.copy()
+        all_packages = cls._default_packages.copy()
 
         if additional_packages:
             # Extract package names (without version specifiers) for deduplication
@@ -76,7 +76,7 @@ class RemoteMachine:
                 .split("<=")[0]
                 .split("~=")[0]
                 .split("!=")[0]
-                for pkg in cls._packages
+                for pkg in cls._default_packages
             }
             for pkg in additional_packages:
                 pkg_name = (
@@ -110,7 +110,7 @@ class RemoteMachine:
             gpu_type: The GPU type (e.g., "A100", "T4").
                      Required for modal provider, ignored for mock provider.
             pip_packages: Additional pip packages to install in the modal app.
-                         These will be added to the base packages (default: [])
+                         These will be added to the default packages (default: [])
             start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
             timeout: Timeout in seconds for modal provider (default: None)
@@ -119,7 +119,7 @@ class RemoteMachine:
         self.gpu_type = gpu_type
         self.pip_packages = pip_packages
 
-        # Combine base packages with additional packages, removing duplicates
+        # Combine default packages with additional packages, removing duplicates
         self.final_packages = self._combine_packages(pip_packages)
 
         # Handle GPU type based on provider
