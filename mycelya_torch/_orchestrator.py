@@ -84,6 +84,7 @@ class Orchestrator:
         machine_id: str,
         provider: str,
         gpu_type: str,
+        packages: List[str],
         batching: bool = True,
         timeout: Optional[int] = None,
     ) -> None:
@@ -93,13 +94,14 @@ class Orchestrator:
             machine_id: Unique machine identifier
             provider: Provider type ("modal" or "mock")
             gpu_type: GPU type string (required for modal, ignored for mock)
-            timeout: Timeout in seconds (optional for modal, ignored for mock)
+            packages: Final package list for modal app (ignored for mock)
             batching: Whether to enable batching
+            timeout: Timeout in seconds (optional for modal, ignored for mock)
         """
         if provider == "modal":
             from .clients.modal.client import ModalClient
 
-            client = ModalClient(machine_id, gpu_type, batching, timeout)
+            client = ModalClient(machine_id, gpu_type, packages, batching, timeout)
         elif provider == "mock":
             from .clients.mock.client import MockClient
 

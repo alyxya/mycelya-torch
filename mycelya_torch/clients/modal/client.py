@@ -31,6 +31,7 @@ class ModalClient(Client):
         self,
         machine_id: str,
         gpu_type: str,
+        packages: List[str],
         batching: bool = True,
         timeout: Optional[int] = None,
     ):
@@ -40,15 +41,8 @@ class ModalClient(Client):
         self._server_instance = None
         self._app_context = None
 
-        # Get synchronized package versions and Python version from local environment
-        base_packages = [
-            "numpy",
-            "torch",
-            "huggingface_hub",
-            "safetensors",
-            "cloudpickle",
-        ]
-        versioned_packages = get_versioned_packages(base_packages)
+        # Get versioned packages and Python version from local environment
+        versioned_packages = get_versioned_packages(packages)
         python_version = get_python_version()
 
         # Initialize the Modal app and server class with synchronized versions

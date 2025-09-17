@@ -10,7 +10,7 @@ machines with different cloud providers and GPU types.
 
 import atexit
 import uuid
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import torch
 
@@ -46,11 +46,58 @@ class RemoteMachine:
     # Class-level tracking of all machine instances
     _all_machines: list["RemoteMachine"] = []
 
+    # Base packages required for modal apps
+    _packages = [
+        "numpy",
+        "torch",
+        "huggingface_hub",
+        "safetensors",
+        "cloudpickle",
+    ]
+
+    @classmethod
+    def _combine_packages(cls, additional_packages: List[str]) -> List[str]:
+        """
+        Combine base packages with additional packages, removing duplicates.
+
+        Args:
+            additional_packages: Additional packages to include
+
+        Returns:
+            Combined list of packages with duplicates removed
+        """
+        all_packages = cls._packages.copy()
+
+        if additional_packages:
+            # Extract package names (without version specifiers) for deduplication
+            base_names = {
+                pkg.split("==")[0]
+                .split(">=")[0]
+                .split("<=")[0]
+                .split("~=")[0]
+                .split("!=")[0]
+                for pkg in cls._packages
+            }
+            for pkg in additional_packages:
+                pkg_name = (
+                    pkg.split("==")[0]
+                    .split(">=")[0]
+                    .split("<=")[0]
+                    .split("~=")[0]
+                    .split("!=")[0]
+                )
+                if pkg_name not in base_names:
+                    all_packages.append(pkg)
+                    base_names.add(pkg_name)
+
+        return all_packages
+
     def __init__(
         self,
         provider: str,
         gpu_type: str = "",
         *,
+        pip_packages: List[str] = [],  # noqa: B006
         start: bool = True,
         _batching: bool = True,
         timeout: Optional[int] = None,
@@ -62,12 +109,18 @@ class RemoteMachine:
             provider: The cloud provider (e.g., "modal", "mock")
             gpu_type: The GPU type (e.g., "A100", "T4").
                      Required for modal provider, ignored for mock provider.
+            pip_packages: Additional pip packages to install in the modal app.
+                         These will be added to the base packages (default: [])
             start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
             timeout: Timeout in seconds for modal provider (default: None)
         """
         self.provider = provider
         self.gpu_type = gpu_type
+        self.pip_packages = pip_packages
+
+        # Combine base packages with additional packages, removing duplicates
+        self.final_packages = self._combine_packages(pip_packages)
 
         # Handle GPU type based on provider
         if provider == "modal":
@@ -117,6 +170,7 @@ class RemoteMachine:
             self.machine_id,
             self.provider,
             self.gpu_type,
+            self.final_packages,
             self._batching,
             self.timeout,
         )
