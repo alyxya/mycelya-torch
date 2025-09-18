@@ -78,9 +78,6 @@ class ClientManager:
         # Clear pending results
         self._pending_results.clear()
 
-        # Delegate to client for any client-specific cleanup
-        self.client.propagate_exception_to_futures(exception)
-
     def add_pending_result(self, result):
         """Add a pending result to the manager's queue."""
         self._pending_results.append(result)

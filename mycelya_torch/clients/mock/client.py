@@ -74,11 +74,6 @@ class MockClient(Client):
                 # Individual result
                 pending_futures.popleft().set_result(result)
 
-    def propagate_exception_to_futures(self, exception: Exception) -> None:
-        """Propagate the given exception to all pending futures."""
-        # Client-specific cleanup - the manager handles pending futures
-        pass
-
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Mock."""
         if not batch_calls:

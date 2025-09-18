@@ -104,11 +104,6 @@ class ModalClient(Client):
             except TimeoutError:
                 break
 
-    def propagate_exception_to_futures(self, exception: Exception) -> None:
-        """Propagate the given exception to all pending futures."""
-        # Client-specific cleanup - the manager handles pending futures
-        pass
-
     def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Modal."""
         if not batch_calls:
