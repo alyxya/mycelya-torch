@@ -136,10 +136,6 @@ class ClientManager:
         # Clear pending results
         self._pending_results.clear()
 
-    def add_pending_result(self, result):
-        """Add a pending result to the manager's queue."""
-        self._pending_results.append(result)
-
     def _ensure_running(self) -> None:
         """Ensure the machine is running, raise RuntimeError if not."""
         if self.state == ClientState.INITIALIZED:
