@@ -11,10 +11,20 @@ operation coordination.
 
 from collections import deque
 from concurrent.futures import Future
+from enum import Enum
 from typing import Any, Dict, List
 
 from ._utils import TensorMetadata
 from .clients.base_client import BatchCall, Client
+
+
+class ClientState(Enum):
+    """Enumeration of possible client states."""
+
+    INITIALIZED = "initialized"  # Created but not started
+    RUNNING = "running"  # Active and accepting operations
+    PAUSED = "paused"  # Temporarily suspended (not implemented yet)
+    STOPPED = "stopped"  # Shut down, no longer accepting operations
 
 
 class ClientManager:
@@ -39,7 +49,7 @@ class ClientManager:
         self.client = client
         self.machine_id = machine_id
         self.batching = batching
-        self._is_running = False
+        self._state = ClientState.INITIALIZED
 
         # Deque for storing pending futures that need to be resolved (returned to caller)
         self._pending_futures = deque()
@@ -52,17 +62,49 @@ class ClientManager:
 
     def start(self) -> None:
         """Start the cloud provider's compute resources."""
+        if self._state == ClientState.STOPPED:
+            raise RuntimeError(
+                f"Cannot start machine {self.machine_id} - already stopped"
+            )
+
         self.client.start()
-        self._is_running = True
+        self._state = ClientState.RUNNING
 
     def stop(self) -> None:
         """Stop the cloud provider's compute resources."""
         self.client.stop()
-        self._is_running = False
+        self._state = ClientState.STOPPED
 
     def is_running(self) -> bool:
         """Check if the machine is currently running and ready."""
-        return self._is_running
+        return self._state == ClientState.RUNNING
+
+    def pause(self) -> None:
+        """Pause the client (temporarily suspend operations)."""
+        if self._state != ClientState.RUNNING:
+            raise RuntimeError(
+                f"Cannot pause machine {self.machine_id} - not currently running"
+            )
+
+        # TODO: Implement pause logic
+        self._state = ClientState.PAUSED
+        raise NotImplementedError("Pause functionality not yet implemented")
+
+    def resume(self) -> None:
+        """Resume the client from paused state."""
+        if self._state != ClientState.PAUSED:
+            raise RuntimeError(
+                f"Cannot resume machine {self.machine_id} - not currently paused"
+            )
+
+        # TODO: Implement resume logic
+        self._state = ClientState.RUNNING
+        raise NotImplementedError("Resume functionality not yet implemented")
+
+    @property
+    def state(self) -> ClientState:
+        """Get the current client state."""
+        return self._state
 
     def resolve_futures(self) -> None:
         """Resolve any pending futures by fetching results from the queue."""
@@ -107,10 +149,19 @@ class ClientManager:
 
     def _ensure_running(self) -> None:
         """Ensure the machine is running, raise RuntimeError if not."""
-        if not self.is_running():
+        if self._state == ClientState.INITIALIZED:
             raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
+                f"Machine {self.machine_id} is not started. Call start() first."
             )
+        elif self._state == ClientState.PAUSED:
+            raise RuntimeError(
+                f"Machine {self.machine_id} is paused. Call resume() first."
+            )
+        elif self._state == ClientState.STOPPED:
+            raise RuntimeError(
+                f"Machine {self.machine_id} is stopped and cannot be restarted."
+            )
+        # If we get here, state is RUNNING - which is what we want
 
     def execute_batch(self) -> None:
         """Execute any pending batch calls."""
