@@ -50,23 +50,10 @@ class MockClient(Client):
             self._server_instance = None
             self._is_running = False
 
-    def resolve_futures_with_state(
-        self, pending_futures, pending_results, batching: bool
-    ) -> None:
-        """Resolve pending futures using result deque."""
-
-        # Process all available results from the deque
-        while pending_results and pending_futures:
-            result = pending_results.popleft()
-
-            # Resolve futures based on batching mode
-            if batching:
-                # Batch result - iterate over list
-                for res in result:
-                    pending_futures.popleft().set_result(res)
-            else:
-                # Individual result
-                pending_futures.popleft().set_result(result)
+    def try_get_rpc_result(self, rpc_result: Any) -> Any | None:
+        """Non-blocking attempt to get the result from an RPC call."""
+        # For Mock, rpc_result is already the resolved value - always available
+        return rpc_result
 
     def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Mock."""

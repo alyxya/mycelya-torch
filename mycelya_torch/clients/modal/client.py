@@ -72,31 +72,13 @@ class ModalClient(Client):
                 self._app_context = None
                 self._server_instance = None
 
-    def resolve_futures_with_state(
-        self, pending_futures, pending_results, batching: bool
-    ) -> None:
-        """Resolve pending futures using FunctionCall polling."""
-
-        # Poll FunctionCall objects for completed results
-        while pending_results and pending_futures:
-            func_call = pending_results[0]  # Peek at first
-            try:
-                # Try to get result with zero timeout (non-blocking)
-                result = func_call.get(timeout=0)
-                # Result is ready, remove from deque
-                pending_results.popleft()
-
-                # Resolve futures based on batching mode
-                if batching:
-                    # Batch result - iterate over list
-                    for res in result:
-                        pending_futures.popleft().set_result(res)
-                else:
-                    # Individual result
-                    pending_futures.popleft().set_result(result)
-
-            except TimeoutError:
-                break
+    def try_get_rpc_result(self, rpc_result: Any) -> Any | None:
+        """Non-blocking attempt to get the result from an RPC call."""
+        # For Modal, rpc_result is a FunctionCall object - try with zero timeout
+        try:
+            return rpc_result.get(timeout=0)
+        except TimeoutError:
+            return None
 
     def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Modal."""

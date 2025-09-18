@@ -69,10 +69,27 @@ class ClientManager:
         if not self.is_running():
             return
 
-        # Pass the manager's queues to the client for resolution
-        self.client.resolve_futures_with_state(
-            self._pending_futures, self._pending_results, self.batching
-        )
+        # Poll for completed RPC results and resolve corresponding futures
+        while self._pending_results and self._pending_futures:
+            rpc_result = self._pending_results[0]  # Peek at first
+
+            # Try to get the result without blocking
+            resolved_value = self.client.try_get_rpc_result(rpc_result)
+            if resolved_value is None:
+                # Result not ready yet, stop processing
+                break
+
+            # Result is ready, remove from pending results
+            self._pending_results.popleft()
+
+            # Resolve futures based on batching mode
+            if self.batching:
+                # Batch result - iterate over list
+                for res in resolved_value:
+                    self._pending_futures.popleft().set_result(res)
+            else:
+                # Individual result
+                self._pending_futures.popleft().set_result(resolved_value)
 
     def propagate_exception_to_futures(self, exception: Exception) -> None:
         """Propagate the given exception to all pending futures."""

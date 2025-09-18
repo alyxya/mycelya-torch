@@ -56,19 +56,19 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def resolve_futures_with_state(
-        self, pending_futures, pending_results, batching: bool
-    ) -> None:
+    def try_get_rpc_result(self, rpc_result: Any) -> Any | None:
         """
-        Resolve any pending futures by fetching results from the queue.
+        Non-blocking attempt to get the result from an RPC call.
 
-        Called periodically by orchestrator's background thread to process
-        futures that were created for asynchronous operations.
+        This method takes the result object returned by RPC methods (like FunctionCall
+        for Modal, direct result for Mock) and returns the resolved value if available,
+        or None if the result is not ready yet.
 
         Args:
-            pending_futures: Deque of pending futures to resolve
-            pending_results: Deque of pending results from remote operations
-            batching: Whether batching is enabled
+            rpc_result: The result object returned by any RPC method
+
+        Returns:
+            The resolved actual value if ready, None if not ready yet
         """
         pass
 
