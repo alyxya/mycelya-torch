@@ -33,6 +33,7 @@ class MockClient(Client):
     def start(
         self,
         gpu_type: str,
+        gpu_count: int,
         packages: List[str],
         python_version: str,
     ):

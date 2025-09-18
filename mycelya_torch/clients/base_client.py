@@ -48,6 +48,7 @@ class Client(ABC):
     def start(
         self,
         gpu_type: str,
+        gpu_count: int,
         packages: List[str],
         python_version: str,
     ) -> None:
@@ -59,6 +60,7 @@ class Client(ABC):
 
         Args:
             gpu_type: GPU type string (required for modal, ignored for mock)
+            gpu_count: Number of GPUs (1-8, ignored for mock)
             packages: Versioned package list for modal app (ignored for mock)
             python_version: Python version string (ignored for mock)
         """

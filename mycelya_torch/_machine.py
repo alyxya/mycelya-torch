@@ -61,6 +61,7 @@ class RemoteMachine:
         provider: str,
         gpu_type: str = "",
         *,
+        gpu_count: int = 1,
         pip_packages: List[str] | None = None,
         modal_timeout: int | None = None,
         _start: bool = True,
@@ -73,6 +74,7 @@ class RemoteMachine:
             provider: The cloud provider (e.g., "modal", "mock")
             gpu_type: The GPU type (e.g., "A100", "T4").
                      Required for modal provider, ignored for mock provider.
+            gpu_count: Number of GPUs (1-8, default: 1). Ignored for mock provider.
             pip_packages: Additional pip packages to install in the modal app.
                          These will be added to the default packages (default: None)
             modal_timeout: Timeout in seconds for modal provider (default: None)
@@ -81,6 +83,11 @@ class RemoteMachine:
         """
         self.provider = provider
         self.gpu_type = gpu_type
+
+        # Validate gpu_count
+        if not isinstance(gpu_count, int) or gpu_count < 1 or gpu_count > 8:
+            raise ValueError(f"gpu_count must be an integer between 1 and 8, got {gpu_count}")
+        self.gpu_count = gpu_count
 
         # Combine default and pip packages, with pip_packages overriding defaults
         self.packages = []
@@ -145,6 +152,7 @@ class RemoteMachine:
             self.machine_id,
             self.provider,
             self.gpu_type,
+            self.gpu_count,
             self.packages,
             self._batching,
             self.modal_timeout,

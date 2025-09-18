@@ -35,14 +35,18 @@ class ModalClient(Client):
     def start(
         self,
         gpu_type: str,
+        gpu_count: int,
         packages: List[str],
         python_version: str,
     ):
         """Start the Modal app context for this machine."""
         if self._app_context is None:
+            # Format gpu_type with count for Modal
+            modal_gpu_type = f"{gpu_type}:{gpu_count}" if gpu_count > 1 else gpu_type
+
             # Create the Modal app and server class
             app, server_class = create_modal_app_for_gpu(
-                gpu_type=gpu_type,
+                gpu_type=modal_gpu_type,
                 packages=packages,
                 python_version=python_version,
                 timeout=self._timeout,

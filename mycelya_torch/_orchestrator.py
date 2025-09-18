@@ -75,6 +75,7 @@ class Orchestrator:
         machine_id: str,
         provider: str,
         gpu_type: str,
+        gpu_count: int,
         packages: List[str],
         batching: bool = True,
         timeout: int | None = None,
@@ -85,6 +86,7 @@ class Orchestrator:
             machine_id: Unique machine identifier
             provider: Provider type ("modal" or "mock")
             gpu_type: GPU type string (required for modal, ignored for mock)
+            gpu_count: Number of GPUs (1-8, ignored for mock)
             packages: Final package list for modal app (ignored for mock)
             batching: Whether to enable batching
             timeout: Timeout in seconds (optional for modal, ignored for mock)
@@ -105,6 +107,7 @@ class Orchestrator:
             client_impl,
             self._main_thread_waiting,
             gpu_type=gpu_type,
+            gpu_count=gpu_count,
             packages=packages,
             batching=batching,
         )

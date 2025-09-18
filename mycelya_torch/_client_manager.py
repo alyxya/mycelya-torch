@@ -49,6 +49,7 @@ class ClientManager:
         client: Client,
         main_thread_waiting: threading.Event,
         gpu_type: str,
+        gpu_count: int,
         packages: List[str],
         batching: bool = True,
     ):
@@ -59,12 +60,14 @@ class ClientManager:
             client: Concrete client implementation (ModalClient, MockClient, etc.)
             main_thread_waiting: Event to signal the background thread for coordination
             gpu_type: GPU type string (required for modal, ignored for mock)
+            gpu_count: Number of GPUs (1-8, ignored for mock)
             packages: Final package list for modal app (ignored for mock)
             batching: Whether to enable operation batching (default: True)
         """
         self.client = client
         self.main_thread_waiting = main_thread_waiting
         self.gpu_type = gpu_type
+        self.gpu_count = gpu_count
         self.packages = packages
         self.batching = batching
         self.state = ClientState.INITIALIZED
@@ -94,6 +97,7 @@ class ClientManager:
 
         self.client.start(
             gpu_type=self.gpu_type,
+            gpu_count=self.gpu_count,
             packages=get_versioned_packages(self.packages),
             python_version=get_python_version(),
         )
