@@ -45,8 +45,8 @@ class MockClient(Client):
         """Stop the mock execution environment."""
         self._server_instance = None
 
-    def try_get_rpc_result(self, rpc_result: Any) -> Any | None:
-        """Non-blocking attempt to get the result from an RPC call."""
+    def get_rpc_result(self, rpc_result: Any, blocking: bool) -> Any | None:
+        """Get the result from an RPC call."""
         # For Mock, rpc_result is already the resolved value - always available
         return rpc_result
 

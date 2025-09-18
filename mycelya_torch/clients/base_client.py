@@ -65,19 +65,19 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def try_get_rpc_result(self, rpc_result: Any) -> Any | None:
+    def get_rpc_result(self, rpc_result: Any, blocking: bool) -> Any | None:
         """
-        Non-blocking attempt to get the result from an RPC call.
+        Get the result from an RPC call.
 
         This method takes the result object returned by RPC methods (like FunctionCall
-        for Modal, direct result for Mock) and returns the resolved value if available,
-        or None if the result is not ready yet.
+        for Modal, direct result for Mock) and returns the resolved value.
 
         Args:
             rpc_result: The result object returned by any RPC method
+            blocking: If True, wait for result. If False, return None if not ready.
 
         Returns:
-            The resolved actual value if ready, None if not ready yet
+            The resolved actual value, or None if not ready and blocking=False
         """
         pass
 

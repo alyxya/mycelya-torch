@@ -72,11 +72,12 @@ class ModalClient(Client):
                 self._app_context = None
                 self._server_instance = None
 
-    def try_get_rpc_result(self, rpc_result: Any) -> Any | None:
-        """Non-blocking attempt to get the result from an RPC call."""
-        # For Modal, rpc_result is a FunctionCall object - try with zero timeout
+    def get_rpc_result(self, rpc_result: Any, blocking: bool) -> Any | None:
+        """Get the result from an RPC call."""
+        # For Modal, rpc_result is a FunctionCall object
         try:
-            return rpc_result.get(timeout=0)
+            timeout = None if blocking else 0
+            return rpc_result.get(timeout=timeout)
         except TimeoutError:
             return None
 

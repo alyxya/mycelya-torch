@@ -116,7 +116,7 @@ class ClientManager:
             rpc_result = self._pending_results[0]  # Peek at first
 
             # Try to get the result without blocking
-            resolved_value = self.client.try_get_rpc_result(rpc_result)
+            resolved_value = self.client.get_rpc_result(rpc_result, blocking=False)
             if resolved_value is None:
                 # Result not ready yet, stop processing
                 break
