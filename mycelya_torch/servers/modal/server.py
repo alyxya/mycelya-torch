@@ -73,11 +73,11 @@ def create_modal_app_for_gpu(
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
 
-        def __init__(self, file, tensor_registry):
+        def __init__(self, file: Any, tensor_registry: Dict[int, torch.Tensor]) -> None:
             super().__init__(file)
             self.tensor_registry = tensor_registry
 
-        def persistent_load(self, pid):
+        def persistent_load(self, pid: Tuple[str, Any]) -> Any:
             type_tag, data = pid
 
             if type_tag == "mycelya_tensor":
@@ -98,11 +98,11 @@ def create_modal_app_for_gpu(
     class Pickler(cloudpickle.Pickler):
         """Custom pickler to convert results back to metadata."""
 
-        def __init__(self, file, temp_tensor_registry):
+        def __init__(self, file: Any, temp_tensor_registry: Dict[str, torch.Tensor]) -> None:
             super().__init__(file)
             self.temp_tensor_registry = temp_tensor_registry
 
-        def persistent_id(self, obj):
+        def persistent_id(self, obj: Any) -> Tuple[str, Any] | None:
             if isinstance(obj, torch.Tensor):
                 # Generate unique temp key
                 temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
@@ -175,7 +175,7 @@ def create_modal_app_for_gpu(
             return str(dtype).replace("torch.", "")
 
         @modal.enter()
-        def setup(self):
+        def setup(self) -> None:
             """Initialize the server when container starts."""
             # Use getattr to avoid pickling errors - torch.ops is an _Ops object that cannot be pickled
             self.torch_ops = getattr(torch, "ops")  # noqa: B009
@@ -212,7 +212,7 @@ def create_modal_app_for_gpu(
             }
 
         @modal.exit()
-        def cleanup(self):
+        def cleanup(self) -> None:
             """Cleanup when container shuts down (no-op for now)."""
             pass
 
@@ -227,7 +227,7 @@ def create_modal_app_for_gpu(
             nbytes: int,
             device_type: str,
             device_index: int,
-        ):
+        ) -> None:
             """Create an empty tensor with given tensor_id and proper storage layout."""
 
             tensor_registry = self._tensor_registry
@@ -265,7 +265,7 @@ def create_modal_app_for_gpu(
             nbytes: int,
             device_type: str,
             device_index: int,
-        ):
+        ) -> None:
             """Create an empty tensor on the remote machine with proper storage layout."""
             self._create_empty_tensor_impl(
                 tensor_id,
@@ -285,7 +285,7 @@ def create_modal_app_for_gpu(
             shape: List[int],
             stride: List[int],
             offset: int,
-        ):
+        ) -> None:
             """Create a tensor view from existing tensor using as_strided."""
 
             tensor_registry = self._tensor_registry
@@ -311,7 +311,7 @@ def create_modal_app_for_gpu(
             shape: List[int],
             stride: List[int],
             offset: int,
-        ):
+        ) -> None:
             """Create a tensor view from existing tensor using as_strided."""
             self._create_tensor_view_impl(
                 new_tensor_id, base_tensor_id, shape, stride, offset
@@ -325,7 +325,7 @@ def create_modal_app_for_gpu(
             source_stride: List[int],
             source_storage_offset: int,
             source_dtype: str,
-        ):
+        ) -> None:
             """Update an existing tensor with new data and source metadata."""
 
             tensor_registry = self._tensor_registry
@@ -367,7 +367,7 @@ def create_modal_app_for_gpu(
             source_stride: List[int],
             source_storage_offset: int,
             source_dtype: str,
-        ):
+        ) -> None:
             """Update an existing tensor with new data and source metadata."""
             self._update_tensor_impl(
                 tensor_id,
@@ -378,7 +378,7 @@ def create_modal_app_for_gpu(
                 source_dtype,
             )
 
-        def _get_storage_data_impl(self, tensor_id: int):
+        def _get_storage_data_impl(self, tensor_id: int) -> bytes:
             """Get raw storage data by tensor ID."""
 
             tensor_registry = self._tensor_registry
@@ -399,11 +399,11 @@ def create_modal_app_for_gpu(
             return result
 
         @modal.method()
-        def get_storage_data(self, tensor_id: int):
+        def get_storage_data(self, tensor_id: int) -> bytes:
             """Get raw storage data by tensor ID."""
             return self._get_storage_data_impl(tensor_id)
 
-        def _remove_tensors_impl(self, tensor_ids: List[int]):
+        def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
             """Remove multiple tensors from the remote machine."""
             tensor_registry = self._tensor_registry
 
@@ -412,11 +412,11 @@ def create_modal_app_for_gpu(
                     del tensor_registry[tensor_id]
 
         @modal.method()
-        def remove_tensors(self, tensor_ids: List[int]):
+        def remove_tensors(self, tensor_ids: List[int]) -> None:
             """Remove multiple tensors from the remote machine."""
             self._remove_tensors_impl(tensor_ids)
 
-        def _resize_storage_impl(self, tensor_id: int, nbytes: int):
+        def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
             """Resize the underlying storage for a tensor."""
 
             tensor_registry = self._tensor_registry
@@ -438,11 +438,11 @@ def create_modal_app_for_gpu(
             temp_storage_tensor.resize_([nbytes])
 
         @modal.method()
-        def resize_storage(self, tensor_id: int, nbytes: int):
+        def resize_storage(self, tensor_id: int, nbytes: int) -> None:
             """Resize the underlying storage for a tensor."""
             self._resize_storage_impl(tensor_id, nbytes)
 
-        def _copy_tensor_impl(self, source_tensor_id: int, target_tensor_id: int):
+        def _copy_tensor_impl(self, source_tensor_id: int, target_tensor_id: int) -> None:
             """Copy tensor data from source to target on the remote machine."""
 
             tensor_registry = self._tensor_registry
@@ -461,7 +461,7 @@ def create_modal_app_for_gpu(
             target_tensor.copy_(source_tensor)
 
         @modal.method()
-        def copy_tensor(self, source_tensor_id: int, target_tensor_id: int):
+        def copy_tensor(self, source_tensor_id: int, target_tensor_id: int) -> None:
             """Copy tensor data from source to target on the remote machine."""
             self._copy_tensor_impl(source_tensor_id, target_tensor_id)
 
@@ -472,13 +472,13 @@ def create_modal_app_for_gpu(
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
             output_tensor_ids: List[int] | None = None,
-        ):
+        ) -> List[TensorMetadata] | None:
             """Implementation of execute_aten_operation without Modal decorators."""
             tensor_registry = self._tensor_registry
 
             mask_iter = iter(tensor_mask)
 
-            def process_item(obj):
+            def process_item(obj: Any) -> Any:
                 if isinstance(obj, (list, tuple)):
                     return type(obj)(
                         tensor_registry[item] if next(mask_iter) else item
@@ -542,7 +542,7 @@ def create_modal_app_for_gpu(
             kwargs: Dict[str, Any],
             tensor_mask: List[bool],
             output_tensor_ids: List[int] | None = None,
-        ):
+        ) -> List[TensorMetadata] | None:
             """Execute an aten operation on the remote machine."""
             result = self._execute_aten_operation_impl(
                 op_name,
@@ -562,7 +562,7 @@ def create_modal_app_for_gpu(
 
         def _load_huggingface_state_dicts_impl(
             self, repo: str, path: str, device_type: str, device_index: int
-        ):
+        ) -> Dict[str, Dict[str, Dict[str, Any]]]:
             """Load HuggingFace model weights organized by directory and store with temporary keys."""
 
             device = torch.device(device_type, device_index)
@@ -640,7 +640,7 @@ def create_modal_app_for_gpu(
             path: str,
             device_type: str,
             device_index: int,
-        ):
+        ) -> Dict[str, Dict[str, Dict[str, Any]]]:
             """Download and prepare HuggingFace model weights organized by directory."""
             return self._load_huggingface_state_dicts_impl(
                 repo, path, device_type, device_index
@@ -650,7 +650,7 @@ def create_modal_app_for_gpu(
             self,
             local_tensor_ids: List[int],
             temp_keys: List[str],
-        ):
+        ) -> None:
             """Implementation of link_tensors without Modal decorators."""
 
             if len(local_tensor_ids) != len(temp_keys):
@@ -681,7 +681,7 @@ def create_modal_app_for_gpu(
             self,
             local_tensor_ids: List[int],
             temp_keys: List[str],
-        ):
+        ) -> None:
             """
             Link local mycelya tensor IDs to remote tensors from temporary registry.
 
@@ -725,7 +725,7 @@ def create_modal_app_for_gpu(
             return self._execute_function_impl(pickled_function)
 
         @modal.method()
-        def execute_batch(self, batch_calls: List[BatchCall]):
+        def execute_batch(self, batch_calls: List[BatchCall]) -> List[Any]:
             """
             Execute a batch of RPCs in sequence.
 
