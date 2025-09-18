@@ -47,7 +47,7 @@ class ClientManager:
         """
         self.client = client
         self.batching = batching
-        self._state = ClientState.INITIALIZED
+        self.state = ClientState.INITIALIZED
 
         # Deque for storing pending futures that need to be resolved (returned to caller)
         self._pending_futures = deque()
@@ -60,49 +60,44 @@ class ClientManager:
 
     def start(self) -> None:
         """Start the cloud provider's compute resources."""
-        if self._state == ClientState.STOPPED:
+        if self.state == ClientState.STOPPED:
             raise RuntimeError(
                 f"Cannot start machine {self.client.machine_id} - already stopped"
             )
 
         self.client.start()
-        self._state = ClientState.RUNNING
+        self.state = ClientState.RUNNING
 
     def stop(self) -> None:
         """Stop the cloud provider's compute resources."""
         self.client.stop()
-        self._state = ClientState.STOPPED
-
-    def is_running(self) -> bool:
-        """Check if the machine is currently running and ready."""
-        return self._state == ClientState.RUNNING
+        self.state = ClientState.STOPPED
 
     def pause(self) -> None:
         """Pause the client (temporarily suspend operations)."""
-        if self._state != ClientState.RUNNING:
+        if self.state != ClientState.RUNNING:
             raise RuntimeError(
                 f"Cannot pause machine {self.client.machine_id} - not currently running"
             )
 
         # TODO: Implement pause logic
-        self._state = ClientState.PAUSED
+        self.state = ClientState.PAUSED
         raise NotImplementedError("Pause functionality not yet implemented")
 
     def resume(self) -> None:
         """Resume the client from paused state."""
-        if self._state != ClientState.PAUSED:
+        if self.state != ClientState.PAUSED:
             raise RuntimeError(
                 f"Cannot resume machine {self.client.machine_id} - not currently paused"
             )
 
         # TODO: Implement resume logic
-        self._state = ClientState.RUNNING
+        self.state = ClientState.RUNNING
         raise NotImplementedError("Resume functionality not yet implemented")
 
-    @property
-    def state(self) -> ClientState:
-        """Get the current client state."""
-        return self._state
+    def is_running(self) -> bool:
+        """Check if the machine is currently running and ready."""
+        return self.state == ClientState.RUNNING
 
     def resolve_futures(self) -> None:
         """Resolve any pending futures by fetching results from the queue."""
@@ -147,7 +142,7 @@ class ClientManager:
 
     def _ensure_running(self) -> None:
         """Ensure the machine is running, raise RuntimeError if not."""
-        if self._state == ClientState.INITIALIZED:
+        if self.state == ClientState.INITIALIZED:
             raise RuntimeError(
                 f"Machine {self.client.machine_id} is not started. Call start() first."
             )
