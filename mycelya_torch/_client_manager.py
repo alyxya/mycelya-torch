@@ -17,8 +17,11 @@ from typing import Any, Dict, List
 
 import torch
 
+from ._logging import get_logger
 from ._utils import TensorMetadata
 from .clients.base_client import BatchCall, Client
+
+log = get_logger(__name__)
 
 
 class ClientState(Enum):
@@ -540,3 +543,26 @@ class ClientManager:
             self._pending_results.append(result)
 
         return future
+
+    def process_background_tasks(self) -> None:
+        """Process background tasks for this client manager."""
+        # Check if client should be stopped (stop request signaled by cleared event)
+        if not self.stop_signal.is_set():
+            if self.is_running():
+                self.stop()
+            # Set event to signal completion of stop
+            self.stop_signal.set()
+            return
+
+        # Normal processing for running clients
+        if self.is_running():
+            try:
+                # Execute any pending batched operations first
+                self.execute_batch()
+
+                # Then resolve any pending futures (including CPU tensor futures)
+                self.resolve_futures()
+            except Exception as e:
+                log.error(f"Fatal error for client {self.client.machine_id}: {e}")
+                # Propagate the exception to all pending futures for this client (including CPU tensor futures)
+                self.propagate_exception_to_futures(e)

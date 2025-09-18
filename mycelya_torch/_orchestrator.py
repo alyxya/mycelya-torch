@@ -699,26 +699,8 @@ class Orchestrator:
         """
         while self._running_flag.is_set():
             for machine_id, client in self._client_managers.items():
-                # Check if client should be stopped (stop request signaled by cleared event)
-                if not self._client_managers[machine_id].stop_signal.is_set():
-                    if client.is_running():
-                        client.stop()
-                    # Set event to signal completion of stop
-                    self._client_managers[machine_id].stop_signal.set()
-                    continue
-
-                # Normal processing for running clients
-                if client.is_running():
-                    try:
-                        # Execute any pending batched operations first
-                        client.execute_batch()
-
-                        # Then resolve any pending futures (including CPU tensor futures)
-                        client.resolve_futures()
-                    except Exception as e:
-                        log.error(f"Fatal error for client {machine_id}: {e}")
-                        # Propagate the exception to all pending futures for this client (including CPU tensor futures)
-                        client.propagate_exception_to_futures(e)
+                # Process background tasks for this client
+                client.process_background_tasks()
 
             # Yield to the main thread before waiting
             time.sleep(0)
