@@ -134,6 +134,10 @@ def create_modal_app_for_gpu(
 
             return None
 
+    def _dtype_to_str(dtype) -> str:
+        """Convert torch.dtype to string without 'torch.' prefix."""
+        return str(dtype).replace("torch.", "")
+
     app = modal.App("mycelya-torch")
 
     # Create image with synchronized packages and Python version
@@ -169,12 +173,9 @@ def create_modal_app_for_gpu(
             "/data": data_volume,
         }
 
+
     @app.cls(**cls_kwargs)
     class PytorchServer:
-        @staticmethod
-        def _dtype_to_str(dtype) -> str:
-            """Convert torch.dtype to string without 'torch.' prefix."""
-            return str(dtype).replace("torch.", "")
 
         @modal.enter()
         def setup(self) -> None:
@@ -521,7 +522,7 @@ def create_modal_app_for_gpu(
                         TensorMetadata(
                             shape=list(t.shape),
                             stride=list(t.stride()),
-                            dtype=self._dtype_to_str(t.dtype),
+                            dtype=_dtype_to_str(t.dtype),
                             storage_offset=t.storage_offset(),
                             nbytes=t.untyped_storage().nbytes(),
                             device_type=t.device.type,
@@ -621,7 +622,7 @@ def create_modal_app_for_gpu(
                     dir_metadata[name] = {
                         "shape": list(tensor.shape),
                         "stride": list(tensor.stride()),
-                        "dtype": self._dtype_to_str(tensor.dtype),
+                        "dtype": _dtype_to_str(tensor.dtype),
                         "storage_offset": tensor.storage_offset(),
                         "nbytes": tensor.untyped_storage().nbytes(),
                         "device_type": tensor.device.type,
