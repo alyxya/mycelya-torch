@@ -87,9 +87,7 @@ def _create_module() -> types.ModuleType:
         default_generator = mycelya_torch._C._get_default_generator(idx)
         return default_generator.get_state()
 
-    def set_rng_state(
-        new_state: torch.Tensor, device: int | torch.device
-    ) -> None:
+    def set_rng_state(new_state: torch.Tensor, device: int | torch.device) -> None:
         """Set the random number generator state for a mycelya device.
 
         Args:

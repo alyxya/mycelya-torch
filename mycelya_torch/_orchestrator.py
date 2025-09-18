@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 import torch
 
+from ._client_manager import ClientManager
 from ._device import device_manager
 from ._logging import get_logger
 from ._pickle import Pickler, Unpickler
@@ -30,7 +31,6 @@ from ._utils import (
     get_tensor_id,
     map_args_kwargs,
 )
-from .clients.base_client import Client
 
 log = get_logger(__name__)
 
@@ -50,7 +50,7 @@ class Orchestrator:
         self.storage = StorageManager()
 
         # Centralized client management by machine ID
-        self._clients: Dict[str, Client] = {}  # machine_id -> client
+        self._clients: Dict[str, ClientManager] = {}  # machine_id -> client manager
 
         # Per-client CPU tensor futures deques for async tensor copying
         self._cpu_tensor_futures_deques: Dict[
@@ -101,16 +101,19 @@ class Orchestrator:
         if provider == "modal":
             from .clients.modal.client import ModalClient
 
-            client = ModalClient(machine_id, gpu_type, packages, batching, timeout)
+            client_impl = ModalClient(machine_id, gpu_type, packages, timeout)
         elif provider == "mock":
             from .clients.mock.client import MockClient
 
-            client = MockClient(machine_id, batching)
+            client_impl = MockClient(machine_id)
         else:
             raise ValueError(f"Provider {provider} not implemented yet")
 
-        # Store client mapping
-        self._clients[machine_id] = client
+        # Create client manager wrapping the client implementation
+        client_manager = ClientManager(client_impl, machine_id, batching)
+
+        # Store client manager mapping
+        self._clients[machine_id] = client_manager
 
         # Initialize CPU tensor futures deque for this client
         self._cpu_tensor_futures_deques[machine_id] = deque()

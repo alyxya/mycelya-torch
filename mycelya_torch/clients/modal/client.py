@@ -32,10 +32,9 @@ class ModalClient(Client):
         machine_id: str,
         gpu_type: str,
         packages: List[str],
-        batching: bool = True,
         timeout: int | None = None,
     ):
-        super().__init__(machine_id, batching)
+        self.machine_id = machine_id
         self.gpu_type = gpu_type
         self.timeout = timeout
         self._server_instance = None
@@ -77,51 +76,47 @@ class ModalClient(Client):
         """Check if the machine is currently running."""
         return self._app_context is not None
 
-    def resolve_futures(self) -> None:
+    def resolve_futures_with_state(
+        self, pending_futures, pending_results, batching: bool
+    ) -> None:
         """Resolve pending futures using FunctionCall polling."""
         if not self.is_running():
             return
 
         # Poll FunctionCall objects for completed results
-        while self._pending_results and self._pending_futures:
-            func_call = self._pending_results[0]  # Peek at first
+        while pending_results and pending_futures:
+            func_call = pending_results[0]  # Peek at first
             try:
                 # Try to get result with zero timeout (non-blocking)
                 result = func_call.get(timeout=0)
                 # Result is ready, remove from deque
-                self._pending_results.popleft()
+                pending_results.popleft()
 
                 # Resolve futures based on batching mode
-                if self.batching:
+                if batching:
                     # Batch result - iterate over list
                     for res in result:
-                        self._pending_futures.popleft().set_result(res)
+                        pending_futures.popleft().set_result(res)
                 else:
                     # Individual result
-                    self._pending_futures.popleft().set_result(result)
+                    pending_futures.popleft().set_result(result)
 
             except TimeoutError:
                 break
 
     def propagate_exception_to_futures(self, exception: Exception) -> None:
         """Propagate the given exception to all pending futures."""
-        # Set exception on all pending futures
-        while self._pending_futures:
-            future = self._pending_futures.popleft()
-            if not future.cancelled():
-                future.set_exception(exception)
+        # Client-specific cleanup - the manager handles pending futures
+        pass
 
-        # Clear the pending results queue since they're no longer valid
-        self._pending_results.clear()
-
-    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> None:
+    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Modal."""
         if not batch_calls:
-            return
+            return None
 
-        # Use spawn for non-blocking execution and capture FunctionCall for batch results
+        # Use spawn for non-blocking execution and return FunctionCall for batch results
         func_call = self._server_instance.execute_batch.spawn(batch_calls)
-        self._pending_results.append(func_call)
+        return func_call
 
     # Tensor management methods
     def _create_empty_tensor_impl(
@@ -180,11 +175,11 @@ class ModalClient(Client):
             source_dtype,
         )
 
-    def _get_storage_data_impl(self, tensor_id: int) -> None:
+    def _get_storage_data_impl(self, tensor_id: int) -> Any:
         """Implementation: Get raw storage data by tensor ID."""
-        # Trigger the remote call and capture FunctionCall - result will be available via resolve_futures
+        # Trigger the remote call and return FunctionCall - result will be available via resolve_futures
         func_call = self._server_instance.get_storage_data.spawn(tensor_id)
-        self._pending_results.append(func_call)
+        return func_call
 
     def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
@@ -213,7 +208,7 @@ class ModalClient(Client):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         output_tensor_ids: List[int] | None = None,
-    ) -> None:
+    ) -> Any | None:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         # Call Modal method and capture FunctionCall if returning metadata
         func_call = self._server_instance.execute_aten_operation.spawn(
@@ -223,9 +218,10 @@ class ModalClient(Client):
             tensor_mask,
             output_tensor_ids,
         )
-        # Only track FunctionCall if expecting a return value for dynamic operations
+        # Only return FunctionCall if expecting a return value for dynamic operations
         if output_tensor_ids is None:
-            self._pending_results.append(func_call)
+            return func_call
+        return None
 
     # HuggingFace model loading methods
     def _load_huggingface_state_dicts_impl(
@@ -234,13 +230,13 @@ class ModalClient(Client):
         path: str,
         device_type: str,
         device_index: int,
-    ) -> None:
+    ) -> Any:
         """Implementation: Load HuggingFace state dicts organized by directory on the remote machine."""
-        # Trigger the remote call and capture FunctionCall - result will be available via resolve_futures
+        # Trigger the remote call and return FunctionCall - result will be available via resolve_futures
         func_call = self._server_instance.load_huggingface_state_dicts.spawn(
             repo, path, device_type, device_index
         )
-        self._pending_results.append(func_call)
+        return func_call
 
     def _link_tensors_impl(
         self,
@@ -250,10 +246,10 @@ class ModalClient(Client):
         """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._server_instance.link_tensors.spawn(local_tensor_ids, temp_keys)
 
-    def _execute_function_impl(self, pickled_function: bytes) -> None:
+    def _execute_function_impl(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""
         func_call = self._server_instance.execute_function.spawn(pickled_function)
-        self._pending_results.append(func_call)
+        return func_call
 
     def __repr__(self) -> str:
         status = "running" if self.is_running() else "stopped"
