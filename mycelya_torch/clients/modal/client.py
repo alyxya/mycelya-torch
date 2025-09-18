@@ -81,12 +81,7 @@ class ModalClient(Client):
 
     def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Modal."""
-        if not batch_calls:
-            return None
-
-        # Use spawn for non-blocking execution and return FunctionCall for batch results
-        func_call = self._server_instance.execute_batch.spawn(batch_calls)
-        return func_call
+        return self._server_instance.execute_batch.spawn(batch_calls)
 
     # Tensor management methods
     def create_empty_tensor(
@@ -147,15 +142,10 @@ class ModalClient(Client):
 
     def get_storage_data(self, tensor_id: int) -> Any:
         """Implementation: Get raw storage data by tensor ID."""
-        # Trigger the remote call and return FunctionCall - result will be available via resolve_futures
-        func_call = self._server_instance.get_storage_data.spawn(tensor_id)
-        return func_call
+        return self._server_instance.get_storage_data.spawn(tensor_id)
 
     def remove_tensors(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
-        if not tensor_ids:
-            return
-
         self._server_instance.remove_tensors.spawn(tensor_ids)
 
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
@@ -180,15 +170,13 @@ class ModalClient(Client):
         output_tensor_ids: List[int] | None = None,
     ) -> Any:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
-        # Call Modal method and return FunctionCall
-        func_call = self._server_instance.execute_aten_operation.spawn(
+        return self._server_instance.execute_aten_operation.spawn(
             op_name,
             args,
             kwargs,
             tensor_mask,
             output_tensor_ids,
         )
-        return func_call
 
     # HuggingFace model loading methods
     def load_huggingface_state_dicts(
@@ -199,11 +187,9 @@ class ModalClient(Client):
         device_index: int,
     ) -> Any:
         """Implementation: Load HuggingFace state dicts organized by directory on the remote machine."""
-        # Trigger the remote call and return FunctionCall - result will be available via resolve_futures
-        func_call = self._server_instance.load_huggingface_state_dicts.spawn(
+        return self._server_instance.load_huggingface_state_dicts.spawn(
             repo, path, device_type, device_index
         )
-        return func_call
 
     def link_tensors(
         self,
@@ -215,5 +201,4 @@ class ModalClient(Client):
 
     def execute_function(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""
-        func_call = self._server_instance.execute_function.spawn(pickled_function)
-        return func_call
+        return self._server_instance.execute_function.spawn(pickled_function)

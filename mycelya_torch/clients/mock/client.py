@@ -52,12 +52,7 @@ class MockClient(Client):
 
     def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Mock."""
-        if not batch_calls:
-            return None
-
-        # Use local execution for batch and return result
-        result = self._server_instance.execute_batch.local(batch_calls)
-        return result
+        return self._server_instance.execute_batch.local(batch_calls)
 
     # Tensor management methods
     def create_empty_tensor(
@@ -126,15 +121,10 @@ class MockClient(Client):
 
     def get_storage_data(self, tensor_id: int) -> Any:
         """Implementation: Get raw storage data by tensor ID."""
-        # Execute local call and return result for resolve_futures
-        result = self._server_instance.get_storage_data.local(tensor_id)
-        return result
+        return self._server_instance.get_storage_data.local(tensor_id)
 
     def remove_tensors(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
-        if not tensor_ids:
-            return
-
         self._server_instance.remove_tensors.local(tensor_ids)
 
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
@@ -164,16 +154,13 @@ class MockClient(Client):
         output_tensor_ids: List[int] | None = None,
     ) -> Any:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
-
-        # Execute using .local() and return result
-        result = self._server_instance.execute_aten_operation.local(
+        return self._server_instance.execute_aten_operation.local(
             op_name,
             args,
             kwargs,
             tensor_mask,
             output_tensor_ids,
         )
-        return result
 
     # HuggingFace model loading methods
     def load_huggingface_state_dicts(
@@ -184,11 +171,9 @@ class MockClient(Client):
         device_index: int,
     ) -> Any:
         """Implementation: Load HuggingFace state dicts organized by directory on the remote machine."""
-        # Execute local call and return result for resolve_futures
-        result = self._server_instance.load_huggingface_state_dicts.local(
+        return self._server_instance.load_huggingface_state_dicts.local(
             repo, path, device_type, device_index
         )
-        return result
 
     def link_tensors(
         self,
@@ -200,5 +185,4 @@ class MockClient(Client):
 
     def execute_function(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""
-        result = self._server_instance.execute_function.local(pickled_function)
-        return result
+        return self._server_instance.execute_function.local(pickled_function)
