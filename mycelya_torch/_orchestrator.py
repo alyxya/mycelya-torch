@@ -713,17 +713,12 @@ class Orchestrator:
                         # Execute any pending batched operations first
                         client.execute_batch()
 
-                        # Then resolve any pending futures
+                        # Then resolve any pending futures (including CPU tensor futures)
                         client.resolve_futures()
-
-                        # Process CPU tensor futures for this client
-                        client.resolve_cpu_tensor_futures()
                     except Exception as e:
                         log.error(f"Fatal error for client {machine_id}: {e}")
-                        # Propagate the exception to all pending futures for this client
+                        # Propagate the exception to all pending futures for this client (including CPU tensor futures)
                         client.propagate_exception_to_futures(e)
-                        # Also propagate to CPU tensor futures for this client
-                        client.propagate_exception_to_cpu_tensor_futures(e)
 
             # Yield to the main thread before waiting
             time.sleep(0)

@@ -154,6 +154,28 @@ class ClientManager:
                 # Individual result
                 self._pending_futures.popleft().set_result(resolved_value)
 
+        # Also resolve CPU tensor futures
+        while self.cpu_tensor_futures_deque:
+            storage_future, cpu_tensor_future, mycelya_tensor = (
+                self.cpu_tensor_futures_deque[0]
+            )
+            if not storage_future.done():
+                break
+            self.cpu_tensor_futures_deque.popleft()
+            raw_bytes = storage_future.result()
+            # Reconstruct CPU tensor from raw bytes
+            untyped_storage = torch.UntypedStorage.from_buffer(
+                raw_bytes, dtype=torch.uint8
+            )
+            cpu_tensor = torch.empty(0, dtype=mycelya_tensor.dtype, device="cpu")
+            cpu_tensor.set_(
+                untyped_storage,
+                mycelya_tensor.storage_offset(),
+                mycelya_tensor.shape,
+                mycelya_tensor.stride(),
+            )
+            cpu_tensor_future.set_result(cpu_tensor)
+
     def propagate_exception_to_futures(self, exception: Exception) -> None:
         """Propagate the given exception to all pending futures."""
         # Propagate to all pending futures
@@ -163,6 +185,17 @@ class ClientManager:
 
         # Clear pending results
         self._pending_results.clear()
+
+        # Also propagate to CPU tensor futures
+        if not self.cpu_tensor_futures_deque:
+            return
+        # Set exception on all CPU tensor futures and clear the deque
+        while self.cpu_tensor_futures_deque:
+            storage_future, cpu_tensor_future, mycelya_tensor = (
+                self.cpu_tensor_futures_deque.popleft()
+            )
+            if not cpu_tensor_future.cancelled():
+                cpu_tensor_future.set_exception(exception)
 
     def _ensure_running(self) -> None:
         """Ensure the machine is running, raise RuntimeError if not."""
@@ -511,37 +544,3 @@ class ClientManager:
 
         return future
 
-    def resolve_cpu_tensor_futures(self) -> None:
-        """Resolve pending CPU tensor futures for this client."""
-        while self.cpu_tensor_futures_deque:
-            storage_future, cpu_tensor_future, mycelya_tensor = (
-                self.cpu_tensor_futures_deque[0]
-            )
-            if not storage_future.done():
-                break
-            self.cpu_tensor_futures_deque.popleft()
-            raw_bytes = storage_future.result()
-            # Reconstruct CPU tensor from raw bytes
-            untyped_storage = torch.UntypedStorage.from_buffer(
-                raw_bytes, dtype=torch.uint8
-            )
-            cpu_tensor = torch.empty(0, dtype=mycelya_tensor.dtype, device="cpu")
-            cpu_tensor.set_(
-                untyped_storage,
-                mycelya_tensor.storage_offset(),
-                mycelya_tensor.shape,
-                mycelya_tensor.stride(),
-            )
-            cpu_tensor_future.set_result(cpu_tensor)
-
-    def propagate_exception_to_cpu_tensor_futures(self, exception: Exception) -> None:
-        """Propagate the given exception to all pending CPU tensor futures for this client."""
-        if not self.cpu_tensor_futures_deque:
-            return
-        # Set exception on all CPU tensor futures and clear the deque
-        while self.cpu_tensor_futures_deque:
-            storage_future, cpu_tensor_future, mycelya_tensor = (
-                self.cpu_tensor_futures_deque.popleft()
-            )
-            if not cpu_tensor_future.cancelled():
-                cpu_tensor_future.set_exception(exception)
