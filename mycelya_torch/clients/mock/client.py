@@ -74,7 +74,7 @@ class MockClient(Client):
                 # Individual result
                 pending_futures.popleft().set_result(result)
 
-    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> Any:
+    def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Mock."""
         if not batch_calls:
             return None
@@ -84,7 +84,7 @@ class MockClient(Client):
         return result
 
     # Tensor management methods
-    def _create_empty_tensor_impl(
+    def create_empty_tensor(
         self,
         tensor_id: int,
         shape: List[int],
@@ -110,7 +110,7 @@ class MockClient(Client):
         except Exception as e:
             raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
 
-    def _create_tensor_view_impl(
+    def create_tensor_view(
         self,
         new_tensor_id: int,
         base_tensor_id: int,
@@ -128,7 +128,7 @@ class MockClient(Client):
                 f"Failed to create tensor view {new_tensor_id}: {e}"
             ) from e
 
-    def _update_tensor_impl(
+    def update_tensor(
         self,
         tensor_id: int,
         raw_data: bytes,
@@ -148,24 +148,24 @@ class MockClient(Client):
             source_dtype,
         )
 
-    def _get_storage_data_impl(self, tensor_id: int) -> Any:
+    def get_storage_data(self, tensor_id: int) -> Any:
         """Implementation: Get raw storage data by tensor ID."""
         # Execute local call and return result for resolve_futures
         result = self._server_instance.get_storage_data.local(tensor_id)
         return result
 
-    def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
+    def remove_tensors(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
         if not tensor_ids:
             return
 
         self._server_instance.remove_tensors.local(tensor_ids)
 
-    def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
+    def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
         self._server_instance.resize_storage.local(tensor_id, nbytes)
 
-    def _copy_tensor_impl(
+    def copy_tensor(
         self,
         source_tensor_id: int,
         target_tensor_id: int,
@@ -179,7 +179,7 @@ class MockClient(Client):
             ) from e
 
     # Operation execution methods
-    def _execute_aten_operation_impl(
+    def execute_aten_operation(
         self,
         op_name: str,
         args: List[Any],
@@ -203,7 +203,7 @@ class MockClient(Client):
         return None
 
     # HuggingFace model loading methods
-    def _load_huggingface_state_dicts_impl(
+    def load_huggingface_state_dicts(
         self,
         repo: str,
         path: str,
@@ -217,7 +217,7 @@ class MockClient(Client):
         )
         return result
 
-    def _link_tensors_impl(
+    def link_tensors(
         self,
         local_tensor_ids: List[int],
         temp_keys: List[str],
@@ -225,7 +225,7 @@ class MockClient(Client):
         """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._server_instance.link_tensors.local(local_tensor_ids, temp_keys)
 
-    def _execute_function_impl(self, pickled_function: bytes) -> Any:
+    def execute_function(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""
         result = self._server_instance.execute_function.local(pickled_function)
         return result

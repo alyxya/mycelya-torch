@@ -83,7 +83,7 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> Any:
+    def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
         """
         Implementation: Execute a batch of operations.
 
@@ -97,7 +97,7 @@ class Client(ABC):
 
     # Tensor management methods
     @abstractmethod
-    def _create_empty_tensor_impl(
+    def create_empty_tensor(
         self,
         tensor_id: int,
         shape: List[int],
@@ -108,11 +108,11 @@ class Client(ABC):
         device_type: str,
         device_index: int,
     ) -> None:
-        """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
+        """Create an empty tensor on the remote machine with proper storage layout."""
         pass
 
     @abstractmethod
-    def _create_tensor_view_impl(
+    def create_tensor_view(
         self,
         new_tensor_id: int,
         base_tensor_id: int,
@@ -120,11 +120,11 @@ class Client(ABC):
         stride: List[int],
         offset: int,
     ) -> None:
-        """Implementation: Create a tensor view from an existing tensor."""
+        """Create a tensor view from an existing tensor."""
         pass
 
     @abstractmethod
-    def _update_tensor_impl(
+    def update_tensor(
         self,
         tensor_id: int,
         raw_data: bytes,
@@ -133,12 +133,12 @@ class Client(ABC):
         source_storage_offset: int,
         source_dtype: str,
     ) -> None:
-        """Implementation: Update an existing tensor with new data and source metadata."""
+        """Update an existing tensor with new data and source metadata."""
         pass
 
     @abstractmethod
-    def _get_storage_data_impl(self, tensor_id: int) -> Any:
-        """Implementation: Get raw storage data by tensor ID.
+    def get_storage_data(self, tensor_id: int) -> Any:
+        """Get raw storage data by tensor ID.
 
         Returns:
             The result object (e.g., FunctionCall for Modal, direct result for Mock)
@@ -146,28 +146,28 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
-        """Implementation: Remove multiple tensors from the remote machine."""
+    def remove_tensors(self, tensor_ids: List[int]) -> None:
+        """Remove multiple tensors from the remote machine."""
         pass
 
     @abstractmethod
-    def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
-        """Implementation: Resize the underlying storage for a tensor."""
+    def resize_storage(self, tensor_id: int, nbytes: int) -> None:
+        """Resize the underlying storage for a tensor."""
         pass
 
     # Tensor copy methods
     @abstractmethod
-    def _copy_tensor_impl(
+    def copy_tensor(
         self,
         source_tensor_id: int,
         target_tensor_id: int,
     ) -> None:
-        """Implementation: Copy tensor data from source to target on the remote machine."""
+        """Copy tensor data from source to target on the remote machine."""
         pass
 
     # Operation execution methods
     @abstractmethod
-    def _execute_aten_operation_impl(
+    def execute_aten_operation(
         self,
         op_name: str,
         args: List[Any],
@@ -175,7 +175,7 @@ class Client(ABC):
         tensor_mask: List[bool],
         output_tensor_ids: List[int] | None = None,
     ) -> Any | None:
-        """Implementation: Execute an aten operation on the remote machine with tensor IDs.
+        """Execute an aten operation on the remote machine with tensor IDs.
 
         Returns:
             The result object for dynamic operations (when output_tensor_ids is None),
@@ -185,14 +185,14 @@ class Client(ABC):
 
     # HuggingFace model loading methods
     @abstractmethod
-    def _load_huggingface_state_dicts_impl(
+    def load_huggingface_state_dicts(
         self,
         repo: str,
         path: str,
         device_type: str,
         device_index: int,
     ) -> Any:
-        """Implementation: Load HuggingFace state dicts organized by directory on the remote machine.
+        """Load HuggingFace state dicts organized by directory on the remote machine.
 
         Returns:
             The result object (e.g., FunctionCall for Modal, direct result for Mock)
@@ -200,17 +200,17 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def _link_tensors_impl(
+    def link_tensors(
         self,
         local_tensor_ids: List[int],
         temp_keys: List[str],
     ) -> None:
-        """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
+        """Link local mycelya tensor IDs to remote tensors from temporary registry."""
         pass
 
     @abstractmethod
-    def _execute_function_impl(self, pickled_function: bytes) -> Any:
-        """Implementation: Execute a pickled function remotely.
+    def execute_function(self, pickled_function: bytes) -> Any:
+        """Execute a pickled function remotely.
 
         Returns:
             The result object (e.g., FunctionCall for Modal, direct result for Mock)

@@ -93,7 +93,7 @@ class ClientManager:
             batch_to_execute.append(self._batch_calls.popleft())
 
         # Execute the batch via the client and add result to pending results
-        result = self.client._execute_batch_impl(batch_to_execute)
+        result = self.client.execute_batch(batch_to_execute)
         if result is not None:
             self._pending_results.append(result)
 
@@ -136,7 +136,7 @@ class ClientManager:
             )
         else:
             # Direct execution
-            self.client._create_empty_tensor_impl(
+            self.client.create_empty_tensor(
                 tensor_id,
                 shape,
                 stride,
@@ -172,7 +172,7 @@ class ClientManager:
             )
         else:
             # Direct execution
-            self.client._create_tensor_view_impl(
+            self.client.create_tensor_view(
                 new_tensor_id, base_tensor_id, shape, stride, offset
             )
 
@@ -209,7 +209,7 @@ class ClientManager:
             )
         else:
             # Direct execution
-            self.client._update_tensor_impl(
+            self.client.update_tensor(
                 tensor_id,
                 raw_data,
                 source_shape,
@@ -237,7 +237,7 @@ class ClientManager:
             )
         else:
             # Direct execution and add result to pending results
-            result = self.client._get_storage_data_impl(tensor_id)
+            result = self.client.get_storage_data(tensor_id)
             if result is not None:
                 self._pending_results.append(result)
 
@@ -257,7 +257,7 @@ class ClientManager:
             )
         else:
             # Direct execution
-            self.client._remove_tensors_impl(tensor_ids)
+            self.client.remove_tensors(tensor_ids)
 
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """Resize the underlying storage for a tensor."""
@@ -275,7 +275,7 @@ class ClientManager:
             )
         else:
             # Direct execution
-            self.client._resize_storage_impl(tensor_id, nbytes)
+            self.client.resize_storage(tensor_id, nbytes)
 
     # Tensor copy methods
 
@@ -301,7 +301,7 @@ class ClientManager:
             )
         else:
             # Direct execution
-            self.client._copy_tensor_impl(source_tensor_id, target_tensor_id)
+            self.client.copy_tensor(source_tensor_id, target_tensor_id)
 
     # Operation execution methods
 
@@ -342,7 +342,7 @@ class ClientManager:
             )
         else:
             # Direct execution and add result to pending results if needed
-            result = self.client._execute_aten_operation_impl(
+            result = self.client.execute_aten_operation(
                 op_name,
                 args,
                 kwargs,
@@ -385,7 +385,7 @@ class ClientManager:
             )
         else:
             # Direct execution and add result to pending results
-            result = self.client._load_huggingface_state_dicts_impl(
+            result = self.client.load_huggingface_state_dicts(
                 repo, path, device_type, device_index
             )
             if result is not None:
@@ -415,7 +415,7 @@ class ClientManager:
             )
         else:
             # Direct execution
-            self.client._link_tensors_impl(local_tensor_ids, temp_keys)
+            self.client.link_tensors(local_tensor_ids, temp_keys)
 
     def execute_function(self, pickled_function: bytes) -> Future[bytes]:
         """Execute a pickled function on the remote machine."""
@@ -440,7 +440,7 @@ class ClientManager:
             )
         else:
             # Direct execution and add result to pending results
-            result = self.client._execute_function_impl(pickled_function)
+            result = self.client.execute_function(pickled_function)
             if result is not None:
                 self._pending_results.append(result)
 

@@ -104,7 +104,7 @@ class ModalClient(Client):
             except TimeoutError:
                 break
 
-    def _execute_batch_impl(self, batch_calls: List[BatchCall]) -> Any:
+    def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
         """Execute a batch of operations via Modal."""
         if not batch_calls:
             return None
@@ -114,7 +114,7 @@ class ModalClient(Client):
         return func_call
 
     # Tensor management methods
-    def _create_empty_tensor_impl(
+    def create_empty_tensor(
         self,
         tensor_id: int,
         shape: List[int],
@@ -137,7 +137,7 @@ class ModalClient(Client):
             device_index,
         )
 
-    def _create_tensor_view_impl(
+    def create_tensor_view(
         self,
         new_tensor_id: int,
         base_tensor_id: int,
@@ -150,7 +150,7 @@ class ModalClient(Client):
             new_tensor_id, base_tensor_id, shape, stride, offset
         )
 
-    def _update_tensor_impl(
+    def update_tensor(
         self,
         tensor_id: int,
         raw_data: bytes,
@@ -170,24 +170,24 @@ class ModalClient(Client):
             source_dtype,
         )
 
-    def _get_storage_data_impl(self, tensor_id: int) -> Any:
+    def get_storage_data(self, tensor_id: int) -> Any:
         """Implementation: Get raw storage data by tensor ID."""
         # Trigger the remote call and return FunctionCall - result will be available via resolve_futures
         func_call = self._server_instance.get_storage_data.spawn(tensor_id)
         return func_call
 
-    def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
+    def remove_tensors(self, tensor_ids: List[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
         if not tensor_ids:
             return
 
         self._server_instance.remove_tensors.spawn(tensor_ids)
 
-    def _resize_storage_impl(self, tensor_id: int, nbytes: int) -> None:
+    def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """Implementation: Resize the underlying storage for a tensor."""
         self._server_instance.resize_storage.spawn(tensor_id, nbytes)
 
-    def _copy_tensor_impl(
+    def copy_tensor(
         self,
         source_tensor_id: int,
         target_tensor_id: int,
@@ -196,7 +196,7 @@ class ModalClient(Client):
         self._server_instance.copy_tensor.spawn(source_tensor_id, target_tensor_id)
 
     # Operation execution methods
-    def _execute_aten_operation_impl(
+    def execute_aten_operation(
         self,
         op_name: str,
         args: List[Any],
@@ -219,7 +219,7 @@ class ModalClient(Client):
         return None
 
     # HuggingFace model loading methods
-    def _load_huggingface_state_dicts_impl(
+    def load_huggingface_state_dicts(
         self,
         repo: str,
         path: str,
@@ -233,7 +233,7 @@ class ModalClient(Client):
         )
         return func_call
 
-    def _link_tensors_impl(
+    def link_tensors(
         self,
         local_tensor_ids: List[int],
         temp_keys: List[str],
@@ -241,7 +241,7 @@ class ModalClient(Client):
         """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._server_instance.link_tensors.spawn(local_tensor_ids, temp_keys)
 
-    def _execute_function_impl(self, pickled_function: bytes) -> Any:
+    def execute_function(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""
         func_call = self._server_instance.execute_function.spawn(pickled_function)
         return func_call
