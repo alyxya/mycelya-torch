@@ -110,7 +110,7 @@ class Orchestrator:
             raise ValueError(f"Provider {provider} not implemented yet")
 
         # Create client manager wrapping the client implementation
-        client_manager = ClientManager(client_impl, machine_id, batching)
+        client_manager = ClientManager(client_impl, batching)
 
         # Store client manager mapping
         self._clients[machine_id] = client_manager

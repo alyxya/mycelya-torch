@@ -142,11 +142,11 @@ class ClientManager:
             raise RuntimeError(
                 f"Machine {self.client.machine_id} is not started. Call start() first."
             )
-        elif self._state == ClientState.PAUSED:
+        elif self.state == ClientState.PAUSED:
             raise RuntimeError(
                 f"Machine {self.client.machine_id} is paused. Call resume() first."
             )
-        elif self._state == ClientState.STOPPED:
+        elif self.state == ClientState.STOPPED:
             raise RuntimeError(
                 f"Machine {self.client.machine_id} is stopped and cannot be restarted."
             )
