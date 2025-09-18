@@ -33,8 +33,8 @@ class MockClient(Client):
         super().__init__(machine_id)
         self._server_instance = None
 
-        # Initialize the Mock Modal app and server class (local execution)
-        self._app, self._server_class = create_mock_modal_app()
+        # Initialize the Mock Modal server class (local execution)
+        _, self._server_class = create_mock_modal_app()
 
     def start(self):
         """Start the mock execution environment."""
