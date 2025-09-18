@@ -34,7 +34,7 @@ class ModalClient(Client):
         packages: List[str],
         timeout: int | None = None,
     ):
-        self.machine_id = machine_id
+        super().__init__(machine_id)
         self.gpu_type = gpu_type
         self.timeout = timeout
         self._server_instance = None

@@ -30,7 +30,7 @@ class MockClient(Client):
         self,
         machine_id: str,
     ):
-        self.machine_id = machine_id
+        super().__init__(machine_id)
         self._server_instance = None
         self._is_running = False
 

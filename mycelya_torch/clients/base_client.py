@@ -35,6 +35,15 @@ class Client(ABC):
     has been moved to ClientManager in _client_manager.py.
     """
 
+    def __init__(self, machine_id: str):
+        """
+        Initialize the client with a machine identifier.
+
+        Args:
+            machine_id: Unique identifier for this machine/client instance
+        """
+        self.machine_id = machine_id
+
     @abstractmethod
     def start(self) -> None:
         """
