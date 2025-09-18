@@ -187,9 +187,6 @@ class ClientManager:
         self._pending_results.clear()
 
         # Also propagate to CPU tensor futures
-        if not self.cpu_tensor_futures_deque:
-            return
-        # Set exception on all CPU tensor futures and clear the deque
         while self.cpu_tensor_futures_deque:
             storage_future, cpu_tensor_future, mycelya_tensor = (
                 self.cpu_tensor_futures_deque.popleft()
@@ -543,4 +540,3 @@ class ClientManager:
             self._pending_results.append(result)
 
         return future
-
