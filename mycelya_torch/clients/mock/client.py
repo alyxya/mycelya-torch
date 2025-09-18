@@ -32,23 +32,18 @@ class MockClient(Client):
     ):
         super().__init__(machine_id)
         self._server_instance = None
-        self._is_running = False
 
         # Initialize the Mock Modal app and server class (local execution)
         self._app, self._server_class = create_mock_modal_app()
 
     def start(self):
         """Start the mock execution environment."""
-        if not self._is_running:
-            # Create server instance directly without app context
-            self._server_instance = self._server_class()
-            self._is_running = True
+        # Create server instance directly without app context
+        self._server_instance = self._server_class()
 
     def stop(self):
         """Stop the mock execution environment."""
-        if self._is_running:
-            self._server_instance = None
-            self._is_running = False
+        self._server_instance = None
 
     def try_get_rpc_result(self, rpc_result: Any) -> Any | None:
         """Non-blocking attempt to get the result from an RPC call."""
