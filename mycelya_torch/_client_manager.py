@@ -39,6 +39,7 @@ class ClientManager:
         self.client = client
         self.machine_id = machine_id
         self.batching = batching
+        self._is_running = False
 
         # Deque for storing pending futures that need to be resolved (returned to caller)
         self._pending_futures = deque()
@@ -52,17 +53,22 @@ class ClientManager:
     def start(self) -> None:
         """Start the cloud provider's compute resources."""
         self.client.start()
+        self._is_running = True
 
     def stop(self) -> None:
         """Stop the cloud provider's compute resources."""
         self.client.stop()
+        self._is_running = False
 
     def is_running(self) -> bool:
         """Check if the machine is currently running and ready."""
-        return self.client.is_running()
+        return self._is_running
 
     def resolve_futures(self) -> None:
         """Resolve any pending futures by fetching results from the queue."""
+        if not self.is_running():
+            return
+
         # Pass the manager's queues to the client for resolution
         self.client.resolve_futures_with_state(
             self._pending_futures, self._pending_results, self.batching

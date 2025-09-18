@@ -56,16 +56,6 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def is_running(self) -> bool:
-        """
-        Check if the machine is currently running and ready.
-
-        Returns:
-            True if the machine is running and can accept operations, False otherwise
-        """
-        pass
-
-    @abstractmethod
     def resolve_futures_with_state(
         self, pending_futures, pending_results, batching: bool
     ) -> None:

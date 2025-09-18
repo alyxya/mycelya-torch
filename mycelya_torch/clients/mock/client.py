@@ -50,16 +50,10 @@ class MockClient(Client):
             self._server_instance = None
             self._is_running = False
 
-    def is_running(self) -> bool:
-        """Check if the mock client is currently running."""
-        return self._is_running
-
     def resolve_futures_with_state(
         self, pending_futures, pending_results, batching: bool
     ) -> None:
         """Resolve pending futures using result deque."""
-        if not self.is_running():
-            return
 
         # Process all available results from the deque
         while pending_results and pending_futures:

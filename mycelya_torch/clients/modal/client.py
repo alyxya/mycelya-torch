@@ -72,16 +72,10 @@ class ModalClient(Client):
                 self._app_context = None
                 self._server_instance = None
 
-    def is_running(self) -> bool:
-        """Check if the machine is currently running."""
-        return self._app_context is not None
-
     def resolve_futures_with_state(
         self, pending_futures, pending_results, batching: bool
     ) -> None:
         """Resolve pending futures using FunctionCall polling."""
-        if not self.is_running():
-            return
 
         # Poll FunctionCall objects for completed results
         while pending_results and pending_futures:
