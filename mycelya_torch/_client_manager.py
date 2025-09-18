@@ -164,8 +164,7 @@ class ClientManager:
 
         # Execute the batch via the client and add result to pending results
         result = self.client.execute_batch(batch_to_execute)
-        if result is not None:
-            self._pending_results.append(result)
+        self._pending_results.append(result)
 
     # Tensor management methods
 
@@ -296,8 +295,7 @@ class ClientManager:
         else:
             # Direct execution and add result to pending results
             result = self.client.get_storage_data(tensor_id)
-            if result is not None:
-                self._pending_results.append(result)
+            self._pending_results.append(result)
 
         return future
 
@@ -435,8 +433,7 @@ class ClientManager:
             result = self.client.load_huggingface_state_dicts(
                 repo, path, device_type, device_index
             )
-            if result is not None:
-                self._pending_results.append(result)
+            self._pending_results.append(result)
 
         return future
 
@@ -482,7 +479,6 @@ class ClientManager:
         else:
             # Direct execution and add result to pending results
             result = self.client.execute_function(pickled_function)
-            if result is not None:
-                self._pending_results.append(result)
+            self._pending_results.append(result)
 
         return future
