@@ -11,7 +11,6 @@ along with related functionality for creating and managing Modal applications.
 from typing import Any, Dict, List
 
 from ..._logging import get_logger
-from ..._package_version import get_python_version, get_versioned_packages
 from ...servers.modal.server import create_modal_app_for_gpu
 from ..base_client import BatchCall, Client
 
@@ -41,13 +40,10 @@ class ModalClient(Client):
     ):
         """Start the Modal app context for this machine."""
         if self._app_context is None:
-            # Get versioned packages
-            versioned_packages = get_versioned_packages(packages)
-
             # Create the Modal app and server class
             app, server_class = create_modal_app_for_gpu(
                 gpu_type=gpu_type,
-                packages=versioned_packages,
+                packages=packages,
                 python_version=python_version,
                 timeout=self._timeout,
             )

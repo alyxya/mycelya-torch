@@ -59,7 +59,7 @@ class Client(ABC):
 
         Args:
             gpu_type: GPU type string (required for modal, ignored for mock)
-            packages: Final package list for modal app (ignored for mock)
+            packages: Versioned package list for modal app (ignored for mock)
             python_version: Python version string (ignored for mock)
         """
         pass

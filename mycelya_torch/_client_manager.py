@@ -18,7 +18,7 @@ from typing import Any, Dict, List
 import torch
 
 from ._logging import get_logger
-from ._package_version import get_python_version
+from ._package_version import get_python_version, get_versioned_packages
 from ._utils import TensorMetadata
 from .clients.base_client import BatchCall, Client
 
@@ -94,7 +94,7 @@ class ClientManager:
 
         self.client.start(
             gpu_type=self.gpu_type,
-            packages=self.packages,
+            packages=get_versioned_packages(self.packages),
             python_version=get_python_version(),
         )
         self.state = ClientState.RUNNING
