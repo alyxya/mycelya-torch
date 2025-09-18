@@ -88,7 +88,7 @@ class RemoteMachine:
             raise ValueError(f"gpu_count must be an integer between 1 and 8, got {gpu_count}")
 
         # Combine default and pip packages, with pip_packages overriding defaults
-        self.packages = []
+        packages = []
         pip_package_names = set()
 
         # First, add pip packages (these can override defaults)
@@ -96,12 +96,12 @@ class RemoteMachine:
             for pkg in pip_packages:
                 pkg_name = re.split(r"[<>=!~]", pkg)[0]
                 pip_package_names.add(pkg_name)
-                self.packages.append(pkg)
+                packages.append(pkg)
 
         # Then add default packages that aren't overridden
         for pkg in self._default_packages:
             if pkg not in pip_package_names:
-                self.packages.append(pkg)
+                packages.append(pkg)
 
         # Handle GPU type based on provider
         if provider == "modal":
@@ -140,20 +140,17 @@ class RemoteMachine:
 
         # Generate unique machine ID
         short_uuid = str(uuid.uuid4())[:8]
-        self.machine_id = f"{self.provider}-{gpu_type.lower()}-{short_uuid}"
-
-        self._batching = _batching
-        self.modal_timeout = modal_timeout
+        machine_id = f"{self.provider}-{gpu_type.lower()}-{short_uuid}"
 
         # Create and register client with orchestrator
         self._client_manager = orchestrator.create_client(
-            self.machine_id,
+            machine_id,
             self.provider,
             gpu_type,
             gpu_count,
-            self.packages,
-            self._batching,
-            self.modal_timeout,
+            packages,
+            _batching,
+            modal_timeout,
         )
 
         # Start client if requested and register cleanup
@@ -173,6 +170,21 @@ class RemoteMachine:
     def gpu_count(self) -> int:
         """Get the GPU count from the client manager."""
         return self._client_manager.gpu_count
+
+    @property
+    def machine_id(self) -> str:
+        """Get the machine ID from the client manager."""
+        return self._client_manager.machine_id
+
+    @property
+    def packages(self) -> List[str]:
+        """Get the packages list from the client manager."""
+        return self._client_manager.packages
+
+    @property
+    def batching(self) -> bool:
+        """Get the batching setting from the client manager."""
+        return self._client_manager.batching
 
     def start(self) -> None:
         """Start the client for this device."""

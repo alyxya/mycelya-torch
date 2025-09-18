@@ -88,6 +88,11 @@ class ClientManager:
         self.stop_signal = threading.Event()
         self.stop_signal.set()
 
+    @property
+    def machine_id(self) -> str:
+        """Get the machine ID from the client."""
+        return self.client.machine_id
+
     def start(self) -> None:
         """Start the cloud provider's compute resources."""
         if self.state == ClientState.STOPPED:
