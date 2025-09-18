@@ -684,50 +684,6 @@ class Orchestrator:
         self._main_thread_waiting.clear()
         return result
 
-    def _resolve_cpu_tensor_futures(self, machine_id: str) -> None:
-        """Resolve pending CPU tensor futures for a client."""
-        cpu_futures_deque = self._client_managers[machine_id].cpu_tensor_futures_deque
-
-        while cpu_futures_deque:
-            storage_future, cpu_tensor_future, mycelya_tensor = cpu_futures_deque[0]
-
-            if not storage_future.done():
-                break
-
-            cpu_futures_deque.popleft()
-
-            raw_bytes = storage_future.result()
-
-            # Reconstruct CPU tensor from raw bytes
-            untyped_storage = torch.UntypedStorage.from_buffer(
-                raw_bytes, dtype=torch.uint8
-            )
-            cpu_tensor = torch.empty(0, dtype=mycelya_tensor.dtype, device="cpu")
-            cpu_tensor.set_(
-                untyped_storage,
-                mycelya_tensor.storage_offset(),
-                mycelya_tensor.shape,
-                mycelya_tensor.stride(),
-            )
-
-            cpu_tensor_future.set_result(cpu_tensor)
-
-    def _propagate_exception_to_cpu_tensor_futures(
-        self, machine_id: str, exception: Exception
-    ) -> None:
-        """Propagate the given exception to all pending CPU tensor futures for a client."""
-        cpu_futures_deque = self._client_managers[machine_id].cpu_tensor_futures_deque
-        if not cpu_futures_deque:
-            return
-
-        # Set exception on all CPU tensor futures and clear the deque
-        while cpu_futures_deque:
-            storage_future, cpu_tensor_future, mycelya_tensor = (
-                cpu_futures_deque.popleft()
-            )
-            if not cpu_tensor_future.cancelled():
-                cpu_tensor_future.set_exception(exception)
-
     def _background_loop(self):
         """Background thread for batch execution and future resolution.
 
@@ -761,13 +717,13 @@ class Orchestrator:
                         client.resolve_futures()
 
                         # Process CPU tensor futures for this client
-                        self._resolve_cpu_tensor_futures(machine_id)
+                        client.resolve_cpu_tensor_futures()
                     except Exception as e:
                         log.error(f"Fatal error for client {machine_id}: {e}")
                         # Propagate the exception to all pending futures for this client
                         client.propagate_exception_to_futures(e)
                         # Also propagate to CPU tensor futures for this client
-                        self._propagate_exception_to_cpu_tensor_futures(machine_id, e)
+                        client.propagate_exception_to_cpu_tensor_futures(e)
 
             # Yield to the main thread before waiting
             time.sleep(0)
