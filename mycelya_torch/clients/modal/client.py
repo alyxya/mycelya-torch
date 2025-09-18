@@ -27,36 +27,36 @@ class ModalClient(Client):
     protocols while maintaining state and connection management.
     """
 
-    def __init__(
-        self,
-        machine_id: str,
-        gpu_type: str,
-        packages: List[str],
-        timeout: int | None = None,
-    ):
+    def __init__(self, machine_id: str, timeout: int | None = None):
         super().__init__(machine_id)
         self._server_instance = None
         self._app_context = None
+        self._timeout = timeout
 
-        # Get versioned packages and Python version from local environment
-        versioned_packages = get_versioned_packages(packages)
-        python_version = get_python_version()
-
-        # Initialize the Modal app and server class with synchronized versions
-        self._app, self._server_class = create_modal_app_for_gpu(
-            gpu_type=gpu_type,
-            packages=versioned_packages,
-            python_version=python_version,
-            timeout=timeout,
-        )
-
-    def start(self):
+    def start(
+        self,
+        gpu_type: str,
+        packages: List[str],
+        python_version: str,
+    ):
         """Start the Modal app context for this machine."""
         if self._app_context is None:
-            self._app_context = self._app.run()
+            # Get versioned packages
+            versioned_packages = get_versioned_packages(packages)
+
+            # Create the Modal app and server class
+            app, server_class = create_modal_app_for_gpu(
+                gpu_type=gpu_type,
+                packages=versioned_packages,
+                python_version=python_version,
+                timeout=self._timeout,
+            )
+
+            # Start the app context
+            self._app_context = app.run()
             self._app_context.__enter__()
             # Create server instance when app starts
-            self._server_instance = self._server_class()
+            self._server_instance = server_class()
 
     def stop(self):
         """Stop the Modal app context for this machine."""

@@ -45,12 +45,22 @@ class Client(ABC):
         self.machine_id = machine_id
 
     @abstractmethod
-    def start(self) -> None:
+    def start(
+        self,
+        gpu_type: str,
+        packages: List[str],
+        python_version: str,
+    ) -> None:
         """
         Start the cloud provider's compute resources.
 
         This method should initialize and start the remote client,
         making it ready to accept operations.
+
+        Args:
+            gpu_type: GPU type string (required for modal, ignored for mock)
+            packages: Final package list for modal app (ignored for mock)
+            python_version: Python version string (ignored for mock)
         """
         pass
 

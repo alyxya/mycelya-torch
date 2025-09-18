@@ -92,7 +92,7 @@ class Orchestrator:
         if provider == "modal":
             from .clients.modal.client import ModalClient
 
-            client_impl = ModalClient(machine_id, gpu_type, packages, timeout)
+            client_impl = ModalClient(machine_id, timeout=timeout)
         elif provider == "mock":
             from .clients.mock.client import MockClient
 
@@ -101,7 +101,13 @@ class Orchestrator:
             raise ValueError(f"Provider {provider} not implemented yet")
 
         # Create client manager wrapping the client implementation
-        client_manager = ClientManager(client_impl, self._main_thread_waiting, batching)
+        client_manager = ClientManager(
+            client_impl,
+            self._main_thread_waiting,
+            gpu_type=gpu_type,
+            packages=packages,
+            batching=batching,
+        )
 
         # Store client manager mapping
         self._client_managers[machine_id] = client_manager

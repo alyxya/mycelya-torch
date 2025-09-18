@@ -26,20 +26,20 @@ class MockClient(Client):
     This mirrors the ModalClient structure exactly for testing consistency.
     """
 
-    def __init__(
-        self,
-        machine_id: str,
-    ):
+    def __init__(self, machine_id: str):
         super().__init__(machine_id)
         self._server_instance = None
 
-        # Initialize the Mock Modal server class (local execution)
-        _, self._server_class = create_mock_modal_app()
-
-    def start(self):
+    def start(
+        self,
+        gpu_type: str,
+        packages: List[str],
+        python_version: str,
+    ):
         """Start the mock execution environment."""
-        # Create server instance directly without app context
-        self._server_instance = self._server_class()
+        # Create mock server instance directly without app context
+        _, server_class = create_mock_modal_app()
+        self._server_instance = server_class()
 
     def stop(self):
         """Stop the mock execution environment."""

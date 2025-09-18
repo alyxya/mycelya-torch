@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 import torch
 
 from ._logging import get_logger
+from ._package_version import get_python_version
 from ._utils import TensorMetadata
 from .clients.base_client import BatchCall, Client
 
@@ -47,6 +48,8 @@ class ClientManager:
         self,
         client: Client,
         main_thread_waiting: threading.Event,
+        gpu_type: str,
+        packages: List[str],
         batching: bool = True,
     ):
         """
@@ -55,10 +58,14 @@ class ClientManager:
         Args:
             client: Concrete client implementation (ModalClient, MockClient, etc.)
             main_thread_waiting: Event to signal the background thread for coordination
+            gpu_type: GPU type string (required for modal, ignored for mock)
+            packages: Final package list for modal app (ignored for mock)
             batching: Whether to enable operation batching (default: True)
         """
         self.client = client
         self.main_thread_waiting = main_thread_waiting
+        self.gpu_type = gpu_type
+        self.packages = packages
         self.batching = batching
         self.state = ClientState.INITIALIZED
 
@@ -85,7 +92,11 @@ class ClientManager:
                 f"Cannot start machine {self.client.machine_id} - already stopped"
             )
 
-        self.client.start()
+        self.client.start(
+            gpu_type=self.gpu_type,
+            packages=self.packages,
+            python_version=get_python_version(),
+        )
         self.state = ClientState.RUNNING
 
     def stop(self) -> None:
