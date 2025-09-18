@@ -82,12 +82,10 @@ class RemoteMachine:
             _batching: Whether to enable operation batching (default: True)
         """
         self.provider = provider
-        self.gpu_type = gpu_type
 
         # Validate gpu_count
         if not isinstance(gpu_count, int) or gpu_count < 1 or gpu_count > 8:
             raise ValueError(f"gpu_count must be an integer between 1 and 8, got {gpu_count}")
-        self.gpu_count = gpu_count
 
         # Combine default and pip packages, with pip_packages overriding defaults
         self.packages = []
@@ -142,7 +140,7 @@ class RemoteMachine:
 
         # Generate unique machine ID
         short_uuid = str(uuid.uuid4())[:8]
-        self.machine_id = f"{self.provider}-{self.gpu_type.lower()}-{short_uuid}"
+        self.machine_id = f"{self.provider}-{gpu_type.lower()}-{short_uuid}"
 
         self._batching = _batching
         self.modal_timeout = modal_timeout
@@ -151,8 +149,8 @@ class RemoteMachine:
         self._client_manager = orchestrator.create_client(
             self.machine_id,
             self.provider,
-            self.gpu_type,
-            self.gpu_count,
+            gpu_type,
+            gpu_count,
             self.packages,
             self._batching,
             self.modal_timeout,
@@ -165,6 +163,16 @@ class RemoteMachine:
 
         # Track all machine instances
         RemoteMachine._all_machines.append(self)
+
+    @property
+    def gpu_type(self) -> str:
+        """Get the GPU type from the client manager."""
+        return self._client_manager.gpu_type
+
+    @property
+    def gpu_count(self) -> int:
+        """Get the GPU count from the client manager."""
+        return self._client_manager.gpu_count
 
     def start(self) -> None:
         """Start the client for this device."""
@@ -189,7 +197,7 @@ class RemoteMachine:
         self.stop()
 
     def __str__(self) -> str:
-        return f"RemoteMachine(provider={self.provider}, gpu={self.gpu_type}, id={self.machine_id})"
+        return f"RemoteMachine(provider={self.provider}, gpu={self.gpu_type}, count={self.gpu_count}, id={self.machine_id})"
 
     def __repr__(self) -> str:
         return self.__str__()
