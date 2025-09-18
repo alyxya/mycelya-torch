@@ -49,8 +49,8 @@ class Orchestrator:
         # Storage management
         self.storage = StorageManager()
 
-        # Centralized client management by machine ID
-        self._clients: Dict[str, ClientManager] = {}  # machine_id -> client manager
+        # Centralized client manager management by machine ID
+        self._client_managers: Dict[str, ClientManager] = {}  # machine_id -> client manager
 
         # Per-client CPU tensor futures deques for async tensor copying
         self._cpu_tensor_futures_deques: Dict[
@@ -113,7 +113,7 @@ class Orchestrator:
         client_manager = ClientManager(client_impl, batching)
 
         # Store client manager mapping
-        self._clients[machine_id] = client_manager
+        self._client_managers[machine_id] = client_manager
 
         # Initialize CPU tensor futures deque for this client
         self._cpu_tensor_futures_deques[machine_id] = deque()
@@ -124,7 +124,7 @@ class Orchestrator:
 
     def start_client(self, machine_id: str) -> None:
         """Start a client for the given machine."""
-        client = self._clients[machine_id]
+        client = self._client_managers[machine_id]
         if not client.is_running():
             client.start()
 
@@ -168,7 +168,7 @@ class Orchestrator:
         tensor_set = self._storage_to_tensors_map.get(storage_id)
 
         if tensor_set:
-            self._clients[machine_id].remove_tensors(list(tensor_set))
+            self._client_managers[machine_id].remove_tensors(list(tensor_set))
 
         self.storage.free_storage(storage_id)
 
@@ -184,7 +184,7 @@ class Orchestrator:
         if tensor_set:
             tensor_id = next(iter(tensor_set))
             machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-            client = self._clients[machine_id]
+            client = self._client_managers[machine_id]
             client.resize_storage(tensor_id, nbytes)
 
         # Invalidate cache for the resized storage
@@ -227,7 +227,7 @@ class Orchestrator:
 
         if storage_future is None:
             # Cache miss - get data from client and cache the future
-            client = self._clients[machine_id]
+            client = self._client_managers[machine_id]
             storage_future = client.get_storage_data(tensor_id)
             self.storage.cache_storage(storage_id, storage_future)
 
@@ -312,7 +312,7 @@ class Orchestrator:
 
         # Get client
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        client = self._clients[machine_id]
+        client = self._client_managers[machine_id]
 
         # Ensure tensor exists on remote
         self._maybe_create_tensor(target_tensor)
@@ -380,7 +380,7 @@ class Orchestrator:
         self._maybe_create_tensor(target_tensor)
 
         # Get client and perform copy
-        client = self._clients[source_machine_id]
+        client = self._client_managers[source_machine_id]
         source_tensor_id = get_tensor_id(source_tensor)
         target_tensor_id = get_tensor_id(target_tensor)
         client.copy_tensor(source_tensor_id, target_tensor_id)
@@ -475,7 +475,7 @@ class Orchestrator:
                             f"Expected device {remote_device_info}, got {tensor_device_info}"
                         )
 
-        client = self._clients[
+        client = self._client_managers[
             remote_device_info[0]
         ]  # Extract machine_id from (machine_id, device_type, device_index)
 
@@ -535,7 +535,7 @@ class Orchestrator:
         machine_id, device_type, device_index = self.storage.get_remote_device_info(
             storage_id
         )
-        client = self._clients[machine_id]
+        client = self._client_managers[machine_id]
 
         if not tensor_set:
             # Storage doesn't exist - create empty tensor on remote
@@ -589,7 +589,7 @@ class Orchestrator:
         first_tensor = local_tensors[0]
         storage_id = get_storage_id(first_tensor)
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        client = self._clients[machine_id]
+        client = self._client_managers[machine_id]
 
         # Delegate to client
         client.link_tensors(local_tensor_ids, temp_keys)
@@ -639,7 +639,7 @@ class Orchestrator:
             )
 
         # Get client for the target machine
-        client = self._clients[machine_id]
+        client = self._client_managers[machine_id]
 
         # Execute remotely
         result_future = client.execute_function(pickled_func)
@@ -678,7 +678,7 @@ class Orchestrator:
         machine_id, remote_device_type, remote_device_index = (
             device_manager.get_remote_device_info(device_index)
         )
-        client = self._clients[machine_id]
+        client = self._client_managers[machine_id]
 
         # Delegate to client's load_huggingface_state_dicts method
         return client.load_huggingface_state_dicts(
@@ -773,7 +773,7 @@ class Orchestrator:
         - Metrics collection
         """
         while self._running_flag.is_set():
-            for machine_id, client in self._clients.items():
+            for machine_id, client in self._client_managers.items():
                 # Check if client should be stopped (stop request signaled by cleared event)
                 if not self._client_stop_signals[machine_id].is_set():
                     if client.is_running():
