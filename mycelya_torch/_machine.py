@@ -81,7 +81,7 @@ class RemoteMachine:
             _start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
         """
-        self.provider = provider
+        self._provider = provider
 
         # Validate gpu_count
         if not isinstance(gpu_count, int) or gpu_count < 1 or gpu_count > 8:
@@ -140,12 +140,12 @@ class RemoteMachine:
 
         # Generate unique machine ID
         short_uuid = str(uuid.uuid4())[:8]
-        machine_id = f"{self.provider}-{gpu_type.lower()}-{short_uuid}"
+        machine_id = f"{provider}-{gpu_type.lower()}-{short_uuid}"
 
         # Create and register client with orchestrator
         self._client_manager = orchestrator.create_client(
             machine_id,
-            self.provider,
+            provider,
             gpu_type,
             gpu_count,
             packages,
@@ -160,6 +160,11 @@ class RemoteMachine:
 
         # Track all machine instances
         RemoteMachine._all_machines.append(self)
+
+    @property
+    def provider(self) -> str:
+        """Get the provider string."""
+        return self._provider
 
     @property
     def gpu_type(self) -> str:
