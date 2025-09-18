@@ -9,6 +9,7 @@ for all cloud provider clients, including batching, future management, and
 operation coordination.
 """
 
+import threading
 from collections import deque
 from concurrent.futures import Future
 from enum import Enum
@@ -57,6 +58,13 @@ class ClientManager:
 
         # Deque for storing pending batch calls when batching is enabled
         self._batch_calls = deque()
+
+        # CPU tensor futures deque for async tensor copying
+        self.cpu_tensor_futures_deque = deque()
+
+        # Client stop signal event (initially set - no stop requested)
+        self.stop_signal = threading.Event()
+        self.stop_signal.set()
 
     def start(self) -> None:
         """Start the cloud provider's compute resources."""
