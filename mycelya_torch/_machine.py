@@ -135,8 +135,7 @@ class RemoteMachine:
 
         # Generate unique machine ID
         short_uuid = str(uuid.uuid4())[:8]
-        gpu_clean = self.gpu_type.replace("-", "").replace("_", "").lower()
-        self.machine_id = f"{self.provider}-{gpu_clean}-{short_uuid}"
+        self.machine_id = f"{self.provider}-{self.gpu_type.lower()}-{short_uuid}"
 
         self._batching = _batching
         self.modal_timeout = modal_timeout
