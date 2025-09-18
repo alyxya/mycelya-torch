@@ -429,7 +429,3 @@ class ClientManager:
                 self._pending_results.append(result)
 
         return future
-
-    def __repr__(self) -> str:
-        """String representation of the client manager."""
-        return f"ClientManager(client={self.client}, machine_id={self.machine_id}, batching={self.batching})"

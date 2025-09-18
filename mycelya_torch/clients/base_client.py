@@ -205,13 +205,3 @@ class Client(ABC):
             The result object (e.g., FunctionCall for Modal, direct result for Mock)
         """
         pass
-
-    @abstractmethod
-    def __repr__(self) -> str:
-        """
-        String representation of the client.
-
-        Returns:
-            Human-readable string describing the client state
-        """
-        pass

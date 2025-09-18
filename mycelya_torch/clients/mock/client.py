@@ -220,7 +220,3 @@ class MockClient(Client):
         """Implementation: Execute a pickled function remotely."""
         result = self._server_instance.execute_function.local(pickled_function)
         return result
-
-    def __repr__(self) -> str:
-        status = "running" if self.is_running() else "stopped"
-        return f'MockClient(machine_id="{self.machine_id}", status="{status}")'

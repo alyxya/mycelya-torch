@@ -236,10 +236,3 @@ class ModalClient(Client):
         """Implementation: Execute a pickled function remotely."""
         func_call = self._server_instance.execute_function.spawn(pickled_function)
         return func_call
-
-    def __repr__(self) -> str:
-        status = "running" if self.is_running() else "stopped"
-        return (
-            f'ModalClient(gpu_type="{self.gpu_type}", '
-            f'machine_id="{self.machine_id}", status="{status}")'
-        )
