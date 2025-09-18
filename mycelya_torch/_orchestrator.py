@@ -13,7 +13,6 @@ import atexit
 import io
 import threading
 import time
-from collections import deque
 from concurrent.futures import Future
 from typing import Any, Dict, List, Set, Tuple
 
@@ -50,7 +49,9 @@ class Orchestrator:
         self.storage = StorageManager()
 
         # Centralized client manager management by machine ID
-        self._client_managers: Dict[str, ClientManager] = {}  # machine_id -> client manager
+        self._client_managers: Dict[
+            str, ClientManager
+        ] = {}  # machine_id -> client manager
 
         # Storage ID to tensor IDs mapping for remote cleanup
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
@@ -77,7 +78,7 @@ class Orchestrator:
         packages: List[str],
         batching: bool = True,
         timeout: int | None = None,
-    ) -> None:
+    ) -> ClientManager:
         """Create and register a client for a machine.
 
         Args:
@@ -100,27 +101,12 @@ class Orchestrator:
             raise ValueError(f"Provider {provider} not implemented yet")
 
         # Create client manager wrapping the client implementation
-        client_manager = ClientManager(client_impl, batching)
+        client_manager = ClientManager(client_impl, self._main_thread_waiting, batching)
 
         # Store client manager mapping
         self._client_managers[machine_id] = client_manager
 
-    def start_client(self, machine_id: str) -> None:
-        """Start a client for the given machine."""
-        client = self._client_managers[machine_id]
-        if not client.is_running():
-            client.start()
-
-    def stop_client(self, machine_id: str) -> None:
-        """Stop a client for the given machine."""
-        # Clear the event to signal stop request
-        self._client_managers[machine_id].stop_signal.clear()
-        # Wake up background thread
-        self._main_thread_waiting.set()
-        # Wait for background thread to set it back (confirming stop)
-        self._client_managers[machine_id].stop_signal.wait()
-        # Clear the wake-up signal after finishing waiting
-        self._main_thread_waiting.clear()
+        return client_manager
 
     # Storage management methods
 

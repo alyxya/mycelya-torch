@@ -141,7 +141,7 @@ class RemoteMachine:
         self.modal_timeout = modal_timeout
 
         # Create and register client with orchestrator
-        orchestrator.create_client(
+        self._client_manager = orchestrator.create_client(
             self.machine_id,
             self.provider,
             self.gpu_type,
@@ -160,12 +160,13 @@ class RemoteMachine:
 
     def start(self) -> None:
         """Start the client for this device."""
-        orchestrator.start_client(self.machine_id)
+        if not self._client_manager.is_running():
+            self._client_manager.start()
 
     def stop(self) -> None:
         """Stop the client for this device."""
         try:
-            orchestrator.stop_client(self.machine_id)
+            self._client_manager.send_stop_signal()
         except Exception as e:
             # Don't log full stack traces during shutdown
             log.warning(f"Error stopping machine {self}: {type(e).__name__}")

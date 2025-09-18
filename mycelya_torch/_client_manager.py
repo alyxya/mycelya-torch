@@ -38,15 +38,22 @@ class ClientManager:
     implementation to the wrapped client.
     """
 
-    def __init__(self, client: Client, batching: bool = True):
+    def __init__(
+        self,
+        client: Client,
+        main_thread_waiting: threading.Event,
+        batching: bool = True,
+    ):
         """
         Initialize the client manager with a concrete client implementation.
 
         Args:
             client: Concrete client implementation (ModalClient, MockClient, etc.)
+            main_thread_waiting: Event to signal the background thread for coordination
             batching: Whether to enable operation batching (default: True)
         """
         self.client = client
+        self.main_thread_waiting = main_thread_waiting
         self.batching = batching
         self.state = ClientState.INITIALIZED
 
@@ -80,6 +87,17 @@ class ClientManager:
         """Stop the cloud provider's compute resources."""
         self.client.stop()
         self.state = ClientState.STOPPED
+
+    def send_stop_signal(self) -> None:
+        """Send stop signal to background thread with proper coordination."""
+        # Clear the event to signal stop request
+        self.stop_signal.clear()
+        # Wake up background thread
+        self.main_thread_waiting.set()
+        # Wait for background thread to set it back (confirming stop)
+        self.stop_signal.wait()
+        # Clear the wake-up signal after finishing waiting
+        self.main_thread_waiting.clear()
 
     def pause(self) -> None:
         """Pause the client (temporarily suspend operations)."""
