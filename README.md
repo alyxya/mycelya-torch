@@ -17,13 +17,6 @@ result = x @ y  # Computed on remote A100!
 print(f"Result computed on {result.device}: {result.shape}")
 ```
 
-## Why Mycelya?
-
-- **🚀 Powerful Hardware** - Access H100, A100, and other high-end GPUs instantly
-- **🔧 Zero Code Changes** - Your existing PyTorch code works unchanged
-- **⚡ Smart Batching** - Automatically batches operations to minimize network overhead
-- **🤖 HuggingFace Ready** - Load models directly on remote GPUs without downloading
-- **🎯 Remote Functions** - Execute custom functions remotely with the @remote decorator
 
 ## Supported GPUs (Modal)
 
