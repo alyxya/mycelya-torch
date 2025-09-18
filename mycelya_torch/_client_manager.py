@@ -97,7 +97,7 @@ class ClientManager:
         """Start the cloud provider's compute resources."""
         if self.state == ClientState.STOPPED:
             raise RuntimeError(
-                f"Cannot start machine {self.client.machine_id} - already stopped"
+                f"Cannot start machine {self.machine_id} - already stopped"
             )
 
         self.client.start(
@@ -128,7 +128,7 @@ class ClientManager:
         """Pause the client (temporarily suspend operations)."""
         if self.state != ClientState.RUNNING:
             raise RuntimeError(
-                f"Cannot pause machine {self.client.machine_id} - not currently running"
+                f"Cannot pause machine {self.machine_id} - not currently running"
             )
 
         # TODO: Implement pause logic
@@ -139,7 +139,7 @@ class ClientManager:
         """Resume the client from paused state."""
         if self.state != ClientState.PAUSED:
             raise RuntimeError(
-                f"Cannot resume machine {self.client.machine_id} - not currently paused"
+                f"Cannot resume machine {self.machine_id} - not currently paused"
             )
 
         # TODO: Implement resume logic
@@ -221,15 +221,15 @@ class ClientManager:
         """Ensure the machine is running, raise RuntimeError if not."""
         if self.state == ClientState.INITIALIZED:
             raise RuntimeError(
-                f"Machine {self.client.machine_id} is not started. Call start() first."
+                f"Machine {self.machine_id} is not started. Call start() first."
             )
         elif self.state == ClientState.PAUSED:
             raise RuntimeError(
-                f"Machine {self.client.machine_id} is paused. Call resume() first."
+                f"Machine {self.machine_id} is paused. Call resume() first."
             )
         elif self.state == ClientState.STOPPED:
             raise RuntimeError(
-                f"Machine {self.client.machine_id} is stopped and cannot be restarted."
+                f"Machine {self.machine_id} is stopped and cannot be restarted."
             )
         # If we get here, state is RUNNING - which is what we want
 
@@ -583,6 +583,6 @@ class ClientManager:
                 # Then resolve any pending futures (including CPU tensor futures)
                 self.resolve_futures()
             except Exception as e:
-                log.error(f"Fatal error for client {self.client.machine_id}: {e}")
+                log.error(f"Fatal error for client {self.machine_id}: {e}")
                 # Propagate the exception to all pending futures for this client (including CPU tensor futures)
                 self.propagate_exception_to_futures(e)
