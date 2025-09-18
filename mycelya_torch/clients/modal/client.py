@@ -203,9 +203,9 @@ class ModalClient(Client):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         output_tensor_ids: List[int] | None = None,
-    ) -> Any | None:
+    ) -> Any:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
-        # Call Modal method and capture FunctionCall if returning metadata
+        # Call Modal method and return FunctionCall
         func_call = self._server_instance.execute_aten_operation.spawn(
             op_name,
             args,
@@ -213,10 +213,7 @@ class ModalClient(Client):
             tensor_mask,
             output_tensor_ids,
         )
-        # Only return FunctionCall if expecting a return value for dynamic operations
-        if output_tensor_ids is None:
-            return func_call
-        return None
+        return func_call
 
     # HuggingFace model loading methods
     def load_huggingface_state_dicts(

@@ -174,12 +174,11 @@ class Client(ABC):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         output_tensor_ids: List[int] | None = None,
-    ) -> Any | None:
+    ) -> Any:
         """Execute an aten operation on the remote machine with tensor IDs.
 
         Returns:
-            The result object for dynamic operations (when output_tensor_ids is None),
-            or None for static operations
+            The result object (e.g., FunctionCall for Modal, direct result for Mock)
         """
         pass
 

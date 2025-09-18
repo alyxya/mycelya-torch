@@ -98,7 +98,9 @@ def create_modal_app_for_gpu(
     class Pickler(cloudpickle.Pickler):
         """Custom pickler to convert results back to metadata."""
 
-        def __init__(self, file: Any, temp_tensor_registry: Dict[str, torch.Tensor]) -> None:
+        def __init__(
+            self, file: Any, temp_tensor_registry: Dict[str, torch.Tensor]
+        ) -> None:
             super().__init__(file)
             self.temp_tensor_registry = temp_tensor_registry
 
@@ -442,7 +444,9 @@ def create_modal_app_for_gpu(
             """Resize the underlying storage for a tensor."""
             self._resize_storage_impl(tensor_id, nbytes)
 
-        def _copy_tensor_impl(self, source_tensor_id: int, target_tensor_id: int) -> None:
+        def _copy_tensor_impl(
+            self, source_tensor_id: int, target_tensor_id: int
+        ) -> None:
             """Copy tensor data from source to target on the remote machine."""
 
             tensor_registry = self._tensor_registry

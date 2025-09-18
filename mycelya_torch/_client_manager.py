@@ -341,7 +341,7 @@ class ClientManager:
                 )
             )
         else:
-            # Direct execution and add result to pending results if needed
+            # Direct execution and add result to pending results only for dynamic operations
             result = self.client.execute_aten_operation(
                 op_name,
                 args,
@@ -349,7 +349,8 @@ class ClientManager:
                 tensor_mask,
                 output_tensor_ids,
             )
-            if result is not None:
+            # Only add result to pending results for dynamic operations (when output_tensor_ids is None)
+            if output_tensor_ids is None:
                 self._pending_results.append(result)
 
         return future

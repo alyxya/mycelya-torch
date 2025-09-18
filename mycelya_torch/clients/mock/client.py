@@ -186,10 +186,10 @@ class MockClient(Client):
         kwargs: Dict[str, Any],
         tensor_mask: List[bool],
         output_tensor_ids: List[int] | None = None,
-    ) -> Any | None:
+    ) -> Any:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
 
-        # Execute using .local() and return result if returning metadata
+        # Execute using .local() and return result
         result = self._server_instance.execute_aten_operation.local(
             op_name,
             args,
@@ -197,10 +197,7 @@ class MockClient(Client):
             tensor_mask,
             output_tensor_ids,
         )
-        # Only return result if expecting a return value for dynamic operations
-        if output_tensor_ids is None:
-            return result
-        return None
+        return result
 
     # HuggingFace model loading methods
     def load_huggingface_state_dicts(
