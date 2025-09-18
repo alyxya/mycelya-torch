@@ -82,6 +82,13 @@ class ClientManager:
         """Add a pending result to the manager's queue."""
         self._pending_results.append(result)
 
+    def _ensure_running(self) -> None:
+        """Ensure the machine is running, raise RuntimeError if not."""
+        if not self.is_running():
+            raise RuntimeError(
+                f"Machine {self.machine_id} is not running. Call start() first."
+            )
+
     def execute_batch(self) -> None:
         """Execute any pending batch calls."""
         if not self._batch_calls:
@@ -111,10 +118,7 @@ class ClientManager:
         device_index: int,
     ) -> None:
         """Create an empty tensor on the remote machine with proper storage layout."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         if self.batching:
             # Add to batch
@@ -156,10 +160,7 @@ class ClientManager:
         offset: int,
     ) -> None:
         """Create a tensor view from an existing tensor."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         if self.batching:
             # Add to batch
@@ -186,10 +187,7 @@ class ClientManager:
         source_dtype: str,
     ) -> None:
         """Update an existing tensor with new data and source metadata."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         if self.batching:
             # Add to batch
@@ -220,10 +218,7 @@ class ClientManager:
 
     def get_storage_data(self, tensor_id: int) -> Future[bytes]:
         """Get raw storage data by tensor ID."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         # Create a Future for the result
         future = Future()
@@ -261,10 +256,7 @@ class ClientManager:
 
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """Resize the underlying storage for a tensor."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         if self.batching:
             # Add to batch
@@ -285,10 +277,7 @@ class ClientManager:
         target_tensor_id: int,
     ) -> None:
         """Copy tensor data from source to target on the same remote machine."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         if self.batching:
             # Add to batch
@@ -314,10 +303,7 @@ class ClientManager:
         output_tensor_ids: List[int] | None = None,
     ) -> Future[List[TensorMetadata]] | None:
         """Execute an aten operation on the remote machine."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         # Create future for dynamic operations
         future = None
@@ -365,10 +351,7 @@ class ClientManager:
         device_index: int,
     ) -> Future[Dict[str, Dict[str, TensorMetadata]]]:
         """Load HuggingFace state dicts organized by directory on the remote machine."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         # Create a Future for the result
         future = Future()
@@ -400,10 +383,7 @@ class ClientManager:
         temp_keys: List[str],
     ) -> None:
         """Link local mycelya tensor IDs to remote tensors from temporary registry."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         if self.batching:
             # Add to batch
@@ -420,10 +400,7 @@ class ClientManager:
 
     def execute_function(self, pickled_function: bytes) -> Future[bytes]:
         """Execute a pickled function on the remote machine."""
-        if not self.is_running():
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not running. Call start() first."
-            )
+        self._ensure_running()
 
         # Create a Future for the result
         future = Future()
