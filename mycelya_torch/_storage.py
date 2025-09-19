@@ -15,7 +15,7 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 """
 
 from concurrent.futures import Future
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Set, Tuple
 
 import torch
 
@@ -76,7 +76,7 @@ class StorageManager:
 
         return storage_id
 
-    def get_remote_device_info(self, storage_id_or_tensor: Union[int, torch.Tensor]) -> Tuple[str, str, int]:
+    def get_remote_device_info(self, storage_id_or_tensor: int | torch.Tensor) -> Tuple[str, str, int]:
         """Get remote device info for a storage ID or tensor.
 
         Args:
