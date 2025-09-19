@@ -161,7 +161,7 @@ class Orchestrator:
             client_manager.resize_storage(tensor_id, nbytes)
 
         # Invalidate cache for the resized storage
-        self.storage.invalidate_storage_caches([storage_id])
+        self.storage.invalidate_cache(storage_id)
 
     # Tensor methods
 
@@ -277,9 +277,6 @@ class Orchestrator:
         if source_tensor.device.type != "cpu":
             raise RuntimeError("Source tensor must be a CPU tensor")
 
-        # Get storage info
-        storage_id = get_storage_id(target_tensor)
-
         # Get client manager
         machine_id, _, _ = self.storage.get_remote_device_info(target_tensor)
         client_manager = self._client_managers[machine_id]
@@ -308,7 +305,7 @@ class Orchestrator:
         )
 
         # Invalidate cache for the updated storage
-        self.storage.invalidate_storage_caches([storage_id])
+        self.storage.invalidate_cache(target_tensor)
 
     def copy_tensor(
         self,
@@ -356,7 +353,7 @@ class Orchestrator:
         client_manager.copy_tensor(source_tensor_id, target_tensor_id)
 
         # Invalidate cache for the target storage since it was modified
-        self.storage.invalidate_storage_caches([target_storage_id])
+        self.storage.invalidate_cache(target_tensor)
 
     def execute_aten_operation(
         self,
@@ -467,9 +464,8 @@ class Orchestrator:
             for output_tensor in output_tensors:
                 self.storage.register_tensor(output_tensor)
 
-            self.storage.invalidate_storage_caches(
-                [get_storage_id(t) for t in output_tensors]
-            )
+            for output_tensor in output_tensors:
+                self.storage.invalidate_cache(output_tensor)
             return None
 
         # Dynamic operation: get result and return metadata for tensor linking

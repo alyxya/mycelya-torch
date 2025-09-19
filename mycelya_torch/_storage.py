@@ -15,7 +15,7 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 """
 
 from concurrent.futures import Future
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Set, Tuple
 
 import torch
 
@@ -125,14 +125,18 @@ class StorageManager:
         storage_id = get_storage_id(tensor)
         return self._storage_cache.get(storage_id)
 
-    def invalidate_storage_caches(self, storage_ids: List[int]) -> None:
-        """Invalidate cache entries for one or more storage IDs.
+    def invalidate_cache(self, storage_id_or_tensor: int | torch.Tensor) -> None:
+        """Invalidate cache entry for a storage ID or tensor.
 
         Args:
-            storage_ids: List of storage IDs to remove from cache (can be single element)
+            storage_id_or_tensor: Either a storage ID (int) or tensor (extracts storage_id internally)
         """
-        for storage_id in storage_ids:
-            self._storage_cache.pop(storage_id, None)
+        if isinstance(storage_id_or_tensor, torch.Tensor):
+            storage_id = get_storage_id(storage_id_or_tensor)
+        else:
+            storage_id = storage_id_or_tensor
+
+        self._storage_cache.pop(storage_id, None)
 
     def register_tensor(self, tensor: torch.Tensor) -> None:
         """Register a tensor as using its associated storage.
