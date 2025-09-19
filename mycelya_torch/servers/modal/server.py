@@ -731,12 +731,12 @@ def create_modal_app_for_gpu(
             return self._execute_function_impl(pickled_function)
 
         def _pip_install_impl(self, packages: List[str]) -> None:
-            """Install packages using pip on the remote machine."""
+            """Install packages using uv pip on the remote machine."""
             if not packages:
                 return
 
-            # Use subprocess to install packages
-            cmd = [sys.executable, "-m", "pip", "install"] + packages
+            # Use uv pip install with --system flag
+            cmd = ["uv", "pip", "install", "--system"] + packages
             try:
                 subprocess.run(cmd, check=True, capture_output=True, text=True)
             except subprocess.CalledProcessError as e:
