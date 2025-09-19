@@ -707,7 +707,7 @@ class Orchestrator:
         - Metrics collection
         """
         while self._running_flag.is_set():
-            for machine_id, client in self._client_managers.items():
+            for _machine_id, client in self._client_managers.items():
                 # Process background tasks for this client
                 client.process_background_tasks()
 

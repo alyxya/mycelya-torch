@@ -173,10 +173,8 @@ def create_modal_app_for_gpu(
             "/data": data_volume,
         }
 
-
     @app.cls(**cls_kwargs)
     class PytorchServer:
-
         @modal.enter()
         def setup(self) -> None:
             """Initialize the server when container starts."""

@@ -85,7 +85,9 @@ class RemoteMachine:
 
         # Validate gpu_count
         if not isinstance(gpu_count, int) or gpu_count < 1 or gpu_count > 8:
-            raise ValueError(f"gpu_count must be an integer between 1 and 8, got {gpu_count}")
+            raise ValueError(
+                f"gpu_count must be an integer between 1 and 8, got {gpu_count}"
+            )
 
         # Combine default and pip packages, with pip_packages overriding defaults
         packages = []
