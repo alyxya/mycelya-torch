@@ -79,7 +79,6 @@ class RemoteMachine:
                 f"gpu_count must be an integer between 1 and 8, got {gpu_count}"
             )
 
-
         # Handle GPU type based on provider
         if provider == "modal":
             # Validate GPU type for modal

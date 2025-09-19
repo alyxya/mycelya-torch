@@ -66,14 +66,15 @@ class ClientManager:
         self.main_thread_waiting = main_thread_waiting
         self.gpu_type = gpu_type
         self.gpu_count = gpu_count
-        # Default packages required for remote execution
-        self.packages = [
+        # Default packages required for remote execution (versioned)
+        default_packages = [
             "numpy",
             "torch",
             "huggingface_hub",
             "safetensors",
             "cloudpickle",
         ]
+        self.packages = get_versioned_packages(default_packages)
         self.batching = batching
         self.state = ClientState.INITIALIZED
 
@@ -108,7 +109,7 @@ class ClientManager:
         self.client.start(
             gpu_type=self.gpu_type,
             gpu_count=self.gpu_count,
-            packages=get_versioned_packages(self.packages),
+            packages=self.packages,
             python_version=get_python_version(),
         )
         self.state = ClientState.RUNNING
@@ -585,6 +586,9 @@ class ClientManager:
         # Parse existing package names to avoid duplicates
         import re
 
+        # Version the input packages
+        versioned_packages = get_versioned_packages(packages)
+
         # Get existing package names for duplicate checking
         existing_package_names = set()
         for pkg in self.packages:
@@ -593,7 +597,7 @@ class ClientManager:
 
         # Add new packages that don't exist yet and collect them for installation
         new_packages_to_install = []
-        for pkg in packages:
+        for pkg in versioned_packages:
             pkg_name = re.split(r"[<>=!~]", pkg)[0]
             if pkg_name not in existing_package_names:
                 self.packages.append(pkg)
