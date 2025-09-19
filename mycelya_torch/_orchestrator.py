@@ -21,6 +21,7 @@ import torch
 from ._client_manager import ClientManager
 from ._device import device_manager
 from ._logging import get_logger
+from ._package_version import module_name_to_package_name
 from ._pickle import Pickler, Unpickler
 from ._storage import StorageManager
 from ._utils import (
@@ -615,6 +616,16 @@ class Orchestrator:
 
         # Get client for the target machine
         client = self._client_managers[machine_id]
+
+        # Install module dependencies if any were found
+        if pickler.module_dependencies:
+            modules_to_install = [
+                pkg for mod in pickler.module_dependencies
+                if (pkg := module_name_to_package_name(mod))
+            ]
+            if modules_to_install:
+                log.debug(f"Installing module dependencies: {modules_to_install}")
+                client.pip_install(modules_to_install)
 
         # Execute remotely
         result_future = client.execute_function(pickled_func)
