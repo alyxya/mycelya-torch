@@ -9,6 +9,7 @@ for all cloud provider clients, including batching, future management, and
 operation coordination.
 """
 
+import re
 import threading
 from collections import deque
 from concurrent.futures import Future
@@ -584,8 +585,6 @@ class ClientManager:
             return
 
         # Version the input packages and handle overrides
-        import re
-
         versioned_packages = get_versioned_packages(packages)
 
         # Create mapping of existing packages by name

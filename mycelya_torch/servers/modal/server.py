@@ -16,6 +16,8 @@ Part of: mycelya_torch PyTorch extension
 import io
 import os
 import pickle
+import subprocess
+import sys
 import uuid
 from typing import Any, Dict, List, Tuple, TypedDict
 
@@ -730,9 +732,6 @@ def create_modal_app_for_gpu(
 
         def _pip_install_impl(self, packages: List[str]) -> None:
             """Install packages using pip on the remote machine."""
-            import subprocess
-            import sys
-
             if not packages:
                 return
 
