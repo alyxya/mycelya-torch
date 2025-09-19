@@ -583,40 +583,46 @@ class ClientManager:
         if not packages:
             return
 
-        # Parse existing package names to avoid duplicates
+        # Version the input packages and handle overrides
         import re
 
-        # Version the input packages
         versioned_packages = get_versioned_packages(packages)
 
-        # Get existing package names for duplicate checking
-        existing_package_names = set()
+        # Create mapping of existing packages by name
+        existing_packages = {}
         for pkg in self.packages:
             pkg_name = re.split(r"[<>=!~]", pkg)[0]
-            existing_package_names.add(pkg_name)
+            existing_packages[pkg_name] = pkg
 
-        # Add new packages that don't exist yet and collect them for installation
-        new_packages_to_install = []
+        # Process new packages: add new ones or replace existing with different versions
+        packages_to_install = []
         for pkg in versioned_packages:
             pkg_name = re.split(r"[<>=!~]", pkg)[0]
-            if pkg_name not in existing_package_names:
-                self.packages.append(pkg)
-                new_packages_to_install.append(pkg)
+            existing_pkg = existing_packages.get(pkg_name)
 
-        # If client is already running, install only new packages at runtime
-        if self.state == ClientState.RUNNING and new_packages_to_install:
+            if existing_pkg != pkg:  # New package or different version
+                if existing_pkg:
+                    # Replace existing package
+                    self.packages[self.packages.index(existing_pkg)] = pkg
+                else:
+                    # Add new package
+                    self.packages.append(pkg)
+                packages_to_install.append(pkg)
+
+        # If client is already running, install packages at runtime
+        if self.state == ClientState.RUNNING and packages_to_install:
             if self.batching:
                 # Add to batch
                 self._batch_calls.append(
                     BatchCall(
                         method_name="pip_install",
-                        args=(new_packages_to_install,),
+                        args=(packages_to_install,),
                         kwargs={},
                     )
                 )
             else:
                 # Direct execution
-                self.client.pip_install(new_packages_to_install)
+                self.client.pip_install(packages_to_install)
         # If client is not started yet, packages are already added to self.packages
         # and will be included in the initial image when start() is called
 
