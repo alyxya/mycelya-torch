@@ -477,10 +477,9 @@ class Orchestrator:
         - Otherwise the tensor already exists
         """
         tensor_id = get_tensor_id(tensor)
-        storage_id = get_storage_id(tensor)
 
         # Get or create tensor set for this storage
-        tensor_set = self.storage.get_or_create_tensor_set(storage_id)
+        tensor_set = self.storage.get_or_create_tensor_set(tensor)
 
         # Check if tensor already exists
         if tensor_id in tensor_set:

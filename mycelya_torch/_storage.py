@@ -160,13 +160,14 @@ class StorageManager:
         """
         return self._storage_to_tensors_map.get(storage_id, set())
 
-    def get_or_create_tensor_set(self, storage_id: int) -> Set[int]:
-        """Get or create the tensor set for a storage ID.
+    def get_or_create_tensor_set(self, tensor: torch.Tensor) -> Set[int]:
+        """Get or create the tensor set for a tensor.
 
         Args:
-            storage_id: The storage ID to get/create tensor set for
+            tensor: The tensor to get/create tensor set for (extracts storage_id internally)
 
         Returns:
             Set of tensor IDs using the storage (creates empty set if none exists)
         """
+        storage_id = get_storage_id(tensor)
         return self._storage_to_tensors_map.setdefault(storage_id, set())
