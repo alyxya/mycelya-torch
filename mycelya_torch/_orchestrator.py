@@ -326,13 +326,9 @@ class Orchestrator:
         if target_tensor.device.type != "mycelya":
             raise RuntimeError("Target tensor must be a mycelya tensor")
 
-        # Get storage info for both tensors
-        source_storage_id = get_storage_id(source_tensor)
-        target_storage_id = get_storage_id(target_tensor)
-
         # Get machine info for both tensors
-        source_machine_id, _, _ = self.storage.get_remote_device_info(source_storage_id)
-        target_machine_id, _, _ = self.storage.get_remote_device_info(target_storage_id)
+        source_machine_id, _, _ = self.storage.get_remote_device_info(source_tensor)
+        target_machine_id, _, _ = self.storage.get_remote_device_info(target_tensor)
 
         # Validate they're on the same machine
         if source_machine_id != target_machine_id:
@@ -390,8 +386,7 @@ class Orchestrator:
                 tensor_mask.append(True)
 
                 # Validate and get device info through storage
-                storage_id = get_storage_id(obj)
-                tensor_device_info = self.storage.get_remote_device_info(storage_id)
+                tensor_device_info = self.storage.get_remote_device_info(obj)
 
                 if remote_device_info is None:
                     remote_device_info = tensor_device_info
@@ -431,8 +426,7 @@ class Orchestrator:
         if output_tensors:
             for output_tensor in output_tensors:
                 if isinstance(output_tensor, torch.Tensor):
-                    storage_id = get_storage_id(output_tensor)
-                    tensor_device_info = self.storage.get_remote_device_info(storage_id)
+                    tensor_device_info = self.storage.get_remote_device_info(output_tensor)
 
                     if remote_device_info is None:
                         remote_device_info = tensor_device_info
