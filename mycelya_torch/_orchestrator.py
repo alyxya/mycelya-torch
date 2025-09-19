@@ -648,9 +648,9 @@ class Orchestrator:
         - Metrics collection
         """
         while self._running_flag.is_set():
-            for _machine_id, client in self._client_managers.items():
-                # Process background tasks for this client
-                client.process_background_tasks()
+            for _machine_id, client_manager in self._client_managers.items():
+                # Process background tasks for this client manager
+                client_manager.process_background_tasks()
 
             # Yield to the main thread before waiting
             time.sleep(0)
