@@ -468,9 +468,7 @@ class Orchestrator:
         # Static operation: register tensor mappings and return None
         if output_tensors is not None:
             for output_tensor in output_tensors:
-                tensor_id = get_tensor_id(output_tensor)
-                storage_id = get_storage_id(output_tensor)
-                self.storage.register_tensor(storage_id, tensor_id)
+                self.storage.register_tensor(output_tensor)
 
             self.storage.invalidate_storage_caches(
                 [get_storage_id(t) for t in output_tensors]
@@ -532,7 +530,7 @@ class Orchestrator:
             )
 
         # Register the tensor in storage manager
-        self.storage.register_tensor(storage_id, tensor_id)
+        self.storage.register_tensor(tensor)
 
     def link_tensors(
         self, local_tensors: List[torch.Tensor], temp_keys: List[str]
@@ -567,11 +565,8 @@ class Orchestrator:
 
         # Update storage manager mapping to track these linked tensors
         for tensor in local_tensors:
-            tensor_id = get_tensor_id(tensor)
-            storage_id = get_storage_id(tensor)
-
-            # Register tensor ID in storage manager
-            self.storage.register_tensor(storage_id, tensor_id)
+            # Register tensor in storage manager
+            self.storage.register_tensor(tensor)
 
     def execute_function(self, func, args, kwargs) -> Any:
         """

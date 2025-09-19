@@ -122,13 +122,16 @@ class StorageManager:
         for storage_id in storage_ids:
             self._storage_cache.pop(storage_id, None)
 
-    def register_tensor(self, storage_id: int, tensor_id: int) -> None:
-        """Register a tensor as using a specific storage.
+    def register_tensor(self, tensor) -> None:
+        """Register a tensor as using its associated storage.
 
         Args:
-            storage_id: The storage ID to register the tensor with
-            tensor_id: The tensor ID to register
+            tensor: The tensor to register (extracts storage_id and tensor_id internally)
         """
+        from ._utils import get_storage_id, get_tensor_id
+
+        storage_id = get_storage_id(tensor)
+        tensor_id = get_tensor_id(tensor)
         self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
     def get_tensors_for_storage(self, storage_id: int) -> Set[int]:
