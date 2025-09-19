@@ -132,53 +132,6 @@ for epoch in range(10):
         print(f'Epoch {epoch}, Loss: {loss.item():.4f}')
 ```
 
-### Load HuggingFace Models
-```python
-import torch
-import mycelya_torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# Create remote machine
-machine = mycelya_torch.RemoteMachine("modal", "A100")
-
-# Load model architecture (no weights yet)
-model = AutoModelForCausalLM.from_pretrained(
-    "HuggingFaceTB/SmolLM2-135M-Instruct",
-    torch_dtype=torch.float16,
-    device_map=None  # Don't load weights yet
-)
-
-# Load weights directly on remote GPU (no local download!)
-remote_state_dicts = mycelya_torch.load_huggingface_state_dicts(
-    "HuggingFaceTB/SmolLM2-135M-Instruct",
-    machine.device("cuda")
-)
-
-# Load the remote weights into the model
-model.load_state_dict(remote_state_dicts[""], strict=True)  # "" is root directory
-
-tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M-Instruct")
-
-# Generate text on remote GPU
-def chat(message):
-    inputs = tokenizer(message, return_tensors="pt")
-    inputs = {k: v.to(machine.device("cuda")) for k, v in inputs.items()}
-    
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_length=100,
-            do_sample=True,
-            temperature=0.7
-        )
-    
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return response
-
-# Use it
-response = chat("Hello! How are you today?")
-print(response)
-```
 
 ## Local Development
 

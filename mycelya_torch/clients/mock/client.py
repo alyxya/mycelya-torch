@@ -163,19 +163,6 @@ class MockClient(Client):
             output_tensor_ids,
         )
 
-    # HuggingFace model loading methods
-    def load_huggingface_state_dicts(
-        self,
-        repo: str,
-        path: str,
-        device_type: str,
-        device_index: int,
-    ) -> Any:
-        """Implementation: Load HuggingFace state dicts organized by directory on the remote machine."""
-        return self._server_instance.load_huggingface_state_dicts.local(
-            repo, path, device_type, device_index
-        )
-
     def link_tensors(
         self,
         local_tensor_ids: List[int],

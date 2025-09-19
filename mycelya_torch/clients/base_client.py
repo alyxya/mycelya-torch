@@ -193,22 +193,6 @@ class Client(ABC):
         """
         pass
 
-    # HuggingFace model loading methods
-    @abstractmethod
-    def load_huggingface_state_dicts(
-        self,
-        repo: str,
-        path: str,
-        device_type: str,
-        device_index: int,
-    ) -> Any:
-        """Load HuggingFace state dicts organized by directory on the remote machine.
-
-        Returns:
-            The result object (e.g., FunctionCall for Modal, direct result for Mock)
-        """
-        pass
-
     @abstractmethod
     def link_tensors(
         self,

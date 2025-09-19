@@ -490,40 +490,6 @@ class ClientManager:
 
         return future
 
-    # HuggingFace model loading methods
-
-    def load_huggingface_state_dicts(
-        self,
-        repo: str,
-        path: str,
-        device_type: str,
-        device_index: int,
-    ) -> Future[Dict[str, Dict[str, TensorMetadata]]]:
-        """Load HuggingFace state dicts organized by directory on the remote machine."""
-        self._ensure_running()
-
-        # Create a Future for the result
-        future = Future()
-        # Add future to pending futures queue
-        self._pending_futures.append(future)
-
-        if self.batching:
-            # Add to batch
-            self._batch_calls.append(
-                BatchCall(
-                    method_name="load_huggingface_state_dicts",
-                    args=(repo, path, device_type, device_index),
-                    kwargs={},
-                )
-            )
-        else:
-            # Direct execution and add result to pending results
-            result = self.client.load_huggingface_state_dicts(
-                repo, path, device_type, device_index
-            )
-            self._pending_results.append(result)
-
-        return future
 
     def link_tensors(
         self,

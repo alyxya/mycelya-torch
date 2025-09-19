@@ -9,9 +9,10 @@ This example demonstrates:
 4. Automatic dependency installation and single machine inference
 """
 
-import mycelya_torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+import mycelya_torch
 
 # Create a single Modal remote machine with A100 GPU
 print("🚀 Creating Modal remote machine with A100...")
@@ -38,7 +39,7 @@ def load_smollm2():
     )
     model = model.to("cuda")
 
-    print(f"✅ Model loaded successfully!")
+    print("✅ Model loaded successfully!")
     print(f"Model device: {next(model.parameters()).device}")
     print(f"Model dtype: {next(model.parameters()).dtype}")
 
@@ -61,7 +62,7 @@ def generate_response(model, tokenizer, prompt: str, max_length: int = 100):
             tokenize=False,
             add_generation_prompt=True
         )
-    except:
+    except Exception:
         # Fallback to simple prompt
         formatted_prompt = f"User: {prompt}\nAssistant:"
 
@@ -109,7 +110,7 @@ def main():
     # Step 1: Load the model once
     print("\n📋 Step 1: Loading SmolLM2 135M model remotely...")
     model, tokenizer = load_smollm2()
-    print(f"✅ Model and tokenizer loaded successfully!")
+    print("✅ Model and tokenizer loaded successfully!")
 
     # Step 2: Perform multiple inference calls
     print("\n📋 Step 2: Performing multiple inference calls...")

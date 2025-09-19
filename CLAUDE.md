@@ -11,7 +11,6 @@ A production-ready PyTorch extension that enables transparent remote execution o
 - **Multi-GPU Cloud Support**: 10 GPU types supported (T4, L4, A10G, A100, L40S, H100, H200, B200) across cloud providers
 - **Provider Abstraction**: Pluggable client system with Modal (production), Mock (development), extensible for AWS
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
-- **HuggingFace Integration**: Direct remote model loading with parameter linking, bypassing data transfer entirely
 - **Remote Function Execution**: @remote decorator enables transparent remote execution of custom functions with automatic serialization
 
 ### Production-Scale Features  
@@ -82,7 +81,6 @@ To run type checking:
 - `_device.py` - DeviceManager for mapping local device indices to remote GPU configurations
 - `_storage.py` - Sequential storage ID system with atomic counter and thread-safe generation (1, 2, 3...)
 - `_backend_hooks.py` - PyTorch backend hooks and C++ interface bridge for transparent integration
-- `_state_dict.py` - HuggingFace integration utilities for direct remote model loading
 - `_remote.py` - Remote function execution decorator with automatic machine inference and serialization
 - `_pickle.py` - Custom cloudpickle-based serialization system for tensor and function transfer
 - `_utils.py` - Internal tensor utilities and metadata handling
@@ -124,15 +122,12 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 - `mycelya_extension.cpp` - Python bindings, C++ extensions, and API exposure
 
 ### Development Resources
-- `examples/` - SmolLM2 inference, Modal integration testing, performance comparisons, HuggingFace loading:
-  - `smollm2_comparison.py` - Performance comparison between local and remote execution
-  - `gravity_hf_loader.py` - HuggingFace model loading and inference
+- `examples/` - SmolLM2 inference, Modal integration testing:
   - `smollm2.py` - Basic SmolLM2 model usage
   - `modal_smollm2_test.py` - Modal integration testing
 - `tests/` - Comprehensive test coverage with critical/fast/comprehensive markers (18 test files)
 - Root directory utilities:
   - `tiny_sd.py` - Stable Diffusion integration example
-  - `load_smollm2_mycelya_manual.py` - Manual SmolLM2 loading script
 - Modern build system with `pyproject.toml`, `setup.py` for C++ extensions, and ruff configuration
 
 ## Current Architecture
@@ -251,60 +246,6 @@ for epoch in range(10):
             print(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.item():.4f}")
 ```
 
-### HuggingFace Model Integration
-```python
-import torch
-import mycelya_torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# Create remote machine for inference
-machine = mycelya_torch.RemoteMachine("modal", "H100")
-
-# Load model architecture (no weights yet)
-model = AutoModelForCausalLM.from_pretrained(
-    "HuggingFaceTB/SmolLM2-135M-Instruct",
-    torch_dtype=torch.float16,
-    device_map=None  # Don't load weights yet
-)
-
-# Load weights directly on remote GPU - no data transfer
-remote_state_dicts = mycelya_torch.load_huggingface_state_dicts(
-    "HuggingFaceTB/SmolLM2-135M-Instruct",
-    machine.device("cuda")
-)
-
-# Load the remote weights into the model
-model.load_state_dict(remote_state_dicts[""], strict=True)  # "" is root directory
-
-tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M-Instruct")
-
-# All model parameters have sequential tensor IDs and reside remotely  
-total_params = sum(p.numel() for p in model.parameters())
-print(f"Model loaded with {total_params:,} parameters on {machine.device('cuda')}")
-
-# Inference with automatic RPC batching
-def generate_response(prompt, max_length=50):
-    inputs = tokenizer(prompt, return_tensors="pt")
-    inputs = {k: v.to(machine.device("cuda")) for k, v in inputs.items()}
-    
-    with torch.no_grad():
-        # Generation entirely on remote H100
-        outputs = model.generate(
-            **inputs, 
-            max_length=max_length,
-            do_sample=True,
-            temperature=0.7,
-            pad_token_id=tokenizer.eos_token_id
-        )
-    
-    # Only final result transferred back
-    response = tokenizer.decode(outputs[0].cpu(), skip_special_tokens=True)
-    return response
-
-# Example usage
-response = generate_response("Hello, how are you today?")
-print(f"Generated response: {response}")
-```
 
 ## Implementation Details
 
@@ -348,7 +289,6 @@ print(f"Generated response: {response}")
 - Major performance optimizations or C++ implementation changes
 - Updates to RPC batching system or background thread processing
 - Reorganizing ATen operation handling or modular dispatch system
-- Changes to HuggingFace integration or direct model loading capabilities
 - Updates to build system, development workflows, or testing strategies
 
 ## Development Guidelines

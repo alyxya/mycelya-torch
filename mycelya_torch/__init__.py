@@ -228,16 +228,11 @@ from ._machine import (  # noqa: E402
 # Remote execution utilities
 from ._remote import remote  # noqa: E402
 
-# Remote state dict loading utilities
-from ._state_dict import load_huggingface_state_dicts  # noqa: E402
-
 # Define the public API
 __all__ = [
     # Core machine and device classes
     "RemoteMachine",
     "get_all_machines",
-    # Remote state dict loading
-    "load_huggingface_state_dicts",
     # Remote execution utilities
     "remote",
     # Logging utilities
