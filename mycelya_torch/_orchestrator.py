@@ -578,7 +578,6 @@ class Orchestrator:
             # Register tensor ID in orchestrator mapping
             self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
-
     def execute_function(self, func, args, kwargs) -> Any:
         """
         Execute a pickled function on the remote machine.

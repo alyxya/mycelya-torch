@@ -71,8 +71,6 @@ class ClientManager:
         default_packages = [
             "numpy",
             "torch",
-            "huggingface_hub",
-            "safetensors",
             "cloudpickle",
         ]
         self.packages = get_versioned_packages(default_packages)
@@ -489,7 +487,6 @@ class ClientManager:
                 self._pending_results.append(result)
 
         return future
-
 
     def link_tensors(
         self,
