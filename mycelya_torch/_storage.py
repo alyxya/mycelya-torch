@@ -7,7 +7,7 @@ Storage management for remote tensors.
 This module provides the StorageManager class for managing storage IDs and their lifecycle:
 - Storage ID generation and tracking
 - Storage-to-machine mappings and resolution
-- Storage-to-tensor mappings for remote cleanup
+- Storage-to-tensor mappings to track materialized tensors
 - Storage statistics and information
 
 StorageManager is designed to be used as a property of the Orchestrator class,
@@ -33,7 +33,7 @@ class StorageManager:
     - storage_id: Identifies remote memory allocation on clients
     - Uses incremental storage IDs starting from 1 (1, 2, 3, ...)
     - Maps storage_id to (machine_id, remote_type, remote_index)
-    - Maps storage_id to tensor_ids for remote cleanup
+    - Maps storage_id to tensor_ids to track which tensors are materialized remotely
     - Thread-safe storage ID generation
     """
 
@@ -46,7 +46,7 @@ class StorageManager:
         # Storage cache (storage_id -> Future[bytes])
         self._storage_cache: Dict[int, Future[bytes]] = {}
 
-        # Storage ID to tensor IDs mapping for remote cleanup
+        # Storage ID to tensor IDs mapping - tracks which tensors are materialized on remote machines
         self._storage_to_tensors_map: Dict[int, Set[int]] = {}
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
