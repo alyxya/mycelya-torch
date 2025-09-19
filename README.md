@@ -1,6 +1,6 @@
 # Mycelya: Remote GPU Computing for PyTorch
 
-Run your PyTorch code on powerful cloud GPUs without changing a single line. Mycelya transparently executes tensor operations on remote cloud infrastructure while you work locally.
+Run your PyTorch code anywhere and power it with cloud GPUs without changing a single line. Mycelya transparently executes tensor operations on remote cloud infrastructure from any Python environment.
 
 ```python
 import torch
