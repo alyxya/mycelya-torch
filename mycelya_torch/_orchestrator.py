@@ -157,8 +157,8 @@ class Orchestrator:
         if tensor_set:
             tensor_id = next(iter(tensor_set))
             machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-            client = self._client_managers[machine_id]
-            client.resize_storage(tensor_id, nbytes)
+            client_manager = self._client_managers[machine_id]
+            client_manager.resize_storage(tensor_id, nbytes)
 
         # Invalidate cache for the resized storage
         self.storage.invalidate_storage_caches([storage_id])
@@ -200,8 +200,8 @@ class Orchestrator:
 
         if storage_future is None:
             # Cache miss - get data from client and cache the future
-            client = self._client_managers[machine_id]
-            storage_future = client.get_storage_data(tensor_id)
+            client_manager = self._client_managers[machine_id]
+            storage_future = client_manager.get_storage_data(tensor_id)
             self.storage.cache_storage(storage_id, storage_future)
 
         # Create future for CPU tensor result
@@ -280,9 +280,9 @@ class Orchestrator:
         # Get storage info
         storage_id = get_storage_id(target_tensor)
 
-        # Get client
+        # Get client manager
         machine_id, _, _ = self.storage.get_remote_device_info(target_tensor)
-        client = self._client_managers[machine_id]
+        client_manager = self._client_managers[machine_id]
 
         # Ensure tensor exists on remote
         self._maybe_create_tensor(target_tensor)
@@ -298,7 +298,7 @@ class Orchestrator:
         raw_data = storage_tensor.detach().numpy().tobytes()
 
         # Update tensor with source data
-        client.update_tensor(
+        client_manager.update_tensor(
             tensor_id,
             raw_data,
             list(source_tensor.shape),
@@ -349,11 +349,11 @@ class Orchestrator:
         self._maybe_create_tensor(source_tensor)
         self._maybe_create_tensor(target_tensor)
 
-        # Get client and perform copy
-        client = self._client_managers[source_machine_id]
+        # Get client manager and perform copy
+        client_manager = self._client_managers[source_machine_id]
         source_tensor_id = get_tensor_id(source_tensor)
         target_tensor_id = get_tensor_id(target_tensor)
-        client.copy_tensor(source_tensor_id, target_tensor_id)
+        client_manager.copy_tensor(source_tensor_id, target_tensor_id)
 
         # Invalidate cache for the target storage since it was modified
         self.storage.invalidate_storage_caches([target_storage_id])
@@ -445,7 +445,7 @@ class Orchestrator:
                             f"Expected device {remote_device_info}, got {tensor_device_info}"
                         )
 
-        client = self._client_managers[
+        client_manager = self._client_managers[
             remote_device_info[0]
         ]  # Extract machine_id from (machine_id, device_type, device_index)
 
@@ -454,7 +454,7 @@ class Orchestrator:
             [get_tensor_id(t) for t in output_tensors] if output_tensors else None
         )
 
-        result_future = client.execute_aten_operation(
+        result_future = client_manager.execute_aten_operation(
             op_name,
             processed_args,
             processed_kwargs,
@@ -497,13 +497,13 @@ class Orchestrator:
         if tensor_id in tensor_set:
             return
 
-        # Get client and device info from tensor's storage
+        # Get client manager and device info from tensor's storage
         machine_id, device_type, device_index = self.storage.get_remote_device_info(tensor)
-        client = self._client_managers[machine_id]
+        client_manager = self._client_managers[machine_id]
 
         if not tensor_set:
             # Storage doesn't exist - create empty tensor on remote
-            client.create_empty_tensor(
+            client_manager.create_empty_tensor(
                 tensor_id=tensor_id,
                 shape=list(tensor.shape),
                 stride=list(tensor.stride()),
@@ -516,7 +516,7 @@ class Orchestrator:
         else:
             # Storage exists - create view of existing tensor
             base_tensor_id = next(iter(tensor_set))
-            client.create_tensor_view(
+            client_manager.create_tensor_view(
                 new_tensor_id=tensor_id,
                 base_tensor_id=base_tensor_id,
                 shape=list(tensor.shape),
@@ -552,10 +552,10 @@ class Orchestrator:
         # Get the machine from the first tensor (all should be on same device)
         first_tensor = local_tensors[0]
         machine_id, _, _ = self.storage.get_remote_device_info(first_tensor)
-        client = self._client_managers[machine_id]
+        client_manager = self._client_managers[machine_id]
 
-        # Delegate to client
-        client.link_tensors(local_tensor_ids, temp_keys)
+        # Delegate to client manager
+        client_manager.link_tensors(local_tensor_ids, temp_keys)
 
         # Update storage manager mapping to track these linked tensors
         for tensor in local_tensors:
@@ -603,8 +603,8 @@ class Orchestrator:
                     f"or exactly one client to exist (found {len(self._client_managers)} clients)."
                 )
 
-        # Get client for the target machine
-        client = self._client_managers[machine_id]
+        # Get client manager for the target machine
+        client_manager = self._client_managers[machine_id]
 
         # Install module dependencies if any were found
         if pickler.module_dependencies:
@@ -615,10 +615,10 @@ class Orchestrator:
             ]
             if modules_to_install:
                 log.debug(f"Installing module dependencies: {modules_to_install}")
-                client.pip_install(modules_to_install)
+                client_manager.pip_install(modules_to_install)
 
         # Execute remotely
-        result_future = client.execute_function(pickled_func)
+        result_future = client_manager.execute_function(pickled_func)
         pickled_result = result_future.result()
 
         # Unpickle result with proper tensor linking
