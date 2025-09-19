@@ -17,6 +17,8 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 from concurrent.futures import Future
 from typing import Dict, List, Set, Tuple
 
+import torch
+
 from ._logging import get_logger
 from ._utils import get_storage_id, get_tensor_id
 
@@ -123,7 +125,7 @@ class StorageManager:
         for storage_id in storage_ids:
             self._storage_cache.pop(storage_id, None)
 
-    def register_tensor(self, tensor) -> None:
+    def register_tensor(self, tensor: torch.Tensor) -> None:
         """Register a tensor as using its associated storage.
 
         Args:
