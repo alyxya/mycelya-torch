@@ -190,7 +190,7 @@ class Orchestrator:
         storage_id = get_storage_id(tensor)
 
         # Get machine_id from storage manager
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        machine_id, _, _ = self.storage.get_remote_device_info(tensor)
 
         # Ensure tensor exists on remote before copying
         self._maybe_create_tensor(tensor)
@@ -284,7 +284,7 @@ class Orchestrator:
         storage_id = get_storage_id(target_tensor)
 
         # Get client
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        machine_id, _, _ = self.storage.get_remote_device_info(target_tensor)
         client = self._client_managers[machine_id]
 
         # Ensure tensor exists on remote
@@ -501,9 +501,7 @@ class Orchestrator:
             return
 
         # Get client and device info from tensor's storage
-        machine_id, device_type, device_index = self.storage.get_remote_device_info(
-            storage_id
-        )
+        machine_id, device_type, device_index = self.storage.get_remote_device_info(tensor)
         client = self._client_managers[machine_id]
 
         if not tensor_set:
@@ -556,8 +554,7 @@ class Orchestrator:
 
         # Get the machine from the first tensor (all should be on same device)
         first_tensor = local_tensors[0]
-        storage_id = get_storage_id(first_tensor)
-        machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
+        machine_id, _, _ = self.storage.get_remote_device_info(first_tensor)
         client = self._client_managers[machine_id]
 
         # Delegate to client

@@ -24,7 +24,6 @@ from ._device import device_manager
 from ._logging import get_logger
 from ._utils import (
     create_mycelya_tensor_from_metadata,
-    get_storage_id,
     get_tensor_id,
 )
 
@@ -143,9 +142,8 @@ class Pickler(cloudpickle.Pickler):
         # Handle mycelya tensors
         if isinstance(obj, torch.Tensor) and obj.device.type == "mycelya":
             # Get tensor's machine information
-            storage_id = get_storage_id(obj)
             machine_id, remote_type, remote_index = (
-                self.storage_manager.get_remote_device_info(storage_id)
+                self.storage_manager.get_remote_device_info(obj)
             )
 
             # Validate machine consistency
