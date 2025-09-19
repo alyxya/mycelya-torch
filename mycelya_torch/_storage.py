@@ -18,6 +18,7 @@ from concurrent.futures import Future
 from typing import Dict, List, Set, Tuple
 
 from ._logging import get_logger
+from ._utils import get_storage_id, get_tensor_id
 
 log = get_logger(__name__)
 
@@ -128,8 +129,6 @@ class StorageManager:
         Args:
             tensor: The tensor to register (extracts storage_id and tensor_id internally)
         """
-        from ._utils import get_storage_id, get_tensor_id
-
         storage_id = get_storage_id(tensor)
         tensor_id = get_tensor_id(tensor)
         self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
