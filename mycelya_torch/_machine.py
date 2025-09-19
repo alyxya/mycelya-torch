@@ -198,6 +198,20 @@ class RemoteMachine:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def pip_install(self, packages: str | List[str]) -> None:
+        """Install packages using pip on the remote machine.
+
+        Args:
+            packages: Package name(s) to install. Can be a single string or list of strings.
+                     Examples: "numpy", ["numpy", "scipy"], "torch==2.0.0"
+        """
+        # Convert single string to list
+        if isinstance(packages, str):
+            packages = [packages]
+
+        # Delegate to client manager
+        self._client_manager.pip_install(packages)
+
     def device(self, type: str, index: int | None = None) -> torch.device:
         """Get a PyTorch device object for this RemoteMachine.
 
