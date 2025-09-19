@@ -196,7 +196,7 @@ class Orchestrator:
         self._maybe_create_tensor(tensor)
 
         # First try to get cached storage future
-        storage_future = self.storage.get_cached_storage(storage_id)
+        storage_future = self.storage.get_cached_storage(tensor)
 
         if storage_future is None:
             # Cache miss - get data from client and cache the future
@@ -232,11 +232,8 @@ class Orchestrator:
                 f"copy_tensor_to_cpu() can only be called on mycelya tensors, got {tensor.device.type}"
             )
 
-        # Get tensor and storage IDs
-        storage_id = get_storage_id(tensor)
-
         # Fast path: check if storage is already cached and done
-        storage_future = self.storage.get_cached_storage(storage_id)
+        storage_future = self.storage.get_cached_storage(tensor)
         if storage_future is not None and storage_future.done():
             # Direct reconstruction from cached data
             raw_bytes = storage_future.result()

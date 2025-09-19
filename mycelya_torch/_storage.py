@@ -113,15 +113,16 @@ class StorageManager:
         """
         self._storage_cache[storage_id] = data_future
 
-    def get_cached_storage(self, storage_id: int) -> Future[bytes] | None:
-        """Get cached storage future by storage ID.
+    def get_cached_storage(self, tensor: torch.Tensor) -> Future[bytes] | None:
+        """Get cached storage future by tensor.
 
         Args:
-            storage_id: The storage ID to retrieve from cache
+            tensor: The tensor to get cached storage for (extracts storage_id internally)
 
         Returns:
             Future[bytes] if cached, None if not in cache
         """
+        storage_id = get_storage_id(tensor)
         return self._storage_cache.get(storage_id)
 
     def invalidate_storage_caches(self, storage_ids: List[int]) -> None:
