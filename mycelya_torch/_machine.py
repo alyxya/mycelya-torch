@@ -9,7 +9,6 @@ machines with different cloud providers and GPU types.
 """
 
 import atexit
-import re
 import uuid
 from typing import Any, List
 
@@ -47,15 +46,6 @@ class RemoteMachine:
     # Class-level tracking of all machine instances
     _all_machines: list["RemoteMachine"] = []
 
-    # Default packages required for modal apps
-    _default_packages = [
-        "numpy",
-        "torch",
-        "huggingface_hub",
-        "safetensors",
-        "cloudpickle",
-    ]
-
     def __init__(
         self,
         provider: str,
@@ -89,21 +79,6 @@ class RemoteMachine:
                 f"gpu_count must be an integer between 1 and 8, got {gpu_count}"
             )
 
-        # Combine default and pip packages, with pip_packages overriding defaults
-        packages = []
-        pip_package_names = set()
-
-        # First, add pip packages (these can override defaults)
-        if pip_packages is not None:
-            for pkg in pip_packages:
-                pkg_name = re.split(r"[<>=!~]", pkg)[0]
-                pip_package_names.add(pkg_name)
-                packages.append(pkg)
-
-        # Then add default packages that aren't overridden
-        for pkg in self._default_packages:
-            if pkg not in pip_package_names:
-                packages.append(pkg)
 
         # Handle GPU type based on provider
         if provider == "modal":
@@ -150,10 +125,13 @@ class RemoteMachine:
             provider,
             gpu_type,
             gpu_count,
-            packages,
             _batching,
             modal_timeout,
         )
+
+        # Install additional pip packages if specified
+        if pip_packages:
+            self._client_manager.pip_install(pip_packages)
 
         # Start client if requested and register cleanup
         if _start:

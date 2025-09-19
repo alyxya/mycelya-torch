@@ -50,7 +50,6 @@ class ClientManager:
         main_thread_waiting: threading.Event,
         gpu_type: str,
         gpu_count: int,
-        packages: List[str],
         batching: bool = True,
     ):
         """
@@ -61,14 +60,20 @@ class ClientManager:
             main_thread_waiting: Event to signal the background thread for coordination
             gpu_type: GPU type string (required for modal, ignored for mock)
             gpu_count: Number of GPUs (1-8, ignored for mock)
-            packages: Final package list for modal app (ignored for mock)
             batching: Whether to enable operation batching (default: True)
         """
         self.client = client
         self.main_thread_waiting = main_thread_waiting
         self.gpu_type = gpu_type
         self.gpu_count = gpu_count
-        self.packages = packages
+        # Default packages required for remote execution
+        self.packages = [
+            "numpy",
+            "torch",
+            "huggingface_hub",
+            "safetensors",
+            "cloudpickle",
+        ]
         self.batching = batching
         self.state = ClientState.INITIALIZED
 
@@ -565,21 +570,51 @@ class ClientManager:
         return future
 
     def pip_install(self, packages: List[str]) -> None:
-        """Install packages using pip on the remote machine."""
-        self._ensure_running()
+        """Install packages using pip on the remote machine.
 
-        if self.batching:
-            # Add to batch
-            self._batch_calls.append(
-                BatchCall(
-                    method_name="pip_install",
-                    args=(packages,),
-                    kwargs={},
+        This method intelligently manages the packages list:
+        - If client hasn't been started yet, modifies the packages list for initial image creation
+        - If client has been started, calls pip install on the running container
+
+        Args:
+            packages: List of package names to install (e.g., ["numpy", "scipy"])
+        """
+        if not packages:
+            return
+
+        # Parse existing package names to avoid duplicates
+        import re
+
+        # Get existing package names for duplicate checking
+        existing_package_names = set()
+        for pkg in self.packages:
+            pkg_name = re.split(r"[<>=!~]", pkg)[0]
+            existing_package_names.add(pkg_name)
+
+        # Add new packages that don't exist yet and collect them for installation
+        new_packages_to_install = []
+        for pkg in packages:
+            pkg_name = re.split(r"[<>=!~]", pkg)[0]
+            if pkg_name not in existing_package_names:
+                self.packages.append(pkg)
+                new_packages_to_install.append(pkg)
+
+        # If client is already running, install only new packages at runtime
+        if self.state == ClientState.RUNNING and new_packages_to_install:
+            if self.batching:
+                # Add to batch
+                self._batch_calls.append(
+                    BatchCall(
+                        method_name="pip_install",
+                        args=(new_packages_to_install,),
+                        kwargs={},
+                    )
                 )
-            )
-        else:
-            # Direct execution
-            self.client.pip_install(packages)
+            else:
+                # Direct execution
+                self.client.pip_install(new_packages_to_install)
+        # If client is not started yet, packages are already added to self.packages
+        # and will be included in the initial image when start() is called
 
     def process_background_tasks(self) -> None:
         """Process background tasks for this client manager."""
