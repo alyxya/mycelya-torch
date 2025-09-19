@@ -50,6 +50,42 @@ To run type checking:
 # Consider adding: mypy
 ```
 
+## Local Development Setup
+
+### Building C++ Extensions
+```bash
+# Clone the repository
+git clone https://github.com/alyxya/mycelya-torch.git
+cd mycelya-torch
+
+# Build C++ extensions for development
+python setup.py build_ext --inplace
+```
+
+### Mock Client for Testing
+
+For development and testing without cloud resources, use the mock client:
+
+```python
+import torch
+import mycelya_torch
+
+# Use mock client - runs locally using Modal's .local() execution
+# GPU type is ignored for mock client
+machine = mycelya_torch.RemoteMachine("mock")
+device = machine.device("cuda")
+
+# All operations run locally but through the same API
+x = torch.randn(100, 100, device=device)
+y = x @ x  # Executed locally
+```
+
+**Mock Client Benefits:**
+- **No Cloud Dependencies**: Runs entirely locally without Modal authentication
+- **Same API**: Identical interface to production Modal client for testing
+- **Fast Development**: Immediate feedback without network latency
+- **CI/CD Integration**: Perfect for automated testing in build pipelines
+
 ## Build Configuration
 
 ### Modern Python Packaging

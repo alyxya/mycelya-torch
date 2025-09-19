@@ -133,43 +133,6 @@ for epoch in range(10):
 ```
 
 
-## Local Development
-
-```bash
-# Clone the repo
-git clone https://github.com/alyxya/mycelya-torch.git
-cd mycelya-torch
-
-# Build C++ extensions for development
-python setup.py build_ext --inplace
-
-# Run tests
-pytest tests/test_regression.py::TestCriticalRegression -v  # Critical tests (<30s)
-pytest tests/test_regression.py -v                         # Fast tests (~2-5min)
-pytest tests/ -v                                           # Full test suite (~10-30min)
-
-# Code quality
-ruff check .     # Linting
-ruff format .    # Formatting
-```
-
-### Mock Client for Testing
-
-For development and testing without cloud resources, use the mock client:
-
-```python
-import mycelya_torch
-
-# Use mock client - runs locally using Modal's .local() execution
-# GPU type is ignored for mock client
-machine = mycelya_torch.RemoteMachine("mock")
-device = machine.device("cuda")
-
-# All operations run locally but through the same API
-x = torch.randn(100, 100, device=device)
-y = x @ x  # Executed locally
-```
-
 ## License
 
 AGPL-3.0-or-later - See LICENSE file for details.
