@@ -64,9 +64,7 @@ def _execute_meta_operation(
                 # Equivalent to device_container.append(obj.device) except when virtual devices are a thing
                 device_container.append(
                     device_manager.get_mycelya_device(
-                        *orchestrator.storage.get_remote_device_info(
-                            get_storage_id(obj)
-                        )
+                        *orchestrator.storage.get_remote_device_info(obj)
                     )
                 )
 
