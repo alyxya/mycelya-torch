@@ -564,6 +564,23 @@ class ClientManager:
 
         return future
 
+    def pip_install(self, packages: List[str]) -> None:
+        """Install packages using pip on the remote machine."""
+        self._ensure_running()
+
+        if self.batching:
+            # Add to batch
+            self._batch_calls.append(
+                BatchCall(
+                    method_name="pip_install",
+                    args=(packages,),
+                    kwargs={},
+                )
+            )
+        else:
+            # Direct execution
+            self.client.pip_install(packages)
+
     def process_background_tasks(self) -> None:
         """Process background tasks for this client manager."""
         # Check if client should be stopped (stop request signaled by cleared event)

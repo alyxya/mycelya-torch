@@ -187,3 +187,8 @@ class MockClient(Client):
     def execute_function(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""
         return self._server_instance.execute_function.local(pickled_function)
+
+    def pip_install(self, packages: List[str]) -> None:
+        """Implementation: No-op for mock client - packages are already available locally."""
+        # Mock client does nothing for pip install since it uses local execution
+        pass

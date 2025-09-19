@@ -226,3 +226,12 @@ class Client(ABC):
             The result object (e.g., FunctionCall for Modal, direct result for Mock)
         """
         pass
+
+    @abstractmethod
+    def pip_install(self, packages: List[str]) -> None:
+        """Install packages using pip on the remote machine.
+
+        Args:
+            packages: List of package names to install (e.g., ["numpy", "scipy"])
+        """
+        pass

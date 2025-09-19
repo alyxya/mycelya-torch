@@ -210,6 +210,7 @@ def create_modal_app_for_gpu(
                 "load_huggingface_state_dicts": self._load_huggingface_state_dicts_impl,
                 "link_tensors": self._link_tensors_impl,
                 "execute_function": self._execute_function_impl,
+                "pip_install": self._pip_install_impl,
             }
 
         @modal.exit()
@@ -726,6 +727,26 @@ def create_modal_app_for_gpu(
         def execute_function(self, pickled_function: bytes) -> bytes:
             """Execute a pickled function on the remote machine."""
             return self._execute_function_impl(pickled_function)
+
+        def _pip_install_impl(self, packages: List[str]) -> None:
+            """Install packages using pip on the remote machine."""
+            import subprocess
+            import sys
+
+            if not packages:
+                return
+
+            # Use subprocess to install packages
+            cmd = [sys.executable, "-m", "pip", "install"] + packages
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Failed to install packages {packages}: {e.stderr}")
+
+        @modal.method()
+        def pip_install(self, packages: List[str]) -> None:
+            """Install packages using pip on the remote machine."""
+            self._pip_install_impl(packages)
 
         @modal.method()
         def execute_batch(self, batch_calls: List[BatchCall]) -> List[Any]:

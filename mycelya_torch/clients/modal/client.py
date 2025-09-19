@@ -202,3 +202,7 @@ class ModalClient(Client):
     def execute_function(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""
         return self._server_instance.execute_function.spawn(pickled_function)
+
+    def pip_install(self, packages: List[str]) -> None:
+        """Implementation: Install packages using pip on the remote machine."""
+        self._server_instance.pip_install.spawn(packages)
