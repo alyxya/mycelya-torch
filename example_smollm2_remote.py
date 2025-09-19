@@ -19,6 +19,7 @@ print("🚀 Creating Modal remote machine with A100...")
 machine = mycelya_torch.RemoteMachine("modal", "A100")
 print(f"✅ Created machine: {machine}")
 
+
 @mycelya_torch.remote
 def load_smollm2():
     """Load SmolLM2 135M model and tokenizer on the remote machine."""
@@ -48,19 +49,20 @@ def load_smollm2():
 
     return model, tokenizer
 
+
 @mycelya_torch.remote
 def generate_response(model, tokenizer, prompt: str, max_length: int = 100):
     """Generate response from the model for the given prompt."""
-    print(f"🤖 Generating response for: '{prompt[:50]}{'...' if len(prompt) > 50 else ''}'")
+    print(
+        f"🤖 Generating response for: '{prompt[:50]}{'...' if len(prompt) > 50 else ''}'"
+    )
 
     # Prepare the prompt with chat template if available
     try:
         # Try to use the chat template
         messages = [{"role": "user", "content": prompt}]
         formatted_prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True
         )
     except Exception:
         # Fallback to simple prompt
@@ -68,10 +70,7 @@ def generate_response(model, tokenizer, prompt: str, max_length: int = 100):
 
     # Tokenize input
     inputs = tokenizer(
-        formatted_prompt,
-        return_tensors="pt",
-        truncation=True,
-        max_length=512
+        formatted_prompt, return_tensors="pt", truncation=True, max_length=512
     )
 
     # Move to same device as model
@@ -97,15 +96,16 @@ def generate_response(model, tokenizer, prompt: str, max_length: int = 100):
     if "Assistant:" in response:
         response = response.split("Assistant:")[-1].strip()
     elif formatted_prompt in response:
-        response = response[len(formatted_prompt):].strip()
+        response = response[len(formatted_prompt) :].strip()
 
     return response
 
+
 def main():
     """Main function to demonstrate the remote LLM example."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🦙 SmolLM2 Remote Inference Example")
-    print("="*60)
+    print("=" * 60)
 
     # Step 1: Load the model once
     print("\n📋 Step 1: Loading SmolLM2 135M model remotely...")
@@ -120,7 +120,7 @@ def main():
         "Write a haiku about coding.",
         "Explain Python in one sentence.",
         "What's the meaning of life?",
-        "How do neural networks work?"
+        "How do neural networks work?",
     ]
 
     for i, prompt in enumerate(test_prompts, 1):
@@ -133,6 +133,7 @@ def main():
 
     print("\n✅ Example completed successfully!")
     print("🎉 All inferences used the same loaded model on the remote machine!")
+
 
 if __name__ == "__main__":
     main()
