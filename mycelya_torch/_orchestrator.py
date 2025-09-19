@@ -14,7 +14,7 @@ import io
 import threading
 import time
 from concurrent.futures import Future
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Tuple
 
 import torch
 
@@ -53,9 +53,6 @@ class Orchestrator:
         self._client_managers: Dict[
             str, ClientManager
         ] = {}  # machine_id -> client manager
-
-        # Storage ID to tensor IDs mapping for remote cleanup
-        self._storage_to_tensors_map: Dict[int, Set[int]] = {}
 
         # Background thread for periodic maintenance tasks
         self._main_thread_waiting = threading.Event()
@@ -141,7 +138,7 @@ class Orchestrator:
             storage_id: Storage ID to free
         """
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        tensor_set = self._storage_to_tensors_map.get(storage_id)
+        tensor_set = self.storage.get_tensors_for_storage(storage_id)
 
         if tensor_set:
             self._client_managers[machine_id].remove_tensors(list(tensor_set))
@@ -156,7 +153,7 @@ class Orchestrator:
             nbytes: New size in bytes
         """
         # Get a tensor ID for this storage if mapping exists
-        tensor_set = self._storage_to_tensors_map.get(storage_id)
+        tensor_set = self.storage.get_tensors_for_storage(storage_id)
         if tensor_set:
             tensor_id = next(iter(tensor_set))
             machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
@@ -473,9 +470,7 @@ class Orchestrator:
             for output_tensor in output_tensors:
                 tensor_id = get_tensor_id(output_tensor)
                 storage_id = get_storage_id(output_tensor)
-                self._storage_to_tensors_map.setdefault(storage_id, set()).add(
-                    tensor_id
-                )
+                self.storage.register_tensor(storage_id, tensor_id)
 
             self.storage.invalidate_storage_caches(
                 [get_storage_id(t) for t in output_tensors]
@@ -501,7 +496,7 @@ class Orchestrator:
         storage_id = get_storage_id(tensor)
 
         # Get or create tensor set for this storage
-        tensor_set = self._storage_to_tensors_map.setdefault(storage_id, set())
+        tensor_set = self.storage.get_or_create_tensor_set(storage_id)
 
         # Check if tensor already exists
         if tensor_id in tensor_set:
@@ -536,8 +531,8 @@ class Orchestrator:
                 offset=tensor.storage_offset(),
             )
 
-        # Register the tensor in orchestrator mapping
-        tensor_set.add(tensor_id)
+        # Register the tensor in storage manager
+        self.storage.register_tensor(storage_id, tensor_id)
 
     def link_tensors(
         self, local_tensors: List[torch.Tensor], temp_keys: List[str]
@@ -570,13 +565,13 @@ class Orchestrator:
         # Delegate to client
         client.link_tensors(local_tensor_ids, temp_keys)
 
-        # Update orchestrator's storage mapping to track these linked tensors
+        # Update storage manager mapping to track these linked tensors
         for tensor in local_tensors:
             tensor_id = get_tensor_id(tensor)
             storage_id = get_storage_id(tensor)
 
-            # Register tensor ID in orchestrator mapping
-            self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
+            # Register tensor ID in storage manager
+            self.storage.register_tensor(storage_id, tensor_id)
 
     def execute_function(self, func, args, kwargs) -> Any:
         """
@@ -625,7 +620,8 @@ class Orchestrator:
         # Install module dependencies if any were found
         if pickler.module_dependencies:
             modules_to_install = [
-                pkg for mod in pickler.module_dependencies
+                pkg
+                for mod in pickler.module_dependencies
                 if (pkg := module_name_to_package_name(mod))
             ]
             if modules_to_install:
@@ -648,7 +644,6 @@ class Orchestrator:
             self.link_tensors(list(tensors), list(temp_keys))
 
         return result
-
 
     def _background_loop(self):
         """Background thread for batch execution and future resolution.

@@ -7,6 +7,7 @@ Storage management for remote tensors.
 This module provides the StorageManager class for managing storage IDs and their lifecycle:
 - Storage ID generation and tracking
 - Storage-to-machine mappings and resolution
+- Storage-to-tensor mappings for remote cleanup
 - Storage statistics and information
 
 StorageManager is designed to be used as a property of the Orchestrator class,
@@ -14,7 +15,7 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 """
 
 from concurrent.futures import Future
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 from ._logging import get_logger
 
@@ -29,8 +30,7 @@ class StorageManager:
     - storage_id: Identifies remote memory allocation on clients
     - Uses incremental storage IDs starting from 1 (1, 2, 3, ...)
     - Maps storage_id to (machine_id, remote_type, remote_index)
-    - No tensor_id tracking (handled by orchestrator)
-    - No remote cleanup (handled by orchestrator)
+    - Maps storage_id to tensor_ids for remote cleanup
     - Thread-safe storage ID generation
     """
 
@@ -42,6 +42,9 @@ class StorageManager:
 
         # Storage cache (storage_id -> Future[bytes])
         self._storage_cache: Dict[int, Future[bytes]] = {}
+
+        # Storage ID to tensor IDs mapping for remote cleanup
+        self._storage_to_tensors_map: Dict[int, Set[int]] = {}
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -88,6 +91,7 @@ class StorageManager:
         """
         self.storage_id_to_remote_device.pop(storage_id, None)
         self._storage_cache.pop(storage_id, None)
+        self._storage_to_tensors_map.pop(storage_id, None)
 
     def cache_storage(self, storage_id: int, data_future: Future[bytes]) -> None:
         """Cache storage future by storage ID.
@@ -117,3 +121,34 @@ class StorageManager:
         """
         for storage_id in storage_ids:
             self._storage_cache.pop(storage_id, None)
+
+    def register_tensor(self, storage_id: int, tensor_id: int) -> None:
+        """Register a tensor as using a specific storage.
+
+        Args:
+            storage_id: The storage ID to register the tensor with
+            tensor_id: The tensor ID to register
+        """
+        self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
+
+    def get_tensors_for_storage(self, storage_id: int) -> Set[int]:
+        """Get all tensor IDs for a given storage ID.
+
+        Args:
+            storage_id: The storage ID to get tensors for
+
+        Returns:
+            Set of tensor IDs using the storage (empty set if none)
+        """
+        return self._storage_to_tensors_map.get(storage_id, set())
+
+    def get_or_create_tensor_set(self, storage_id: int) -> Set[int]:
+        """Get or create the tensor set for a storage ID.
+
+        Args:
+            storage_id: The storage ID to get/create tensor set for
+
+        Returns:
+            Set of tensor IDs using the storage (creates empty set if none exists)
+        """
+        return self._storage_to_tensors_map.setdefault(storage_id, set())
