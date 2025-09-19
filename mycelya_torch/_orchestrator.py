@@ -185,9 +185,8 @@ class Orchestrator:
                 f"copy_tensor_to_cpu() can only be called on mycelya tensors, got {tensor.device.type}"
             )
 
-        # Get tensor and storage IDs
+        # Get tensor ID
         tensor_id = get_tensor_id(tensor)
-        storage_id = get_storage_id(tensor)
 
         # Get machine_id from storage manager
         machine_id, _, _ = self.storage.get_remote_device_info(tensor)
@@ -202,7 +201,7 @@ class Orchestrator:
             # Cache miss - get data from client and cache the future
             client_manager = self._client_managers[machine_id]
             storage_future = client_manager.get_storage_data(tensor_id)
-            self.storage.cache_storage(storage_id, storage_future)
+            self.storage.cache_storage(tensor, storage_future)
 
         # Create future for CPU tensor result
         cpu_tensor_future = Future()

@@ -104,13 +104,14 @@ class StorageManager:
         self._storage_cache.pop(storage_id, None)
         self._storage_to_tensors_map.pop(storage_id, None)
 
-    def cache_storage(self, storage_id: int, data_future: Future[bytes]) -> None:
-        """Cache storage future by storage ID.
+    def cache_storage(self, tensor: torch.Tensor, data_future: Future[bytes]) -> None:
+        """Cache storage future by tensor.
 
         Args:
-            storage_id: The storage ID to cache
+            tensor: The tensor to cache storage for (extracts storage_id internally)
             data_future: Future that will resolve to raw bytes
         """
+        storage_id = get_storage_id(tensor)
         self._storage_cache[storage_id] = data_future
 
     def get_cached_storage(self, tensor: torch.Tensor) -> Future[bytes] | None:
