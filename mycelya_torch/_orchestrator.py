@@ -609,10 +609,15 @@ class Orchestrator:
         # Get machine_id from pickler (inferred during pickling)
         machine_id = pickler.machine_id
         if machine_id is None:
-            raise RuntimeError(
-                "No mycelya tensors or devices found in function arguments. "
-                "Remote execution requires at least one mycelya object to determine target machine."
-            )
+            # No mycelya objects found - try to infer from single client
+            if len(self._client_managers) == 1:
+                machine_id = next(iter(self._client_managers))
+            else:
+                raise RuntimeError(
+                    f"No mycelya tensors or devices found in function arguments. "
+                    f"Remote execution requires at least one mycelya object to determine target machine, "
+                    f"or exactly one client to exist (found {len(self._client_managers)} clients)."
+                )
 
         # Get client for the target machine
         client = self._client_managers[machine_id]
