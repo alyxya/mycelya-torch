@@ -10,7 +10,6 @@ from .._logging import get_logger
 from .._orchestrator import orchestrator
 from .._utils import (
     create_mycelya_tensor_from_metadata,
-    get_storage_id,
     map_args_kwargs,
 )
 
@@ -18,18 +17,18 @@ log = get_logger(__name__)
 
 
 def _create_meta_tensor_from_mycelya(
-    mycelya_tensor: torch.Tensor, meta_storage_cache: Dict[int, torch.UntypedStorage]
+    mycelya_tensor: torch.Tensor, meta_storage_cache: Dict[torch.UntypedStorage, torch.UntypedStorage]
 ) -> torch.Tensor:
     """Create a meta tensor that closely mirrors a mycelya tensor, including storage sharing."""
-    storage_id = get_storage_id(mycelya_tensor)
+    original_storage = mycelya_tensor.untyped_storage()
 
     # Create or reuse meta storage to preserve storage sharing relationships
-    if storage_id not in meta_storage_cache:
+    if original_storage not in meta_storage_cache:
         # Create meta storage with same nbytes as the original
-        nbytes = mycelya_tensor.untyped_storage().nbytes()
-        meta_storage_cache[storage_id] = torch.UntypedStorage(nbytes, device="meta")
+        nbytes = original_storage.nbytes()
+        meta_storage_cache[original_storage] = torch.UntypedStorage(nbytes, device="meta")
 
-    meta_storage = meta_storage_cache[storage_id]
+    meta_storage = meta_storage_cache[original_storage]
 
     # Create meta tensor with same metadata as mycelya tensor
     meta_tensor = torch.empty(0, dtype=mycelya_tensor.dtype, device="meta")
@@ -52,7 +51,7 @@ def _execute_meta_operation(
     """Execute operation on meta tensors for shape inference and device resolution."""
     # Map from meta storage to original tensor for preserving storage relationships
     original_tensors = {}  # meta_storage -> original_tensor
-    meta_storage_cache = {}  # storage_id -> meta storage for preserving sharing
+    meta_storage_cache = {}  # original_storage -> meta storage for preserving sharing
 
     if "device" in kwargs:
         device_container.append(kwargs["device"])
