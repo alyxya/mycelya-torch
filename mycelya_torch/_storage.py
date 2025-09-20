@@ -161,7 +161,7 @@ class StorageManager:
         self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
         self._tensor_id_to_tensor[tensor_id] = tensor
 
-    def get_tensors_for_storage(self, storage_id: int) -> int | None:
+    def get_tensor_for_storage(self, storage_id: int) -> int | None:
         """Get a tensor ID for a given storage ID.
 
         Args:
