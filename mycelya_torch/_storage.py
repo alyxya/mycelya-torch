@@ -15,6 +15,7 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 """
 
 from concurrent.futures import Future
+import weakref
 
 import torch
 
@@ -33,6 +34,7 @@ class StorageManager:
     - Uses incremental storage IDs starting from 1 (1, 2, 3, ...)
     - Maps storage_id to (machine_id, remote_type, remote_index)
     - Maps storage_id to tensor_ids to track which tensors are materialized remotely
+    - Maps tensor_id to tensors using weak references for automatic cleanup
     - Thread-safe storage ID generation
     """
 
@@ -47,6 +49,9 @@ class StorageManager:
 
         # Storage ID to tensor IDs mapping - tracks which tensors are materialized on remote machines
         self._storage_to_tensors_map: dict[int, set[int]] = {}
+
+        # Tensor ID to tensor mapping - weak references automatically remove deleted tensors
+        self._tensor_id_to_tensor: weakref.WeakValueDictionary[int, torch.Tensor] = weakref.WeakValueDictionary()
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -154,6 +159,7 @@ class StorageManager:
         storage_id = get_storage_id(tensor)
         tensor_id = get_tensor_id(tensor)
         self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
+        self._tensor_id_to_tensor[tensor_id] = tensor
 
     def get_tensors_for_storage(self, storage_id: int) -> set[int]:
         """Get all tensor IDs for a given storage ID.
@@ -166,14 +172,29 @@ class StorageManager:
         """
         return self._storage_to_tensors_map.get(storage_id, set())
 
-    def get_or_create_tensor_set(self, tensor: torch.Tensor) -> set[int]:
-        """Get or create the tensor set for a tensor.
+    def get_alias_tensor_id(self, tensor: torch.Tensor) -> int | None:
+        """Get alias tensor ID for materialization logic.
 
         Args:
-            tensor: The tensor to get/create tensor set for (extracts storage_id internally)
+            tensor: The tensor to get alias for (extracts storage_id and tensor_id internally)
 
         Returns:
-            set of tensor IDs using the storage (creates empty set if none exists)
+            - None: if tensor's storage isn't in the storage-to-tensors map (new storage case)
+            - tensor_id: if the input tensor's ID is already in the map (tensor already exists)
+            - first_tensor_id: otherwise, return the first tensor ID for this storage (view case)
         """
         storage_id = get_storage_id(tensor)
-        return self._storage_to_tensors_map.setdefault(storage_id, set())
+        tensor_id = get_tensor_id(tensor)
+
+        # Get tensor set for this storage
+        tensor_set = self._storage_to_tensors_map.get(storage_id)
+
+        if tensor_set is None:
+            # Storage not in map - new storage case
+            return None
+        elif tensor_id in tensor_set:
+            # Tensor already exists in map
+            return tensor_id
+        else:
+            # Storage exists but tensor doesn't - return first tensor for view creation
+            return next(iter(tensor_set))

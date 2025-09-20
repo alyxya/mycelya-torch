@@ -475,18 +475,18 @@ class Orchestrator:
         """
         tensor_id = get_tensor_id(tensor)
 
-        # Get or create tensor set for this storage
-        tensor_set = self.storage.get_or_create_tensor_set(tensor)
+        # Get alias tensor ID to determine materialization case
+        alias_tensor_id = self.storage.get_alias_tensor_id(tensor)
 
-        # Check if tensor already exists
-        if tensor_id in tensor_set:
+        if alias_tensor_id == tensor_id:
+            # Tensor already exists - nothing to do
             return
 
         # Get client manager and device info from tensor's storage
         machine_id, device_type, device_index = self.storage.get_remote_device_info(tensor)
         client_manager = self._client_managers[machine_id]
 
-        if not tensor_set:
+        if alias_tensor_id is None:
             # Storage doesn't exist - create empty tensor on remote
             client_manager.create_empty_tensor(
                 tensor_id=tensor_id,
@@ -500,10 +500,9 @@ class Orchestrator:
             )
         else:
             # Storage exists - create view of existing tensor
-            base_tensor_id = next(iter(tensor_set))
             client_manager.create_tensor_view(
                 new_tensor_id=tensor_id,
-                base_tensor_id=base_tensor_id,
+                base_tensor_id=alias_tensor_id,
                 shape=list(tensor.shape),
                 stride=list(tensor.stride()),
                 offset=tensor.storage_offset(),
