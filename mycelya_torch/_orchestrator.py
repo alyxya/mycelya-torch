@@ -189,7 +189,7 @@ class Orchestrator:
         machine_id, _, _ = self.storage.get_remote_device_info(tensor)
 
         # Ensure tensor exists on remote before copying
-        self._maybe_create_tensor(tensor)
+        self._materialize_tensor(tensor)
 
         # First try to get cached storage future
         storage_future = self.storage.get_cached_storage(tensor)
@@ -278,7 +278,7 @@ class Orchestrator:
         client_manager = self._client_managers[machine_id]
 
         # Ensure tensor exists on remote
-        self._maybe_create_tensor(target_tensor)
+        self._materialize_tensor(target_tensor)
 
         # Get tensor ID and prepare data for update
         tensor_id = get_tensor_id(target_tensor)
@@ -335,8 +335,8 @@ class Orchestrator:
             )
 
         # Ensure both tensors exist on remote before copying
-        self._maybe_create_tensor(source_tensor)
-        self._maybe_create_tensor(target_tensor)
+        self._materialize_tensor(source_tensor)
+        self._materialize_tensor(target_tensor)
 
         # Get client manager and perform copy
         client_manager = self._client_managers[source_machine_id]
@@ -393,7 +393,7 @@ class Orchestrator:
                     )
 
                 # Ensure tensor exists on remote
-                self._maybe_create_tensor(obj)
+                self._materialize_tensor(obj)
                 return get_tensor_id(obj)
 
             # Convert mycelya device arguments to corresponding remote device
@@ -465,7 +465,7 @@ class Orchestrator:
             self._main_thread_waiting.clear()
             return result
 
-    def _maybe_create_tensor(self, tensor: torch.Tensor) -> None:
+    def _materialize_tensor(self, tensor: torch.Tensor) -> None:
         """Ensure tensor exists on remote client using storage mapping logic.
 
         Logic:
@@ -573,7 +573,7 @@ class Orchestrator:
 
         # Handle tensor creation for any tensors collected by pickler
         for tensor in pickler.tensors:
-            self._maybe_create_tensor(tensor)
+            self._materialize_tensor(tensor)
 
         # Get machine_id from pickler (inferred during pickling)
         machine_id = pickler.machine_id
