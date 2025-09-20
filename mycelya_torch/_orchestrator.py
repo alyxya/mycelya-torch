@@ -137,12 +137,10 @@ class Orchestrator:
             storage_id: Storage ID to free
         """
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        tensor_set = self.storage.get_tensors_for_storage(storage_id)
+        tensors = self.storage.free_storage(storage_id)
 
-        if tensor_set:
-            self._client_managers[machine_id].remove_tensors(list(tensor_set))
-
-        self.storage.free_storage(storage_id)
+        if tensors:
+            self._client_managers[machine_id].remove_tensors(tensors)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.

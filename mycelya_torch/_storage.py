@@ -15,7 +15,7 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 """
 
 from concurrent.futures import Future
-from typing import Dict, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 import torch
 
@@ -95,14 +95,21 @@ class StorageManager:
 
         return self.storage_id_to_remote_device[storage_id]
 
-    def free_storage(self, storage_id: int) -> None:
+    def free_storage(self, storage_id: int) -> List[int]:
         """Free storage by storage ID (local tracking only).
+
+        Args:
+            storage_id: The storage ID to free
+
+        Returns:
+            List of tensor IDs that were using this storage
 
         Note: Remote cleanup is handled by the orchestrator.
         """
         self.storage_id_to_remote_device.pop(storage_id, None)
         self._storage_cache.pop(storage_id, None)
-        self._storage_to_tensors_map.pop(storage_id, None)
+        tensor_set = self._storage_to_tensors_map.pop(storage_id, set())
+        return list(tensor_set)
 
     def cache_storage(self, tensor: torch.Tensor, data_future: Future[bytes]) -> None:
         """Cache storage future by tensor.
