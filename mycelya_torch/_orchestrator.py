@@ -27,7 +27,6 @@ from ._storage import StorageManager
 from ._utils import (
     TensorMetadata,
     dtype_to_str,
-    get_storage_id,
     get_tensor_id,
     map_args_kwargs,
 )
