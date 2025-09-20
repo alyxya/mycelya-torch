@@ -150,9 +150,8 @@ class Orchestrator:
             nbytes: New size in bytes
         """
         # Get a tensor ID for this storage if mapping exists
-        tensor_set = self.storage.get_tensors_for_storage(storage_id)
-        if tensor_set:
-            tensor_id = next(iter(tensor_set))
+        tensor_id = self.storage.get_tensors_for_storage(storage_id)
+        if tensor_id is not None:
             machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
             client_manager = self._client_managers[machine_id]
             client_manager.resize_storage(tensor_id, nbytes)

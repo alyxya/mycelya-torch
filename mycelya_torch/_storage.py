@@ -161,16 +161,19 @@ class StorageManager:
         self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
         self._tensor_id_to_tensor[tensor_id] = tensor
 
-    def get_tensors_for_storage(self, storage_id: int) -> set[int]:
-        """Get all tensor IDs for a given storage ID.
+    def get_tensors_for_storage(self, storage_id: int) -> int | None:
+        """Get a tensor ID for a given storage ID.
 
         Args:
-            storage_id: The storage ID to get tensors for
+            storage_id: The storage ID to get tensor for
 
         Returns:
-            set of tensor IDs using the storage (empty set if none)
+            tensor ID using the storage, or None if no tensors use this storage
         """
-        return self._storage_to_tensors_map.get(storage_id, set())
+        tensor_set = self._storage_to_tensors_map.get(storage_id)
+        if tensor_set:
+            return next(iter(tensor_set))
+        return None
 
     def get_alias_tensor_id(self, tensor: torch.Tensor) -> int | None:
         """Get alias tensor ID for materialization logic.
