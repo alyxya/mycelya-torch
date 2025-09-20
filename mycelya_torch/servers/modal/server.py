@@ -18,7 +18,7 @@ import os
 import pickle
 import subprocess
 import uuid
-from typing import Any, Dict, List, Tuple, TypedDict
+from typing import Any, TypedDict
 
 import cloudpickle
 import modal
@@ -27,10 +27,10 @@ import torch
 
 def create_modal_app_for_gpu(
     gpu_type: str,
-    packages: List[str],
+    packages: list[str],
     python_version: str,
     timeout: int | None = None,
-) -> Tuple[Any, Any]:
+) -> tuple[Any, Any]:
     """
     Create a Modal app and class for a specific GPU type.
 
@@ -48,8 +48,8 @@ def create_modal_app_for_gpu(
         """Structure for a single batched RPC call."""
 
         method_name: str
-        args: Tuple[Any, ...]
-        kwargs: Dict[str, Any]
+        args: tuple[Any, ...]
+        kwargs: dict[str, Any]
 
     class TensorMetadata(TypedDict):
         """Structure for tensor metadata with temp key.
@@ -59,8 +59,8 @@ def create_modal_app_for_gpu(
         linking local tensors to remote tensors.
         """
 
-        shape: List[int]
-        stride: List[int]
+        shape: list[int]
+        stride: list[int]
         dtype: str
         storage_offset: int
         nbytes: int
@@ -72,11 +72,11 @@ def create_modal_app_for_gpu(
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
 
-        def __init__(self, file: Any, tensor_registry: Dict[int, torch.Tensor]) -> None:
+        def __init__(self, file: Any, tensor_registry: dict[int, torch.Tensor]) -> None:
             super().__init__(file)
             self.tensor_registry = tensor_registry
 
-        def persistent_load(self, pid: Tuple[str, Any]) -> Any:
+        def persistent_load(self, pid: tuple[str, Any]) -> Any:
             type_tag, data = pid
 
             if type_tag == "mycelya_tensor":
@@ -98,12 +98,12 @@ def create_modal_app_for_gpu(
         """Custom pickler to convert results back to metadata."""
 
         def __init__(
-            self, file: Any, temp_tensor_registry: Dict[str, torch.Tensor]
+            self, file: Any, temp_tensor_registry: dict[str, torch.Tensor]
         ) -> None:
             super().__init__(file)
             self.temp_tensor_registry = temp_tensor_registry
 
-        def persistent_id(self, obj: Any) -> Tuple[str, Any] | None:
+        def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
             if isinstance(obj, torch.Tensor):
                 # Generate unique temp key
                 temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
@@ -220,8 +220,8 @@ def create_modal_app_for_gpu(
         def _create_empty_tensor_impl(
             self,
             tensor_id: int,
-            shape: List[int],
-            stride: List[int],
+            shape: list[int],
+            stride: list[int],
             storage_offset: int,
             dtype: str,
             nbytes: int,
@@ -258,8 +258,8 @@ def create_modal_app_for_gpu(
         def create_empty_tensor(
             self,
             tensor_id: int,
-            shape: List[int],
-            stride: List[int],
+            shape: list[int],
+            stride: list[int],
             storage_offset: int,
             dtype: str,
             nbytes: int,
@@ -282,8 +282,8 @@ def create_modal_app_for_gpu(
             self,
             new_tensor_id: int,
             base_tensor_id: int,
-            shape: List[int],
-            stride: List[int],
+            shape: list[int],
+            stride: list[int],
             offset: int,
         ) -> None:
             """Create a tensor view from existing tensor using as_strided."""
@@ -308,8 +308,8 @@ def create_modal_app_for_gpu(
             self,
             new_tensor_id: int,
             base_tensor_id: int,
-            shape: List[int],
-            stride: List[int],
+            shape: list[int],
+            stride: list[int],
             offset: int,
         ) -> None:
             """Create a tensor view from existing tensor using as_strided."""
@@ -321,8 +321,8 @@ def create_modal_app_for_gpu(
             self,
             tensor_id: int,
             raw_data: bytes,
-            source_shape: List[int],
-            source_stride: List[int],
+            source_shape: list[int],
+            source_stride: list[int],
             source_storage_offset: int,
             source_dtype: str,
         ) -> None:
@@ -363,8 +363,8 @@ def create_modal_app_for_gpu(
             self,
             tensor_id: int,
             raw_data: bytes,
-            source_shape: List[int],
-            source_stride: List[int],
+            source_shape: list[int],
+            source_stride: list[int],
             source_storage_offset: int,
             source_dtype: str,
         ) -> None:
@@ -403,7 +403,7 @@ def create_modal_app_for_gpu(
             """Get raw storage data by tensor ID."""
             return self._get_storage_data_impl(tensor_id)
 
-        def _remove_tensors_impl(self, tensor_ids: List[int]) -> None:
+        def _remove_tensors_impl(self, tensor_ids: list[int]) -> None:
             """Remove multiple tensors from the remote machine."""
             tensor_registry = self._tensor_registry
 
@@ -412,7 +412,7 @@ def create_modal_app_for_gpu(
                     del tensor_registry[tensor_id]
 
         @modal.method()
-        def remove_tensors(self, tensor_ids: List[int]) -> None:
+        def remove_tensors(self, tensor_ids: list[int]) -> None:
             """Remove multiple tensors from the remote machine."""
             self._remove_tensors_impl(tensor_ids)
 
@@ -470,11 +470,11 @@ def create_modal_app_for_gpu(
         def _execute_aten_operation_impl(
             self,
             op_name: str,
-            args: List[Any],
-            kwargs: Dict[str, Any],
-            tensor_mask: List[bool],
-            output_tensor_ids: List[int] | None = None,
-        ) -> List[TensorMetadata] | None:
+            args: list[Any],
+            kwargs: dict[str, Any],
+            tensor_mask: list[bool],
+            output_tensor_ids: list[int] | None = None,
+        ) -> list[TensorMetadata] | None:
             """Implementation of execute_aten_operation without Modal decorators."""
             tensor_registry = self._tensor_registry
 
@@ -540,11 +540,11 @@ def create_modal_app_for_gpu(
         def execute_aten_operation(
             self,
             op_name: str,
-            args: List[Any],
-            kwargs: Dict[str, Any],
-            tensor_mask: List[bool],
-            output_tensor_ids: List[int] | None = None,
-        ) -> List[TensorMetadata] | None:
+            args: list[Any],
+            kwargs: dict[str, Any],
+            tensor_mask: list[bool],
+            output_tensor_ids: list[int] | None = None,
+        ) -> list[TensorMetadata] | None:
             """Execute an aten operation on the remote machine."""
             result = self._execute_aten_operation_impl(
                 op_name,
@@ -564,8 +564,8 @@ def create_modal_app_for_gpu(
 
         def _link_tensors_impl(
             self,
-            local_tensor_ids: List[int],
-            temp_keys: List[str],
+            local_tensor_ids: list[int],
+            temp_keys: list[str],
         ) -> None:
             """Implementation of link_tensors without Modal decorators."""
 
@@ -595,8 +595,8 @@ def create_modal_app_for_gpu(
         @modal.method()
         def link_tensors(
             self,
-            local_tensor_ids: List[int],
-            temp_keys: List[str],
+            local_tensor_ids: list[int],
+            temp_keys: list[str],
         ) -> None:
             """
             Link local mycelya tensor IDs to remote tensors from temporary registry.
@@ -640,7 +640,7 @@ def create_modal_app_for_gpu(
             """Execute a pickled function on the remote machine."""
             return self._execute_function_impl(pickled_function)
 
-        def _pip_install_impl(self, packages: List[str]) -> None:
+        def _pip_install_impl(self, packages: list[str]) -> None:
             """Install packages using uv pip on the remote machine."""
             if not packages:
                 return
@@ -653,12 +653,12 @@ def create_modal_app_for_gpu(
                 raise RuntimeError(f"Failed to install packages {packages}: {e.stderr}")
 
         @modal.method()
-        def pip_install(self, packages: List[str]) -> None:
+        def pip_install(self, packages: list[str]) -> None:
             """Install packages using pip on the remote machine."""
             self._pip_install_impl(packages)
 
         @modal.method()
-        def execute_batch(self, batch_calls: List[BatchCall]) -> List[Any]:
+        def execute_batch(self, batch_calls: list[BatchCall]) -> list[Any]:
             """
             Execute a batch of RPCs in sequence.
 

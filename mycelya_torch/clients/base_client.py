@@ -9,7 +9,7 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple, TypedDict
+from typing import Any, TypedDict
 
 
 class BatchCall(TypedDict):
@@ -20,8 +20,8 @@ class BatchCall(TypedDict):
     """
 
     method_name: str
-    args: Tuple[Any, ...]
-    kwargs: Dict[str, Any]
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
 
 
 class Client(ABC):
@@ -49,7 +49,7 @@ class Client(ABC):
         self,
         gpu_type: str,
         gpu_count: int,
-        packages: List[str],
+        packages: list[str],
         python_version: str,
     ) -> None:
         """
@@ -94,7 +94,7 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
+    def execute_batch(self, batch_calls: list[BatchCall]) -> Any:
         """
         Implementation: Execute a batch of operations.
 
@@ -111,8 +111,8 @@ class Client(ABC):
     def create_empty_tensor(
         self,
         tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         storage_offset: int,
         dtype: str,
         nbytes: int,
@@ -127,8 +127,8 @@ class Client(ABC):
         self,
         new_tensor_id: int,
         base_tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         offset: int,
     ) -> None:
         """Create a tensor view from an existing tensor."""
@@ -139,8 +139,8 @@ class Client(ABC):
         self,
         tensor_id: int,
         raw_data: bytes,
-        source_shape: List[int],
-        source_stride: List[int],
+        source_shape: list[int],
+        source_stride: list[int],
         source_storage_offset: int,
         source_dtype: str,
     ) -> None:
@@ -157,7 +157,7 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def remove_tensors(self, tensor_ids: List[int]) -> None:
+    def remove_tensors(self, tensor_ids: list[int]) -> None:
         """Remove multiple tensors from the remote machine."""
         pass
 
@@ -181,10 +181,10 @@ class Client(ABC):
     def execute_aten_operation(
         self,
         op_name: str,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        tensor_mask: List[bool],
-        output_tensor_ids: List[int] | None = None,
+        args: list[Any],
+        kwargs: dict[str, Any],
+        tensor_mask: list[bool],
+        output_tensor_ids: list[int] | None = None,
     ) -> Any:
         """Execute an aten operation on the remote machine with tensor IDs.
 
@@ -196,8 +196,8 @@ class Client(ABC):
     @abstractmethod
     def link_tensors(
         self,
-        local_tensor_ids: List[int],
-        temp_keys: List[str],
+        local_tensor_ids: list[int],
+        temp_keys: list[str],
     ) -> None:
         """Link local mycelya tensor IDs to remote tensors from temporary registry."""
         pass
@@ -212,7 +212,7 @@ class Client(ABC):
         pass
 
     @abstractmethod
-    def pip_install(self, packages: List[str]) -> None:
+    def pip_install(self, packages: list[str]) -> None:
         """Install packages using pip on the remote machine.
 
         Args:

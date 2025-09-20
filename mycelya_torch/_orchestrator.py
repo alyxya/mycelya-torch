@@ -14,7 +14,7 @@ import io
 import threading
 import time
 from concurrent.futures import Future
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import torch
 
@@ -49,7 +49,7 @@ class Orchestrator:
         self.storage = StorageManager()
 
         # Centralized client manager management by machine ID
-        self._client_managers: Dict[
+        self._client_managers: dict[
             str, ClientManager
         ] = {}  # machine_id -> client manager
 
@@ -350,10 +350,10 @@ class Orchestrator:
     def execute_aten_operation(
         self,
         op_name: str,
-        args: Tuple[Any, ...],
-        kwargs: Dict[str, Any],
-        output_tensors: List[torch.Tensor] | None = None,
-    ) -> List[TensorMetadata] | None:
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        output_tensors: list[torch.Tensor] | None = None,
+    ) -> list[TensorMetadata] | None:
         """Execute remote operation with tensor objects in args/kwargs.
 
         Args:
@@ -364,7 +364,7 @@ class Orchestrator:
                            or None for dynamic operations
 
         Returns:
-            For dynamic operations (output_tensors=None): List[TensorMetadata] metadata with temp_key embedded
+            For dynamic operations (output_tensors=None): list[TensorMetadata] metadata with temp_key embedded
             For static operations: None
         """
         # Process args/kwargs: validate, collect tensors, replace with IDs
@@ -513,13 +513,13 @@ class Orchestrator:
         self.storage.register_tensor(tensor)
 
     def link_tensors(
-        self, local_tensors: List[torch.Tensor], temp_keys: List[str]
+        self, local_tensors: list[torch.Tensor], temp_keys: list[str]
     ) -> None:
         """Link local tensors to remote tensors from temporary registry.
 
         Args:
             local_tensors: List of local mycelya tensors to link
-            temp_keys: List of temporary keys from remote execution
+            temp_keys: list of temporary keys from remote execution
 
         Note: All tensors must be on the same device.
         """

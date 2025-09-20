@@ -2,12 +2,12 @@
 
 """Mock server module for local testing."""
 
-from typing import Any, Tuple
+from typing import Any
 
 from ..modal.server import create_modal_app_for_gpu
 
 
-def create_mock_modal_app() -> Tuple[Any, Any]:
+def create_mock_modal_app() -> tuple[Any, Any]:
     """
     Create a mock Modal app for local testing.
 

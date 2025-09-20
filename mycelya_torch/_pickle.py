@@ -15,7 +15,7 @@ import dis
 import io
 import pickle
 import types
-from typing import Any, Set, Tuple
+from typing import Any
 
 import cloudpickle
 import torch
@@ -56,7 +56,7 @@ class Pickler(cloudpickle.Pickler):
         # Collect tensors that need _maybe_create_tensor called
         self.tensors = []
         # Collect module dependencies
-        self.module_dependencies: Set[str] = set()
+        self.module_dependencies: set[str] = set()
 
     def _extract_module_from_globals(self, globals_dict: dict) -> None:
         """
@@ -124,7 +124,7 @@ class Pickler(cloudpickle.Pickler):
         elif isinstance(obj, types.CodeType):
             self._extract_modules_from_code(obj)
 
-    def persistent_id(self, obj: Any) -> Tuple[str, Any] | None:
+    def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
         """
         Handle mycelya tensors and devices during pickling, and analyze dependencies.
 
@@ -201,7 +201,7 @@ class Unpickler(pickle.Unpickler):
         # Collect tensor linking info for orchestrator to handle
         self.tensors_to_link = []  # List of (tensor, temp_key) tuples
 
-    def persistent_load(self, pid: Tuple[str, Any]) -> Any:
+    def persistent_load(self, pid: tuple[str, Any]) -> Any:
         """
         Handle reconstruction of remote execution results.
 

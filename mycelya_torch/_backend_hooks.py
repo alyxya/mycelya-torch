@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from collections import defaultdict
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
 import torch
 
@@ -12,7 +12,7 @@ from ._orchestrator import orchestrator
 log = get_logger(__name__)
 
 
-def register(registry: Dict[str, Callable]) -> Callable[[Callable], Callable]:
+def register(registry: dict[str, Callable]) -> Callable[[Callable], Callable]:
     """Decorator to register functions in a registry dictionary.
 
     This decorator adds the decorated function to the provided registry
@@ -49,10 +49,10 @@ class RuntimeManager:
         self._current_device: int = 0
 
         # Stream management - no torch.Stream objects, only stream IDs
-        self._current_streams: Dict[int, int] = defaultdict(
+        self._current_streams: dict[int, int] = defaultdict(
             lambda: 0
         )  # device_idx -> current stream_id
-        self._stream_registry: Dict[int, List[int]] = defaultdict(
+        self._stream_registry: dict[int, list[int]] = defaultdict(
             lambda: [0]
         )  # device_idx -> list of stream_ids
 
@@ -149,7 +149,7 @@ class RuntimeManager:
 class Driver:
     """Driver that manages device operations with registry-based dispatch"""
 
-    registry: Dict[str, Callable] = {}
+    registry: dict[str, Callable] = {}
 
     def __init__(self) -> None:
         self.runtime_manager = RuntimeManager()

@@ -8,7 +8,7 @@ This module provides the DeviceManager for managing remote device information
 and their device indices for PyTorch integration.
 """
 
-from typing import Dict, Tuple
+# No typing imports needed
 
 import torch
 
@@ -21,11 +21,11 @@ class DeviceManager:
     """
 
     def __init__(self) -> None:
-        self._local_to_remote_device: Dict[
-            int, Tuple[str, str, int]
+        self._local_to_remote_device: dict[
+            int, tuple[str, str, int]
         ] = {}  # local_index -> (machine_id, remote_type, remote_index)
-        self._remote_to_local_device: Dict[
-            Tuple[str, str, int], int
+        self._remote_to_local_device: dict[
+            tuple[str, str, int], int
         ] = {}  # (machine_id, remote_type, remote_index) -> local_index
         self._next_index = 0
 
@@ -62,7 +62,7 @@ class DeviceManager:
 
         return torch.device("mycelya", local_index)
 
-    def get_remote_device_info(self, device_index: int) -> Tuple[str, str, int]:
+    def get_remote_device_info(self, device_index: int) -> tuple[str, str, int]:
         """Get remote device info for a given mycelya device index.
 
         Args:

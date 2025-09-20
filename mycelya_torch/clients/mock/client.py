@@ -8,7 +8,7 @@ This module provides the MockClient class that uses Modal's .local() execution
 for development and testing without requiring remote cloud resources.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ..._logging import get_logger
 from ...servers.mock.server import create_mock_modal_app
@@ -34,7 +34,7 @@ class MockClient(Client):
         self,
         gpu_type: str,
         gpu_count: int,
-        packages: List[str],
+        packages: list[str],
         python_version: str,
     ):
         """Start the mock execution environment."""
@@ -51,7 +51,7 @@ class MockClient(Client):
         # For Mock, rpc_result is already the resolved value - always available
         return rpc_result
 
-    def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
+    def execute_batch(self, batch_calls: list[BatchCall]) -> Any:
         """Execute a batch of operations via Mock."""
         return self._server_instance.execute_batch.local(batch_calls)
 
@@ -59,8 +59,8 @@ class MockClient(Client):
     def create_empty_tensor(
         self,
         tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         storage_offset: int,
         dtype: str,
         nbytes: int,
@@ -86,8 +86,8 @@ class MockClient(Client):
         self,
         new_tensor_id: int,
         base_tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         offset: int,
     ) -> None:
         """Implementation: Create a tensor view from an existing tensor."""
@@ -104,8 +104,8 @@ class MockClient(Client):
         self,
         tensor_id: int,
         raw_data: bytes,
-        source_shape: List[int],
-        source_stride: List[int],
+        source_shape: list[int],
+        source_stride: list[int],
         source_storage_offset: int,
         source_dtype: str,
     ) -> None:
@@ -124,7 +124,7 @@ class MockClient(Client):
         """Implementation: Get raw storage data by tensor ID."""
         return self._server_instance.get_storage_data.local(tensor_id)
 
-    def remove_tensors(self, tensor_ids: List[int]) -> None:
+    def remove_tensors(self, tensor_ids: list[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
         self._server_instance.remove_tensors.local(tensor_ids)
 
@@ -149,10 +149,10 @@ class MockClient(Client):
     def execute_aten_operation(
         self,
         op_name: str,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        tensor_mask: List[bool],
-        output_tensor_ids: List[int] | None = None,
+        args: list[Any],
+        kwargs: dict[str, Any],
+        tensor_mask: list[bool],
+        output_tensor_ids: list[int] | None = None,
     ) -> Any:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         return self._server_instance.execute_aten_operation.local(
@@ -165,8 +165,8 @@ class MockClient(Client):
 
     def link_tensors(
         self,
-        local_tensor_ids: List[int],
-        temp_keys: List[str],
+        local_tensor_ids: list[int],
+        temp_keys: list[str],
     ) -> None:
         """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._server_instance.link_tensors.local(local_tensor_ids, temp_keys)
@@ -175,7 +175,7 @@ class MockClient(Client):
         """Implementation: Execute a pickled function remotely."""
         return self._server_instance.execute_function.local(pickled_function)
 
-    def pip_install(self, packages: List[str]) -> None:
+    def pip_install(self, packages: list[str]) -> None:
         """Implementation: No-op for mock client - packages are already available locally."""
         # Mock client does nothing for pip install since it uses local execution
         pass

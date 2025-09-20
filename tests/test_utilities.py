@@ -8,7 +8,7 @@ This module provides common utility functions for test setup, verification,
 and data generation to reduce code duplication across test files.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mycelya_torch import RemoteMachine
@@ -43,8 +43,8 @@ class DeviceTestUtils:
 
     @staticmethod
     def create_remote_tensor(
-        shape: Tuple[int, ...],
-        shared_machines: Dict[str, "RemoteMachine"],
+        shape: tuple[int, ...],
+        shared_machines: dict[str, "RemoteMachine"],
         machine_key: str = "T4",
         requires_grad: bool = False,
         dtype: torch.dtype = torch.float32,
@@ -65,11 +65,11 @@ class DeviceTestUtils:
 
     @staticmethod
     def create_test_tensors(
-        shapes: List[Tuple[int, ...]],
-        shared_machines: Dict[str, "RemoteMachine"],
+        shapes: list[tuple[int, ...]],
+        shared_machines: dict[str, "RemoteMachine"],
         machine_key: str = "T4",
         device_type: str = "cuda",
-    ) -> List[torch.Tensor]:
+    ) -> list[torch.Tensor]:
         """Create multiple test tensors on the same remote machine."""
         return [
             DeviceTestUtils.create_remote_tensor(
@@ -90,13 +90,13 @@ class DeviceTestUtils:
 
     @staticmethod
     def create_cpu_and_remote_pair(
-        shape: Tuple[int, ...],
-        shared_machines: Dict[str, "RemoteMachine"],
+        shape: tuple[int, ...],
+        shared_machines: dict[str, "RemoteMachine"],
         machine_key: str = "T4",
         dtype: torch.dtype = torch.float32,
         requires_grad: bool = False,
         device_type: str = "cuda",
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Create a CPU tensor and its remote counterpart."""
         cpu_tensor = torch.randn(shape, dtype=dtype, requires_grad=requires_grad)
         remote_tensor = cpu_tensor.to(shared_machines[machine_key].device(device_type))
@@ -188,7 +188,7 @@ class ErrorTestUtils:
     @staticmethod
     def test_operation_gracefully(
         operation_fn: callable,
-        expected_exceptions: Tuple = (RuntimeError, TypeError, NotImplementedError),
+        expected_exceptions: tuple = (RuntimeError, TypeError, NotImplementedError),
     ) -> bool:
         """Test that an operation either succeeds or fails gracefully with expected exceptions."""
         try:
@@ -209,10 +209,10 @@ class TestDataGenerator:
     def generate_classification_data(
         batch_size: int = TestConstants.DEFAULT_BATCH_SIZE,
         num_classes: int = TestConstants.DEFAULT_NUM_CLASSES,
-        shared_machines: Dict[str, "RemoteMachine"] | None = None,
+        shared_machines: dict[str, "RemoteMachine"] | None = None,
         machine_key: str = "T4",
         device_type: str = "cuda",
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Generate data for classification tests."""
         # Create input data
         inputs = torch.randn(batch_size, num_classes, requires_grad=True)
@@ -229,8 +229,8 @@ class TestDataGenerator:
 
     @staticmethod
     def generate_tensor_test_cases(
-        base_shapes: List[Tuple[int, ...]] | None = None,
-    ) -> List[torch.Tensor]:
+        base_shapes: list[tuple[int, ...]] | None = None,
+    ) -> list[torch.Tensor]:
         """Generate a variety of tensor test cases."""
         if base_shapes is None:
             base_shapes = TestConstants.SMALL_SHAPES
@@ -251,11 +251,11 @@ class TestDataGenerator:
 
     @staticmethod
     def create_gradient_test_setup(
-        shape: Tuple[int, ...],
-        shared_machines: Dict[str, Any],
+        shape: tuple[int, ...],
+        shared_machines: dict[str, Any],
         machine_key: str = "T4",
         device_type: str = "cuda",
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Create a standard setup for gradient testing."""
         # Create a leaf tensor that requires gradients
         x = torch.randn(shape, requires_grad=True)
@@ -289,7 +289,7 @@ class ViewOperationTestUtils:
         assert result_remote.shape == result_cpu.shape
 
     @staticmethod
-    def generate_view_test_cases() -> List[Tuple[str, callable, tuple, dict]]:
+    def generate_view_test_cases() -> list[tuple[str, callable, tuple, dict]]:
         """Generate test cases for view operations."""
         return [
             ("view", lambda x, *args: x.view(*args), (4, 1), {}),
@@ -309,7 +309,7 @@ class IntegrationTestUtils:
     def create_simple_linear_model(
         input_size: int,
         output_size: int,
-        shared_machines: Dict[str, "RemoteMachine"],
+        shared_machines: dict[str, "RemoteMachine"],
         machine_key: str = "T4",
         device_type: str = "cuda",
     ) -> torch.nn.Module:
@@ -323,7 +323,7 @@ class IntegrationTestUtils:
         inputs: torch.Tensor,
         targets: torch.Tensor,
         loss_fn: callable = torch.nn.functional.mse_loss,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Verify a model's forward and backward pass."""
         # Forward pass
         outputs = model(inputs)

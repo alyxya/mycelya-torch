@@ -1,7 +1,7 @@
 # Copyright (C) 2025 alyxya
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import torch
 
@@ -17,7 +17,7 @@ log = get_logger(__name__)
 
 
 def _create_meta_tensor_from_mycelya(
-    mycelya_tensor: torch.Tensor, meta_storage_cache: Dict[torch.UntypedStorage, torch.UntypedStorage]
+    mycelya_tensor: torch.Tensor, meta_storage_cache: dict[torch.UntypedStorage, torch.UntypedStorage]
 ) -> torch.Tensor:
     """Create a meta tensor that closely mirrors a mycelya tensor, including storage sharing."""
     original_storage = mycelya_tensor.untyped_storage()
@@ -44,10 +44,10 @@ def _create_meta_tensor_from_mycelya(
 
 def _execute_meta_operation(
     op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
-    device_container: List[torch.device],
-) -> tuple[Any, Dict]:
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    device_container: list[torch.device],
+) -> tuple[Any, dict]:
     """Execute operation on meta tensors for shape inference and device resolution."""
     # Map from meta storage to original tensor for preserving storage relationships
     original_tensors = {}  # meta_storage -> original_tensor
@@ -86,8 +86,8 @@ def _execute_meta_operation(
 
 
 def _create_output_tensors(
-    meta_outputs: List, original_tensors: Dict, mycelya_device: torch.device
-) -> List[torch.Tensor]:
+    meta_outputs: list, original_tensors: dict, mycelya_device: torch.device
+) -> list[torch.Tensor]:
     """Create output tensors based on meta execution results with proper alias detection."""
     output_tensors = []
 
@@ -125,11 +125,11 @@ def _create_output_tensors(
 
 def _execute_with_static_outputs(
     op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
     mycelya_device: torch.device,
     meta_result: Any,
-    original_tensors: Dict,
+    original_tensors: dict,
 ) -> Any:
     """Execute operation using meta tensors for shape inference."""
     # Normalize meta_result to list
@@ -161,8 +161,8 @@ def _execute_with_static_outputs(
 
 def _execute_with_dynamic_outputs(
     op: torch._ops.OpOverload | torch._ops.OpOverloadPacket,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
     mycelya_device: torch.device,
 ) -> Any:
     """Execute operation with dynamic output shapes."""

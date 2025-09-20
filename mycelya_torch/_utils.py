@@ -8,7 +8,7 @@ from mycelya tensors. These functions are for internal use only and should not b
 used by external users of mycelya_torch.
 """
 
-from typing import Any, Dict, List, Tuple, TypedDict
+from typing import Any, TypedDict
 
 import torch
 
@@ -21,8 +21,8 @@ class TensorMetadata(TypedDict):
     linking local tensors to remote tensors.
     """
 
-    shape: List[int]
-    stride: List[int]
+    shape: list[int]
+    stride: list[int]
     dtype: str
     storage_offset: int
     nbytes: int
@@ -118,8 +118,8 @@ def create_mycelya_tensor_from_metadata(
 
 
 def map_args_kwargs(
-    func, args: Tuple[Any, ...], kwargs: Dict[str, Any]
-) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    func, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Lightweight function to apply func to all elements in args/kwargs, recursing into lists/tuples."""
 
     def map_container(container):

@@ -8,7 +8,7 @@ This module provides the ModalClient class for interfacing with Modal cloud GPUs
 along with related functionality for creating and managing Modal applications.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ..._logging import get_logger
 from ...servers.modal.server import create_modal_app_for_gpu
@@ -36,7 +36,7 @@ class ModalClient(Client):
         self,
         gpu_type: str,
         gpu_count: int,
-        packages: List[str],
+        packages: list[str],
         python_version: str,
     ):
         """Start the Modal app context for this machine."""
@@ -79,7 +79,7 @@ class ModalClient(Client):
         except TimeoutError:
             return None
 
-    def execute_batch(self, batch_calls: List[BatchCall]) -> Any:
+    def execute_batch(self, batch_calls: list[BatchCall]) -> Any:
         """Execute a batch of operations via Modal."""
         return self._server_instance.execute_batch.spawn(batch_calls)
 
@@ -87,8 +87,8 @@ class ModalClient(Client):
     def create_empty_tensor(
         self,
         tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         storage_offset: int,
         dtype: str,
         nbytes: int,
@@ -111,8 +111,8 @@ class ModalClient(Client):
         self,
         new_tensor_id: int,
         base_tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         offset: int,
     ) -> None:
         """Implementation: Create a tensor view on the remote machine from an existing tensor using as_strided."""
@@ -124,8 +124,8 @@ class ModalClient(Client):
         self,
         tensor_id: int,
         raw_data: bytes,
-        source_shape: List[int],
-        source_stride: List[int],
+        source_shape: list[int],
+        source_stride: list[int],
         source_storage_offset: int,
         source_dtype: str,
     ) -> None:
@@ -144,7 +144,7 @@ class ModalClient(Client):
         """Implementation: Get raw storage data by tensor ID."""
         return self._server_instance.get_storage_data.spawn(tensor_id)
 
-    def remove_tensors(self, tensor_ids: List[int]) -> None:
+    def remove_tensors(self, tensor_ids: list[int]) -> None:
         """Implementation: Remove multiple tensors from the remote machine."""
         self._server_instance.remove_tensors.spawn(tensor_ids)
 
@@ -164,10 +164,10 @@ class ModalClient(Client):
     def execute_aten_operation(
         self,
         op_name: str,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        tensor_mask: List[bool],
-        output_tensor_ids: List[int] | None = None,
+        args: list[Any],
+        kwargs: dict[str, Any],
+        tensor_mask: list[bool],
+        output_tensor_ids: list[int] | None = None,
     ) -> Any:
         """Implementation: Execute an aten operation on the remote machine with tensor IDs."""
         return self._server_instance.execute_aten_operation.spawn(
@@ -180,8 +180,8 @@ class ModalClient(Client):
 
     def link_tensors(
         self,
-        local_tensor_ids: List[int],
-        temp_keys: List[str],
+        local_tensor_ids: list[int],
+        temp_keys: list[str],
     ) -> None:
         """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._server_instance.link_tensors.spawn(local_tensor_ids, temp_keys)
@@ -190,6 +190,6 @@ class ModalClient(Client):
         """Implementation: Execute a pickled function remotely."""
         return self._server_instance.execute_function.spawn(pickled_function)
 
-    def pip_install(self, packages: List[str]) -> None:
+    def pip_install(self, packages: list[str]) -> None:
         """Implementation: Install packages using pip on the remote machine."""
         self._server_instance.pip_install.spawn(packages)

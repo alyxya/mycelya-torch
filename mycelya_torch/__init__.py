@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import types
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 import torch
 
@@ -10,7 +10,7 @@ import torch
 from ._backend_hooks import driver
 
 # Factory pattern for C++ method access with caching
-_IMPL_REGISTRY: Dict[str, Callable] = {}
+_IMPL_REGISTRY: dict[str, Callable] = {}
 
 
 def impl_factory(name: str) -> Callable:

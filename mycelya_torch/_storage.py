@@ -15,7 +15,6 @@ not as a global instance. It does not handle remote cleanup or orchestrator inte
 """
 
 from concurrent.futures import Future
-from typing import Dict, List, Set, Tuple
 
 import torch
 
@@ -39,15 +38,15 @@ class StorageManager:
 
     def __init__(self) -> None:
         # Storage ID tracking - maps storage to remote device info
-        self.storage_id_to_remote_device: Dict[
-            int, Tuple[str, str, int]
+        self.storage_id_to_remote_device: dict[
+            int, tuple[str, str, int]
         ] = {}  # storage_id -> (machine_id, remote_type, remote_index)
 
         # Storage cache (storage_id -> Future[bytes])
-        self._storage_cache: Dict[int, Future[bytes]] = {}
+        self._storage_cache: dict[int, Future[bytes]] = {}
 
         # Storage ID to tensor IDs mapping - tracks which tensors are materialized on remote machines
-        self._storage_to_tensors_map: Dict[int, Set[int]] = {}
+        self._storage_to_tensors_map: dict[int, set[int]] = {}
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -76,14 +75,14 @@ class StorageManager:
 
         return storage_id
 
-    def get_remote_device_info(self, storage_id_or_tensor: int | torch.Tensor) -> Tuple[str, str, int]:
+    def get_remote_device_info(self, storage_id_or_tensor: int | torch.Tensor) -> tuple[str, str, int]:
         """Get remote device info for a storage ID or tensor.
 
         Args:
             storage_id_or_tensor: Either a storage ID (int) or tensor (extracts storage_id internally)
 
         Returns:
-            Tuple of (machine_id, remote_type, remote_index)
+            tuple of (machine_id, remote_type, remote_index)
 
         Raises:
             KeyError: If storage_id not found
@@ -95,14 +94,14 @@ class StorageManager:
 
         return self.storage_id_to_remote_device[storage_id]
 
-    def free_storage(self, storage_id: int) -> List[int]:
+    def free_storage(self, storage_id: int) -> list[int]:
         """Free storage by storage ID (local tracking only).
 
         Args:
             storage_id: The storage ID to free
 
         Returns:
-            List of tensor IDs that were using this storage
+            list of tensor IDs that were using this storage
 
         Note: Remote cleanup is handled by the orchestrator.
         """
@@ -156,25 +155,25 @@ class StorageManager:
         tensor_id = get_tensor_id(tensor)
         self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
 
-    def get_tensors_for_storage(self, storage_id: int) -> Set[int]:
+    def get_tensors_for_storage(self, storage_id: int) -> set[int]:
         """Get all tensor IDs for a given storage ID.
 
         Args:
             storage_id: The storage ID to get tensors for
 
         Returns:
-            Set of tensor IDs using the storage (empty set if none)
+            set of tensor IDs using the storage (empty set if none)
         """
         return self._storage_to_tensors_map.get(storage_id, set())
 
-    def get_or_create_tensor_set(self, tensor: torch.Tensor) -> Set[int]:
+    def get_or_create_tensor_set(self, tensor: torch.Tensor) -> set[int]:
         """Get or create the tensor set for a tensor.
 
         Args:
             tensor: The tensor to get/create tensor set for (extracts storage_id internally)
 
         Returns:
-            Set of tensor IDs using the storage (creates empty set if none exists)
+            set of tensor IDs using the storage (creates empty set if none exists)
         """
         storage_id = get_storage_id(tensor)
         return self._storage_to_tensors_map.setdefault(storage_id, set())

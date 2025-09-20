@@ -14,7 +14,7 @@ import threading
 from collections import deque
 from concurrent.futures import Future
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 import torch
 
@@ -257,8 +257,8 @@ class ClientManager:
     def create_empty_tensor(
         self,
         tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         storage_offset: int,
         dtype: str,
         nbytes: int,
@@ -303,8 +303,8 @@ class ClientManager:
         self,
         new_tensor_id: int,
         base_tensor_id: int,
-        shape: List[int],
-        stride: List[int],
+        shape: list[int],
+        stride: list[int],
         offset: int,
     ) -> None:
         """Create a tensor view from an existing tensor."""
@@ -329,8 +329,8 @@ class ClientManager:
         self,
         tensor_id: int,
         raw_data: bytes,
-        source_shape: List[int],
-        source_stride: List[int],
+        source_shape: list[int],
+        source_stride: list[int],
         source_storage_offset: int,
         source_dtype: str,
     ) -> None:
@@ -385,7 +385,7 @@ class ClientManager:
 
         return future
 
-    def remove_tensors(self, tensor_ids: List[int]) -> None:
+    def remove_tensors(self, tensor_ids: list[int]) -> None:
         """Remove multiple tensors from the remote machine."""
         if not self.is_running():
             # During cleanup/garbage collection, machine may already be shut down
@@ -444,11 +444,11 @@ class ClientManager:
     def execute_aten_operation(
         self,
         op_name: str,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        tensor_mask: List[bool],
-        output_tensor_ids: List[int] | None = None,
-    ) -> Future[List[TensorMetadata]] | None:
+        args: list[Any],
+        kwargs: dict[str, Any],
+        tensor_mask: list[bool],
+        output_tensor_ids: list[int] | None = None,
+    ) -> Future[list[TensorMetadata]] | None:
         """Execute an aten operation on the remote machine."""
         self._ensure_running()
 
@@ -490,8 +490,8 @@ class ClientManager:
 
     def link_tensors(
         self,
-        local_tensor_ids: List[int],
-        temp_keys: List[str],
+        local_tensor_ids: list[int],
+        temp_keys: list[str],
     ) -> None:
         """Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._ensure_running()
@@ -534,7 +534,7 @@ class ClientManager:
 
         return future
 
-    def pip_install(self, packages: List[str]) -> None:
+    def pip_install(self, packages: list[str]) -> None:
         """Install packages using pip on the remote machine.
 
         This method intelligently manages the packages list:

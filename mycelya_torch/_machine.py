@@ -10,7 +10,7 @@ machines with different cloud providers and GPU types.
 
 import atexit
 import uuid
-from typing import Any, List
+from typing import Any
 
 import torch
 
@@ -52,7 +52,7 @@ class RemoteMachine:
         gpu_type: str = "",
         *,
         gpu_count: int = 1,
-        pip_packages: List[str] | None = None,
+        pip_packages: list[str] | None = None,
         modal_timeout: int | None = None,
         _start: bool = True,
         _batching: bool = True,
@@ -161,7 +161,7 @@ class RemoteMachine:
         return self._client_manager.machine_id
 
     @property
-    def packages(self) -> List[str]:
+    def packages(self) -> list[str]:
         """Get the packages list from the client manager."""
         return self._client_manager.packages
 
@@ -198,7 +198,7 @@ class RemoteMachine:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def pip_install(self, packages: str | List[str]) -> None:
+    def pip_install(self, packages: str | list[str]) -> None:
         """Install packages using pip on the remote machine.
 
         Args:
