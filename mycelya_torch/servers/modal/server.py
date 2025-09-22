@@ -85,7 +85,7 @@ def create_modal_app_for_gpu(
                     raise ValueError(
                         f"Tensor ID {tensor_id} not found in remote registry"
                     )
-                return self.tensor_registry[tensor_id]
+                return self.tensor_registry[tensor_id].detach()
 
             elif type_tag == "mycelya_device":
                 remote_type, remote_index = data
