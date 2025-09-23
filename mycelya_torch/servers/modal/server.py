@@ -483,10 +483,10 @@ def create_modal_app_for_gpu(
             def process_item(obj: Any) -> Any:
                 if isinstance(obj, (list, tuple)):
                     return type(obj)(
-                        tensor_registry[item] if next(mask_iter) else item
+                        tensor_registry[item].detach() if next(mask_iter) else item
                         for item in obj
                     )
-                return tensor_registry[obj] if next(mask_iter) else obj
+                return tensor_registry[obj].detach() if next(mask_iter) else obj
 
             processed_args = [process_item(arg) for arg in args]
             processed_kwargs = {k: process_item(v) for k, v in kwargs.items()}
