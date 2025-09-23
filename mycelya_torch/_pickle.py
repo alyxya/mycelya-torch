@@ -53,7 +53,7 @@ class Pickler(cloudpickle.Pickler):
         super().__init__(file, protocol=protocol, buffer_callback=buffer_callback)
         self.storage_manager = storage_manager
         self.machine_id: str | None = None
-        # Collect tensors that need _maybe_create_tensor called
+        # Collect tensors that need _materialize_tensor called
         self.tensors = []
         # Collect module dependencies
         self.module_dependencies: set[str] = set()
@@ -155,7 +155,7 @@ class Pickler(cloudpickle.Pickler):
                     f"current machine {self.machine_id}, tensor machine {machine_id}"
                 )
 
-            # Collect tensor for orchestrator to call _maybe_create_tensor on
+            # Collect tensor for orchestrator to call _materialize_tensor on
             self.tensors.append(obj)
             tensor_id = get_tensor_id(obj)  # Use metadata hash as tensor ID
             return ("mycelya_tensor", tensor_id)
