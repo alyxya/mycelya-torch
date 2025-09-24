@@ -50,8 +50,8 @@ class StorageManager:
         # Storage ID to tensor IDs mapping - tracks which tensors are materialized on remote machines
         self._storage_to_tensors_map: dict[int, set[int]] = {}
 
-        # Tensor ID to tensor mapping - weak references automatically remove deleted tensors
-        self._tensor_id_to_tensor: weakref.WeakValueDictionary[int, torch.Tensor] = weakref.WeakValueDictionary()
+        # Tensor ID to untyped storage mapping - weak references automatically remove deleted storages
+        self._tensor_id_to_storage: weakref.WeakValueDictionary[int, torch.UntypedStorage] = weakref.WeakValueDictionary()
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -159,7 +159,7 @@ class StorageManager:
         storage_id = get_storage_id(tensor)
         tensor_id = get_tensor_id(tensor)
         self._storage_to_tensors_map.setdefault(storage_id, set()).add(tensor_id)
-        self._tensor_id_to_tensor[tensor_id] = tensor
+        self._tensor_id_to_storage[tensor_id] = tensor.untyped_storage()
 
     def get_tensor_for_storage(self, storage_id: int) -> int | None:
         """Get a tensor ID for a given storage ID.
