@@ -11,9 +11,7 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from typing import Any, TypedDict
 
-# Import TensorMetadata from parent module
-if True:  # TYPE_CHECKING
-    from .._utils import TensorMetadata
+from .._utils import TensorMetadata
 
 
 class BatchCall(TypedDict):
@@ -112,7 +110,7 @@ class Client(ABC):
 
     # Tensor management methods
     @abstractmethod
-    def create_tensor(self, metadata: "TensorMetadata") -> None:
+    def create_tensor(self, metadata: TensorMetadata) -> None:
         """Create a tensor on the remote machine.
 
         Creates either a new empty tensor or a tensor view based on metadata.alias_id:
