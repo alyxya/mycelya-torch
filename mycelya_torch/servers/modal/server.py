@@ -384,15 +384,12 @@ def create_modal_app_for_gpu(
 
         def _remove_tensors_impl(self, tensor_ids: list[int]) -> None:
             """Remove multiple tensors from the remote machine."""
-            # Check for partial storage removal
-            for tensor_id in tensor_ids:
-                if tensor_id in self._tensor_registry:
-                    storage = self._tensor_registry[tensor_id].untyped_storage()
-                    expected_ids = self._storage_to_ids.get(storage, set())
-                    removing_ids = {tid for tid in tensor_ids if tid in self._tensor_registry and self._tensor_registry[tid].untyped_storage() is storage}
-                    if removing_ids != expected_ids:
-                        logging.warning(f"Partial storage removal: removing {len(removing_ids)}/{len(expected_ids)} tensors")
-                        break  # Only warn once
+            # Warn if not removing complete storage
+            if tensor_ids and tensor_ids[0] in self._tensor_registry:
+                storage = self._tensor_registry[tensor_ids[0]].untyped_storage()
+                expected_ids = self._storage_to_ids.get(storage, set())
+                if expected_ids != set(tensor_ids):
+                    logging.warning("Partial storage removal detected")
 
             # Remove tensors from registry
             for tensor_id in tensor_ids:
