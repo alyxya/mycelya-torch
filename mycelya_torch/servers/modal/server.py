@@ -14,10 +14,12 @@ Part of: mycelya_torch PyTorch extension
 """
 
 import io
+import logging
 import os
 import pickle
 import subprocess
 import uuid
+import weakref
 from typing import Any, TypedDict
 
 import cloudpickle
@@ -99,10 +101,14 @@ def create_modal_app_for_gpu(
         """Custom pickler to convert results back to metadata."""
 
         def __init__(
-            self, file: Any, temp_tensor_registry: dict[str, torch.Tensor]
+            self,
+            file: Any,
+            temp_tensor_registry: dict[str, torch.Tensor],
+            storage_to_ids: weakref.WeakKeyDictionary[torch.UntypedStorage, set[str | int]],
         ) -> None:
             super().__init__(file)
             self.temp_tensor_registry = temp_tensor_registry
+            self.storage_to_ids = storage_to_ids
 
         def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
             if isinstance(obj, torch.Tensor):
@@ -111,6 +117,10 @@ def create_modal_app_for_gpu(
 
                 # Register tensor in temp registry
                 self.temp_tensor_registry[temp_id] = obj
+
+                # Update storage-to-IDs mapping
+                storage = obj.untyped_storage()
+                self.storage_to_ids.setdefault(storage, set()).add(temp_id)
 
                 # Create metadata for client reconstruction
                 metadata = {
@@ -194,6 +204,11 @@ def create_modal_app_for_gpu(
             # Temporary tensor registry: temp_id -> torch.Tensor (for operations that create tensors remotely first)
             self._temp_tensor_registry = {}
 
+            # Storage-to-IDs mapping: untyped_storage -> set of tensor_ids/temp_ids
+            self._storage_to_ids: weakref.WeakKeyDictionary[
+                torch.UntypedStorage, set[str | int]
+            ] = weakref.WeakKeyDictionary()
+
             # Method mapping for batch execution
             self._method_map = {
                 "create_tensor": self._create_tensor_impl,
@@ -251,6 +266,10 @@ def create_modal_app_for_gpu(
                 )
 
                 tensor_registry[tensor_id] = tensor
+
+                # Update storage-to-IDs mapping for empty tensor
+                storage = tensor.untyped_storage()
+                self._storage_to_ids.setdefault(storage, set()).add(tensor_id)
             else:
                 # Create tensor view (equivalent to old _create_tensor_view_impl)
                 if alias_id not in tensor_registry:
@@ -267,6 +286,10 @@ def create_modal_app_for_gpu(
                 )
 
                 tensor_registry[tensor_id] = view_tensor
+
+                # Update storage-to-IDs mapping for tensor view
+                storage = view_tensor.untyped_storage()
+                self._storage_to_ids.setdefault(storage, set()).add(tensor_id)
 
         @modal.method()
         def create_tensor(self, metadata: TensorMetadata) -> None:
@@ -363,9 +386,47 @@ def create_modal_app_for_gpu(
             """Remove multiple tensors from the remote machine."""
             tensor_registry = self._tensor_registry
 
+            # Collect all storages for tensors being removed for verification
+            storages_to_ids = {}
             for tensor_id in tensor_ids:
                 if tensor_id in tensor_registry:
+                    storage = tensor_registry[tensor_id].untyped_storage()
+                    storages_to_ids.setdefault(storage, set()).add(tensor_id)
+
+            # Verify expected behavior: log if tensors have different storages
+            if len(storages_to_ids) > 1:
+                logging.warning(
+                    f"Removing tensors with different storages: "
+                    f"{[len(ids) for ids in storages_to_ids.values()]} tensors per storage"
+                )
+
+            # Verify storage mapping consistency
+            for storage, ids in storages_to_ids.items():
+                if storage in self._storage_to_ids:
+                    expected_ids = self._storage_to_ids[storage]
+                    if not ids.issubset(expected_ids):
+                        logging.warning(
+                            f"Storage has IDs {expected_ids} but removing {ids} - "
+                            f"missing: {ids - expected_ids}"
+                        )
+                    elif ids == expected_ids:
+                        logging.info(
+                            f"Removing all tensors ({len(ids)}) associated with storage - "
+                            f"storage will be freed"
+                        )
+
+            # Remove tensors and update storage mapping
+            for tensor_id in tensor_ids:
+                if tensor_id in tensor_registry:
+                    tensor = tensor_registry[tensor_id]
+                    storage = tensor.untyped_storage()
+
+                    # Remove from tensor registry
                     del tensor_registry[tensor_id]
+
+                    # Update storage-to-IDs mapping
+                    if storage in self._storage_to_ids:
+                        self._storage_to_ids[storage].discard(tensor_id)
 
         @modal.method()
         def remove_tensors(self, tensor_ids: list[int]) -> None:
@@ -471,6 +532,10 @@ def create_modal_app_for_gpu(
                 for i, t in enumerate(result_tensors):
                     temp_id = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
                     temp_registry[temp_id] = t
+
+                    # Update storage-to-IDs mapping for temp tensor
+                    storage = t.untyped_storage()
+                    self._storage_to_ids.setdefault(storage, set()).add(temp_id)
                     output_metadata.append(
                         TensorMetadata(
                             shape=list(t.shape),
@@ -491,6 +556,10 @@ def create_modal_app_for_gpu(
                 # Static: store in main registry
                 for tid, tensor in zip(output_tensor_ids, result_tensors, strict=True):
                     tensor_registry[tid] = tensor
+
+                    # Update storage-to-IDs mapping for static tensor
+                    storage = tensor.untyped_storage()
+                    self._storage_to_ids.setdefault(storage, set()).add(tid)
 
         @modal.method()
         def execute_aten_operation(
@@ -542,6 +611,12 @@ def create_modal_app_for_gpu(
                 # Get the tensor from temporary registry
                 remote_tensor = temp_tensor_registry[temp_id]
 
+                # Update storage-to-IDs mapping: remove temp_id, add tensor_id
+                storage = remote_tensor.untyped_storage()
+                if storage in self._storage_to_ids:
+                    self._storage_to_ids[storage].discard(temp_id)
+                self._storage_to_ids.setdefault(storage, set()).add(tensor_id)
+
                 # Link the local tensor ID to the remote tensor in the main registry
                 tensor_registry[tensor_id] = remote_tensor
 
@@ -586,7 +661,7 @@ def create_modal_app_for_gpu(
 
             # Pickle the result
             result_buffer = io.BytesIO()
-            pickler = Pickler(result_buffer, temp_tensor_registry)
+            pickler = Pickler(result_buffer, temp_tensor_registry, self._storage_to_ids)
             pickler.dump(result)
 
             return result_buffer.getvalue()
