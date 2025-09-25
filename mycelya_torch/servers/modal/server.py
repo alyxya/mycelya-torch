@@ -193,7 +193,7 @@ def create_modal_app_for_gpu(
             # checkpoint -> {model: nn.Module, parameter_tensor_map: Dict[str, int]}
             self._model_registry = {}
 
-            # Temporary tensor registry: string_key -> torch.Tensor (for operations that create tensors remotely first)
+            # Temporary tensor registry: temp_id -> torch.Tensor (for operations that create tensors remotely first)
             self._temp_tensor_registry = {}
 
             # Method mapping for batch execution
