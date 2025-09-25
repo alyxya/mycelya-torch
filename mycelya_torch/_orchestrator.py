@@ -363,7 +363,7 @@ class Orchestrator:
                            or None for dynamic operations
 
         Returns:
-            For dynamic operations (output_tensors=None): list[TensorMetadata] metadata with id embedded
+            For dynamic operations (output_tensors=None): list[TensorMetadata] metadata with temp_id embedded
             For static operations: None
         """
         # Process args/kwargs: validate, collect tensors, replace with IDs
