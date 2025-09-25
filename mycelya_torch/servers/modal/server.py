@@ -191,9 +191,6 @@ def create_modal_app_for_gpu(
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
             self._tensor_registry = {}
 
-            # checkpoint -> {model: nn.Module, parameter_tensor_map: Dict[str, int]}
-            self._model_registry = {}
-
             # Temporary tensor registry: temp_id -> torch.Tensor (for operations that create tensors remotely first)
             self._temp_tensor_registry = {}
 
