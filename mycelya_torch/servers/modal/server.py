@@ -425,8 +425,7 @@ def create_modal_app_for_gpu(
                     del tensor_registry[tensor_id]
 
                     # Update storage-to-IDs mapping
-                    if storage in self._storage_to_ids:
-                        self._storage_to_ids[storage].discard(tensor_id)
+                    self._storage_to_ids.setdefault(storage, set()).discard(tensor_id)
 
         @modal.method()
         def remove_tensors(self, tensor_ids: list[int]) -> None:
@@ -613,9 +612,8 @@ def create_modal_app_for_gpu(
 
                 # Update storage-to-IDs mapping: remove temp_id, add tensor_id
                 storage = remote_tensor.untyped_storage()
-                if storage in self._storage_to_ids:
-                    self._storage_to_ids[storage].discard(temp_id)
-                self._storage_to_ids.setdefault(storage, set()).add(tensor_id)
+                self._storage_to_ids.setdefault(storage, set()).discard(temp_id)
+                self._storage_to_ids[storage].add(tensor_id)
 
                 # Link the local tensor ID to the remote tensor in the main registry
                 tensor_registry[tensor_id] = remote_tensor
