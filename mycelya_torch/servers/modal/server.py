@@ -384,32 +384,23 @@ def create_modal_app_for_gpu(
 
         def _remove_tensors_impl(self, tensor_ids: list[int]) -> None:
             """Remove multiple tensors from the remote machine."""
-            tensor_registry = self._tensor_registry
-
-            # Group tensors by storage for logging
+            # Group tensors by storage for verification
             storages_to_ids = {}
             for tensor_id in tensor_ids:
-                if tensor_id in tensor_registry:
-                    storage = tensor_registry[tensor_id].untyped_storage()
+                if tensor_id in self._tensor_registry:
+                    storage = self._tensor_registry[tensor_id].untyped_storage()
                     storages_to_ids.setdefault(storage, set()).add(tensor_id)
 
-            # Log verification info
-            if len(storages_to_ids) > 1:
-                logging.warning(f"Removing tensors with {len(storages_to_ids)} different storages")
-
+            # Warn if not removing all tensors for each storage
             for storage, ids in storages_to_ids.items():
                 expected_ids = self._storage_to_ids.get(storage, set())
                 if ids != expected_ids:
                     logging.warning(f"Expected to remove all {len(expected_ids)} tensors for storage, but only removing {len(ids)}")
-                else:
-                    logging.info(f"Removing all {len(ids)} tensors for storage - will be freed")
 
-            # Remove tensors and update mappings
+            # Remove tensors from registry
             for tensor_id in tensor_ids:
-                if tensor_id in tensor_registry:
-                    storage = tensor_registry[tensor_id].untyped_storage()
-                    del tensor_registry[tensor_id]
-                    self._storage_to_ids.setdefault(storage, set()).discard(tensor_id)
+                if tensor_id in self._tensor_registry:
+                    del self._tensor_registry[tensor_id]
 
         @modal.method()
         def remove_tensors(self, tensor_ids: list[int]) -> None:
