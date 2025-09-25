@@ -399,7 +399,9 @@ def create_modal_app_for_gpu(
 
             for storage, ids in storages_to_ids.items():
                 expected_ids = self._storage_to_ids.get(storage, set())
-                if ids == expected_ids:
+                if ids != expected_ids:
+                    logging.warning(f"Expected to remove all {len(expected_ids)} tensors for storage, but only removing {len(ids)}")
+                else:
                     logging.info(f"Removing all {len(ids)} tensors for storage - will be freed")
 
             # Remove tensors and update mappings
