@@ -17,7 +17,8 @@ log = get_logger(__name__)
 
 
 def _create_meta_tensor_from_mycelya(
-    mycelya_tensor: torch.Tensor, meta_storage_cache: dict[torch.UntypedStorage, torch.UntypedStorage]
+    mycelya_tensor: torch.Tensor,
+    meta_storage_cache: dict[torch.UntypedStorage, torch.UntypedStorage],
 ) -> torch.Tensor:
     """Create a meta tensor that closely mirrors a mycelya tensor, including storage sharing."""
     original_storage = mycelya_tensor.untyped_storage()
@@ -26,7 +27,9 @@ def _create_meta_tensor_from_mycelya(
     if original_storage not in meta_storage_cache:
         # Create meta storage with same nbytes as the original
         nbytes = original_storage.nbytes()
-        meta_storage_cache[original_storage] = torch.UntypedStorage(nbytes, device="meta")
+        meta_storage_cache[original_storage] = torch.UntypedStorage(
+            nbytes, device="meta"
+        )
 
     meta_storage = meta_storage_cache[original_storage]
 

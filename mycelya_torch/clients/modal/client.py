@@ -11,6 +11,7 @@ along with related functionality for creating and managing Modal applications.
 from typing import Any
 
 from ..._logging import get_logger
+from ..._utils import TensorMetadata
 from ...servers.modal.server import create_modal_app_for_gpu
 from ..base_client import BatchCall, Client
 
@@ -84,41 +85,14 @@ class ModalClient(Client):
         return self._server_instance.execute_batch.spawn(batch_calls)
 
     # Tensor management methods
-    def create_empty_tensor(
-        self,
-        tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        storage_offset: int,
-        dtype: str,
-        nbytes: int,
-        device_type: str,
-        device_index: int,
-    ) -> None:
-        """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
-        self._server_instance.create_empty_tensor.spawn(
-            tensor_id,
-            shape,
-            stride,
-            storage_offset,
-            dtype,
-            nbytes,
-            device_type,
-            device_index,
-        )
+    def create_tensor(self, metadata: TensorMetadata) -> None:
+        """Implementation: Create a tensor on the remote machine.
 
-    def create_tensor_view(
-        self,
-        new_tensor_id: int,
-        base_tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        offset: int,
-    ) -> None:
-        """Implementation: Create a tensor view on the remote machine from an existing tensor using as_strided."""
-        self._server_instance.create_tensor_view.spawn(
-            new_tensor_id, base_tensor_id, shape, stride, offset
-        )
+        Creates either a new empty tensor or a tensor view based on metadata.alias_id:
+        - If alias_id is None: Creates new empty tensor
+        - If alias_id is int: Creates tensor view using alias_id as base tensor
+        """
+        self._server_instance.create_tensor.spawn(metadata)
 
     def update_tensor(
         self,

@@ -67,7 +67,8 @@ def create_modal_app_for_gpu(
         device_type: str
         device_index: int
         requires_grad: bool
-        id: str
+        id: str | int
+        alias_id: int | None
 
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
@@ -198,8 +199,7 @@ def create_modal_app_for_gpu(
 
             # Method mapping for batch execution
             self._method_map = {
-                "create_empty_tensor": self._create_empty_tensor_impl,
-                "create_tensor_view": self._create_tensor_view_impl,
+                "create_tensor": self._create_tensor_impl,
                 "update_tensor": self._update_tensor_impl,
                 "get_storage_data": self._get_storage_data_impl,
                 "remove_tensors": self._remove_tensors_impl,
@@ -217,105 +217,64 @@ def create_modal_app_for_gpu(
             pass
 
         # Tensor ID-based methods
-        def _create_empty_tensor_impl(
-            self,
-            tensor_id: int,
-            shape: list[int],
-            stride: list[int],
-            storage_offset: int,
-            dtype: str,
-            nbytes: int,
-            device_type: str,
-            device_index: int,
-        ) -> None:
-            """Create an empty tensor with given tensor_id and proper storage layout."""
+        def _create_tensor_impl(self, metadata: TensorMetadata) -> None:
+            """Create a tensor based on metadata.
 
+            Creates either a new empty tensor or a tensor view based on metadata.alias_id:
+            - If alias_id is None: Creates new empty tensor
+            - If alias_id is int: Creates tensor view using alias_id as base tensor
+            """
             tensor_registry = self._tensor_registry
+            tensor_id = metadata["id"]
+            alias_id = metadata.get("alias_id")
 
             if tensor_id in tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} already exists")
 
-            torch_dtype = getattr(torch, dtype)
+            if alias_id is None:
+                # Create empty tensor (equivalent to old _create_empty_tensor_impl)
+                torch_dtype = getattr(torch, metadata["dtype"])
 
-            # Use the explicit device type and index from the client
-            device = torch.device(device_type, device_index)
+                # Use the explicit device type and index from the client
+                device = torch.device(metadata["device_type"], metadata["device_index"])
 
-            # Use the exact nbytes provided by the client allocator
-            # The client has already calculated the correct storage size
-            storage_nbytes = nbytes
+                # Use the exact nbytes provided by the client allocator
+                # The client has already calculated the correct storage size
+                storage_nbytes = metadata["nbytes"]
 
-            # Create untyped storage with the exact nbytes size
-            untyped_storage = torch.UntypedStorage(storage_nbytes, device=device)
+                # Create untyped storage with the exact nbytes size
+                untyped_storage = torch.UntypedStorage(storage_nbytes, device=device)
 
-            # Create the tensor view with the specified layout
-            tensor = torch.empty(0, dtype=torch_dtype, device=device).set_(
-                untyped_storage, storage_offset, shape, stride
-            )
+                # Create the tensor view with the specified layout
+                tensor = torch.empty(0, dtype=torch_dtype, device=device).set_(
+                    untyped_storage,
+                    metadata["storage_offset"],
+                    metadata["shape"],
+                    metadata["stride"],
+                )
 
-            tensor_registry[tensor_id] = tensor
+                tensor_registry[tensor_id] = tensor
+            else:
+                # Create tensor view (equivalent to old _create_tensor_view_impl)
+                if alias_id not in tensor_registry:
+                    raise ValueError(f"Base tensor ID {alias_id} does not exist")
 
-        @modal.method()
-        def create_empty_tensor(
-            self,
-            tensor_id: int,
-            shape: list[int],
-            stride: list[int],
-            storage_offset: int,
-            dtype: str,
-            nbytes: int,
-            device_type: str,
-            device_index: int,
-        ) -> None:
-            """Create an empty tensor on the remote machine with proper storage layout."""
-            self._create_empty_tensor_impl(
-                tensor_id,
-                shape,
-                stride,
-                storage_offset,
-                dtype,
-                nbytes,
-                device_type,
-                device_index,
-            )
+                base_tensor = tensor_registry[alias_id]
 
-        def _create_tensor_view_impl(
-            self,
-            new_tensor_id: int,
-            base_tensor_id: int,
-            shape: list[int],
-            stride: list[int],
-            offset: int,
-        ) -> None:
-            """Create a tensor view from existing tensor using as_strided."""
+                # Create view using as_strided directly on the base tensor
+                view_tensor = torch.as_strided(
+                    base_tensor,
+                    metadata["shape"],
+                    metadata["stride"],
+                    metadata["storage_offset"],
+                )
 
-            tensor_registry = self._tensor_registry
-
-            if new_tensor_id in tensor_registry:
-                raise ValueError(f"New tensor ID {new_tensor_id} already exists")
-
-            if base_tensor_id not in tensor_registry:
-                raise ValueError(f"Base tensor ID {base_tensor_id} does not exist")
-
-            base_tensor = tensor_registry[base_tensor_id]
-
-            # Create view using as_strided directly on the base tensor
-            view_tensor = torch.as_strided(base_tensor, shape, stride, offset)
-
-            tensor_registry[new_tensor_id] = view_tensor
+                tensor_registry[tensor_id] = view_tensor
 
         @modal.method()
-        def create_tensor_view(
-            self,
-            new_tensor_id: int,
-            base_tensor_id: int,
-            shape: list[int],
-            stride: list[int],
-            offset: int,
-        ) -> None:
-            """Create a tensor view from existing tensor using as_strided."""
-            self._create_tensor_view_impl(
-                new_tensor_id, base_tensor_id, shape, stride, offset
-            )
+        def create_tensor(self, metadata: TensorMetadata) -> None:
+            """Create a tensor on the remote machine with proper storage layout."""
+            self._create_tensor_impl(metadata)
 
         def _update_tensor_impl(
             self,

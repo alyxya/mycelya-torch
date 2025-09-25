@@ -11,6 +11,10 @@ ensuring consistent API across different backends (Modal, AWS, GCP, Azure, etc.)
 from abc import ABC, abstractmethod
 from typing import Any, TypedDict
 
+# Import TensorMetadata from parent module
+if True:  # TYPE_CHECKING
+    from .._utils import TensorMetadata
+
 
 class BatchCall(TypedDict):
     """Structure for a single batched RPC call.
@@ -108,30 +112,16 @@ class Client(ABC):
 
     # Tensor management methods
     @abstractmethod
-    def create_empty_tensor(
-        self,
-        tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        storage_offset: int,
-        dtype: str,
-        nbytes: int,
-        device_type: str,
-        device_index: int,
-    ) -> None:
-        """Create an empty tensor on the remote machine with proper storage layout."""
-        pass
+    def create_tensor(self, metadata: "TensorMetadata") -> None:
+        """Create a tensor on the remote machine.
 
-    @abstractmethod
-    def create_tensor_view(
-        self,
-        new_tensor_id: int,
-        base_tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        offset: int,
-    ) -> None:
-        """Create a tensor view from an existing tensor."""
+        Creates either a new empty tensor or a tensor view based on metadata.alias_id:
+        - If alias_id is None: Creates new empty tensor
+        - If alias_id is int: Creates tensor view using alias_id as base tensor
+
+        Args:
+            metadata: TensorMetadata containing tensor properties and creation info
+        """
         pass
 
     @abstractmethod

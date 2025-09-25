@@ -29,7 +29,8 @@ class TensorMetadata(TypedDict):
     device_type: str
     device_index: int
     requires_grad: bool
-    id: str
+    id: str | int
+    alias_id: int | None
 
 
 def get_tensor_id(tensor: torch.Tensor) -> int:

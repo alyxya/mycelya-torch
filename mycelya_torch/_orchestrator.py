@@ -421,7 +421,9 @@ class Orchestrator:
         if output_tensors:
             for output_tensor in output_tensors:
                 if isinstance(output_tensor, torch.Tensor):
-                    tensor_device_info = self.storage.get_remote_device_info(output_tensor)
+                    tensor_device_info = self.storage.get_remote_device_info(
+                        output_tensor
+                    )
 
                     if remote_device_info is None:
                         remote_device_info = tensor_device_info
@@ -468,8 +470,8 @@ class Orchestrator:
         """Ensure tensor exists on remote client using storage mapping logic.
 
         Logic:
-        - If storage ID isn't in mapping, call create_empty_tensor
-        - If storage ID exists but not tensor ID, call create_tensor_view
+        - If storage ID isn't in mapping, create empty tensor (alias_id=None)
+        - If storage ID exists but not tensor ID, create tensor view (alias_id=existing tensor ID)
         - Otherwise the tensor already exists
         """
         tensor_id = get_tensor_id(tensor)
@@ -482,30 +484,27 @@ class Orchestrator:
             return
 
         # Get client manager and device info from tensor's storage
-        machine_id, device_type, device_index = self.storage.get_remote_device_info(tensor)
+        machine_id, device_type, device_index = self.storage.get_remote_device_info(
+            tensor
+        )
         client_manager = self._client_managers[machine_id]
 
-        if alias_tensor_id is None:
-            # Storage doesn't exist - create empty tensor on remote
-            client_manager.create_empty_tensor(
-                tensor_id=tensor_id,
-                shape=list(tensor.shape),
-                stride=list(tensor.stride()),
-                storage_offset=tensor.storage_offset(),
-                dtype=dtype_to_str(tensor.dtype),
-                nbytes=tensor.untyped_storage().nbytes(),
-                device_type=device_type,
-                device_index=device_index,
-            )
-        else:
-            # Storage exists - create view of existing tensor
-            client_manager.create_tensor_view(
-                new_tensor_id=tensor_id,
-                base_tensor_id=alias_tensor_id,
-                shape=list(tensor.shape),
-                stride=list(tensor.stride()),
-                offset=tensor.storage_offset(),
-            )
+        # Create metadata for tensor creation
+        metadata: TensorMetadata = {
+            "id": tensor_id,
+            "alias_id": alias_tensor_id,  # None for empty tensor, int for tensor view
+            "shape": list(tensor.shape),
+            "stride": list(tensor.stride()),
+            "dtype": dtype_to_str(tensor.dtype),
+            "storage_offset": tensor.storage_offset(),
+            "nbytes": tensor.untyped_storage().nbytes(),
+            "device_type": device_type,
+            "device_index": device_index,
+            "requires_grad": tensor.requires_grad,
+        }
+
+        # Use unified create_tensor method
+        client_manager.create_tensor(metadata)
 
         # Register the tensor in storage manager
         self.storage.register_tensor(tensor)

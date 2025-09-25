@@ -11,6 +11,7 @@ for development and testing without requiring remote cloud resources.
 from typing import Any
 
 from ..._logging import get_logger
+from ..._utils import TensorMetadata
 from ...servers.mock.server import create_mock_modal_app
 from ..base_client import BatchCall, Client
 
@@ -56,48 +57,21 @@ class MockClient(Client):
         return self._server_instance.execute_batch.local(batch_calls)
 
     # Tensor management methods
-    def create_empty_tensor(
-        self,
-        tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        storage_offset: int,
-        dtype: str,
-        nbytes: int,
-        device_type: str,
-        device_index: int,
-    ) -> None:
-        """Implementation: Create an empty tensor on the remote machine with proper storage layout."""
-        try:
-            self._server_instance.create_empty_tensor.local(
-                tensor_id,
-                shape,
-                stride,
-                storage_offset,
-                dtype,
-                nbytes,
-                device_type,
-                device_index,
-            )
-        except Exception as e:
-            raise RuntimeError(f"Failed to create empty tensor {tensor_id}: {e}") from e
+    def create_tensor(self, metadata: TensorMetadata) -> None:
+        """Implementation: Create a tensor on the remote machine.
 
-    def create_tensor_view(
-        self,
-        new_tensor_id: int,
-        base_tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        offset: int,
-    ) -> None:
-        """Implementation: Create a tensor view from an existing tensor."""
+        Creates either a new empty tensor or a tensor view based on metadata.alias_id:
+        - If alias_id is None: Creates new empty tensor
+        - If alias_id is int: Creates tensor view using alias_id as base tensor
+        """
         try:
-            self._server_instance.create_tensor_view.local(
-                new_tensor_id, base_tensor_id, shape, stride, offset
-            )
+            self._server_instance.create_tensor.local(metadata)
         except Exception as e:
+            tensor_id = metadata["id"]
+            alias_id = metadata.get("alias_id")
+            operation_type = "tensor view" if alias_id is not None else "empty tensor"
             raise RuntimeError(
-                f"Failed to create tensor view {new_tensor_id}: {e}"
+                f"Failed to create {operation_type} {tensor_id}: {e}"
             ) from e
 
     def update_tensor(

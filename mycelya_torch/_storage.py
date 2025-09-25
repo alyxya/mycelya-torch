@@ -51,7 +51,9 @@ class StorageManager:
         self._storage_to_tensors_map: dict[int, set[int]] = {}
 
         # Tensor ID to untyped storage mapping - weak references automatically remove deleted storages
-        self._tensor_id_to_storage: weakref.WeakValueDictionary[int, torch.UntypedStorage] = weakref.WeakValueDictionary()
+        self._tensor_id_to_storage: weakref.WeakValueDictionary[
+            int, torch.UntypedStorage
+        ] = weakref.WeakValueDictionary()
 
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
@@ -80,7 +82,9 @@ class StorageManager:
 
         return storage_id
 
-    def get_remote_device_info(self, storage_id_or_tensor: int | torch.Tensor) -> tuple[str, str, int]:
+    def get_remote_device_info(
+        self, storage_id_or_tensor: int | torch.Tensor
+    ) -> tuple[str, str, int]:
         """Get remote device info for a storage ID or tensor.
 
         Args:

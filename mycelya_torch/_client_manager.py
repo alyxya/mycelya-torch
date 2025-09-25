@@ -254,76 +254,30 @@ class ClientManager:
 
     # Tensor management methods
 
-    def create_empty_tensor(
-        self,
-        tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        storage_offset: int,
-        dtype: str,
-        nbytes: int,
-        device_type: str,
-        device_index: int,
-    ) -> None:
-        """Create an empty tensor on the remote machine with proper storage layout."""
+    def create_tensor(self, metadata: TensorMetadata) -> None:
+        """Create a tensor on the remote machine.
+
+        Creates either a new empty tensor or a tensor view based on metadata.alias_id:
+        - If alias_id is None: Creates new empty tensor
+        - If alias_id is int: Creates tensor view using alias_id as base tensor
+
+        Args:
+            metadata: TensorMetadata containing tensor properties and creation info
+        """
         self._ensure_running()
 
         if self.batching:
             # Add to batch
             self._batch_calls.append(
                 BatchCall(
-                    method_name="create_empty_tensor",
-                    args=(
-                        tensor_id,
-                        shape,
-                        stride,
-                        storage_offset,
-                        dtype,
-                        nbytes,
-                        device_type,
-                        device_index,
-                    ),
+                    method_name="create_tensor",
+                    args=(metadata,),
                     kwargs={},
                 )
             )
         else:
             # Direct execution
-            self.client.create_empty_tensor(
-                tensor_id,
-                shape,
-                stride,
-                storage_offset,
-                dtype,
-                nbytes,
-                device_type,
-                device_index,
-            )
-
-    def create_tensor_view(
-        self,
-        new_tensor_id: int,
-        base_tensor_id: int,
-        shape: list[int],
-        stride: list[int],
-        offset: int,
-    ) -> None:
-        """Create a tensor view from an existing tensor."""
-        self._ensure_running()
-
-        if self.batching:
-            # Add to batch
-            self._batch_calls.append(
-                BatchCall(
-                    method_name="create_tensor_view",
-                    args=(new_tensor_id, base_tensor_id, shape, stride, offset),
-                    kwargs={},
-                )
-            )
-        else:
-            # Direct execution
-            self.client.create_tensor_view(
-                new_tensor_id, base_tensor_id, shape, stride, offset
-            )
+            self.client.create_tensor(metadata)
 
     def update_tensor(
         self,
