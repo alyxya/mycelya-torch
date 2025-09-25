@@ -196,8 +196,8 @@ class Client(ABC):
     @abstractmethod
     def link_tensors(
         self,
-        local_tensor_ids: list[int],
-        temp_keys: list[str],
+        tensor_ids: list[int],
+        temp_ids: list[str],
     ) -> None:
         """Link local mycelya tensor IDs to remote tensors from temporary registry."""
         pass

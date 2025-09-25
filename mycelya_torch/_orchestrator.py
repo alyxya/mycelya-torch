@@ -363,7 +363,7 @@ class Orchestrator:
                            or None for dynamic operations
 
         Returns:
-            For dynamic operations (output_tensors=None): list[TensorMetadata] metadata with temp_key embedded
+            For dynamic operations (output_tensors=None): list[TensorMetadata] metadata with id embedded
             For static operations: None
         """
         # Process args/kwargs: validate, collect tensors, replace with IDs
@@ -511,26 +511,26 @@ class Orchestrator:
         self.storage.register_tensor(tensor)
 
     def link_tensors(
-        self, local_tensors: list[torch.Tensor], temp_keys: list[str]
+        self, local_tensors: list[torch.Tensor], temp_ids: list[str]
     ) -> None:
         """Link local tensors to remote tensors from temporary registry.
 
         Args:
             local_tensors: List of local mycelya tensors to link
-            temp_keys: list of temporary keys from remote execution
+            temp_ids: list of temporary IDs from remote execution
 
         Note: All tensors must be on the same device.
         """
-        if not local_tensors or not temp_keys:
+        if not local_tensors or not temp_ids:
             return
 
-        if len(local_tensors) != len(temp_keys):
+        if len(local_tensors) != len(temp_ids):
             raise ValueError(
-                f"Mismatch between tensors ({len(local_tensors)}) and temp keys ({len(temp_keys)})"
+                f"Mismatch between tensors ({len(local_tensors)}) and temp IDs ({len(temp_ids)})"
             )
 
         # Extract tensor IDs from tensors
-        local_tensor_ids = [get_tensor_id(tensor) for tensor in local_tensors]
+        tensor_ids = [get_tensor_id(tensor) for tensor in local_tensors]
 
         # Get the machine from the first tensor (all should be on same device)
         first_tensor = local_tensors[0]
@@ -538,7 +538,7 @@ class Orchestrator:
         client_manager = self._client_managers[machine_id]
 
         # Delegate to client manager
-        client_manager.link_tensors(local_tensor_ids, temp_keys)
+        client_manager.link_tensors(tensor_ids, temp_ids)
 
         # Update storage manager mapping to track these linked tensors
         for tensor in local_tensors:
@@ -612,8 +612,8 @@ class Orchestrator:
 
         # Handle tensor linking if any tensors were collected
         if unpickler.tensors_to_link:
-            tensors, temp_keys = zip(*unpickler.tensors_to_link)
-            self.link_tensors(list(tensors), list(temp_keys))
+            tensors, temp_ids = zip(*unpickler.tensors_to_link)
+            self.link_tensors(list(tensors), list(temp_ids))
 
         return result
 

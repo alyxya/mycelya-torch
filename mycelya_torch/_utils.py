@@ -14,10 +14,10 @@ import torch
 
 
 class TensorMetadata(TypedDict):
-    """Structure for tensor metadata with temp key.
+    """Structure for tensor metadata with ID.
 
     This TypedDict defines the structure returned by dynamic operations
-    that need to pass tensor metadata along with a temporary key for
+    that need to pass tensor metadata along with an ID for
     linking local tensors to remote tensors.
     """
 
@@ -29,7 +29,7 @@ class TensorMetadata(TypedDict):
     device_type: str
     device_index: int
     requires_grad: bool
-    temp_key: str
+    id: str
 
 
 def get_tensor_id(tensor: torch.Tensor) -> int:

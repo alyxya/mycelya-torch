@@ -490,8 +490,8 @@ class ClientManager:
 
     def link_tensors(
         self,
-        local_tensor_ids: list[int],
-        temp_keys: list[str],
+        tensor_ids: list[int],
+        temp_ids: list[str],
     ) -> None:
         """Link local mycelya tensor IDs to remote tensors from temporary registry."""
         self._ensure_running()
@@ -501,13 +501,13 @@ class ClientManager:
             self._batch_calls.append(
                 BatchCall(
                     method_name="link_tensors",
-                    args=(local_tensor_ids, temp_keys),
+                    args=(tensor_ids, temp_ids),
                     kwargs={},
                 )
             )
         else:
             # Direct execution
-            self.client.link_tensors(local_tensor_ids, temp_keys)
+            self.client.link_tensors(tensor_ids, temp_ids)
 
     def execute_function(self, pickled_function: bytes) -> Future[bytes]:
         """Execute a pickled function on the remote machine."""

@@ -177,14 +177,14 @@ def _execute_with_dynamic_outputs(
 
     # Create output tensors from metadata
     output_tensors = []
-    temp_keys = []
+    temp_ids = []
     for metadata in result:
         output_tensor = create_mycelya_tensor_from_metadata(metadata, mycelya_device)
         output_tensors.append(output_tensor)
-        temp_keys.append(metadata["temp_key"])
+        temp_ids.append(metadata["id"])
 
     # Link all tensors to remote data
-    orchestrator.link_tensors(output_tensors, temp_keys)
+    orchestrator.link_tensors(output_tensors, temp_ids)
 
     return output_tensors[0] if len(output_tensors) == 1 else tuple(output_tensors)
 

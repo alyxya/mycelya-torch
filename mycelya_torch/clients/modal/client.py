@@ -180,11 +180,11 @@ class ModalClient(Client):
 
     def link_tensors(
         self,
-        local_tensor_ids: list[int],
-        temp_keys: list[str],
+        tensor_ids: list[int],
+        temp_ids: list[str],
     ) -> None:
         """Implementation: Link local mycelya tensor IDs to remote tensors from temporary registry."""
-        self._server_instance.link_tensors.spawn(local_tensor_ids, temp_keys)
+        self._server_instance.link_tensors.spawn(tensor_ids, temp_ids)
 
     def execute_function(self, pickled_function: bytes) -> Any:
         """Implementation: Execute a pickled function remotely."""

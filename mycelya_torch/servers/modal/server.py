@@ -52,10 +52,10 @@ def create_modal_app_for_gpu(
         kwargs: dict[str, Any]
 
     class TensorMetadata(TypedDict):
-        """Structure for tensor metadata with temp key.
+        """Structure for tensor metadata with ID.
 
         This TypedDict defines the structure returned by dynamic operations
-        that need to pass tensor metadata along with a temporary key for
+        that need to pass tensor metadata along with an ID for
         linking local tensors to remote tensors.
         """
 
@@ -67,7 +67,7 @@ def create_modal_app_for_gpu(
         device_type: str
         device_index: int
         requires_grad: bool
-        temp_key: str
+        id: str
 
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
@@ -105,11 +105,11 @@ def create_modal_app_for_gpu(
 
         def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
             if isinstance(obj, torch.Tensor):
-                # Generate unique temp key
-                temp_key = f"remote_result_{uuid.uuid4().hex[:8]}"
+                # Generate unique temp ID for registry
+                temp_id = f"remote_result_{uuid.uuid4().hex[:8]}"
 
                 # Register tensor in temp registry
-                self.temp_tensor_registry[temp_key] = obj
+                self.temp_tensor_registry[temp_id] = obj
 
                 # Create metadata for client reconstruction
                 metadata = {
@@ -123,7 +123,7 @@ def create_modal_app_for_gpu(
                     if obj.device.index is not None
                     else 0,
                     "requires_grad": obj.requires_grad,
-                    "temp_key": temp_key,
+                    "id": temp_id,
                 }
 
                 return ("remote_tensor", metadata)
@@ -509,12 +509,12 @@ def create_modal_app_for_gpu(
 
             # Handle static vs dynamic operations
             if output_tensor_ids is None:
-                # Dynamic: return metadata with temp keys
+                # Dynamic: return metadata with IDs
                 temp_registry = self._temp_tensor_registry
                 output_metadata = []
                 for i, t in enumerate(result_tensors):
-                    temp_key = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
-                    temp_registry[temp_key] = t
+                    temp_id = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
+                    temp_registry[temp_id] = t
                     output_metadata.append(
                         TensorMetadata(
                             shape=list(t.shape),
@@ -527,7 +527,7 @@ def create_modal_app_for_gpu(
                             if t.device.index is not None
                             else 0,
                             requires_grad=t.requires_grad,
-                            temp_key=temp_key,
+                            id=temp_id,
                         )
                     )
                 return output_metadata
@@ -556,7 +556,7 @@ def create_modal_app_for_gpu(
 
             # Handle return format based on whether this is a dynamic operation
             if output_tensor_ids is None:
-                # Dynamic operation: result is metadata list with temp_key embedded
+                # Dynamic operation: result is metadata list with id embedded
                 return result
             else:
                 # Static operation: no return value needed
@@ -564,39 +564,39 @@ def create_modal_app_for_gpu(
 
         def _link_tensors_impl(
             self,
-            local_tensor_ids: list[int],
-            temp_keys: list[str],
+            tensor_ids: list[int],
+            temp_ids: list[str],
         ) -> None:
             """Implementation of link_tensors without Modal decorators."""
 
-            if len(local_tensor_ids) != len(temp_keys):
+            if len(tensor_ids) != len(temp_ids):
                 raise ValueError(
-                    f"Mismatch between tensor IDs ({len(local_tensor_ids)}) and temp keys ({len(temp_keys)})"
+                    f"Mismatch between tensor IDs ({len(tensor_ids)}) and temp IDs ({len(temp_ids)})"
                 )
 
             tensor_registry = self._tensor_registry
             temp_tensor_registry = self._temp_tensor_registry
 
-            for local_tensor_id, temp_key in zip(local_tensor_ids, temp_keys):
-                if temp_key not in temp_tensor_registry:
+            for tensor_id, temp_id in zip(tensor_ids, temp_ids):
+                if temp_id not in temp_tensor_registry:
                     raise KeyError(
-                        f"Temporary tensor key '{temp_key}' not found in temporary registry"
+                        f"Temporary tensor ID '{temp_id}' not found in temporary registry"
                     )
 
                 # Get the tensor from temporary registry
-                remote_tensor = temp_tensor_registry[temp_key]
+                remote_tensor = temp_tensor_registry[temp_id]
 
                 # Link the local tensor ID to the remote tensor in the main registry
-                tensor_registry[local_tensor_id] = remote_tensor
+                tensor_registry[tensor_id] = remote_tensor
 
                 # Remove from temporary registry after linking
-                del temp_tensor_registry[temp_key]
+                del temp_tensor_registry[temp_id]
 
         @modal.method()
         def link_tensors(
             self,
-            local_tensor_ids: list[int],
-            temp_keys: list[str],
+            tensor_ids: list[int],
+            temp_ids: list[str],
         ) -> None:
             """
             Link local mycelya tensor IDs to remote tensors from temporary registry.
@@ -605,10 +605,10 @@ def create_modal_app_for_gpu(
             that were previously stored in the temporary registry.
 
             Args:
-                local_tensor_ids: List of local tensor IDs from created mycelya tensors
-                temp_keys: List of temporary registry keys corresponding to each tensor ID
+                tensor_ids: List of local tensor IDs from created mycelya tensors
+                temp_ids: List of temporary registry IDs corresponding to each tensor ID
             """
-            self._link_tensors_impl(local_tensor_ids, temp_keys)
+            self._link_tensors_impl(tensor_ids, temp_ids)
 
         def _execute_function_impl(self, pickled_function: bytes) -> bytes:
             """Implementation of execute_function without Modal decorators."""

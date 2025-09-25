@@ -199,7 +199,7 @@ class Unpickler(pickle.Unpickler):
         super().__init__(file)
         self.machine_id = machine_id
         # Collect tensor linking info for orchestrator to handle
-        self.tensors_to_link = []  # List of (tensor, temp_key) tuples
+        self.tensors_to_link = []  # List of (tensor, temp_id) tuples
 
     def persistent_load(self, pid: tuple[str, Any]) -> Any:
         """
@@ -225,8 +225,8 @@ class Unpickler(pickle.Unpickler):
             tensor = create_mycelya_tensor_from_metadata(metadata, device)
 
             # Collect tensor linking info for orchestrator to handle
-            temp_key = metadata["temp_key"]
-            self.tensors_to_link.append((tensor, temp_key))
+            temp_id = metadata["id"]
+            self.tensors_to_link.append((tensor, temp_id))
 
             return tensor
 
