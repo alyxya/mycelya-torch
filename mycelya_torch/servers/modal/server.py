@@ -68,7 +68,7 @@ def create_modal_app_for_gpu(
         device_index: int
         requires_grad: bool
         id: str | int
-        alias_id: int | None
+        alias_id: str | int | None
 
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
