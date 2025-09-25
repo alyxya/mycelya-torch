@@ -64,15 +64,7 @@ class MockClient(Client):
         - If alias_id is None: Creates new empty tensor
         - If alias_id is int: Creates tensor view using alias_id as base tensor
         """
-        try:
-            self._server_instance.create_tensor.local(metadata)
-        except Exception as e:
-            tensor_id = metadata["id"]
-            alias_id = metadata.get("alias_id")
-            operation_type = "tensor view" if alias_id is not None else "empty tensor"
-            raise RuntimeError(
-                f"Failed to create {operation_type} {tensor_id}: {e}"
-            ) from e
+        self._server_instance.create_tensor.local(metadata)
 
     def update_tensor(
         self,
