@@ -386,45 +386,27 @@ def create_modal_app_for_gpu(
             """Remove multiple tensors from the remote machine."""
             tensor_registry = self._tensor_registry
 
-            # Collect all storages for tensors being removed for verification
+            # Group tensors by storage for logging
             storages_to_ids = {}
             for tensor_id in tensor_ids:
                 if tensor_id in tensor_registry:
                     storage = tensor_registry[tensor_id].untyped_storage()
                     storages_to_ids.setdefault(storage, set()).add(tensor_id)
 
-            # Verify expected behavior: log if tensors have different storages
+            # Log verification info
             if len(storages_to_ids) > 1:
-                logging.warning(
-                    f"Removing tensors with different storages: "
-                    f"{[len(ids) for ids in storages_to_ids.values()]} tensors per storage"
-                )
+                logging.warning(f"Removing tensors with {len(storages_to_ids)} different storages")
 
-            # Verify storage mapping consistency
             for storage, ids in storages_to_ids.items():
-                if storage in self._storage_to_ids:
-                    expected_ids = self._storage_to_ids[storage]
-                    if not ids.issubset(expected_ids):
-                        logging.warning(
-                            f"Storage has IDs {expected_ids} but removing {ids} - "
-                            f"missing: {ids - expected_ids}"
-                        )
-                    elif ids == expected_ids:
-                        logging.info(
-                            f"Removing all tensors ({len(ids)}) associated with storage - "
-                            f"storage will be freed"
-                        )
+                expected_ids = self._storage_to_ids.get(storage, set())
+                if ids == expected_ids:
+                    logging.info(f"Removing all {len(ids)} tensors for storage - will be freed")
 
-            # Remove tensors and update storage mapping
+            # Remove tensors and update mappings
             for tensor_id in tensor_ids:
                 if tensor_id in tensor_registry:
-                    tensor = tensor_registry[tensor_id]
-                    storage = tensor.untyped_storage()
-
-                    # Remove from tensor registry
+                    storage = tensor_registry[tensor_id].untyped_storage()
                     del tensor_registry[tensor_id]
-
-                    # Update storage-to-IDs mapping
                     self._storage_to_ids.setdefault(storage, set()).discard(tensor_id)
 
         @modal.method()
