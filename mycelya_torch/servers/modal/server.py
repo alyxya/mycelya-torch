@@ -387,7 +387,7 @@ def create_modal_app_for_gpu(
             # Warn if not removing complete storage
             if tensor_ids and tensor_ids[0] in self._tensor_registry:
                 storage = self._tensor_registry[tensor_ids[0]].untyped_storage()
-                expected_ids = self._storage_to_ids.get(storage, set())
+                expected_ids = self._storage_to_ids[storage]
                 if expected_ids != set(tensor_ids):
                     logging.warning("Partial storage removal detected")
 
