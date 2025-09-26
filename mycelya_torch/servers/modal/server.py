@@ -289,7 +289,7 @@ def create_modal_app_for_gpu(
 
                 # Update storage-to-IDs mapping for tensor view
                 storage = view_tensor.untyped_storage()
-                self._storage_to_ids.setdefault(storage, set()).add(tensor_id)
+                self._storage_to_ids[storage].add(tensor_id)
 
         @modal.method()
         def create_tensor(self, metadata: TensorMetadata) -> None:
