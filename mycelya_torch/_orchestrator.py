@@ -490,18 +490,18 @@ class Orchestrator:
         client_manager = self._client_managers[machine_id]
 
         # Create metadata for tensor creation
-        metadata: TensorMetadata = {
-            "id": tensor_id,
-            "alias_id": alias_tensor_id,  # None for empty tensor, int for tensor view
-            "shape": list(tensor.shape),
-            "stride": list(tensor.stride()),
-            "dtype": dtype_to_str(tensor.dtype),
-            "storage_offset": tensor.storage_offset(),
-            "nbytes": tensor.untyped_storage().nbytes(),
-            "device_type": device_type,
-            "device_index": device_index,
-            "requires_grad": tensor.requires_grad,
-        }
+        metadata = TensorMetadata(
+            id=tensor_id,
+            alias_id=alias_tensor_id,  # None for empty tensor, int for tensor view
+            shape=list(tensor.shape),
+            stride=list(tensor.stride()),
+            dtype=dtype_to_str(tensor.dtype),
+            storage_offset=tensor.storage_offset(),
+            nbytes=tensor.untyped_storage().nbytes(),
+            device_type=device_type,
+            device_index=device_index,
+            requires_grad=tensor.requires_grad,
+        )
 
         # Use unified create_tensor method
         client_manager.create_tensor(metadata)
