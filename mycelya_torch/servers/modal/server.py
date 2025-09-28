@@ -102,73 +102,73 @@ def create_modal_app_for_gpu(
 
         def __init__(self):
             # tensor_id -> torch.Tensor (direct mapping from tensor ID to tensor)
-            self._tensor_registry: dict[int, torch.Tensor] = {}
+            self.tensor_registry: dict[int, torch.Tensor] = {}
 
             # Temporary tensor registry: temp_id -> torch.Tensor (for operations that create tensors remotely first)
-            self._temp_tensor_registry: dict[str, torch.Tensor] = {}
+            self.temp_tensor_registry: dict[str, torch.Tensor] = {}
 
             # Storage-to-IDs mapping: untyped_storage -> set of tensor_ids/temp_ids
-            self._storage_to_ids: weakref.WeakKeyDictionary[
+            self.storage_to_ids: weakref.WeakKeyDictionary[
                 torch.UntypedStorage, set[str | int]
             ] = weakref.WeakKeyDictionary()
 
         def register_tensor(self, tensor_id: int, tensor: torch.Tensor) -> None:
             """Register a tensor in the main registry and update storage mapping."""
-            self._tensor_registry[tensor_id] = tensor
+            self.tensor_registry[tensor_id] = tensor
             storage = tensor.untyped_storage()
-            self._storage_to_ids.setdefault(storage, set()).add(tensor_id)
+            self.storage_to_ids.setdefault(storage, set()).add(tensor_id)
 
         def register_temp_tensor(self, temp_id: str, tensor: torch.Tensor) -> None:
             """Register a temporary tensor and update storage mapping."""
-            self._temp_tensor_registry[temp_id] = tensor
+            self.temp_tensor_registry[temp_id] = tensor
             storage = tensor.untyped_storage()
-            self._storage_to_ids.setdefault(storage, set()).add(temp_id)
+            self.storage_to_ids.setdefault(storage, set()).add(temp_id)
 
         def get_tensor(self, tensor_id: int) -> torch.Tensor:
             """Get tensor by ID from main registry."""
-            return self._tensor_registry[tensor_id]
+            return self.tensor_registry[tensor_id]
 
         def get_temp_tensor(self, temp_id: str) -> torch.Tensor:
             """Get tensor by temp ID from temp registry."""
-            return self._temp_tensor_registry[temp_id]
+            return self.temp_tensor_registry[temp_id]
 
         def has_tensor(self, tensor_id: int) -> bool:
             """Check if tensor ID exists in main registry."""
-            return tensor_id in self._tensor_registry
+            return tensor_id in self.tensor_registry
 
         def has_temp_tensor(self, temp_id: str) -> bool:
             """Check if temp ID exists in temp registry."""
-            return temp_id in self._temp_tensor_registry
+            return temp_id in self.temp_tensor_registry
 
         def remove_tensors(self, tensor_ids: list[int]) -> None:
             """Remove tensors from main registry."""
             for tensor_id in tensor_ids:
-                if tensor_id in self._tensor_registry:
-                    del self._tensor_registry[tensor_id]
+                if tensor_id in self.tensor_registry:
+                    del self.tensor_registry[tensor_id]
 
         def get_alias_id(self, storage: torch.UntypedStorage) -> str | int | None:
             """Get an existing ID for storage (for creating aliases)."""
-            existing_ids = self._storage_to_ids.get(storage, set())
+            existing_ids = self.storage_to_ids.get(storage, set())
             return next(iter(existing_ids), None) if existing_ids else None
 
         def get_storage_ids(self, storage: torch.UntypedStorage) -> set[str | int]:
             """Get all IDs using a specific storage."""
-            return self._storage_to_ids.get(storage, set())
+            return self.storage_to_ids.get(storage, set())
 
         def link_tensors(self, tensor_ids: list[int], temp_ids: list[str]) -> None:
             """Link local tensor IDs to remote tensors from temporary registry."""
             for tensor_id, temp_id in zip(tensor_ids, temp_ids):
-                if temp_id not in self._temp_tensor_registry:
+                if temp_id not in self.temp_tensor_registry:
                     raise KeyError(f"Temporary tensor ID '{temp_id}' not found in temporary registry")
 
-                temp_tensor = self._temp_tensor_registry.pop(temp_id)
+                temp_tensor = self.temp_tensor_registry.pop(temp_id)
                 self.register_tensor(tensor_id, temp_tensor)
 
                 # Update storage mapping - remove temp_id, add tensor_id
                 storage = temp_tensor.untyped_storage()
-                if storage in self._storage_to_ids:
-                    self._storage_to_ids[storage].discard(temp_id)
-                    self._storage_to_ids[storage].add(tensor_id)
+                if storage in self.storage_to_ids:
+                    self.storage_to_ids[storage].discard(temp_id)
+                    self.storage_to_ids[storage].add(tensor_id)
 
     class Pickler(cloudpickle.Pickler):
         """Custom pickler to convert results back to metadata."""
@@ -644,7 +644,7 @@ def create_modal_app_for_gpu(
             """Implementation of execute_function without Modal decorators."""
             # Unpickle the function bundle using tensor manager
             buffer = io.BytesIO(pickled_function)
-            unpickler = Unpickler(buffer, self.tensor_manager._tensor_registry)
+            unpickler = Unpickler(buffer, self.tensor_manager.tensor_registry)
             func_bundle = unpickler.load()
 
             # Extract function and arguments
