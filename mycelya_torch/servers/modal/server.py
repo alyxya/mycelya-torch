@@ -100,7 +100,8 @@ def create_modal_app_for_gpu(
 
             # Get alias ID before registering (to see if storage already exists)
             storage = tensor.untyped_storage()
-            alias_id = self.get_alias_id(storage)
+            existing_ids = self.storage_to_ids.get(storage, set())
+            alias_id = next(iter(existing_ids), None) if existing_ids else None
 
             # Register tensor in temp registry
             self.temp_tensor_registry[temp_id] = tensor
@@ -119,16 +120,6 @@ def create_modal_app_for_gpu(
                 id=temp_id,
                 alias_id=alias_id,
             )
-
-
-        def get_alias_id(self, storage: torch.UntypedStorage) -> str | int | None:
-            """Get an existing ID for storage (for creating aliases)."""
-            existing_ids = self.storage_to_ids.get(storage, set())
-            return next(iter(existing_ids), None) if existing_ids else None
-
-        def get_storage_ids(self, storage: torch.UntypedStorage) -> set[str | int]:
-            """Get all IDs using a specific storage."""
-            return self.storage_to_ids.get(storage, set())
 
         def link_tensors(self, tensor_ids: list[int], temp_ids: list[str]) -> None:
             """Link local tensor IDs to remote tensors from temporary registry."""
@@ -419,7 +410,7 @@ def create_modal_app_for_gpu(
             if tensor_ids and tensor_ids[0] in self.tensor_manager.tensor_registry:
                 tensor = self.tensor_manager.tensor_registry[tensor_ids[0]]
                 storage = tensor.untyped_storage()
-                expected_ids = self.tensor_manager.get_storage_ids(storage)
+                expected_ids = self.tensor_manager.storage_to_ids.get(storage, set())
                 if expected_ids != set(tensor_ids):
                     logging.warning("Unexpected tensor ID to storage removal mismatch detected")
 
