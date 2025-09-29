@@ -148,20 +148,20 @@ def create_modal_app_for_gpu(
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
 
-        def __init__(self, file: Any, tensor_registry: dict[int, torch.Tensor]) -> None:
+        def __init__(self, file: Any, tensor_manager: TensorManager) -> None:
             super().__init__(file)
-            self.tensor_registry = tensor_registry
+            self.tensor_manager = tensor_manager
 
         def persistent_load(self, pid: tuple[str, Any]) -> Any:
             type_tag, data = pid
 
             if type_tag == "mycelya_tensor":
                 tensor_id = data
-                if tensor_id not in self.tensor_registry:
+                if not self.tensor_manager.has_tensor(tensor_id):
                     raise ValueError(
                         f"Tensor ID {tensor_id} not found in remote registry"
                     )
-                return self.tensor_registry[tensor_id].detach()
+                return self.tensor_manager.get_tensor(tensor_id).detach()
 
             elif type_tag == "mycelya_device":
                 remote_type, remote_index = data
@@ -644,7 +644,7 @@ def create_modal_app_for_gpu(
             """Implementation of execute_function without Modal decorators."""
             # Unpickle the function bundle using tensor manager
             buffer = io.BytesIO(pickled_function)
-            unpickler = Unpickler(buffer, self.tensor_manager.tensor_registry)
+            unpickler = Unpickler(buffer, self.tensor_manager)
             func_bundle = unpickler.load()
 
             # Extract function and arguments
