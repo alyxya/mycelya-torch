@@ -93,10 +93,10 @@ def create_modal_app_for_gpu(
             storage = tensor.untyped_storage()
             self.storage_to_ids.setdefault(storage, set()).add(tensor_id)
 
-        def register_temp_tensor(self, tensor: torch.Tensor, op_name: str = "temp", index: int = 0) -> TensorMetadata:
+        def register_temp_tensor(self, tensor: torch.Tensor) -> TensorMetadata:
             """Register a temporary tensor and return its metadata."""
             # Generate unique temp ID
-            temp_id = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{index}"
+            temp_id = f"temp_{uuid.uuid4().hex}"
 
             # Get alias ID before registering (to see if storage already exists)
             storage = tensor.untyped_storage()
@@ -189,7 +189,7 @@ def create_modal_app_for_gpu(
         def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
             if isinstance(obj, torch.Tensor):
                 # Register tensor and get metadata
-                metadata = self.tensor_manager.register_temp_tensor(obj, "remote_result")
+                metadata = self.tensor_manager.register_temp_tensor(obj)
 
                 return ("remote_tensor", metadata)
 
@@ -531,9 +531,9 @@ def create_modal_app_for_gpu(
             if output_tensor_ids is None:
                 # Dynamic: return metadata with IDs
                 output_metadata = []
-                for i, t in enumerate(result_tensors):
+                for t in result_tensors:
                     # Register temp tensor and get metadata
-                    metadata = self.tensor_manager.register_temp_tensor(t, op_name, i)
+                    metadata = self.tensor_manager.register_temp_tensor(t)
                     output_metadata.append(metadata)
                 return output_metadata
             else:
