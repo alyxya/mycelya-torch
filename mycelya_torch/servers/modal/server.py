@@ -72,31 +72,6 @@ def create_modal_app_for_gpu(
         id: str | int
         alias_id: str | int | None
 
-    class Unpickler(pickle.Unpickler):
-        """Custom unpickler to reconstruct tensors from IDs."""
-
-        def __init__(self, file: Any, tensor_registry: dict[int, torch.Tensor]) -> None:
-            super().__init__(file)
-            self.tensor_registry = tensor_registry
-
-        def persistent_load(self, pid: tuple[str, Any]) -> Any:
-            type_tag, data = pid
-
-            if type_tag == "mycelya_tensor":
-                tensor_id = data
-                if tensor_id not in self.tensor_registry:
-                    raise ValueError(
-                        f"Tensor ID {tensor_id} not found in remote registry"
-                    )
-                return self.tensor_registry[tensor_id].detach()
-
-            elif type_tag == "mycelya_device":
-                remote_type, remote_index = data
-                return torch.device(remote_type, remote_index)
-
-            else:
-                raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
-
     class TensorManager:
         """Manages tensor registries and storage-to-tensor ID mappings for server-side tensor operations."""
 
@@ -169,6 +144,31 @@ def create_modal_app_for_gpu(
                 if storage in self.storage_to_ids:
                     self.storage_to_ids[storage].discard(temp_id)
                     self.storage_to_ids[storage].add(tensor_id)
+
+    class Unpickler(pickle.Unpickler):
+        """Custom unpickler to reconstruct tensors from IDs."""
+
+        def __init__(self, file: Any, tensor_registry: dict[int, torch.Tensor]) -> None:
+            super().__init__(file)
+            self.tensor_registry = tensor_registry
+
+        def persistent_load(self, pid: tuple[str, Any]) -> Any:
+            type_tag, data = pid
+
+            if type_tag == "mycelya_tensor":
+                tensor_id = data
+                if tensor_id not in self.tensor_registry:
+                    raise ValueError(
+                        f"Tensor ID {tensor_id} not found in remote registry"
+                    )
+                return self.tensor_registry[tensor_id].detach()
+
+            elif type_tag == "mycelya_device":
+                remote_type, remote_index = data
+                return torch.device(remote_type, remote_index)
+
+            else:
+                raise pickle.PicklingError(f"Unknown persistent ID type: {type_tag}")
 
     class Pickler(cloudpickle.Pickler):
         """Custom pickler to convert results back to metadata."""
