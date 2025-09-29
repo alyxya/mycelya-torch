@@ -137,7 +137,7 @@ def create_modal_app_for_gpu(
 
         def link_tensors(self, tensor_ids: list[int], temp_ids: list[str]) -> None:
             """Link local tensor IDs to remote tensors from temporary registry."""
-            for tensor_id, temp_id in zip(tensor_ids, temp_ids):
+            for tensor_id, temp_id in zip(tensor_ids, temp_ids, strict=True):
                 if temp_id not in self.temp_tensor_registry:
                     raise KeyError(f"Temporary tensor ID '{temp_id}' not found in temporary registry")
 
