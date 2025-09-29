@@ -93,12 +93,32 @@ def create_modal_app_for_gpu(
             storage = tensor.untyped_storage()
             self.storage_to_ids.setdefault(storage, set()).add(tensor_id)
 
-        def register_temp_tensor(self, temp_id: str, tensor: torch.Tensor) -> None:
-            """Register a temporary tensor and update storage mapping."""
-            self.temp_tensor_registry[temp_id] = tensor
+        def register_temp_tensor(self, tensor: torch.Tensor, op_name: str = "temp", index: int = 0) -> TensorMetadata:
+            """Register a temporary tensor and return its metadata."""
+            # Generate unique temp ID
+            temp_id = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{index}"
+
+            # Get alias ID before registering (to see if storage already exists)
             storage = tensor.untyped_storage()
+            alias_id = self.get_alias_id(storage)
+
+            # Register tensor in temp registry
+            self.temp_tensor_registry[temp_id] = tensor
             self.storage_to_ids.setdefault(storage, set()).add(temp_id)
 
+            # Create and return metadata
+            return TensorMetadata(
+                shape=list(tensor.shape),
+                stride=list(tensor.stride()),
+                dtype=str(tensor.dtype).replace("torch.", ""),
+                storage_offset=tensor.storage_offset(),
+                nbytes=tensor.untyped_storage().nbytes(),
+                device_type=tensor.device.type,
+                device_index=tensor.device.index if tensor.device.index is not None else 0,
+                requires_grad=tensor.requires_grad,
+                id=temp_id,
+                alias_id=alias_id,
+            )
 
         def remove_tensors(self, tensor_ids: list[int]) -> None:
             """Remove tensors from main registry."""
@@ -168,31 +188,8 @@ def create_modal_app_for_gpu(
 
         def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
             if isinstance(obj, torch.Tensor):
-                # Generate unique temp ID for registry
-                temp_id = f"remote_result_{uuid.uuid4().hex[:8]}"
-
-                # Get alias ID before registering (to see if storage already exists)
-                storage = obj.untyped_storage()
-                alias_id = self.tensor_manager.get_alias_id(storage)
-
-                # Register tensor in temp registry
-                self.tensor_manager.register_temp_tensor(temp_id, obj)
-
-                # Create metadata for client reconstruction
-                metadata = TensorMetadata(
-                    shape=list(obj.shape),
-                    stride=list(obj.stride()),
-                    dtype=str(obj.dtype).replace("torch.", ""),
-                    storage_offset=obj.storage_offset(),
-                    nbytes=obj.untyped_storage().nbytes(),
-                    device_type=obj.device.type,
-                    device_index=obj.device.index
-                    if obj.device.index is not None
-                    else 0,
-                    requires_grad=obj.requires_grad,
-                    id=temp_id,
-                    alias_id=alias_id,
-                )
+                # Register tensor and get metadata
+                metadata = self.tensor_manager.register_temp_tensor(obj, "remote_result")
 
                 return ("remote_tensor", metadata)
 
@@ -535,31 +532,9 @@ def create_modal_app_for_gpu(
                 # Dynamic: return metadata with IDs
                 output_metadata = []
                 for i, t in enumerate(result_tensors):
-                    temp_id = f"temp_{op_name}_{uuid.uuid4().hex[:8]}_{i}"
-
-                    # Get alias ID before registering temp tensor
-                    storage = t.untyped_storage()
-                    alias_id = self.tensor_manager.get_alias_id(storage)
-
-                    # Register temp tensor
-                    self.tensor_manager.register_temp_tensor(temp_id, t)
-
-                    output_metadata.append(
-                        TensorMetadata(
-                            shape=list(t.shape),
-                            stride=list(t.stride()),
-                            dtype=_dtype_to_str(t.dtype),
-                            storage_offset=t.storage_offset(),
-                            nbytes=t.untyped_storage().nbytes(),
-                            device_type=t.device.type,
-                            device_index=t.device.index
-                            if t.device.index is not None
-                            else 0,
-                            requires_grad=t.requires_grad,
-                            id=temp_id,
-                            alias_id=alias_id,
-                        )
-                    )
+                    # Register temp tensor and get metadata
+                    metadata = self.tensor_manager.register_temp_tensor(t, op_name, i)
+                    output_metadata.append(metadata)
                 return output_metadata
             else:
                 # Static: store in main registry
