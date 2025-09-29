@@ -216,7 +216,7 @@ resize_mycelya_(const at::Tensor &self, at::IntArrayRef size,
     }
   }
 
-  const_cast<at::Tensor &>(self).set_(storage, 0, size, new_stride);
+  const_cast<at::Tensor &>(self).set_(storage, self.storage_offset(), size, new_stride);
 
   return self;
 }
