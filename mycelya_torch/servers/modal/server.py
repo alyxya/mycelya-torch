@@ -426,7 +426,7 @@ def create_modal_app_for_gpu(
                 storage = tensor.untyped_storage()
                 expected_ids = self.tensor_manager.get_storage_ids(storage)
                 if expected_ids != set(tensor_ids):
-                    logging.warning("Partial storage removal detected")
+                    logging.warning("Unexpected tensor ID to storage removal mismatch detected")
 
             # Remove tensors from registry
             self.tensor_manager.remove_tensors(tensor_ids)
