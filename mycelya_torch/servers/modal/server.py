@@ -120,11 +120,6 @@ def create_modal_app_for_gpu(
                 alias_id=alias_id,
             )
 
-        def remove_tensors(self, tensor_ids: list[int]) -> None:
-            """Remove tensors from main registry."""
-            for tensor_id in tensor_ids:
-                if tensor_id in self.tensor_registry:
-                    del self.tensor_registry[tensor_id]
 
         def get_alias_id(self, storage: torch.UntypedStorage) -> str | int | None:
             """Get an existing ID for storage (for creating aliases)."""
@@ -429,7 +424,9 @@ def create_modal_app_for_gpu(
                     logging.warning("Unexpected tensor ID to storage removal mismatch detected")
 
             # Remove tensors from registry
-            self.tensor_manager.remove_tensors(tensor_ids)
+            for tensor_id in tensor_ids:
+                if tensor_id in self.tensor_manager.tensor_registry:
+                    del self.tensor_manager.tensor_registry[tensor_id]
 
         @modal.method()
         def remove_tensors(self, tensor_ids: list[int]) -> None:
