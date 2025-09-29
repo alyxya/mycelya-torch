@@ -24,10 +24,7 @@ A production-ready PyTorch extension that enables transparent remote execution o
 
 To run tests:
 ```bash
-# Minimal regression tests (every commit, <30 seconds)
-pytest tests/test_regression.py::TestCriticalRegression -v
-
-# Fast functional tests (PR reviews, ~2-5 minutes)  
+# Regression tests (core functionality, ~10 seconds)
 pytest tests/test_regression.py -v
 
 # Full comprehensive test suite
@@ -356,8 +353,8 @@ for epoch in range(10):
 #### Enterprise-Level Code Quality
 - **Ruff linting/formatting**: Line length 88, comprehensive rule selection (E,W,F,I,B,C4,UP)
 - **Google C++ Style**: All C++ files with consistent formatting and comprehensive documentation
-- **3-Tier Testing Strategy**: Critical (<30s), Fast (~2-5min), Comprehensive (~10-30min)
-- **Test Markers**: Use `@pytest.mark.critical`, `@pytest.mark.fast`, `@pytest.mark.slow` for categorization
+- **2-Tier Testing Strategy**: Regression (~10s), Comprehensive (~10-30min)
+- **Test Markers**: Use `@pytest.mark.fast`, `@pytest.mark.slow` for categorization
 - **Comprehensive Error Handling**: Clear RuntimeError messages, graceful failure modes, proper error propagation
 - **Thread-Safe Operations**: Background processing with proper synchronization and future-based error handling
 - **Modular Organization**: Clean separation between ATen operation handlers, provider clients, and core coordination

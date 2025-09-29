@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
-Minimal regression test suite for mycelya-torch.
+Regression test suite for mycelya-torch.
 
-This module contains the essential tests that should be run on every commit
-to catch critical regressions. These tests focus on core functionality and
-run quickly (target: <30 seconds).
+This module contains the essential tests that should be run to catch
+regressions in core functionality.
 
 Run with: pytest tests/test_regression.py -v
 """
@@ -17,9 +16,8 @@ import torch
 import mycelya_torch
 
 
-@pytest.mark.critical
-class TestCriticalRegression:
-    """Critical regression tests - run on every commit."""
+class TestRegression:
+    """Regression tests for core functionality."""
 
     def test_basic_imports(self):
         """Test that core modules import successfully."""
