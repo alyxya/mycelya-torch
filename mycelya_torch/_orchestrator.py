@@ -377,6 +377,12 @@ class Orchestrator:
         def process_tensor(obj):
             nonlocal remote_device_info
             if isinstance(obj, torch.Tensor):
+                # Special case: CPU scalar tensors (0-dim) are converted to Python scalars
+                # This allows operations like: mycelya_tensor + torch.tensor(2.0)
+                if obj.device.type == "cpu" and obj.dim() == 0:
+                    tensor_mask.append(False)
+                    return obj.item()  # Convert to Python scalar
+
                 input_tensors.append(obj)
                 tensor_mask.append(True)
 

@@ -72,6 +72,21 @@ def _execute_meta_operation(
 
         # Convert tensor to meta for shape inference
         if isinstance(obj, torch.Tensor):
+            # Validate device type: must be mycelya or CPU scalar (0-dim)
+            if obj.device.type != "mycelya":
+                if obj.device.type == "cpu" and obj.dim() == 0:
+                    # CPU scalar tensors are allowed - pass through as-is
+                    # Meta device operations already handle CPU scalars correctly
+                    # These will be converted to Python scalars later in process_tensor
+                    return obj
+                else:
+                    # Non-mycelya, non-CPU-scalar tensors are not allowed
+                    raise RuntimeError(
+                        f"Cannot mix {obj.device.type} tensors with mycelya tensors in operations. "
+                        f"Only 0-dimensional CPU scalar tensors are automatically transferred. "
+                        f"Please move your tensor to the mycelya device first."
+                    )
+
             meta_tensor = _create_meta_tensor_from_mycelya(obj, meta_storage_cache)
             original_tensors[meta_tensor.untyped_storage()] = obj
             return meta_tensor
