@@ -174,10 +174,6 @@ def _execute_with_dynamic_outputs(
         str(op), args, kwargs, output_tensors=None
     )
 
-    # TODO: Handle operations that return tensors aliasing to existing storage
-    # This is a niche edge case that makes the code messy - should be implemented
-    # in a cleaner way in future design
-
     # Create output tensors from metadata
     output_tensors = []
     temp_ids = []
