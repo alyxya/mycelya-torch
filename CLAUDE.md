@@ -8,14 +8,15 @@ A production-ready PyTorch extension that enables transparent remote execution o
 - **Sequential Tensor ID Architecture**: Atomic counter generates unique storage IDs (1, 2, 3...) with metadata-based FNV-1a hash identification
 - **Custom PyTorch Integration**: Complete custom TensorImpl, StorageImpl, and Allocator following pytorch-npu patterns with zero local memory overhead
 - **Four-Layer Architecture**: C++ Backend, Python Coordination, Client Interface, Server Implementation with clean separation of concerns
-- **Multi-GPU Cloud Support**: 10 GPU types supported (T4, L4, A10G, A100, L40S, H100, H200, B200) across cloud providers
+- **Multi-GPU Cloud Support**: 8 GPU types supported (T4, L4, A10G, A100, L40S, H100, H200, B200) on Modal
 - **Provider Abstraction**: Pluggable client system with Modal (production), Mock (development), extensible for AWS
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
 - **Remote Function Execution**: @remote decorator enables transparent remote execution of custom functions with automatic serialization
+- **CPU Scalar Support**: Automatic handling of 0-dimensional CPU tensors in mixed-device operations
 
-### Production-Scale Features  
+### Production-Scale Features
 - **Thread-Safe Operations**: Background processing with proper synchronization and error handling
-- **Comprehensive Test Coverage**: Complete test suite with 3-tier test strategy (critical/fast/comprehensive)
+- **Comprehensive Test Coverage**: Complete test suite with 2-tier test strategy (fast/comprehensive)
 - **Enterprise Error Handling**: Clear error messages, graceful failure modes, and automatic resource cleanup
 - **Memory Efficiency**: Zero local tensor data storage, raw bytes transfer, metadata caching with automatic invalidation
 - **Performance Optimizations**: Meta tensor inference, view operation handling, dynamic output support
@@ -26,6 +27,9 @@ To run tests:
 ```bash
 # Regression tests (core functionality, ~10 seconds)
 pytest tests/test_regression.py -v
+
+# Remote decorator tests
+pytest tests/test_remote_decorator.py -v
 
 # Full comprehensive test suite
 pytest tests/ -v
@@ -68,9 +72,8 @@ import torch
 import mycelya_torch
 
 # Use mock client - runs locally using Modal's .local() execution
-# GPU type is ignored for mock client
 machine = mycelya_torch.RemoteMachine("mock")
-device = machine.device("cuda")
+device = machine.device("cpu")  # Mock client uses CPU
 
 # All operations run locally but through the same API
 x = torch.randn(100, 100, device=device)
@@ -94,22 +97,23 @@ y = x @ x  # Executed locally
 
 ### Code Quality Configuration
 - **Ruff**: Line length 88, comprehensive rule selection (E, W, F, I, B, C4, UP)
-- **Pytest**: Configuration in `pytest.ini` with custom markers
+- **Pytest**: Configuration in `pytest.ini` with custom markers (@pytest.mark.fast)
 - **Build artifacts**: Compiled extensions in `build/` directory
 
 ## Codebase Structure
 
 ### Project Scale
 - **Modular architecture** with Python and C++ components across comprehensive test coverage
-- **25 Python modules** (~6,500 lines) including core coordination, provider clients, and operation dispatch
+- **27 Python modules** (~6,850 lines) including core coordination, provider clients, and operation dispatch
 - **10 C++ source files** (~1,000 lines) with custom PyTorch integration following pytorch-npu patterns
-- **18 comprehensive test files** with 3-tier testing strategy and critical/fast/comprehensive markers
-- **Example applications** demonstrating HuggingFace integration and performance comparisons
+- **19 comprehensive test files** with 2-tier testing strategy and fast/comprehensive markers
+- **Example application** demonstrating Stable Diffusion integration
 - **Production-ready codebase** with enterprise-level code quality and documentation
 
 ### Core Python Modules (mycelya_torch/)
 - `__init__.py` - Public API and PyTorch PrivateUse1 backend registration with tensor ID utilities
 - `_orchestrator.py` - Central coordination with RPC batching, cache management, and background thread processing
+- `_client_manager.py` - Client connection management and coordination for remote execution
 - `_machine.py` - RemoteMachine abstraction with multi-provider support and context management
 - `_device.py` - DeviceManager for mapping local device indices to remote GPU configurations
 - `_storage.py` - Sequential storage ID system with atomic counter and thread-safe generation (1, 2, 3...)
@@ -123,22 +127,25 @@ y = x @ x  # Executed locally
 ### ATen Operation System (aten/)
 Modular operation dispatch with clean separation of concerns:
 - `__init__.py` - PyTorch library registrations for comprehensive ATen operation coverage
-- `dispatch.py` - Main fallback kernel for unimplemented operations with meta tensor inference
+- `dispatch.py` - Main fallback kernel with meta tensor inference and CPU scalar tensor support
 - `copy.py` - Cross-device copy and transfer operations with raw bytes optimization
 - `scalar.py` - Scalar operations with local execution optimization
 
 ### Provider Client System (clients/)
+- `__init__.py` - Client package initialization and exports
 - `base_client.py` - Abstract client interface with RPC batching, caching, and standardized provider API
+- `modal/__init__.py` - Modal client module exports
 - `modal/client.py` - Modal cloud provider implementation with multi-GPU support and connection management
+- `mock/__init__.py` - Mock client module exports
 - `mock/client.py` - Local execution provider using Modal's .local() for development and testing
 
 ### Server Implementation System (servers/)
 Pluggable server architecture for different cloud providers with clean client-server separation:
 - `__init__.py` - Server system package initialization and provider discovery
-- `modal/server.py` - Modal cloud GPU server implementation with dynamic app creation and lazy/realized storage
 - `modal/__init__.py` - Modal server module exports and API
-- `mock/server.py` - Mock server implementation for local testing and development
+- `modal/server.py` - Modal cloud GPU server implementation with dynamic app creation and lazy/realized storage
 - `mock/__init__.py` - Mock server module exports and API
+- `mock/server.py` - Mock server implementation for local testing and development
 
 The servers directory mirrors the clients directory structure, providing a clear separation between:
 - **Client Layer** (`clients/`): Interface, connection management, RPC batching, local coordination
@@ -155,12 +162,28 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 - `mycelya_extension.cpp` - Python bindings, C++ extensions, and API exposure
 
 ### Development Resources
-- `examples/` - SmolLM2 inference, Modal integration testing:
-  - `smollm2.py` - Basic SmolLM2 model usage
-  - `modal_smollm2_test.py` - Modal integration testing
-- `tests/` - Comprehensive test coverage with critical/fast/comprehensive markers (18 test files)
-- Root directory utilities:
+- `examples/` - Sample applications:
   - `tiny_sd.py` - Stable Diffusion integration example
+- `tests/` - Comprehensive test coverage with fast/comprehensive markers (19 test files):
+  - `test_regression.py` - Core functionality regression tests (~10 seconds)
+  - `test_remote_decorator.py` - Remote function execution tests
+  - `test_autograd_basic.py` - Basic autograd functionality
+  - `test_autograd_complex.py` - Complex autograd scenarios
+  - `test_basic_operations.py` - Basic tensor operations
+  - `test_comparison_logical_operations.py` - Comparison and logical operations
+  - `test_device_management.py` - Device creation and management
+  - `test_error_handling.py` - Error handling and validation
+  - `test_indexing_selection_operations.py` - Indexing and selection
+  - `test_loss_functions.py` - Loss function computations
+  - `test_mathematical_operations.py` - Mathematical operations
+  - `test_mycelya_torch.py` - Core mycelya-torch functionality
+  - `test_reduction_operations.py` - Reduction operations
+  - `test_tensor_manipulation_operations.py` - Tensor manipulation
+  - `test_tensor_transfers.py` - Tensor transfer operations
+  - `test_transformer.py` - Transformer model tests
+  - `test_utilities.py` - Utility functions
+  - `test_view_operations.py` - View and reshape operations
+  - `conftest.py` - Pytest configuration and fixtures
 - Modern build system with `pyproject.toml`, `setup.py` for C++ extensions, and ruff configuration
 
 ## Current Architecture
@@ -169,9 +192,10 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 - **Sequential Tensor ID Architecture**: Atomic counter generates unique storage IDs (1, 2, 3...) with FNV-1a metadata hash computation for debugging
 - **Custom PyTorch Integration**: Complete TensorImpl/StorageImpl/Allocator following pytorch-npu architecture patterns with zero local memory overhead
 - **Clean Input/Output Separation**: Raw bytes transfer with numpy serialization, eliminating torch.save/load overhead (~2-5x faster)
-- **Zero Local Memory**: No tensor data stored locally for remote tensors, only metadata maintained in custom implementations  
+- **Zero Local Memory**: No tensor data stored locally for remote tensors, only metadata maintained in custom implementations
 - **RPC Batching**: Background thread processing reduces network overhead by ~10-100x with queue-based operation dispatch
 - **Multi-Provider Support**: Extensible client system with Modal (production), Mock (development), ready for AWS
+- **CPU Scalar Tensor Support**: Automatic handling of 0-dimensional CPU tensors in operations with mycelya tensors
 
 ### Memory Management Excellence
 - **Zero local memory overhead**: Custom TensorImpl/StorageImpl store no tensor data locally, only metadata maintained
@@ -183,14 +207,15 @@ Complete custom PyTorch integration following pytorch-npu patterns:
 - **Automatic cache invalidation**: Immediate invalidation at queue time ensures correctness with background batching
 
 ### Advanced Operation Dispatch Flow
-1. **Meta Tensor Inference**: Shape computation using PyTorch's meta device eliminates data transfer for shape operations
-2. **View Operation Optimization**: Local view creation with remote propagation maximizes memory efficiency
-3. **Dynamic Output Support**: Special handling for operations with data-dependent output shapes (e.g., nonzero, unique)
-4. **RPC Batching Pipeline**: Operations queued in background thread, reducing network calls by ~10-100x
-5. **Remote Function Execution**: @remote decorator with automatic machine inference and cloudpickle-based serialization
-6. **Remote Execution**: All compute operations dispatched to cloud GPUs with proper error handling
-7. **Thread-Safe Processing**: Background thread coordination with proper synchronization and error propagation
-8. **Efficient Data Transfer**: Raw untyped storage bytes only when crossing device boundaries, no unnecessary serialization
+1. **Device Validation**: Check for mixed device operations, allowing 0-dimensional CPU scalars with mycelya tensors
+2. **Meta Tensor Inference**: Shape computation using PyTorch's meta device eliminates data transfer for shape operations
+3. **View Operation Optimization**: Local view creation with remote propagation maximizes memory efficiency
+4. **Dynamic Output Support**: Special handling for operations with data-dependent output shapes (e.g., nonzero, unique)
+5. **RPC Batching Pipeline**: Operations queued in background thread, reducing network calls by ~10-100x
+6. **Remote Function Execution**: @remote decorator with automatic machine inference and cloudpickle-based serialization
+7. **Remote Execution**: All compute operations dispatched to cloud GPUs with proper error handling
+8. **Thread-Safe Processing**: Background thread coordination with proper synchronization and error propagation
+9. **Efficient Data Transfer**: Raw untyped storage bytes only when crossing device boundaries, no unnecessary serialization
 
 ## Usage Patterns
 
@@ -209,6 +234,26 @@ result = x @ y  # Matrix multiplication on remote A100, Storage ID: 3
 
 # Each tensor has FNV-1a metadata hash for debugging
 print(f"Result computed on {result.device}: {result.shape}")
+```
+
+### CPU Scalar Tensor Support
+```python
+import torch
+import mycelya_torch
+
+machine = mycelya_torch.RemoteMachine("modal", "A100")
+device = machine.device("cuda")
+
+# Create mycelya tensor
+x = torch.randn(1000, 1000, device=device)
+
+# Mix with CPU scalar tensor (0-dimensional) - automatically handled
+scalar_cpu = torch.tensor(2.0)  # CPU scalar
+result = x * scalar_cpu  # Works! CPU scalar auto-transferred
+
+# Non-scalar CPU tensors still raise error
+cpu_vector = torch.randn(1000)  # Non-scalar
+# result = x + cpu_vector  # RuntimeError: Cannot mix cpu tensors with mycelya tensors
 ```
 
 ### Remote Function Execution
@@ -291,6 +336,13 @@ for epoch in range(10):
 - **Internal API Access**: Metadata hash accessible via utility functions for debugging complex tensor flows
 - **Process-Scoped Uniqueness**: Storage IDs unique within single Python process for memory efficiency
 
+### CPU Scalar Tensor Support
+- **Automatic Detection**: 0-dimensional CPU tensors detected in operation dispatch
+- **Validation in Meta Execution**: Mixed device tensors validated, allowing CPU scalars
+- **Conversion in Orchestrator**: CPU scalar tensors converted to Python scalars via .item()
+- **PyTorch Compatibility**: Matches PyTorch's standard behavior where CPU scalars auto-transfer to GPU
+- **Error Handling**: Non-scalar CPU tensors properly rejected with clear error messages
+
 ### Enterprise Error Handling
 - **Cross-Device Operation Prevention**: Clear RuntimeError messages when mixing tensors from different machines
 - **Type Safety Validation**: Descriptive errors for non-mycelya tensors accessing tensor ID APIs
@@ -303,11 +355,11 @@ for epoch in range(10):
 ### Multi-Provider Architecture
 - **Standardized Client Interface**: Abstract base client with consistent API across providers
 - **Modal Production Client**: Complete cloud provider with multi-GPU support, dynamic app creation, connection pooling
-- **Mock Development Client**: Local execution using Modal's .local() for testing without cloud dependencies  
+- **Mock Development Client**: Local execution using Modal's .local() for testing without cloud dependencies
 - **Extensible Provider System**: Clean interfaces ready for AWS integration
 - **Provider-Agnostic Features**: RPC batching, caching, error handling work across all providers
 - **Connection Management**: Proper initialization, cleanup, and resource management per provider
-- **GPU Type Abstraction**: Unified interface for 10 different GPU types across cloud providers
+- **GPU Type Abstraction**: Unified interface for 8 different GPU types on Modal
 
 ## Documentation Maintenance
 
@@ -315,7 +367,7 @@ for epoch in range(10):
 
 ### Update This File When:
 - Adding new core modules or changing module responsibilities
-- Modifying the sequential tensor ID architecture or metadata hash system  
+- Modifying the sequential tensor ID architecture or metadata hash system
 - Adding/removing provider clients (AWS, etc.) or GPU types
 - Changing development commands (test, lint, typecheck) or build configuration
 - Making breaking changes to the public API or internal architecture
@@ -354,7 +406,7 @@ for epoch in range(10):
 - **Ruff linting/formatting**: Line length 88, comprehensive rule selection (E,W,F,I,B,C4,UP)
 - **Google C++ Style**: All C++ files with consistent formatting and comprehensive documentation
 - **2-Tier Testing Strategy**: Regression (~10s), Comprehensive (~10-30min)
-- **Test Markers**: Use `@pytest.mark.fast`, `@pytest.mark.slow` for categorization
+- **Test Markers**: Use `@pytest.mark.fast` for categorization
 - **Comprehensive Error Handling**: Clear RuntimeError messages, graceful failure modes, proper error propagation
 - **Thread-Safe Operations**: Background processing with proper synchronization and future-based error handling
 - **Modular Organization**: Clean separation between ATen operation handlers, provider clients, and core coordination
@@ -365,3 +417,4 @@ for epoch in range(10):
 - **Meta Tensor Integration**: Shape computation without data transfer using PyTorch's meta device
 - **View Operation Optimization**: Local view creation with remote propagation for memory efficiency
 - **Automatic Cache Invalidation**: Immediate invalidation at queue time ensuring correctness
+- **CPU Scalar Optimization**: 0-dimensional CPU tensors converted to Python scalars for efficient remote execution

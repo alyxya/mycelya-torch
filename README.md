@@ -121,14 +121,14 @@ for epoch in range(10):
         # Move data to remote GPU
         data = batch_data.to(device)
         labels = batch_labels.to(device)
-        
+
         # Forward pass, loss, backward pass all on remote GPU
         optimizer.zero_grad()
         outputs = model(data)
         loss = loss_fn(outputs, labels)
         loss.backward()
         optimizer.step()
-        
+
         print(f'Epoch {epoch}, Loss: {loss.item():.4f}')
 ```
 
@@ -136,4 +136,3 @@ for epoch in range(10):
 ## License
 
 AGPL-3.0-or-later - See LICENSE file for details.
-
