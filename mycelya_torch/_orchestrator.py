@@ -543,6 +543,8 @@ class Orchestrator:
         for tensor in local_tensors:
             # Register tensor in storage manager
             self.storage.register_tensor(tensor)
+            # Invalidate cache since tensor is now linked to fresh remote data
+            self.storage.invalidate_cache(tensor)
 
         # Clear temporary storage mappings after linking is complete
         self.storage.clear_temp_storage_map()
