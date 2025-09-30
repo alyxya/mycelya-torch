@@ -182,7 +182,9 @@ def _execute_with_dynamic_outputs(
     output_tensors = []
     temp_ids = []
     for metadata in result:
-        output_tensor = create_mycelya_tensor_from_metadata(metadata, mycelya_device)
+        output_tensor = create_mycelya_tensor_from_metadata(
+            metadata, mycelya_device, orchestrator.storage
+        )
         output_tensors.append(output_tensor)
         temp_ids.append(metadata["id"])
 

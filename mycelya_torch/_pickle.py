@@ -195,9 +195,10 @@ class Unpickler(pickle.Unpickler):
     remote_device info back into local mycelya devices.
     """
 
-    def __init__(self, file: io.BytesIO, machine_id: str):
+    def __init__(self, file: io.BytesIO, machine_id: str, storage_manager):
         super().__init__(file)
         self.machine_id = machine_id
+        self.storage_manager = storage_manager
         # Collect tensor linking info for orchestrator to handle
         self.tensors_to_link = []  # List of (tensor, temp_id) tuples
 
@@ -221,8 +222,10 @@ class Unpickler(pickle.Unpickler):
                 self.machine_id, metadata["device_type"], metadata["device_index"]
             )
 
-            # Create mycelya tensor from metadata
-            tensor = create_mycelya_tensor_from_metadata(metadata, device)
+            # Create mycelya tensor from metadata with storage_manager
+            tensor = create_mycelya_tensor_from_metadata(
+                metadata, device, self.storage_manager
+            )
 
             # Collect tensor linking info for orchestrator to handle
             temp_id = metadata["id"]

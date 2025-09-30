@@ -8,9 +8,12 @@ from mycelya tensors. These functions are for internal use only and should not b
 used by external users of mycelya_torch.
 """
 
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import torch
+
+if TYPE_CHECKING:
+    from ._storage import StorageManager
 
 
 class TensorMetadata(TypedDict):
@@ -96,23 +99,69 @@ def dtype_to_str(dtype: torch.dtype) -> str:
 
 
 def create_mycelya_tensor_from_metadata(
-    metadata: TensorMetadata, device: torch.device
+    metadata: TensorMetadata,
+    device: torch.device,
+    storage_manager: "StorageManager",
 ) -> torch.Tensor:
-    """Create a mycelya tensor from metadata that will be linked to remote storage.
+    """Create a mycelya tensor from metadata with proper alias handling.
+
+    This function handles three cases for tensor creation:
+    1. No alias_id (None): Creates new storage and registers it under tensor_id if it's a temp ID
+    2. Integer alias_id: Looks up existing storage from tensor_id_to_storage mapping
+    3. String alias_id (temp ID): Looks up storage from temp_id_to_storage, or creates new
+       storage if not found (edge case: alias created before source)
 
     Args:
-        metadata: Tensor metadata containing shape, dtype, stride, storage_offset, nbytes
+        metadata: Tensor metadata containing shape, dtype, stride, storage_offset, nbytes, id, alias_id
         device: Mycelya device where the tensor should appear to be located
+        storage_manager: StorageManager instance for handling storage lookups and registrations
 
     Returns:
-        Mycelya tensor ready for linking to remote storage
+        Mycelya tensor with properly resolved storage (either new or aliased)
     """
-    storage = torch.UntypedStorage(metadata["nbytes"], device=device)
+    tensor_id = metadata["id"]
+    alias_id = metadata["alias_id"]
+
+    storage = None
+
+    # First check if this tensor_id already has a storage registered (edge case: alias created first)
+    # tensor_id should always be a string (temp ID) since metadata comes from remote execution
+    if tensor_id in storage_manager._temp_id_to_storage:
+        storage = storage_manager._temp_id_to_storage[tensor_id]
+
+    # If no storage found yet, check alias_id to determine what to do
+    if storage is None:
+        if alias_id is None:
+            # Case 1: No alias, create new storage and register under tensor_id
+            storage = torch.UntypedStorage(metadata["nbytes"], device=device)
+            storage_manager._temp_id_to_storage[tensor_id] = storage
+        elif isinstance(alias_id, int):
+            # Case 2: Integer alias ID, look up in tensor_id_to_storage
+            storage = storage_manager._tensor_id_to_storage.get(alias_id)
+            if storage is None:
+                raise RuntimeError(
+                    f"Cannot create tensor alias: storage for alias_id {alias_id} not found in tensor_id_to_storage mapping"
+                )
+        elif isinstance(alias_id, str):
+            # Case 3: String (temp) alias ID
+            if alias_id in storage_manager._temp_id_to_storage:
+                # Normal case: source tensor already created
+                storage = storage_manager._temp_id_to_storage[alias_id]
+            else:
+                # Edge case: alias tensor created before source
+                # Create new storage and register under alias_id
+                storage = torch.UntypedStorage(metadata["nbytes"], device=device)
+                storage_manager._temp_id_to_storage[alias_id] = storage
+        else:
+            raise ValueError(
+                f"Invalid alias_id type: {type(alias_id)}. Expected int, str, or None"
+            )
+
+    # Create tensor using the resolved storage
     tensor = torch.empty(0, dtype=getattr(torch, metadata["dtype"]), device=device)
     tensor.set_(
         storage, metadata["storage_offset"], metadata["shape"], metadata["stride"]
     )
-
     tensor.requires_grad_(metadata["requires_grad"])
 
     return tensor

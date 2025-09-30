@@ -544,6 +544,9 @@ class Orchestrator:
             # Register tensor in storage manager
             self.storage.register_tensor(tensor)
 
+        # Clear temporary storage mappings after linking is complete
+        self.storage.clear_temp_storage_map()
+
     def execute_function(self, func, args, kwargs) -> Any:
         """
         Execute a pickled function on the remote machine.
@@ -606,7 +609,7 @@ class Orchestrator:
         # Unpickle result with proper tensor linking
 
         buffer = io.BytesIO(pickled_result)
-        unpickler = Unpickler(buffer, machine_id)
+        unpickler = Unpickler(buffer, machine_id, self.storage)
         result = unpickler.load()
 
         # Handle tensor linking if any tensors were collected

@@ -55,6 +55,10 @@ class StorageManager:
             int, torch.UntypedStorage
         ] = weakref.WeakValueDictionary()
 
+        # Temporary ID to storage mapping - used during tensor creation from metadata
+        # Maps temporary IDs (strings) to storages for handling tensor aliases
+        self._temp_id_to_storage: dict[str, torch.UntypedStorage] = {}
+
         # Simple counter for generating incremental storage IDs (GIL-protected)
         self._storage_id_counter = 1
 
@@ -205,3 +209,11 @@ class StorageManager:
         else:
             # Storage exists but tensor doesn't - return first tensor for view creation
             return next(iter(tensor_set))
+
+    def clear_temp_storage_map(self) -> None:
+        """Clear the temporary ID to storage mapping.
+
+        This should be called after tensor linking is complete to free up
+        the temporary storage references.
+        """
+        self._temp_id_to_storage.clear()
