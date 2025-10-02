@@ -28,6 +28,7 @@ import torch
 
 
 def create_modal_app_for_gpu(
+    machine_id: str,
     gpu_type: str,
     packages: list[str],
     python_version: str,
@@ -37,6 +38,7 @@ def create_modal_app_for_gpu(
     Create a Modal app and class for a specific GPU type.
 
     Args:
+        machine_id: Unique machine ID used as the app name
         gpu_type: The GPU type (e.g., "T4", "A100", "local" for local execution)
         timeout: Function timeout in seconds (defaults to 3600 if None)
         packages: List of versioned packages to install (e.g., ["torch==2.0.0", "numpy==1.24.0"])
@@ -188,7 +190,7 @@ def create_modal_app_for_gpu(
         """Convert torch.dtype to string without 'torch.' prefix."""
         return str(dtype).replace("torch.", "")
 
-    app = modal.App("mycelya-torch")
+    app = modal.App(machine_id)
 
     # Create image with synchronized packages and Python version
     image = modal.Image.debian_slim(python_version=python_version).uv_pip_install(

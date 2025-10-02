@@ -47,6 +47,7 @@ class ModalClient(Client):
 
             # Create the Modal app and server class
             app, server_class = create_modal_app_for_gpu(
+                machine_id=self.machine_id,
                 gpu_type=modal_gpu_type,
                 packages=packages,
                 python_version=python_version,

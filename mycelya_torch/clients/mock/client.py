@@ -40,7 +40,7 @@ class MockClient(Client):
     ):
         """Start the mock execution environment."""
         # Create mock server instance directly without app context
-        _, server_class = create_mock_modal_app()
+        _, server_class = create_mock_modal_app(machine_id=self.machine_id)
         self._server_instance = server_class()
 
     def stop(self):
