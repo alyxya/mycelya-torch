@@ -115,8 +115,7 @@ class RemoteMachine:
             )
 
         # Generate unique machine ID
-        short_uuid = str(uuid.uuid4())[:8]
-        machine_id = f"{provider}-{gpu_type.lower()}-{short_uuid}"
+        machine_id = str(uuid.uuid4())[:8]
 
         # Create and register client with orchestrator
         self._client_manager = orchestrator.create_client(
