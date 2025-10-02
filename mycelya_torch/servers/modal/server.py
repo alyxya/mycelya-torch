@@ -190,7 +190,7 @@ def create_modal_app_for_gpu(
         """Convert torch.dtype to string without 'torch.' prefix."""
         return str(dtype).replace("torch.", "")
 
-    app = modal.App(machine_id)
+    app = modal.App(f"mycelya-torch-{machine_id}")
 
     # Create image with synchronized packages and Python version
     image = modal.Image.debian_slim(python_version=python_version).uv_pip_install(
