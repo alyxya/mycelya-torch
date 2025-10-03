@@ -139,18 +139,27 @@ def create_modal_app_for_gpu(
                     self.storage_to_ids[storage].add(tensor_id)
 
         def offload(self, filepath: str) -> None:
-            """Save tensor registry to disk."""
-            torch.save(self.tensor_registry, filepath)
+            """Save tensor registries to disk."""
+            state = {
+                "tensor_registry": self.tensor_registry,
+                "temp_tensor_registry": self.temp_tensor_registry,
+            }
+            torch.save(state, filepath)
 
         def reload(self, filepath: str) -> None:
-            """Load tensor registry from disk and reconstruct storage_to_ids mapping."""
-            self.tensor_registry = torch.load(filepath, weights_only=False)
+            """Load tensor registries from disk and reconstruct storage_to_ids mapping."""
+            state = torch.load(filepath, weights_only=False)
+            self.tensor_registry = state["tensor_registry"]
+            self.temp_tensor_registry = state["temp_tensor_registry"]
 
-            # Reconstruct storage_to_ids mapping
+            # Reconstruct storage_to_ids mapping from both registries
             self.storage_to_ids = weakref.WeakKeyDictionary()
             for tensor_id, tensor in self.tensor_registry.items():
                 storage = tensor.untyped_storage()
                 self.storage_to_ids.setdefault(storage, set()).add(tensor_id)
+            for temp_id, tensor in self.temp_tensor_registry.items():
+                storage = tensor.untyped_storage()
+                self.storage_to_ids.setdefault(storage, set()).add(temp_id)
 
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
