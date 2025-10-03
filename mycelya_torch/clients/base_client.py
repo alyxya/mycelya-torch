@@ -207,3 +207,13 @@ class Client(ABC):
             packages: List of package names to install (e.g., ["numpy", "scipy"])
         """
         pass
+
+    @abstractmethod
+    def offload(self) -> None:
+        """Offload tensor registry to disk."""
+        pass
+
+    @abstractmethod
+    def reload(self) -> None:
+        """Reload tensor registry from disk."""
+        pass

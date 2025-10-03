@@ -140,3 +140,11 @@ class MockClient(Client):
         """Implementation: No-op for mock client - packages are already available locally."""
         # Mock client does nothing for pip install since it uses local execution
         pass
+
+    def offload(self) -> None:
+        """Implementation: Offload tensor registry to disk."""
+        self._server_instance.offload.local()
+
+    def reload(self) -> None:
+        """Implementation: Reload tensor registry from disk."""
+        self._server_instance.reload.local()

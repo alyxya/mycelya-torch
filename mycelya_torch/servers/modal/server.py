@@ -138,6 +138,20 @@ def create_modal_app_for_gpu(
                     self.storage_to_ids[storage].discard(temp_id)
                     self.storage_to_ids[storage].add(tensor_id)
 
+        def offload(self, filepath: str) -> None:
+            """Save tensor registry to disk."""
+            torch.save(self.tensor_registry, filepath)
+
+        def reload(self, filepath: str) -> None:
+            """Load tensor registry from disk and reconstruct storage_to_ids mapping."""
+            self.tensor_registry = torch.load(filepath, weights_only=False)
+
+            # Reconstruct storage_to_ids mapping
+            self.storage_to_ids = weakref.WeakKeyDictionary()
+            for tensor_id, tensor in self.tensor_registry.items():
+                storage = tensor.untyped_storage()
+                self.storage_to_ids.setdefault(storage, set()).add(tensor_id)
+
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
 
@@ -248,6 +262,9 @@ def create_modal_app_for_gpu(
             # Initialize tensor manager for all tensor-related operations
             self.tensor_manager = TensorManager()
 
+            # Store machine_id for offload/reload operations
+            self.machine_id = machine_id
+
             # Method mapping for batch execution
             self._method_map = {
                 "create_tensor": self._create_tensor_impl,
@@ -260,6 +277,8 @@ def create_modal_app_for_gpu(
                 "link_tensors": self._link_tensors_impl,
                 "execute_function": self._execute_function_impl,
                 "pip_install": self._pip_install_impl,
+                "offload": self._offload_impl,
+                "reload": self._reload_impl,
             }
 
         @modal.exit()
@@ -639,6 +658,26 @@ def create_modal_app_for_gpu(
         def pip_install(self, packages: list[str]) -> None:
             """Install packages using pip on the remote machine."""
             self._pip_install_impl(packages)
+
+        def _offload_impl(self) -> None:
+            """Offload tensor registry to disk."""
+            filepath = f"/offload/{self.machine_id}.pt"
+            self.tensor_manager.offload(filepath)
+
+        @modal.method()
+        def offload(self) -> None:
+            """Offload tensor registry to disk."""
+            self._offload_impl()
+
+        def _reload_impl(self) -> None:
+            """Reload tensor registry from disk."""
+            filepath = f"/offload/{self.machine_id}.pt"
+            self.tensor_manager.reload(filepath)
+
+        @modal.method()
+        def reload(self) -> None:
+            """Reload tensor registry from disk."""
+            self._reload_impl()
 
         @modal.method()
         def execute_batch(self, batch_calls: list[BatchCall]) -> list[Any]:

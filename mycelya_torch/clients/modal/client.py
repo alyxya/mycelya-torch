@@ -168,3 +168,11 @@ class ModalClient(Client):
     def pip_install(self, packages: list[str]) -> None:
         """Implementation: Install packages using pip on the remote machine."""
         self._server_instance.pip_install.spawn(packages)
+
+    def offload(self) -> None:
+        """Implementation: Offload tensor registry to disk."""
+        self._server_instance.offload.spawn()
+
+    def reload(self) -> None:
+        """Implementation: Reload tensor registry from disk."""
+        self._server_instance.reload.spawn()
