@@ -296,8 +296,11 @@ def create_modal_app_for_gpu(
 
         @modal.exit()
         def cleanup(self) -> None:
-            """Cleanup when container shuts down (no-op for now)."""
-            pass
+            """Cleanup when container shuts down, offload on preemption."""
+            if self.offload_on_exit:
+                # Preemption detected - offload tensors to disk
+                filepath = f"/offload/{self.machine_id}_preempt.pt"
+                self.tensor_manager.offload(filepath)
 
         # Tensor ID-based methods
         def _create_tensor_impl(self, metadata: TensorMetadata) -> None:
