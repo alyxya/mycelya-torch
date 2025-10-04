@@ -274,6 +274,9 @@ def create_modal_app_for_gpu(
             # Store machine_id for offload/reload operations
             self.machine_id = machine_id
 
+            # Flag for offloading on exit (for preemption handling)
+            self.offload_on_exit = True
+
             # Method mapping for batch execution
             self._method_map = {
                 "create_tensor": self._create_tensor_impl,
@@ -288,6 +291,7 @@ def create_modal_app_for_gpu(
                 "pip_install": self._pip_install_impl,
                 "offload": self._offload_impl,
                 "reload": self._reload_impl,
+                "stop": self._stop_impl,
             }
 
         @modal.exit()
@@ -687,6 +691,15 @@ def create_modal_app_for_gpu(
         def reload(self) -> None:
             """Reload tensor registry from disk."""
             self._reload_impl()
+
+        def _stop_impl(self) -> None:
+            """Stop the server and disable offload on exit."""
+            self.offload_on_exit = False
+
+        @modal.method()
+        def stop(self) -> None:
+            """Stop the server and disable offload on exit."""
+            self._stop_impl()
 
         @modal.method()
         def execute_batch(self, batch_calls: list[BatchCall]) -> list[Any]:

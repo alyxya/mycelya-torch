@@ -64,6 +64,8 @@ class ModalClient(Client):
         """Stop the Modal app context for this machine."""
         if self._app_context is not None:
             try:
+                # Call server's stop method to disable offload_on_exit for handling preemptions
+                self._server_instance.stop.spawn()
                 self._app_context.__exit__(None, None, None)
             except Exception:
                 # Silently ignore cleanup errors during atexit
