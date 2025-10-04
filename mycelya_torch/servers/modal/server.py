@@ -277,6 +277,12 @@ def create_modal_app_for_gpu(
             # Flag for offloading on exit (for preemption handling)
             self.offload_on_exit = True
 
+            # Check for preemption recovery file and reload if it exists
+            if gpu_type != "local":
+                preempt_filepath = f"/offload/{self.machine_id}_preempt.pt"
+                if os.path.exists(preempt_filepath):
+                    self.tensor_manager.reload(preempt_filepath)
+
             # Method mapping for batch execution
             self._method_map = {
                 "create_tensor": self._create_tensor_impl,
