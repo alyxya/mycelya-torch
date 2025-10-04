@@ -161,6 +161,9 @@ def create_modal_app_for_gpu(
                 storage = tensor.untyped_storage()
                 self.storage_to_ids.setdefault(storage, set()).add(temp_id)
 
+            # Delete the file after successful reload
+            os.remove(filepath)
+
     class Unpickler(pickle.Unpickler):
         """Custom unpickler to reconstruct tensors from IDs."""
 
