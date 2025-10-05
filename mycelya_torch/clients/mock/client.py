@@ -142,9 +142,9 @@ class MockClient(Client):
         pass
 
     def offload(self) -> None:
-        """Implementation: Offload tensor registry to disk."""
-        self._server_instance.offload.local()
+        """Implementation: No-op for mock client - no persistence needed for local execution."""
+        pass
 
     def reload(self) -> None:
-        """Implementation: Reload tensor registry from disk."""
-        self._server_instance.reload.local()
+        """Implementation: No-op for mock client - no persistence needed for local execution."""
+        pass
