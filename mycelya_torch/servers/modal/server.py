@@ -280,6 +280,9 @@ def create_modal_app_for_gpu(
             # Flag for offloading on exit (for preemption handling)
             self.offload_on_exit = True
 
+            # Track all packages installed via pip_install
+            self.installed_packages: list[str] = []
+
             # Check for preemption recovery file and reload if it exists
             if gpu_type != "local":
                 preempt_filepath = f"/offload/{self.machine_id}_preempt.pt"
@@ -676,6 +679,8 @@ def create_modal_app_for_gpu(
             cmd = ["uv", "pip", "install", "--system"] + packages
             try:
                 subprocess.run(cmd, check=True, capture_output=True, text=True)
+                # Track installed packages
+                self.installed_packages.extend(packages)
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(f"Failed to install packages {packages}: {e.stderr}")
 
