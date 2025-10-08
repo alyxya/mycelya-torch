@@ -46,11 +46,9 @@ class ModalClient(Client):
             # First time starting - save initial packages and use them for app creation
             if self._initial_packages is None:
                 self._initial_packages = packages.copy()
-                app_packages = packages
                 extra_packages = []
             else:
                 # Subsequent start - reuse initial packages for app, install extras separately
-                app_packages = self._initial_packages
                 extra_packages = [pkg for pkg in packages if pkg not in self._initial_packages]
 
             # Format gpu_type with count for Modal
@@ -60,7 +58,7 @@ class ModalClient(Client):
             app, server_class = create_modal_app_for_gpu(
                 machine_id=self.machine_id,
                 gpu_type=modal_gpu_type,
-                packages=app_packages,
+                packages=self._initial_packages,
                 python_version=python_version,
                 timeout=self._timeout,
             )
