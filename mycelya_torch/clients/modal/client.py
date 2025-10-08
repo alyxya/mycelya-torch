@@ -32,6 +32,7 @@ class ModalClient(Client):
         self._server_instance = None
         self._app_context = None
         self._timeout = timeout
+        self._initial_packages: list[str] | None = None
 
     def start(
         self,
@@ -42,6 +43,16 @@ class ModalClient(Client):
     ):
         """Start the Modal app context for this machine."""
         if self._app_context is None:
+            # First time starting - save initial packages and use them for app creation
+            if self._initial_packages is None:
+                self._initial_packages = packages.copy()
+                app_packages = packages
+                extra_packages = []
+            else:
+                # Subsequent start - reuse initial packages for app, install extras separately
+                app_packages = self._initial_packages
+                extra_packages = [pkg for pkg in packages if pkg not in self._initial_packages]
+
             # Format gpu_type with count for Modal
             modal_gpu_type = f"{gpu_type}:{gpu_count}" if gpu_count > 1 else gpu_type
 
@@ -49,7 +60,7 @@ class ModalClient(Client):
             app, server_class = create_modal_app_for_gpu(
                 machine_id=self.machine_id,
                 gpu_type=modal_gpu_type,
-                packages=packages,
+                packages=app_packages,
                 python_version=python_version,
                 timeout=self._timeout,
             )
@@ -59,6 +70,10 @@ class ModalClient(Client):
             self._app_context.__enter__()
             # Create server instance when app starts
             self._server_instance = server_class()
+
+            # Install extra packages if any
+            if extra_packages:
+                self.pip_install(extra_packages)
 
     def stop(self):
         """Stop the Modal app context for this machine."""
