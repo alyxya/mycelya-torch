@@ -283,11 +283,27 @@ def create_modal_app_for_gpu(
             # Track all packages installed via pip_install
             self.installed_packages: list[str] = []
 
-            # Check for preemption recovery file and reload if it exists
+            # Check for preemption recovery files and reload if they exist
             if gpu_type != "local":
-                preempt_filepath = f"/offload/{self.machine_id}_preempt.pt"
-                if os.path.exists(preempt_filepath):
-                    self.tensor_manager.reload(preempt_filepath)
+                state_filepath = f"/offload/{self.machine_id}_preempt.pt"
+                packages_filepath = f"/offload/{self.machine_id}_preempt_packages.txt"
+
+                # Reload packages first if available
+                if os.path.exists(packages_filepath):
+                    with open(packages_filepath, "r") as f:
+                        packages_to_install = [line.strip() for line in f if line.strip()]
+                    if packages_to_install:
+                        # Install packages using uv pip directly
+                        cmd = ["uv", "pip", "install", "--system"] + packages_to_install
+                        subprocess.run(cmd, check=True, capture_output=True, text=True)
+                        # Track installed packages
+                        self.installed_packages.extend(packages_to_install)
+                    # Delete packages file after installing
+                    os.remove(packages_filepath)
+
+                # Then reload tensors
+                if os.path.exists(state_filepath):
+                    self.tensor_manager.reload(state_filepath)
 
             # Method mapping for batch execution
             self._method_map = {
@@ -311,8 +327,13 @@ def create_modal_app_for_gpu(
             """Cleanup when container shuts down, offload on preemption."""
             if self.offload_on_exit:
                 # Preemption detected - offload tensors to disk
-                filepath = f"/offload/{self.machine_id}_preempt.pt"
-                self.tensor_manager.offload(filepath)
+                state_filepath = f"/offload/{self.machine_id}_preempt.pt"
+                self.tensor_manager.offload(state_filepath)
+
+                # Save installed packages list
+                packages_filepath = f"/offload/{self.machine_id}_preempt_packages.txt"
+                with open(packages_filepath, "w") as f:
+                    f.write("\n".join(self.installed_packages))
 
         # Tensor ID-based methods
         def _create_tensor_impl(self, metadata: TensorMetadata) -> None:
