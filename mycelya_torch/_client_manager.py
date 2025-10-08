@@ -250,18 +250,14 @@ class ClientManager:
                 cpu_tensor_future.set_exception(exception)
 
     def _ensure_running(self) -> None:
-        """Ensure the machine is running, raise RuntimeError if not."""
+        """Ensure the machine is running, automatically starting or resuming if needed."""
         if self.state == ClientState.INITIALIZED:
-            raise RuntimeError(
-                f"Machine {self.machine_id} is not started. Call start() first."
-            )
+            self.start()
         elif self.state == ClientState.PAUSED:
-            raise RuntimeError(
-                f"Machine {self.machine_id} is paused. Call resume() first."
-            )
+            self.resume()
         elif self.state == ClientState.STOPPED:
             raise RuntimeError(
-                f"Machine {self.machine_id} is stopped and cannot be restarted."
+                f"Machine {self.machine_id} has stopped already."
             )
         # If we get here, state is RUNNING - which is what we want
 
@@ -552,8 +548,11 @@ class ClientManager:
                     self.packages.append(pkg)
                 packages_to_install.append(pkg)
 
-        # If client is already running, install packages at runtime
-        if self.state == ClientState.RUNNING and packages_to_install:
+        # If client is already running or paused, install packages at runtime
+        if packages_to_install and self.state != ClientState.INITIALIZED:
+            # Ensure machine is running (will auto-start from INITIALIZED or auto-resume from PAUSED)
+            self._ensure_running()
+
             if self.batching:
                 # Add to batch
                 self._batch_calls.append(
@@ -566,7 +565,7 @@ class ClientManager:
             else:
                 # Direct execution
                 self.client.pip_install(packages_to_install)
-        # If client is not started yet, packages are already added to self.packages
+        # If client is not started yet (INITIALIZED), packages are already added to self.packages
         # and will be included in the initial image when start() is called
 
     def process_background_tasks(self) -> None:
