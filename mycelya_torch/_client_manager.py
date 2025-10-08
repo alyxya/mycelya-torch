@@ -364,10 +364,13 @@ class ClientManager:
 
     def remove_tensors(self, tensor_ids: list[int]) -> None:
         """Remove multiple tensors from the remote machine."""
-        if not self.is_running():
-            # During cleanup/garbage collection, machine may already be shut down
+        if self.state == ClientState.STOPPED:
+            # During cleanup/garbage collection, machine may already be stopped
             # This is expected and should not raise an exception
             return
+
+        # Ensure machine is running (will auto-start or auto-resume if needed)
+        self._ensure_running()
 
         if self.batching:
             # Add to batch
