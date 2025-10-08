@@ -330,10 +330,11 @@ def create_modal_app_for_gpu(
                 state_filepath = f"/offload/{self.machine_id}_preempt.pt"
                 self.tensor_manager.offload(state_filepath)
 
-                # Save installed packages list
-                packages_filepath = f"/offload/{self.machine_id}_preempt_packages.txt"
-                with open(packages_filepath, "w") as f:
-                    f.write("\n".join(self.installed_packages))
+                # Save installed packages list if there are any
+                if self.installed_packages:
+                    packages_filepath = f"/offload/{self.machine_id}_preempt_packages.txt"
+                    with open(packages_filepath, "w") as f:
+                        f.write("\n".join(self.installed_packages))
 
         # Tensor ID-based methods
         def _create_tensor_impl(self, metadata: TensorMetadata) -> None:
