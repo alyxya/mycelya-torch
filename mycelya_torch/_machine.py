@@ -177,7 +177,7 @@ class RemoteMachine:
     def stop(self) -> None:
         """Stop the client for this device."""
         try:
-            self._client_manager.send_stop_signal()
+            self._client_manager.stop()
         except Exception as e:
             # Don't log full stack traces during shutdown
             log.warning(f"Error stopping machine {self}: {type(e).__name__}")

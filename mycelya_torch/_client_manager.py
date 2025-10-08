@@ -114,11 +114,6 @@ class ClientManager:
         self.state = ClientState.RUNNING
 
     def stop(self) -> None:
-        """Stop the cloud provider's compute resources."""
-        self.client.stop()
-        self.state = ClientState.STOPPED
-
-    def send_stop_signal(self) -> None:
         """Send stop signal to background thread with proper coordination."""
         # Clear the event to signal stop request
         self.stop_signal.clear()
@@ -547,7 +542,9 @@ class ClientManager:
         # Check if client should be stopped (stop request signaled by cleared event)
         if not self.stop_signal.is_set():
             if self.is_running():
-                self.stop()
+                # Stop the cloud provider's compute resources
+                self.client.stop()
+                self.state = ClientState.STOPPED
             # Set event to signal completion of stop
             self.stop_signal.set()
             return
