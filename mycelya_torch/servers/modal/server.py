@@ -293,11 +293,7 @@ def create_modal_app_for_gpu(
                     with open(packages_filepath, "r") as f:
                         packages_to_install = [line.strip() for line in f if line.strip()]
                     if packages_to_install:
-                        # Install packages using uv pip directly
-                        cmd = ["uv", "pip", "install", "--system"] + packages_to_install
-                        subprocess.run(cmd, check=True, capture_output=True, text=True)
-                        # Track installed packages
-                        self.installed_packages.extend(packages_to_install)
+                        self._pip_install_impl(packages_to_install)
                     # Delete packages file after installing
                     os.remove(packages_filepath)
 
@@ -699,12 +695,9 @@ def create_modal_app_for_gpu(
 
             # Use uv pip install with --system flag
             cmd = ["uv", "pip", "install", "--system"] + packages
-            try:
-                subprocess.run(cmd, check=True, capture_output=True, text=True)
-                # Track installed packages
-                self.installed_packages.extend(packages)
-            except subprocess.CalledProcessError as e:
-                raise RuntimeError(f"Failed to install packages {packages}: {e.stderr}")
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            # Track installed packages
+            self.installed_packages.extend(packages)
 
         @modal.method()
         def pip_install(self, packages: list[str]) -> None:
