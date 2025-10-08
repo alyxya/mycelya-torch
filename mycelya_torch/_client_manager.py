@@ -125,26 +125,30 @@ class ClientManager:
         self.main_thread_waiting.clear()
 
     def pause(self) -> None:
-        """Pause the client (temporarily suspend operations)."""
+        """Pause the client (offload state and stop)."""
         if self.state != ClientState.RUNNING:
             raise RuntimeError(
                 f"Cannot pause machine {self.machine_id} - not currently running"
             )
 
-        # TODO: Implement pause logic
-        self.state = ClientState.PAUSED
-        raise NotImplementedError("Pause functionality not yet implemented")
+        # Offload tensor state to disk
+        self.client.offload()
+
+        # Stop via ClientManager's stop() method (signals background thread)
+        self.stop()
 
     def resume(self) -> None:
-        """Resume the client from paused state."""
+        """Resume the client from paused state (start and reload)."""
         if self.state != ClientState.PAUSED:
             raise RuntimeError(
                 f"Cannot resume machine {self.machine_id} - not currently paused"
             )
 
-        # TODO: Implement resume logic
-        self.state = ClientState.RUNNING
-        raise NotImplementedError("Resume functionality not yet implemented")
+        # Start via ClientManager's start() method
+        self.start()
+
+        # Reload tensor state from disk
+        self.client.reload()
 
     def is_running(self) -> bool:
         """Check if the machine is currently running and ready."""
