@@ -93,18 +93,16 @@ class ClientManager:
         self.stop_signal = threading.Event()
         self.stop_signal.set()
 
+        # Stop state for stop operations (None when not stopping)
+        self._stop_state = None
+
     @property
     def machine_id(self) -> str:
         """Get the machine ID from the client."""
         return self.client.machine_id
 
-    def start(self) -> None:
-        """Start the cloud provider's compute resources."""
-        if self.state == ClientState.STOPPED:
-            raise RuntimeError(
-                f"Cannot start machine {self.machine_id} - already stopped"
-            )
-
+    def _start(self) -> None:
+        """Internal method to start the cloud provider's compute resources."""
         self.client.start(
             gpu_type=self.gpu_type,
             gpu_count=self.gpu_count,
@@ -113,8 +111,14 @@ class ClientManager:
         )
         self.state = ClientState.RUNNING
 
-    def stop(self) -> None:
-        """Send stop signal to background thread with proper coordination."""
+    def _stop(self, target_state: ClientState) -> None:
+        """Internal method to signal background thread to stop the cloud provider's compute resources.
+
+        Args:
+            target_state: The state to transition to (STOPPED or PAUSED)
+        """
+        # Set stop state for background thread
+        self._stop_state = target_state
         # Clear the event to signal stop request
         self.stop_signal.clear()
         # Wake up background thread
@@ -123,6 +127,30 @@ class ClientManager:
         self.stop_signal.wait()
         # Clear the wake-up signal after finishing waiting
         self.main_thread_waiting.clear()
+        # Reset stop state
+        self._stop_state = None
+
+    def start(self) -> None:
+        """Start the cloud provider's compute resources."""
+        if self.state != ClientState.INITIALIZED:
+            raise RuntimeError(
+                f"Cannot start machine {self.machine_id} - must be in initialized state"
+            )
+
+        self._start()
+
+    def stop(self) -> None:
+        """Stop the cloud provider's compute resources."""
+        if self.state == ClientState.RUNNING:
+            self._stop(ClientState.STOPPED)
+        elif self.state == ClientState.PAUSED:
+            # Already stopped, just transition to STOPPED state
+            # TODO: Clean up offload state (remove offloaded files)
+            self.state = ClientState.STOPPED
+        else:
+            raise RuntimeError(
+                f"Cannot stop machine {self.machine_id} - not currently running or paused"
+            )
 
     def pause(self) -> None:
         """Pause the client (offload state and stop)."""
@@ -134,8 +162,8 @@ class ClientManager:
         # Offload tensor state to disk
         self.client.offload()
 
-        # Stop via ClientManager's stop() method (signals background thread)
-        self.stop()
+        # Stop via _stop() method with PAUSED target state
+        self._stop(ClientState.PAUSED)
 
     def resume(self) -> None:
         """Resume the client from paused state (start and reload)."""
@@ -144,8 +172,8 @@ class ClientManager:
                 f"Cannot resume machine {self.machine_id} - not currently paused"
             )
 
-        # Start via ClientManager's start() method
-        self.start()
+        # Start via ClientManager's _start() method
+        self._start()
 
         # Reload tensor state from disk
         self.client.reload()
@@ -548,7 +576,8 @@ class ClientManager:
             if self.is_running():
                 # Stop the cloud provider's compute resources
                 self.client.stop()
-                self.state = ClientState.STOPPED
+                # Set state based on _stop_state (STOPPED or PAUSED)
+                self.state = self._stop_state
             # Set event to signal completion of stop
             self.stop_signal.set()
             return
