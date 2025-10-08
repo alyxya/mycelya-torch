@@ -170,17 +170,20 @@ class RemoteMachine:
         return self._client_manager.batching
 
     def start(self) -> None:
-        """Start the client for this device."""
-        if not self._client_manager.is_running():
-            self._client_manager.start()
+        """Start the cloud provider's compute resources."""
+        self._client_manager.start()
 
     def stop(self) -> None:
-        """Stop the client for this device."""
-        try:
-            self._client_manager.stop()
-        except Exception as e:
-            # Don't log full stack traces during shutdown
-            log.warning(f"Error stopping machine {self}: {type(e).__name__}")
+        """Stop the cloud provider's compute resources."""
+        self._client_manager.stop()
+
+    def pause(self) -> None:
+        """Pause the machine (offload state and stop compute resources)."""
+        self._client_manager.pause()
+
+    def resume(self) -> None:
+        """Resume the machine from paused state (start and reload state)."""
+        self._client_manager.resume()
 
     def __enter__(self) -> "RemoteMachine":
         """Enter the context manager and ensure client is started."""
