@@ -8,10 +8,11 @@ import mycelya_torch
 
 # Create a remote machine with cloud GPU
 machine = mycelya_torch.RemoteMachine("modal", "A100")
+cuda_device = machine.device("cuda")
 
 # Your existing PyTorch code just works
-x = torch.randn(1000, 1000, device=machine.device("cuda"))
-y = torch.randn(1000, 1000, device=machine.device("cuda"))
+x = torch.randn(1000, 1000, device=cuda_device)
+y = torch.randn(1000, 1000).to(cuda_device)  # Move tensor to remote GPU
 result = x @ y  # Computed on remote A100!
 
 # Transfer result back to local machine
