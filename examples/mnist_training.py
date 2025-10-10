@@ -46,7 +46,7 @@ class MNISTNet(nn.Module):
         return x
 
 
-# Setup remote GPU (use "mock" for local testing)
+# Setup remote GPU
 machine = mycelya_torch.RemoteMachine("modal", "T4")
 device = machine.device("cuda")
 
