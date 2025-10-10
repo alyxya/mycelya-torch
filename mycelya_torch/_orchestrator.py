@@ -100,6 +100,7 @@ class Orchestrator:
         # Create client manager wrapping the client implementation
         client_manager = ClientManager(
             client_impl,
+            self.storage,
             self._main_thread_waiting,
             gpu_type=gpu_type,
             gpu_count=gpu_count,
@@ -131,16 +132,17 @@ class Orchestrator:
         return self.storage.create_storage(machine_id, remote_type, remote_index)
 
     def free_storage(self, storage_id: int) -> None:
-        """Free storage with remote cleanup.
+        """Free storage with lazy remote cleanup.
+
+        This method marks the storage for removal but does not immediately free it.
+        The actual freeing (both local and remote) happens when the next client manager
+        method is invoked (after _ensure_running()).
 
         Args:
             storage_id: Storage ID to free
         """
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        tensors = self.storage.free_storage(storage_id)
-
-        if tensors:
-            self._client_managers[machine_id].remove_tensors(tensors)
+        self._client_managers[machine_id].mark_storage_for_free(storage_id)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.
@@ -568,7 +570,6 @@ class Orchestrator:
             Function result with proper tensor linking
         """
         # Create function bundle and pickle it
-
         func_bundle = {
             "function": func,
             "args": args,
