@@ -487,7 +487,7 @@ class ClientManager:
         args: list[Any],
         kwargs: dict[str, Any],
         tensor_mask: list[bool],
-        output_tensor_ids: list[int] | None = None,
+        output_tensor_ids: list[int | None] | None = None,
     ) -> Future[list[TensorMetadata]] | None:
         """Execute an aten operation on the remote machine."""
         self._ensure_running_and_process_pending_removals()

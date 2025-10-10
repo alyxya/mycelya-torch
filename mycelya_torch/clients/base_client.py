@@ -172,9 +172,12 @@ class Client(ABC):
         args: list[Any],
         kwargs: dict[str, Any],
         tensor_mask: list[bool],
-        output_tensor_ids: list[int] | None = None,
+        output_tensor_ids: list[int | None] | None = None,
     ) -> Any:
         """Execute an aten operation on the remote machine with tensor IDs.
+
+        Args:
+            output_tensor_ids: List of tensor IDs for outputs (None entries indicate unused gradients)
 
         Returns:
             The result object (e.g., FunctionCall for Modal, direct result for Mock)
