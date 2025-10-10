@@ -11,11 +11,46 @@ from torchvision import datasets, transforms
 
 import mycelya_torch
 
+
+class MNISTNet(nn.Module):
+    """CNN for MNIST classification with BatchNorm for faster convergence."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 32, 3, 1)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, 3, 1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.pool = nn.MaxPool2d(2)
+        self.dropout1 = nn.Dropout(0.25)
+        self.fc1 = nn.Linear(9216, 128)
+        self.bn3 = nn.BatchNorm1d(128)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = nn.functional.relu(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = nn.functional.relu(x)
+        x = self.pool(x)
+        x = self.dropout1(x)
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = self.bn3(x)
+        x = nn.functional.relu(x)
+        x = self.dropout2(x)
+        x = self.fc2(x)
+        return x
+
+
 # Setup remote GPU (use "mock" for local testing)
 machine = mycelya_torch.RemoteMachine("modal", "T4")
 device = machine.device("cuda")
 
-# Load MNIST data with augmentation
+# Load MNIST data
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))
@@ -23,23 +58,8 @@ transform = transforms.Compose([
 train_data = datasets.MNIST("./data", train=True, download=True, transform=transform)
 train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
 
-# CNN with BatchNorm for faster convergence
-model = nn.Sequential(
-    nn.Conv2d(1, 32, 3, 1),
-    nn.BatchNorm2d(32),
-    nn.ReLU(),
-    nn.Conv2d(32, 64, 3, 1),
-    nn.BatchNorm2d(64),
-    nn.ReLU(),
-    nn.MaxPool2d(2),
-    nn.Dropout(0.25),
-    nn.Flatten(),
-    nn.Linear(9216, 128),
-    nn.BatchNorm1d(128),
-    nn.ReLU(),
-    nn.Dropout(0.5),
-    nn.Linear(128, 10)
-).to(device)
+# Initialize model
+model = MNISTNet().to(device)
 
 # AdamW with learning rate scheduler for faster convergence
 optimizer = torch.optim.AdamW(model.parameters(), lr=0.002)
@@ -50,7 +70,7 @@ scheduler = torch.optim.lr_scheduler.OneCycleLR(
     steps_per_epoch=len(train_loader)
 )
 
-# Train for 3 epochs (faster convergence with better optimizer)
+# Train for 3 epochs
 print(f"Training on {device}")
 print(f"Total batches per epoch: {len(train_loader)}\n")
 
