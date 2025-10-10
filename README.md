@@ -14,7 +14,9 @@ x = torch.randn(1000, 1000, device=machine.device("cuda"))
 y = torch.randn(1000, 1000, device=machine.device("cuda"))
 result = x @ y  # Computed on remote A100!
 
-print(f"Result computed on {result.device}: {result.shape}")
+# Transfer result back to local machine
+result_local = result.cpu()
+print(f"Result: {result_local}")
 ```
 
 
