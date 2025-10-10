@@ -614,7 +614,6 @@ class ClientManager:
         if packages_to_install and self.state != ClientState.INITIALIZED:
             # Ensure machine is running (will auto-start from INITIALIZED or auto-resume from PAUSED)
             self._ensure_running()
-            self._process_pending_frees()
 
             if self.batching:
                 # Add to batch
