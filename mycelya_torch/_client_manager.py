@@ -93,8 +93,7 @@ class ClientManager:
         # CPU tensor futures deque for async tensor copying
         self.cpu_tensor_futures_deque = deque()
 
-        # Pending storage IDs to be freed (lazy free storage)
-        # Deque of storage_id integers - atomic append/popleft operations
+        # Pending storage IDs to be freed lazily
         self._pending_free_storages: deque[int] = deque()
 
         # Client stop signal event (initially set - no stop requested)
@@ -270,53 +269,32 @@ class ClientManager:
         # If we get here, state is RUNNING - which is what we want
 
     def mark_storage_for_free(self, storage_id: int) -> None:
-        """Mark a storage ID for lazy free (passive operation).
+        """Mark storage for lazy freeing.
 
-        This method does not immediately free the storage. Instead, it adds the
-        storage ID to a deque. The actual freeing (looking up tensor IDs, freeing
-        locally and remotely) happens when the next client manager method is invoked
-        (after _ensure_running()).
-
-        Deque append is atomic, so this is thread-safe.
-
-        Args:
-            storage_id: Storage ID to mark for freeing
+        Storage is freed when the next client method is invoked.
         """
         self._pending_free_storages.append(storage_id)
 
     def _process_pending_frees(self) -> None:
-        """Process pending storage frees (lazy execution).
-
-        This method is called after _ensure_running() in all public methods.
-        It pops storage IDs from the deque, uses the storage manager to lazily
-        look up their tensor IDs, frees them locally, and then frees them remotely.
-
-        Deque popleft is atomic, so this is thread-safe.
-        """
+        """Process pending storage frees lazily."""
         if not self._pending_free_storages:
             return
 
-        # Collect all tensor IDs by popping storage IDs and looking them up
+        # Collect tensor IDs from pending storage IDs
         all_tensor_ids = []
         while self._pending_free_storages:
             storage_id = self._pending_free_storages.popleft()
-
-            # Lazily look up tensor IDs from storage manager
             tensors = self.storage_manager.free_storage(storage_id)
             if tensors:
                 all_tensor_ids.extend(tensors)
 
-        # Free all collected tensors remotely in one call
-        # Note: We don't call self.remove_tensors() to avoid triggering _ensure_running() again
-        # and to avoid infinite recursion since remove_tensors() also calls _process_pending_frees()
+        # Free tensors remotely (avoiding recursion by not calling self.remove_tensors())
         if all_tensor_ids:
             if self.batching:
-                # Add to batch
                 self._batch_calls.append(
                     BatchCall(method_name="remove_tensors", args=(all_tensor_ids,), kwargs={})
                 )
             else:
-                # Direct execution
                 self.client.remove_tensors(all_tensor_ids)
 
     def execute_batch(self) -> None:
