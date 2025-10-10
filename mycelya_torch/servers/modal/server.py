@@ -174,12 +174,26 @@ def create_modal_app_for_gpu(
             type_tag, data = pid
 
             if type_tag == "mycelya_tensor":
-                tensor_id = data
+                tensor_id = data["id"]
+                requires_grad = data["requires_grad"]
+                is_parameter = data["is_parameter"]
+
                 if not tensor_id in self.tensor_manager.tensor_registry:
                     raise ValueError(
                         f"Tensor ID {tensor_id} not found in remote registry"
                     )
-                return self.tensor_manager.tensor_registry[tensor_id].detach()
+
+                # Detach from registry tensor
+                tensor = self.tensor_manager.tensor_registry[tensor_id].detach()
+
+                # Wrap as Parameter if it was originally a Parameter
+                if is_parameter:
+                    tensor = torch.nn.Parameter(tensor)
+
+                # Restore requires_grad after wrapping
+                tensor.requires_grad_(requires_grad)
+
+                return tensor
 
             elif type_tag == "mycelya_device":
                 remote_type, remote_index = data

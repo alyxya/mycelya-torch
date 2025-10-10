@@ -158,7 +158,12 @@ class Pickler(cloudpickle.Pickler):
             # Collect tensor for orchestrator to call _materialize_tensor on
             self.tensors.append(obj)
             tensor_id = get_tensor_id(obj)  # Use metadata hash as tensor ID
-            return ("mycelya_tensor", tensor_id)
+            # Include requires_grad and is_parameter metadata for proper autograd reconstruction
+            return ("mycelya_tensor", {
+                "id": tensor_id,
+                "requires_grad": obj.requires_grad,
+                "is_parameter": isinstance(obj, torch.nn.Parameter)
+            })
 
         # Handle mycelya devices
         elif isinstance(obj, torch.device) and obj.type == "mycelya":
