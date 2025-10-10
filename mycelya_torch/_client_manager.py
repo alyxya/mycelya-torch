@@ -167,9 +167,15 @@ class ClientManager:
             )
 
         # Offload tensor state to disk
-        self.client.offload()
+        if self.batching:
+            self._batch_calls.append(
+                BatchCall(method_name="offload", args=(), kwargs={})
+            )
+        else:
+            self.client.offload()
 
         # Stop via _stop() method with PAUSED target state
+        # The background thread will execute any pending batches (including offload) before stopping
         self._stop(ClientState.PAUSED)
 
     def resume(self) -> None:
@@ -183,7 +189,12 @@ class ClientManager:
         self._start()
 
         # Reload tensor state from disk
-        self.client.reload()
+        if self.batching:
+            self._batch_calls.append(
+                BatchCall(method_name="reload", args=(), kwargs={})
+            )
+        else:
+            self.client.reload()
 
     def is_running(self) -> bool:
         """Check if the machine is currently running and ready."""
