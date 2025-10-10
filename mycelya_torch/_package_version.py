@@ -9,6 +9,7 @@ to ensure Modal containers use the same versions as the local development enviro
 """
 
 import importlib.metadata
+import importlib.util
 import sys
 
 
@@ -65,17 +66,23 @@ def get_versioned_packages(package_names: list[str]) -> list[str]:
 
 def module_name_to_package_name(module_name: str) -> str | None:
     """
-    Convert module name to package name using package distribution mapping.
+    Convert module name to package name.
 
-    This handles cases where the module name differs from the package name
-    (e.g., "PIL" module name from "pillow" package, "bs4" module name from "beautifulsoup4" package).
+    If module is importable locally, use metadata for package name mapping.
+    Otherwise, assume package name equals module name.
 
     Args:
-        module_name: Name used in import statements (e.g., "PIL")
+        module_name: Name used in import statements (e.g., "PIL", "torchvision")
 
     Returns:
-        Name used for package installation (e.g., "pillow") or None if not found
+        Package name for installation (e.g., "pillow", "torchvision"), or None for stdlib modules
     """
-    pkg_to_dist = importlib.metadata.packages_distributions()
-    distributions = pkg_to_dist.get(module_name)
-    return distributions[0] if distributions else None
+    spec = importlib.util.find_spec(module_name)
+    if spec is not None:
+        # Module is importable - use metadata for mapping
+        pkg_to_dist = importlib.metadata.packages_distributions()
+        distributions = pkg_to_dist.get(module_name)
+        return distributions[0] if distributions else None  # None for stdlib modules
+    else:
+        # Module not importable - return module name
+        return module_name
