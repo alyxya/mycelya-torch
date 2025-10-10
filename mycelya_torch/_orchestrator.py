@@ -557,9 +557,12 @@ class Orchestrator:
         # Clear temporary storage mappings after linking is complete
         self.storage.clear_temp_storage_map()
 
-    def execute_function(self, func, args, kwargs) -> Any:
+    def execute_function_future(self, func, args, kwargs) -> Future[Any]:
         """
-        Execute a pickled function on the remote machine.
+        Execute a pickled function on the remote machine asynchronously.
+
+        This method initiates an asynchronous execution of a function. The unpickling
+        and tensor linking are handled by the background thread to avoid blocking the main thread.
 
         Args:
             func: Function to execute remotely
@@ -567,7 +570,10 @@ class Orchestrator:
             kwargs: Function keyword arguments
 
         Returns:
-            Function result with proper tensor linking
+            Future[Any]: Future that will resolve to the function result
+
+        Raises:
+            RuntimeError: If no machine can be inferred or client not available
         """
         # Create function bundle and pickle it
         func_bundle = {
@@ -611,20 +617,55 @@ class Orchestrator:
                 log.debug(f"Installing module dependencies: {modules_to_install}")
                 client_manager.pip_install(modules_to_install)
 
-        # Execute remotely
-        result_future = client_manager.execute_function(pickled_func)
-        pickled_result = result_future.result()
+        # Execute remotely (returns Future[bytes])
+        pickled_result_future = client_manager.execute_function(pickled_func)
 
-        # Unpickle result with proper tensor linking
+        # Create future for final result
+        final_result_future = Future()
 
-        buffer = io.BytesIO(pickled_result)
-        unpickler = Unpickler(buffer, machine_id, self.storage)
-        result = unpickler.load()
+        # Create unpickling callback for background thread
+        def unpickle_and_link(pickled_result: bytes) -> Any:
+            buffer = io.BytesIO(pickled_result)
+            unpickler = Unpickler(buffer, machine_id, self.storage)
+            result = unpickler.load()
 
-        # Handle tensor linking if any tensors were collected
-        if unpickler.tensors_to_link:
-            tensors, temp_ids = zip(*unpickler.tensors_to_link)
-            self.link_tensors(list(tensors), list(temp_ids))
+            # Handle tensor linking if any tensors were collected
+            if unpickler.tensors_to_link:
+                tensors, temp_ids = zip(*unpickler.tensors_to_link)
+                self.link_tensors(list(tensors), list(temp_ids))
+
+            return result
+
+        # Add to the function result futures deque for this client
+        func_entry = (pickled_result_future, final_result_future, unpickle_and_link)
+        client_manager.function_result_futures_deque.append(func_entry)
+
+        return final_result_future
+
+    def execute_function(self, func, args, kwargs) -> Any:
+        """
+        Execute a pickled function on the remote machine synchronously.
+
+        This method waits for the function execution to complete and returns the result directly.
+
+        Args:
+            func: Function to execute remotely
+            args: Function arguments
+            kwargs: Function keyword arguments
+
+        Returns:
+            Function result with proper tensor linking
+
+        Raises:
+            RuntimeError: If no machine can be inferred or client not available
+        """
+        # Use the async version and wait for result
+        result_future = self.execute_function_future(func, args, kwargs)
+
+        # Wait for result while signaling background thread to continue
+        self._main_thread_waiting.set()
+        result = result_future.result()
+        self._main_thread_waiting.clear()
 
         return result
 
@@ -635,6 +676,7 @@ class Orchestrator:
         - Executing pending batch operations for all clients
         - Resolving pending futures for all clients
         - Resolving pending CPU tensor futures for tensor copying
+        - Resolving pending function result futures for function execution
 
         Future tasks may include:
         - Cache cleanup

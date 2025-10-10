@@ -93,6 +93,9 @@ class ClientManager:
         # CPU tensor futures deque for async tensor copying
         self.cpu_tensor_futures_deque = deque()
 
+        # Function result futures deque for async function execution
+        self.function_result_futures_deque = deque()
+
         # Pending storage IDs to be removed lazily
         self._pending_removed_storages: deque[int] = deque()
 
@@ -249,6 +252,22 @@ class ClientManager:
             )
             cpu_tensor_future.set_result(cpu_tensor)
 
+        # Also resolve function result futures
+        while self.function_result_futures_deque:
+            pickled_future, final_future, process_callback = (
+                self.function_result_futures_deque[0]
+            )
+            if not pickled_future.done():
+                break
+            self.function_result_futures_deque.popleft()
+            try:
+                pickled_result = pickled_future.result()
+                # Process via callback (unpickling and tensor linking)
+                result = process_callback(pickled_result)
+                final_future.set_result(result)
+            except Exception as e:
+                final_future.set_exception(e)
+
     def propagate_exception_to_futures(self, exception: Exception) -> None:
         """Propagate the given exception to all pending futures."""
         # Propagate to all pending futures
@@ -266,6 +285,14 @@ class ClientManager:
             )
             if not cpu_tensor_future.cancelled():
                 cpu_tensor_future.set_exception(exception)
+
+        # Also propagate to function result futures
+        while self.function_result_futures_deque:
+            pickled_future, final_future, process_callback = (
+                self.function_result_futures_deque.popleft()
+            )
+            if not final_future.cancelled():
+                final_future.set_exception(exception)
 
     def _ensure_running(self) -> None:
         """Ensure the machine is running, automatically starting or resuming if needed."""
