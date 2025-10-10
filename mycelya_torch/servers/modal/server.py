@@ -544,7 +544,7 @@ def create_modal_app_for_gpu(
             args: list[Any],
             kwargs: dict[str, Any],
             tensor_mask: list[bool],
-            output_tensor_ids: list[int] | None = None,
+            output_tensor_ids: list[int | None] | None = None,
         ) -> list[TensorMetadata] | None:
             """Implementation of execute_aten_operation without Modal decorators."""
             # Use tensor manager instead of direct registry access
@@ -601,7 +601,7 @@ def create_modal_app_for_gpu(
             args: list[Any],
             kwargs: dict[str, Any],
             tensor_mask: list[bool],
-            output_tensor_ids: list[int] | None = None,
+            output_tensor_ids: list[int | None] | None = None,
         ) -> list[TensorMetadata] | None:
             """Execute an aten operation on the remote machine."""
             result = self._execute_aten_operation_impl(

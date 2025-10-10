@@ -105,7 +105,7 @@ def _execute_meta_operation(
 
 def _create_output_tensors(
     meta_outputs: list, original_tensors: dict, mycelya_device: torch.device
-) -> list[torch.Tensor]:
+) -> list[torch.Tensor | None]:
     """Create output tensors based on meta execution results with proper alias detection."""
     output_tensors = []
 

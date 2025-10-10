@@ -353,7 +353,7 @@ class Orchestrator:
         op_name: str,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-        output_tensors: list[torch.Tensor] | None = None,
+        output_tensors: list[torch.Tensor | None] | None = None,
     ) -> list[TensorMetadata] | None:
         """Execute remote operation with tensor objects in args/kwargs.
 
@@ -361,8 +361,8 @@ class Orchestrator:
             op_name: Name of the operation to execute
             args: Operation args containing original tensors
             kwargs: Operation kwargs containing original tensors
-            output_tensors: List of output tensors with proper shapes/dtypes for static operations,
-                           or None for dynamic operations
+            output_tensors: List of output tensors (or None for unused outputs) with proper shapes/dtypes
+                           for static operations, or None for dynamic operations
 
         Returns:
             For dynamic operations (output_tensors=None): list[TensorMetadata] metadata with temp_id embedded
