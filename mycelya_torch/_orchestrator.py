@@ -446,8 +446,11 @@ class Orchestrator:
         ]  # Extract machine_id from (machine_id, device_type, device_index)
 
         # Execute with simplified client interface
+        # Filter out None outputs when creating tensor IDs (None is common in backward operations)
         output_tensor_ids = (
-            [get_tensor_id(t) for t in output_tensors] if output_tensors else None
+            [get_tensor_id(t) if t is not None else None for t in output_tensors]
+            if output_tensors
+            else None
         )
 
         result_future = client_manager.execute_aten_operation(
@@ -461,10 +464,9 @@ class Orchestrator:
         # Static operation: register tensor mappings and return None
         if output_tensors is not None:
             for output_tensor in output_tensors:
-                self.storage.register_tensor(output_tensor)
-
-            for output_tensor in output_tensors:
-                self.storage.invalidate_cache(output_tensor)
+                if output_tensor is not None:
+                    self.storage.register_tensor(output_tensor)
+                    self.storage.invalidate_cache(output_tensor)
             return None
 
         # Dynamic operation: get result and return metadata for tensor linking

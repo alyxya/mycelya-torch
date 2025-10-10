@@ -110,6 +110,11 @@ def _create_output_tensors(
     output_tensors = []
 
     for meta_output in meta_outputs:
+        # Handle None outputs (common in backward operations)
+        if meta_output is None:
+            output_tensors.append(None)
+            continue
+
         meta_storage = meta_output.untyped_storage()
 
         if meta_storage in original_tensors:

@@ -589,8 +589,10 @@ def create_modal_app_for_gpu(
                 return output_metadata
             else:
                 # Static: store in main registry
+                # Skip None entries (common in backward operations where gradients aren't needed)
                 for tid, tensor in zip(output_tensor_ids, result_tensors, strict=True):
-                    self.tensor_manager.register_tensor(tid, tensor)
+                    if tid is not None and tensor is not None:
+                        self.tensor_manager.register_tensor(tid, tensor)
 
         @modal.method()
         def execute_aten_operation(
