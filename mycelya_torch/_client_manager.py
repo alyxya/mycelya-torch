@@ -403,25 +403,6 @@ class ClientManager:
 
         return future
 
-    def remove_tensors(self, tensor_ids: list[int]) -> None:
-        """Remove multiple tensors from the remote machine."""
-        if self.state == ClientState.STOPPED:
-            # During cleanup/garbage collection, machine may already be stopped
-            # This is expected and should not raise an exception
-            return
-
-        # Ensure machine is running (will auto-start or auto-resume if needed)
-        self._ensure_running()
-
-        if self.batching:
-            # Add to batch
-            self._batch_calls.append(
-                BatchCall(method_name="remove_tensors", args=(tensor_ids,), kwargs={})
-            )
-        else:
-            # Direct execution
-            self.client.remove_tensors(tensor_ids)
-
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """Resize the underlying storage for a tensor."""
         self._ensure_running_and_process_pending_removals()
