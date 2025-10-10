@@ -14,7 +14,6 @@ Part of: mycelya_torch PyTorch extension
 """
 
 import io
-import logging
 import os
 import pickle
 import subprocess
@@ -479,15 +478,6 @@ def create_modal_app_for_gpu(
 
         def _remove_tensors_impl(self, tensor_ids: list[int]) -> None:
             """Remove multiple tensors from the remote machine."""
-            # Warn if not removing complete storage
-            if tensor_ids and tensor_ids[0] in self.tensor_manager.tensor_registry:
-                tensor = self.tensor_manager.tensor_registry[tensor_ids[0]]
-                storage = tensor.untyped_storage()
-                expected_ids = self.tensor_manager.storage_to_ids.get(storage, set())
-                if expected_ids != set(tensor_ids):
-                    logging.warning("Unexpected tensor ID to storage removal mismatch detected")
-
-            # Remove tensors from registry
             for tensor_id in tensor_ids:
                 if tensor_id in self.tensor_manager.tensor_registry:
                     del self.tensor_manager.tensor_registry[tensor_id]
