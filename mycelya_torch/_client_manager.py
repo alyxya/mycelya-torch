@@ -93,8 +93,8 @@ class ClientManager:
         # CPU tensor futures deque for async tensor copying
         self.cpu_tensor_futures_deque = deque()
 
-        # Pending storage IDs to be freed lazily
-        self._pending_free_storages: deque[int] = deque()
+        # Pending storage IDs to be removed lazily
+        self._pending_removed_storages: deque[int] = deque()
 
         # Client stop signal event (initially set - no stop requested)
         self.stop_signal = threading.Event()
@@ -268,27 +268,27 @@ class ClientManager:
             )
         # If we get here, state is RUNNING - which is what we want
 
-    def mark_storage_for_free(self, storage_id: int) -> None:
-        """Mark storage for lazy freeing.
+    def mark_storage_for_removal(self, storage_id: int) -> None:
+        """Mark storage for lazy removal.
 
-        Storage is freed when the next client method is invoked.
+        Storage is removed when the next client method is invoked.
         """
-        self._pending_free_storages.append(storage_id)
+        self._pending_removed_storages.append(storage_id)
 
-    def _process_pending_frees(self) -> None:
-        """Process pending storage frees lazily."""
-        if not self._pending_free_storages:
+    def _process_pending_removals(self) -> None:
+        """Process pending storage removals lazily."""
+        if not self._pending_removed_storages:
             return
 
         # Collect tensor IDs from pending storage IDs
         all_tensor_ids = []
-        while self._pending_free_storages:
-            storage_id = self._pending_free_storages.popleft()
+        while self._pending_removed_storages:
+            storage_id = self._pending_removed_storages.popleft()
             tensors = self.storage_manager.free_storage(storage_id)
             if tensors:
                 all_tensor_ids.extend(tensors)
 
-        # Free tensors remotely (avoiding recursion by not calling self.remove_tensors())
+        # Remove tensors remotely (avoiding recursion by not calling self.remove_tensors())
         if all_tensor_ids:
             if self.batching:
                 self._batch_calls.append(
@@ -297,10 +297,10 @@ class ClientManager:
             else:
                 self.client.remove_tensors(all_tensor_ids)
 
-    def _ensure_running_and_process_pending_frees(self) -> None:
-        """Ensure machine is running and process any pending storage frees."""
+    def _ensure_running_and_process_pending_removals(self) -> None:
+        """Ensure machine is running and process any pending storage removals."""
         self._ensure_running()
-        self._process_pending_frees()
+        self._process_pending_removals()
 
     def execute_batch(self) -> None:
         """Execute any pending batch calls."""
@@ -328,7 +328,7 @@ class ClientManager:
         Args:
             metadata: TensorMetadata containing tensor properties and creation info
         """
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         if self.batching:
             # Add to batch
@@ -353,7 +353,7 @@ class ClientManager:
         source_dtype: str,
     ) -> None:
         """Update an existing tensor with new data and source metadata."""
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         if self.batching:
             # Add to batch
@@ -384,7 +384,7 @@ class ClientManager:
 
     def get_storage_data(self, tensor_id: int) -> Future[bytes]:
         """Get raw storage data by tensor ID."""
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         # Create a Future for the result
         future = Future()
@@ -424,7 +424,7 @@ class ClientManager:
 
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """Resize the underlying storage for a tensor."""
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         if self.batching:
             # Add to batch
@@ -445,7 +445,7 @@ class ClientManager:
         target_tensor_id: int,
     ) -> None:
         """Copy tensor data from source to target on the same remote machine."""
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         if self.batching:
             # Add to batch
@@ -471,7 +471,7 @@ class ClientManager:
         output_tensor_ids: list[int] | None = None,
     ) -> Future[list[TensorMetadata]] | None:
         """Execute an aten operation on the remote machine."""
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         # Create future for dynamic operations
         future = None
@@ -515,7 +515,7 @@ class ClientManager:
         temp_ids: list[str],
     ) -> None:
         """Link local mycelya tensor IDs to remote tensors from temporary registry."""
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         if self.batching:
             # Add to batch
@@ -532,7 +532,7 @@ class ClientManager:
 
     def execute_function(self, pickled_function: bytes) -> Future[bytes]:
         """Execute a pickled function on the remote machine."""
-        self._ensure_running_and_process_pending_frees()
+        self._ensure_running_and_process_pending_removals()
 
         # Create a Future for the result
         future = Future()
