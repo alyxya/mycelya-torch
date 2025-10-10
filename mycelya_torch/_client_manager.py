@@ -632,17 +632,6 @@ class ClientManager:
 
     def process_background_tasks(self) -> None:
         """Process background tasks for this client manager."""
-        # Check if client should be stopped (stop request signaled by cleared event)
-        if not self.stop_signal.is_set():
-            if self.is_running():
-                # Stop the cloud provider's compute resources
-                self.client.stop()
-                # Set state based on _stop_state (STOPPED or PAUSED)
-                self.state = self._stop_state
-            # Set event to signal completion of stop
-            self.stop_signal.set()
-            return
-
         # Normal processing for running clients
         if self.is_running():
             try:
@@ -655,3 +644,14 @@ class ClientManager:
                 log.error(f"Fatal error for client {self.machine_id}: {e}")
                 # Propagate the exception to all pending futures for this client (including CPU tensor futures)
                 self.propagate_exception_to_futures(e)
+
+        # Check if client should be stopped (stop request signaled by cleared event)
+        # This is done AFTER batch execution to ensure graceful shutdown with pending work completed
+        if not self.stop_signal.is_set():
+            if self.is_running():
+                # Stop the cloud provider's compute resources
+                self.client.stop()
+                # Set state based on _stop_state (STOPPED or PAUSED)
+                self.state = self._stop_state
+            # Set event to signal completion of stop
+            self.stop_signal.set()
