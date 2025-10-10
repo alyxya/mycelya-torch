@@ -4,20 +4,41 @@ Run your PyTorch code anywhere and power it with cloud GPUs. Mycelya integrates 
 
 ```python
 import torch
+import torch.nn as nn
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
 import mycelya_torch
 
-# Create a remote machine with cloud GPU
-machine = mycelya_torch.RemoteMachine("modal", "A100")
-cuda_device = machine.device("cuda")
+# Setup remote GPU
+machine = mycelya_torch.RemoteMachine("modal", "T4")
+device = machine.device("cuda")
 
-# Your existing PyTorch code just works
-x = torch.randn(1000, 1000, device=cuda_device)
-y = torch.randn(1000, 1000).to(cuda_device)  # Move tensor to remote GPU
-result = x @ y  # Computed on remote A100!
+# Load MNIST data
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+train_data = datasets.MNIST("./data", train=True, download=True, transform=transform)
+train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
 
-# Transfer result back to local machine
-result_local = result.cpu()
-print(f"Result: {result_local}")
+# Define model - all operations run on remote GPU
+model = nn.Sequential(
+    nn.Flatten(),
+    nn.Linear(784, 128),
+    nn.ReLU(),
+    nn.Linear(128, 10)
+).to(device)
+
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+# Train on remote GPU
+for data, target in train_loader:
+    data, target = data.to(device), target.to(device)
+    optimizer.zero_grad()
+    output = model(data)
+    loss = nn.functional.cross_entropy(output, target)
+    loss.backward()
+    optimizer.step()
 ```
 
 
