@@ -4,6 +4,51 @@ Run your PyTorch code anywhere and power it with cloud GPUs. Mycelya integrates 
 
 ```python
 import torch
+import mycelya_torch
+
+# Create a remote machine with cloud GPU
+machine = mycelya_torch.RemoteMachine("modal", "A100")
+cuda_device = machine.device("cuda")
+
+# Your existing PyTorch code just works
+x = torch.randn(1000, 1000, device=cuda_device)
+y = torch.randn(1000, 1000).to(cuda_device)  # Move tensor to remote GPU
+result = x @ y  # Computed on remote A100!
+
+# Transfer result back to local machine
+result_local = result.cpu()
+print(f"Result: {result_local}")
+```
+
+
+## Supported GPUs (Modal)
+
+**8 GPU Types**: T4, L4, A10G, A100, L40S, H100, H200, B200
+
+## Installation
+
+### Requirements
+- Python 3.10+
+- PyTorch 2.0+
+- Modal account (free tier available)
+
+**Note**: Modal is currently the only supported GPU cloud provider. Support for other providers (AWS, etc.) will be added in future releases.
+
+### Install
+```bash
+pip install git+https://github.com/alyxya/mycelya-torch.git
+```
+
+### Setup Modal
+```bash
+modal setup
+```
+
+## Quick Start
+
+### MNIST Training
+```python
+import torch
 import torch.nn as nn
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
@@ -41,51 +86,6 @@ for data, target in train_loader:
     optimizer.step()
 ```
 
-
-## Supported GPUs (Modal)
-
-**8 GPU Types**: T4, L4, A10G, A100, L40S, H100, H200, B200
-
-## Installation
-
-### Requirements
-- Python 3.10+
-- PyTorch 2.0+
-- Modal account (free tier available)
-
-**Note**: Modal is currently the only supported GPU cloud provider. Support for other providers (AWS, etc.) will be added in future releases.
-
-### Install
-```bash
-pip install git+https://github.com/alyxya/mycelya-torch.git
-```
-
-### Setup Modal
-```bash
-modal setup
-```
-
-## Quick Start
-
-### Basic Usage
-```python
-import torch
-import mycelya_torch
-
-# Create remote machine
-machine = mycelya_torch.RemoteMachine("modal", "A100")
-device = machine.device("cuda")
-
-# Your PyTorch code runs on remote GPU
-x = torch.randn(1000, 1000, device=device)
-y = torch.randn(1000, 1000, device=device)
-result = x @ y
-
-# Transfer result back to local machine
-result_local = result.cpu()
-print(f"Result: {result_local}")
-```
-
 ### Remote Function Execution
 ```python
 import torch
@@ -117,43 +117,6 @@ result1 = matrix_multiply(x, y)  # Executes remotely
 result2 = complex_computation(x, scale=3.0)  # Executes remotely
 
 print(f"Results computed on {result1.device}")
-```
-
-### Neural Network Training
-```python
-import torch
-import torch.nn as nn
-import mycelya_torch
-
-# Set up remote machine
-machine = mycelya_torch.RemoteMachine("modal", "A100")
-device = machine.device("cuda")
-
-# Define your model (works exactly like normal PyTorch)
-model = nn.Sequential(
-    nn.Linear(784, 256),
-    nn.ReLU(),
-    nn.Linear(256, 10)
-).to(device)
-
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-loss_fn = nn.CrossEntropyLoss()
-
-# Training loop - all computations happen on remote GPU
-for epoch in range(10):
-    for batch_data, batch_labels in dataloader:
-        # Move data to remote GPU
-        data = batch_data.to(device)
-        labels = batch_labels.to(device)
-
-        # Forward pass, loss, backward pass all on remote GPU
-        optimizer.zero_grad()
-        outputs = model(data)
-        loss = loss_fn(outputs, labels)
-        loss.backward()
-        optimizer.step()
-
-        print(f'Epoch {epoch}, Loss: {loss.item():.4f}')
 ```
 
 
