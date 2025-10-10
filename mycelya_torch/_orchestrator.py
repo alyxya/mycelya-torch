@@ -135,14 +135,14 @@ class Orchestrator:
         """Free storage with lazy remote cleanup.
 
         This method marks the storage for removal but does not immediately free it.
-        The actual freeing (both local and remote) happens when the next client manager
+        The actual removal (both local and remote) happens when the next client manager
         method is invoked (after _ensure_running()).
 
         Args:
             storage_id: Storage ID to free
         """
         machine_id, _, _ = self.storage.get_remote_device_info(storage_id)
-        self._client_managers[machine_id].mark_storage_for_free(storage_id)
+        self._client_managers[machine_id].mark_storage_for_removal(storage_id)
 
     def resize_storage(self, storage_id: int, nbytes: int) -> None:
         """Resize storage with remote operation.
