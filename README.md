@@ -57,9 +57,9 @@ x = torch.randn(1000, 1000, device=device)
 y = torch.randn(1000, 1000, device=device)
 result = x @ y
 
-# Transfer result back when needed
+# Transfer result back to local machine
 result_local = result.cpu()
-print(f"Computation done on {device}, result shape: {result.shape}")
+print(f"Result: {result_local}")
 ```
 
 ### Remote Function Execution
