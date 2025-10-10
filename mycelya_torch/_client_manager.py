@@ -297,6 +297,11 @@ class ClientManager:
             else:
                 self.client.remove_tensors(all_tensor_ids)
 
+    def _ensure_running_and_process_pending_frees(self) -> None:
+        """Ensure machine is running and process any pending storage frees."""
+        self._ensure_running()
+        self._process_pending_frees()
+
     def execute_batch(self) -> None:
         """Execute any pending batch calls."""
         if not self._batch_calls:
@@ -323,8 +328,7 @@ class ClientManager:
         Args:
             metadata: TensorMetadata containing tensor properties and creation info
         """
-        self._ensure_running()
-        self._process_pending_frees()
+        self._ensure_running_and_process_pending_frees()
 
         if self.batching:
             # Add to batch
@@ -349,7 +353,7 @@ class ClientManager:
         source_dtype: str,
     ) -> None:
         """Update an existing tensor with new data and source metadata."""
-        self._ensure_running()
+        self._ensure_running_and_process_pending_frees()
 
         if self.batching:
             # Add to batch
@@ -380,7 +384,7 @@ class ClientManager:
 
     def get_storage_data(self, tensor_id: int) -> Future[bytes]:
         """Get raw storage data by tensor ID."""
-        self._ensure_running()
+        self._ensure_running_and_process_pending_frees()
 
         # Create a Future for the result
         future = Future()
@@ -420,7 +424,7 @@ class ClientManager:
 
     def resize_storage(self, tensor_id: int, nbytes: int) -> None:
         """Resize the underlying storage for a tensor."""
-        self._ensure_running()
+        self._ensure_running_and_process_pending_frees()
 
         if self.batching:
             # Add to batch
@@ -441,7 +445,7 @@ class ClientManager:
         target_tensor_id: int,
     ) -> None:
         """Copy tensor data from source to target on the same remote machine."""
-        self._ensure_running()
+        self._ensure_running_and_process_pending_frees()
 
         if self.batching:
             # Add to batch
@@ -467,7 +471,7 @@ class ClientManager:
         output_tensor_ids: list[int] | None = None,
     ) -> Future[list[TensorMetadata]] | None:
         """Execute an aten operation on the remote machine."""
-        self._ensure_running()
+        self._ensure_running_and_process_pending_frees()
 
         # Create future for dynamic operations
         future = None
@@ -511,7 +515,7 @@ class ClientManager:
         temp_ids: list[str],
     ) -> None:
         """Link local mycelya tensor IDs to remote tensors from temporary registry."""
-        self._ensure_running()
+        self._ensure_running_and_process_pending_frees()
 
         if self.batching:
             # Add to batch
@@ -528,7 +532,7 @@ class ClientManager:
 
     def execute_function(self, pickled_function: bytes) -> Future[bytes]:
         """Execute a pickled function on the remote machine."""
-        self._ensure_running()
+        self._ensure_running_and_process_pending_frees()
 
         # Create a Future for the result
         future = Future()
