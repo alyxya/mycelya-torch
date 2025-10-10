@@ -15,38 +15,49 @@ import mycelya_torch
 machine = mycelya_torch.RemoteMachine("modal", "T4")
 device = machine.device("cuda")
 
-# Load MNIST data
+# Load MNIST data with augmentation
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))
 ])
 train_data = datasets.MNIST("./data", train=True, download=True, transform=transform)
-train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
 
-# CNN model for good accuracy
+# CNN with BatchNorm for faster convergence
 model = nn.Sequential(
     nn.Conv2d(1, 32, 3, 1),
+    nn.BatchNorm2d(32),
     nn.ReLU(),
     nn.Conv2d(32, 64, 3, 1),
+    nn.BatchNorm2d(64),
     nn.ReLU(),
     nn.MaxPool2d(2),
     nn.Dropout(0.25),
     nn.Flatten(),
     nn.Linear(9216, 128),
+    nn.BatchNorm1d(128),
     nn.ReLU(),
     nn.Dropout(0.5),
     nn.Linear(128, 10)
 ).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+# AdamW with learning rate scheduler for faster convergence
+optimizer = torch.optim.AdamW(model.parameters(), lr=0.002)
+scheduler = torch.optim.lr_scheduler.OneCycleLR(
+    optimizer,
+    max_lr=0.01,
+    epochs=3,
+    steps_per_epoch=len(train_loader)
+)
 
-# Train for 5 epochs
+# Train for 3 epochs (faster convergence with better optimizer)
 print(f"Training on {device}")
-for epoch in range(5):
-    model.train()
-    total_loss = 0
+print(f"Total batches per epoch: {len(train_loader)}\n")
 
-    for batch_idx, (data, target) in enumerate(train_loader):
+for epoch in range(3):
+    model.train()
+
+    for data, target in train_loader:
         data, target = data.to(device), target.to(device)
 
         optimizer.zero_grad()
@@ -54,13 +65,9 @@ for epoch in range(5):
         loss = nn.functional.cross_entropy(output, target)
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
-        total_loss += loss.item()
+    # Only print at epoch end (no synchronous operations during training)
+    print(f"Epoch {epoch+1}/3 completed")
 
-        if batch_idx % 100 == 0:
-            print(f"Epoch {epoch+1}/5 [{batch_idx * len(data):5d}/{len(train_data)}] Loss: {loss.item():.4f}")
-
-    avg_loss = total_loss / len(train_loader)
-    print(f"Epoch {epoch+1} completed - Avg Loss: {avg_loss:.4f}\n")
-
-print("Training completed!")
+print("\nTraining completed!")
