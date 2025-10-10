@@ -56,7 +56,10 @@ transform = transforms.Compose([
     transforms.Normalize((0.1307,), (0.3081,))
 ])
 train_data = datasets.MNIST("./data", train=True, download=True, transform=transform)
+test_data = datasets.MNIST("./data", train=False, download=True, transform=transform)
+
 train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
+test_loader = DataLoader(test_data, batch_size=1000, shuffle=False)
 
 # Initialize model
 model = MNISTNet().to(device)
@@ -87,7 +90,24 @@ for epoch in range(3):
         optimizer.step()
         scheduler.step()
 
-    # Only print at epoch end (no synchronous operations during training)
     print(f"Epoch {epoch+1}/3 completed")
 
+print("\nEvaluating on test set...")
+
+# Evaluate accuracy
+model.eval()
+correct = torch.tensor(0, device=device)
+total = torch.tensor(0, device=device)
+
+with torch.no_grad():
+    for data, target in test_loader:
+        data, target = data.to(device), target.to(device)
+        output = model(data)
+        pred = output.argmax(dim=1)
+        correct += (pred == target).sum()
+        total += len(target)
+
+# Single synchronous operation at the very end
+accuracy = (correct.float() / total).item() * 100
+print(f"Test Accuracy: {accuracy:.2f}%")
 print("\nTraining completed!")
