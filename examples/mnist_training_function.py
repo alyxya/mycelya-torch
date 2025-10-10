@@ -52,32 +52,43 @@ class MNISTNet(nn.Module):
 
 
 @mycelya_torch.remote
-def train_step(model, data, target, optimizer, scheduler):
-    """Execute a single training step remotely.
+def train_epoch(model, optimizer, scheduler, data_batches, device):
+    """Execute an entire training epoch remotely.
 
     This function is pickled and executed entirely on the remote GPU,
-    rather than sending individual operations remotely.
+    iterating through all batches in the epoch.
     """
-    optimizer.zero_grad()
-    output = model(data)
-    loss = nn.functional.cross_entropy(output, target)
-    loss.backward()
-    optimizer.step()
-    scheduler.step()
+    for data, target in data_batches:
+        # Move data to device inside the remote function
+        data, target = data.to(device), target.to(device)
+
+        optimizer.zero_grad()
+        output = model(data)
+        loss = nn.functional.cross_entropy(output, target)
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
     return loss
 
 
 @mycelya_torch.remote
-def eval_batch(model, data, target):
-    """Execute a single evaluation batch remotely.
+def evaluate(model, data_batches, device):
+    """Execute evaluation on all test batches remotely.
 
-    This function is pickled and executed entirely on the remote GPU.
+    This function is pickled and executed entirely on the remote GPU,
+    iterating through all test batches.
     Returns correct predictions count and total count.
     """
-    output = model(data)
-    pred = output.argmax(dim=1)
-    correct = (pred == target).sum()
-    total = torch.tensor(len(target), device=correct.device)
+    correct = 0
+    total = 0
+    for data, target in data_batches:
+        # Move data to device inside the remote function
+        data, target = data.to(device), target.to(device)
+
+        output = model(data)
+        pred = output.argmax(dim=1)
+        correct += (pred == target).sum()
+        total += len(target)
     return correct, total
 
 
@@ -115,11 +126,12 @@ print(f"Total batches per epoch: {len(train_loader)}\n")
 for epoch in range(3):
     model.train()
 
-    for data, target in train_loader:
-        data, target = data.to(device), target.to(device)
+    # Prepare all training batches for this epoch (kept on CPU)
+    train_batches = [(data, target) for data, target in train_loader]
 
-        # Entire training step executed remotely via @remote decorator
-        loss = train_step(model, data, target, optimizer, scheduler)
+    # Entire epoch executed remotely via @remote decorator
+    # Data is pickled on CPU and moved to device inside the function
+    loss = train_epoch(model, optimizer, scheduler, train_batches, device)
 
     print(f"Epoch {epoch+1}/3 completed")
 
@@ -127,17 +139,14 @@ print("\nEvaluating on test set...")
 
 # Evaluate accuracy
 model.eval()
-correct = torch.tensor(0, device=device)
-total = torch.tensor(0, device=device)
 
 with torch.no_grad():
-    for data, target in test_loader:
-        data, target = data.to(device), target.to(device)
+    # Prepare all test batches (kept on CPU)
+    test_batches = [(data, target) for data, target in test_loader]
 
-        # Entire eval batch executed remotely via @remote decorator
-        batch_correct, batch_total = eval_batch(model, data, target)
-        correct += batch_correct
-        total += batch_total
+    # Entire evaluation executed remotely via @remote decorator
+    # Data is pickled on CPU and moved to device inside the function
+    correct, total = evaluate(model, test_batches, device)
 
 # Single synchronous operation at the very end
 accuracy = (correct.float() / total).item() * 100
