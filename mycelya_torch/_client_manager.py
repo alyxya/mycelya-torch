@@ -575,8 +575,8 @@ class ClientManager:
 
         # If client is already running or paused, install packages at runtime
         if packages_to_install and self.state != ClientState.INITIALIZED:
-            # Ensure machine is running (will auto-start from INITIALIZED or auto-resume from PAUSED)
-            self._ensure_running()
+            # Ensure machine is running and process pending removals
+            self._ensure_running_and_process_pending_removals()
 
             if self.batching:
                 # Add to batch
