@@ -164,16 +164,23 @@ def create_modal_app_for_gpu(
             os.remove(filepath)
 
     class Unpickler(pickle.Unpickler):
-        """Custom unpickler to reconstruct tensors from IDs."""
+        """Custom unpickler to reconstruct tensors from IDs with object deduplication."""
 
         def __init__(self, file: Any, tensor_manager: TensorManager) -> None:
             super().__init__(file)
             self.tensor_manager = tensor_manager
+            # Cache for object deduplication: object_id -> tensor
+            self.object_cache: dict[int, torch.Tensor] = {}
 
         def persistent_load(self, pid: tuple[str, Any]) -> Any:
             type_tag, data = pid
 
             if type_tag == "mycelya_tensor":
+                # Check object cache first for deduplication
+                object_id = data["object_id"]
+                if object_id in self.object_cache:
+                    return self.object_cache[object_id]
+
                 tensor_id = data["id"]
                 requires_grad = data["requires_grad"]
                 is_parameter = data["is_parameter"]
@@ -192,6 +199,9 @@ def create_modal_app_for_gpu(
 
                 # Restore requires_grad after wrapping
                 tensor.requires_grad_(requires_grad)
+
+                # Cache the tensor for future lookups
+                self.object_cache[object_id] = tensor
 
                 return tensor
 

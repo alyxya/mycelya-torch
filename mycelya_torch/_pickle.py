@@ -159,10 +159,12 @@ class Pickler(cloudpickle.Pickler):
             self.tensors.append(obj)
             tensor_id = get_tensor_id(obj)  # Use metadata hash as tensor ID
             # Include requires_grad and is_parameter metadata for proper autograd reconstruction
+            # Include object_id for server-side deduplication
             return ("mycelya_tensor", {
                 "id": tensor_id,
                 "requires_grad": obj.requires_grad,
-                "is_parameter": isinstance(obj, torch.nn.Parameter)
+                "is_parameter": isinstance(obj, torch.nn.Parameter),
+                "object_id": id(obj)
             })
 
         # Handle mycelya devices
