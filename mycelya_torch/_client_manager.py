@@ -646,63 +646,33 @@ class ClientManager:
         if self.is_running():
             try:
                 # Check if there's any work to do
-                # Note: Only count _pending_results if there are also _pending_futures
-                # (resolve_futures requires both to process)
                 has_work = (
-                    bool(self._batch_calls)
-                    or (bool(self._pending_results) and bool(self._pending_futures))
-                    or bool(self.cpu_tensor_futures_deque)
-                    or bool(self.function_result_futures_deque)
+                    self._batch_calls
+                    or (self._pending_results and self._pending_futures)
+                    or self.cpu_tensor_futures_deque
+                    or self.function_result_futures_deque
                 )
 
                 if has_work:
-                    # Update last_active timestamp when there's work to do
                     self.last_active = time.time()
-
-                    # Execute any pending batched operations first
                     self.execute_batch()
-
-                    # Then resolve any pending futures (including CPU tensor futures)
                     self.resolve_futures()
-                else:
-                    # No work - check for idle timeout
-                    if self.idle_timeout is not None:
-                        idle_seconds = time.time() - self.last_active
-
-                        if idle_seconds >= self.idle_timeout:
-                            log.info(
-                                f"Machine {self.machine_id} idle for {idle_seconds:.1f}s "
-                                f"(timeout: {self.idle_timeout}s), pausing..."
-                            )
-                            # Offload state before pausing (handle errors gracefully)
-                            try:
-                                if self.batching:
-                                    self._batch_calls.append(
-                                        BatchCall(method_name="offload", args=(), kwargs={})
-                                    )
-                                    # Execute the offload batch immediately
-                                    self.execute_batch()
-                                else:
-                                    self.client.offload()
-
-                                # Note: We don't call resolve_futures() here because offload
-                                # doesn't create futures, and any pending results will be cleaned
-                                # up when the client is paused/stopped
-                            except Exception as e:
-                                log.warning(
-                                    f"Offload failed for machine {self.machine_id} (continuing with pause): {e}"
-                                )
-                                # Clear any pending results from failed offload
-                                self._pending_results.clear()
-
-                            # Stop the compute resources and transition to paused state
-                            self.client.stop()
-                            self.state = ClientState.PAUSED
-                            log.info(f"Machine {self.machine_id} paused due to idle timeout")
+                elif self.idle_timeout and time.time() - self.last_active >= self.idle_timeout:
+                    # Idle timeout reached - offload and pause
+                    log.info(f"Machine {self.machine_id} pausing due to idle timeout")
+                    try:
+                        if self.batching:
+                            self._batch_calls.append(BatchCall(method_name="offload", args=(), kwargs={}))
+                            self.execute_batch()
+                        else:
+                            self.client.offload()
+                    except Exception:
+                        pass  # Offload is best-effort, continue with pause
+                    self.client.stop()
+                    self.state = ClientState.PAUSED
 
             except Exception as e:
                 log.error(f"Fatal error for client {self.machine_id}: {e}")
-                # Propagate the exception to all pending futures for this client (including CPU tensor futures)
                 self.propagate_exception_to_futures(e)
 
         # Check if client should be stopped (stop request signaled by cleared event)
