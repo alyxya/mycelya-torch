@@ -513,7 +513,6 @@ class Orchestrator:
             nbytes=tensor.untyped_storage().nbytes(),
             device_type=device_type,
             device_index=device_index,
-            requires_grad=tensor.requires_grad,
         )
 
         # Use unified create_tensor method

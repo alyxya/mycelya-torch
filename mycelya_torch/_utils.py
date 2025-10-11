@@ -31,7 +31,6 @@ class TensorMetadata(TypedDict):
     nbytes: int
     device_type: str
     device_index: int
-    requires_grad: bool
     id: str | int
     alias_id: str | int | None
 
@@ -162,7 +161,6 @@ def create_mycelya_tensor_from_metadata(
     tensor.set_(
         storage, metadata["storage_offset"], metadata["shape"], metadata["stride"]
     )
-    tensor.requires_grad_(metadata["requires_grad"])
 
     return tensor
 

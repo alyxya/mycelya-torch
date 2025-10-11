@@ -222,7 +222,9 @@ class Unpickler(pickle.Unpickler):
         type_tag, data = pid
 
         if type_tag == "remote_tensor":
-            metadata = data
+            # Extract metadata and requires_grad separately
+            metadata = data["metadata"]
+            requires_grad = data["requires_grad"]
 
             # Get device using device_manager
             device = device_manager.get_mycelya_device(
@@ -233,6 +235,9 @@ class Unpickler(pickle.Unpickler):
             tensor = create_mycelya_tensor_from_metadata(
                 metadata, device, self.storage_manager
             )
+
+            # Apply requires_grad after tensor creation
+            tensor.requires_grad_(requires_grad)
 
             # Collect tensor linking info for orchestrator to handle
             temp_id = metadata["id"]

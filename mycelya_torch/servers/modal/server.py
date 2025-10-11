@@ -69,7 +69,6 @@ def create_modal_app_for_gpu(
         nbytes: int
         device_type: str
         device_index: int
-        requires_grad: bool
         id: str | int
         alias_id: str | int | None
 
@@ -117,7 +116,6 @@ def create_modal_app_for_gpu(
                 nbytes=tensor.untyped_storage().nbytes(),
                 device_type=tensor.device.type,
                 device_index=tensor.device.index if tensor.device.index is not None else 0,
-                requires_grad=tensor.requires_grad,
                 id=temp_id,
                 alias_id=alias_id,
             )
@@ -228,7 +226,11 @@ def create_modal_app_for_gpu(
                 # Register tensor and get metadata
                 metadata = self.tensor_manager.register_temp_tensor(obj)
 
-                return ("remote_tensor", metadata)
+                # Return metadata and requires_grad separately
+                return ("remote_tensor", {
+                    "metadata": metadata,
+                    "requires_grad": obj.requires_grad
+                })
 
             elif isinstance(obj, torch.device):
                 return ("remote_device", (obj.type, obj.index))
