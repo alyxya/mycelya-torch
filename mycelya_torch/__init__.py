@@ -228,9 +228,6 @@ from ._machine import (  # noqa: E402
 # Remote execution utilities
 from ._remote import remote  # noqa: E402
 
-# Import orchestrator for monkeypatch methods
-from ._orchestrator import orchestrator  # noqa: E402
-
 
 # Monkeypatch torch.Tensor with cpu_future() method
 def _tensor_cpu_future(self: torch.Tensor):
@@ -259,6 +256,9 @@ def _tensor_cpu_future(self: torch.Tensor):
             f"cpu_future() can only be called on mycelya tensors, got {self.device.type}. "
             f"Use .cpu() for synchronous transfer or .cpu_future() only with mycelya tensors."
         )
+
+    # Import orchestrator locally to avoid circular import issues
+    from ._orchestrator import orchestrator
 
     # Use orchestrator's async copy method for mycelya tensors
     return orchestrator.copy_tensor_to_cpu_future(self)
