@@ -647,8 +647,14 @@ class ClientManager:
                 self.propagate_exception_to_futures(e)
 
         # Check if client should be stopped (stop request signaled by cleared event)
-        # Only stop if there are no pending batch calls to prevent race conditions
-        if not self.stop_signal.is_set() and not self._batch_calls:
+        # Only stop if there are no pending batch calls or futures to prevent race conditions
+        if (
+            not self.stop_signal.is_set()
+            and not self._batch_calls
+            and not self._pending_futures
+            and not self.cpu_tensor_futures_deque
+            and not self.function_result_futures_deque
+        ):
             if self.is_running():
                 # Stop the cloud provider's compute resources
                 self.client.stop()
