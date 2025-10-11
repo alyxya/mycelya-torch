@@ -660,14 +660,11 @@ class ClientManager:
                 elif self.idle_timeout and time.time() - self.last_active >= self.idle_timeout:
                     # Idle timeout reached - offload and pause
                     log.info(f"Machine {self.machine_id} pausing due to idle timeout")
-                    try:
-                        if self.batching:
-                            self._batch_calls.append(BatchCall(method_name="offload", args=(), kwargs={}))
-                            self.execute_batch()
-                        else:
-                            self.client.offload()
-                    except Exception:
-                        pass  # Offload is best-effort, continue with pause
+                    if self.batching:
+                        self._batch_calls.append(BatchCall(method_name="offload", args=(), kwargs={}))
+                        self.execute_batch()
+                    else:
+                        self.client.offload()
                     self.client.stop()
                     self.state = ClientState.PAUSED
 
