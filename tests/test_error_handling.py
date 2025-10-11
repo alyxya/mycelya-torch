@@ -22,7 +22,6 @@ def isolated_machine():
     """Create a fresh machine for each test to avoid error state contamination."""
     machine = mycelya_torch.RemoteMachine("mock")
     try:
-        machine.start()
         yield machine
     finally:
         try:
@@ -40,8 +39,6 @@ def isolated_machines():
     }
 
     try:
-        for machine in machines.values():
-            machine.start()
         yield machines
     finally:
         for machine in machines.values():

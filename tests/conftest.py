@@ -44,6 +44,7 @@ def shared_machines(provider):
     machines = {}
 
     # Create machines with the parameterized provider
+    # Note: Machines auto-start by default, no need to call start() explicitly
     if provider == "mock":
         machines["T4"] = mycelya_torch.RemoteMachine(provider)
         machines["L4"] = mycelya_torch.RemoteMachine(provider)
@@ -51,13 +52,7 @@ def shared_machines(provider):
         machines["T4"] = mycelya_torch.RemoteMachine(provider, "T4")
         machines["L4"] = mycelya_torch.RemoteMachine(provider, "L4")
 
-    # Start the machines
-    for machine in machines.values():
-        try:
-            machine.start()
-            log.info(f"Started machine: {machine.machine_id} (provider: {provider})")
-        except Exception as e:
-            log.warning(f"Failed to start machine {machine.machine_id}: {e}")
+    log.info(f"Created machines with provider: {provider}")
 
     yield machines
 
