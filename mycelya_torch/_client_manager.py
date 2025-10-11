@@ -659,6 +659,8 @@ class ClientManager:
                     self.resolve_futures()
                 elif self.idle_timeout and time.time() - self.last_active >= self.idle_timeout:
                     # Idle timeout reached - offload and pause
+                    # Note: Race condition - main thread could add work between has_work check and pause.
+                    # Work won't be lost but won't execute until next resume.
                     if self.batching:
                         self._batch_calls.append(BatchCall(method_name="offload", args=(), kwargs={}))
                         self.execute_batch()
