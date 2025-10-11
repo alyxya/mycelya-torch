@@ -659,7 +659,6 @@ class ClientManager:
                     self.resolve_futures()
                 elif self.idle_timeout and time.time() - self.last_active >= self.idle_timeout:
                     # Idle timeout reached - offload and pause
-                    log.info(f"Machine {self.machine_id} pausing due to idle timeout")
                     if self.batching:
                         self._batch_calls.append(BatchCall(method_name="offload", args=(), kwargs={}))
                         self.execute_batch()
