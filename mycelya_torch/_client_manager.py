@@ -166,9 +166,12 @@ class ClientManager:
             # Already stopped, just transition to STOPPED state
             # TODO: Clean up offload state (remove offloaded files)
             self.state = ClientState.STOPPED
+        elif self.state == ClientState.STOPPED:
+            # Already stopped, idempotent
+            return
         else:
             raise RuntimeError(
-                f"Cannot stop machine {self.machine_id} - not currently running or paused"
+                f"Cannot stop machine {self.machine_id} - invalid state {self.state}"
             )
 
     def pause(self) -> None:
