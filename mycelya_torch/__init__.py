@@ -228,6 +228,46 @@ from ._machine import (  # noqa: E402
 # Remote execution utilities
 from ._remote import remote  # noqa: E402
 
+# Import orchestrator for monkeypatch methods
+from ._orchestrator import orchestrator  # noqa: E402
+
+
+# Monkeypatch torch.Tensor with cpu_future() method
+def _tensor_cpu_future(self: torch.Tensor):
+    """Copy mycelya tensor to CPU asynchronously, returning a Future.
+
+    This is a monkeypatch method added to torch.Tensor that provides
+    asynchronous CPU transfer for mycelya tensors only.
+
+    Returns:
+        Future[torch.Tensor]: Future that will resolve to the CPU tensor
+
+    Raises:
+        RuntimeError: If tensor is not a mycelya tensor
+
+    Example:
+        >>> import torch
+        >>> import mycelya_torch
+        >>> machine = mycelya_torch.RemoteMachine("modal", "A100")
+        >>> device = machine.device("cuda")
+        >>> x = torch.randn(1000, 1000, device=device)
+        >>> cpu_future = x.cpu_future()  # Returns immediately
+        >>> cpu_tensor = cpu_future.result()  # Wait for completion
+    """
+    if self.device.type != "mycelya":
+        raise RuntimeError(
+            f"cpu_future() can only be called on mycelya tensors, got {self.device.type}. "
+            f"Use .cpu() for synchronous transfer or .cpu_future() only with mycelya tensors."
+        )
+
+    # Use orchestrator's async copy method for mycelya tensors
+    return orchestrator.copy_tensor_to_cpu_future(self)
+
+
+# Add the monkeypatch to torch.Tensor
+torch.Tensor.cpu_future = _tensor_cpu_future  # type: ignore[assignment]
+
+
 # Define the public API
 __all__ = [
     # Core machine and device classes
