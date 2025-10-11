@@ -53,6 +53,7 @@ class RemoteMachine:
         *,
         gpu_count: int = 1,
         pip_packages: list[str] | None = None,
+        idle_timeout: int | None = None,
         modal_timeout: int | None = None,
         _start: bool = True,
         _batching: bool = True,
@@ -67,6 +68,7 @@ class RemoteMachine:
             gpu_count: Number of GPUs (1-8, default: 1). Ignored for mock provider.
             pip_packages: Additional pip packages to install in the modal app.
                          These will be added to the default packages (default: None)
+            idle_timeout: Number of seconds of inactivity before machine pauses (default: None, no timeout)
             modal_timeout: Timeout in seconds for modal provider (default: None)
             _start: Whether to start the client immediately (default: True)
             _batching: Whether to enable operation batching (default: True)
@@ -124,6 +126,7 @@ class RemoteMachine:
             gpu_type,
             gpu_count,
             _batching,
+            idle_timeout,
             modal_timeout,
         )
 

@@ -74,6 +74,7 @@ class Orchestrator:
         gpu_type: str,
         gpu_count: int,
         batching: bool = True,
+        idle_timeout: int | None = None,
         modal_timeout: int | None = None,
     ) -> ClientManager:
         """Create and register a client for a machine.
@@ -84,6 +85,7 @@ class Orchestrator:
             gpu_type: GPU type string (required for modal, ignored for mock)
             gpu_count: Number of GPUs (1-8, ignored for mock)
             batching: Whether to enable batching
+            idle_timeout: Number of seconds of inactivity before machine pauses (optional, default None)
             modal_timeout: Timeout in seconds (optional for modal, ignored for mock)
         """
         if provider == "modal":
@@ -105,6 +107,7 @@ class Orchestrator:
             gpu_type=gpu_type,
             gpu_count=gpu_count,
             batching=batching,
+            idle_timeout=idle_timeout,
         )
 
         # Store client manager mapping
