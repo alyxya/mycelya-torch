@@ -632,7 +632,10 @@ class Orchestrator:
         def unpickle_and_link(pickled_result: bytes) -> Any:
             buffer = io.BytesIO(pickled_result)
             unpickler = Unpickler(buffer, machine_id, self.storage)
-            result = unpickler.load()
+            result_bundle = unpickler.load()
+
+            # Extract result from bundle (args/kwargs ignored for now)
+            result = result_bundle["result"]
 
             # Handle tensor linking if any tensors were collected
             if unpickler.tensors_to_link:

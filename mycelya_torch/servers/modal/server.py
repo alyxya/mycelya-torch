@@ -692,10 +692,15 @@ def create_modal_app_for_gpu(
             # Execute the function directly (CloudPickle handles the function properly)
             result = func(*args, **kwargs)
 
-            # Pickle the result
+            # Pickle the result bundle with args and kwargs
+            result_bundle = {
+                "result": result,
+                "args": args,
+                "kwargs": kwargs,
+            }
             result_buffer = io.BytesIO()
             pickler = Pickler(result_buffer, self.tensor_manager)
-            pickler.dump(result)
+            pickler.dump(result_bundle)
 
             return result_buffer.getvalue()
 
