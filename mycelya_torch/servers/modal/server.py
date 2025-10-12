@@ -417,12 +417,15 @@ def create_modal_app_for_gpu(
 
                 base_tensor = self.tensor_manager.tensor_registry[alias_id]
 
-                # Create view using as_strided directly on the base tensor
-                view_tensor = torch.as_strided(
-                    base_tensor,
+                # Get dtype from metadata and create view with correct dtype
+                torch_dtype = getattr(torch, metadata["dtype"])
+
+                # Create view with correct dtype using set_() for proper dtype handling
+                view_tensor = torch.empty(0, dtype=torch_dtype, device=base_tensor.device).set_(
+                    base_tensor.untyped_storage(),
+                    metadata["storage_offset"],
                     metadata["shape"],
                     metadata["stride"],
-                    metadata["storage_offset"],
                 )
 
                 self.tensor_manager.register_tensor(tensor_id, view_tensor)
