@@ -12,7 +12,7 @@ from setuptools import find_packages, setup
 from setuptools.command.build_ext import build_ext
 
 PACKAGE_NAME = "mycelya_torch"
-version = "0.1.0"
+version = "0.1.1"
 
 ROOT_DIR = Path(__file__).absolute().parent
 CSRC_DIR = ROOT_DIR / "mycelya_torch/csrc"
