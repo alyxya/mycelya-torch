@@ -222,9 +222,10 @@ class Unpickler(pickle.Unpickler):
         type_tag, data = pid
 
         if type_tag == "remote_tensor":
-            # Extract metadata and requires_grad separately
+            # Extract metadata, requires_grad, and is_parameter separately
             metadata = data["metadata"]
             requires_grad = data["requires_grad"]
+            is_parameter = data["is_parameter"]
 
             # Get device using device_manager
             device = device_manager.get_mycelya_device(
@@ -236,7 +237,11 @@ class Unpickler(pickle.Unpickler):
                 metadata, device, self.storage_manager
             )
 
-            # Apply requires_grad after tensor creation
+            # Wrap as Parameter if it was originally a Parameter
+            if is_parameter:
+                tensor = torch.nn.Parameter(tensor)
+
+            # Apply requires_grad after wrapping
             tensor.requires_grad_(requires_grad)
 
             # Collect tensor linking info for orchestrator to handle

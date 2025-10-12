@@ -226,10 +226,11 @@ def create_modal_app_for_gpu(
                 # Register tensor and get metadata
                 metadata = self.tensor_manager.register_temp_tensor(obj)
 
-                # Return metadata and requires_grad separately
+                # Return metadata, requires_grad, and is_parameter separately
                 return ("remote_tensor", {
                     "metadata": metadata,
-                    "requires_grad": obj.requires_grad
+                    "requires_grad": obj.requires_grad,
+                    "is_parameter": isinstance(obj, torch.nn.Parameter)
                 })
 
             elif isinstance(obj, torch.device):
