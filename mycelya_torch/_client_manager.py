@@ -174,6 +174,31 @@ class ClientManager:
                 f"Cannot stop machine {self.machine_id} - invalid state {self.state}"
             )
 
+    def force_stop(self) -> None:
+        """Force immediate stop of the client, clearing all pending operations.
+
+        This method bypasses the background thread coordination and immediately:
+        1. Updates state to STOPPED
+        2. Clears all pending operation queues
+        3. Stops the client
+
+        This is useful for emergency shutdown scenarios like atexit handlers
+        where normal graceful shutdown may not be possible.
+        """
+        # Update state to stopped
+        self.state = ClientState.STOPPED
+
+        # Clear all deques
+        self._pending_futures.clear()
+        self._pending_results.clear()
+        self._batch_calls.clear()
+        self.cpu_tensor_futures_deque.clear()
+        self.function_result_futures_deque.clear()
+        self._pending_removed_storages.clear()
+
+        # Stop the client immediately
+        self.client.stop()
+
     def pause(self) -> None:
         """Pause the client (offload state and stop)."""
         if self.state != ClientState.RUNNING:

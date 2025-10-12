@@ -137,7 +137,7 @@ class RemoteMachine:
         # Start client if requested and register cleanup
         if _start:
             self.start()
-        atexit.register(self.stop)
+        atexit.register(self.force_stop)
 
         # Track all machine instances
         RemoteMachine._all_machines.append(self)
@@ -179,6 +179,15 @@ class RemoteMachine:
     def stop(self) -> None:
         """Stop the cloud provider's compute resources."""
         self._client_manager.stop()
+
+    def force_stop(self) -> None:
+        """Force immediate stop of the machine, clearing all pending operations.
+
+        This method bypasses normal graceful shutdown and immediately stops
+        the machine, clearing all pending operations. It is useful for
+        emergency shutdown scenarios like atexit handlers.
+        """
+        self._client_manager.force_stop()
 
     def pause(self) -> None:
         """Pause the machine (offload state and stop compute resources)."""
