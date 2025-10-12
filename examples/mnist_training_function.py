@@ -69,8 +69,8 @@ def train_epoch(model, optimizer, scheduler, train_loader_list, device):
         Tuple of (model, optimizer, scheduler) with updated state
     """
     model.train()
+
     for data, target in train_loader_list:
-        # Move data to device inside the remote function
         data, target = data.to(device), target.to(device)
 
         optimizer.zero_grad()
@@ -80,28 +80,35 @@ def train_epoch(model, optimizer, scheduler, train_loader_list, device):
         optimizer.step()
         scheduler.step()
 
-    print("Epoch completed")
     return model, optimizer, scheduler
 
 
 @mycelya_torch.remote
-def evaluate(model, data_batches, device):
+def evaluate_model(model, test_loader_list, device):
     """Execute evaluation on all test batches remotely.
 
     This function is pickled and executed entirely on the remote GPU,
     iterating through all test batches.
-    Returns correct predictions count and total count.
-    """
-    correct = 0
-    total = 0
-    for data, target in data_batches:
-        # Move data to device inside the remote function
-        data, target = data.to(device), target.to(device)
 
+    Args:
+        model: The neural network model
+        test_loader_list: List of (data, target) tuples for evaluation
+        device: Target device for computation
+
+    Returns:
+        Tuple of (correct, total) counts as tensors
+    """
+    model.eval()
+    correct = torch.tensor(0, device=device)
+    total = torch.tensor(0, device=device)
+
+    for data, target in test_loader_list:
+        data, target = data.to(device), target.to(device)
         output = model(data)
         pred = output.argmax(dim=1)
         correct += (pred == target).sum()
         total += len(target)
+
     return correct, total
 
 
@@ -123,41 +130,37 @@ test_loader = DataLoader(test_data, batch_size=1000, shuffle=False)
 # Initialize model
 model = MNISTNet().to(device)
 
-# Initialize optimizer and scheduler (persist across epochs)
+# AdamW with learning rate scheduler for faster convergence
 optimizer = torch.optim.AdamW(model.parameters(), lr=0.002)
 scheduler = torch.optim.lr_scheduler.OneCycleLR(
     optimizer,
     max_lr=0.01,
-    epochs=3,  # Configure for 3 epochs
+    epochs=3,
     steps_per_epoch=len(train_loader)
 )
 
 # Train for 3 epochs
-print(f"Training on {device} using remote function execution")
+print(f"Training on {device}")
 print(f"Total batches per epoch: {len(train_loader)}\n")
 
-# Prepare all training batches (kept on CPU)
-train_batches = [(data, target) for data, target in train_loader]
-
-# Train 3 epochs, calling train_epoch for each
-# Each epoch executed remotely via @remote decorator
-# Optimizer and scheduler state is maintained across calls
 for epoch in range(3):
-    print(f"Starting epoch {epoch + 1}/3")
-    model, optimizer, scheduler = train_epoch(model, optimizer, scheduler, train_batches, device=device)
+    # Prepare training batches for this epoch (kept on CPU)
+    train_batches = [(data, target) for data, target in train_loader]
+
+    # Execute entire epoch remotely via @remote decorator
+    model, optimizer, scheduler = train_epoch(model, optimizer, scheduler, train_batches, device)
+
+    print(f"Epoch {epoch+1}/3 completed")
 
 print("\nEvaluating on test set...")
 
 # Evaluate accuracy
-model.eval()
-
 with torch.no_grad():
     # Prepare all test batches (kept on CPU)
     test_batches = [(data, target) for data, target in test_loader]
 
-    # Entire evaluation executed remotely via @remote decorator
-    # Data is pickled on CPU and moved to device inside the function
-    correct, total = evaluate(model, test_batches, device)
+    # Execute evaluation remotely via @remote decorator
+    correct, total = evaluate_model(model, test_batches, device)
 
 # Single synchronous operation at the very end
 accuracy = (correct.float() / total).item() * 100
