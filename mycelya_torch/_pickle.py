@@ -235,27 +235,28 @@ class Unpickler(pickle.Unpickler):
 
             # Check cache first for deduplication
             if object_id in self.tensor_cache:
-                return self.tensor_cache[object_id]
+                # Use cached tensor
+                tensor = self.tensor_cache[object_id]
+            else:
+                # Get device using device_manager
+                device = device_manager.get_mycelya_device(
+                    self.machine_id, metadata["device_type"], metadata["device_index"]
+                )
 
-            # Get device using device_manager
-            device = device_manager.get_mycelya_device(
-                self.machine_id, metadata["device_type"], metadata["device_index"]
-            )
+                # Create mycelya tensor from metadata with storage_manager
+                tensor = create_mycelya_tensor_from_metadata(
+                    metadata, device, self.storage_manager
+                )
 
-            # Create mycelya tensor from metadata with storage_manager
-            tensor = create_mycelya_tensor_from_metadata(
-                metadata, device, self.storage_manager
-            )
+                # Wrap as Parameter if it was originally a Parameter
+                if is_parameter:
+                    tensor = torch.nn.Parameter(tensor)
 
-            # Wrap as Parameter if it was originally a Parameter
-            if is_parameter:
-                tensor = torch.nn.Parameter(tensor)
+                # Apply requires_grad after wrapping
+                tensor.requires_grad_(requires_grad)
 
-            # Apply requires_grad after wrapping
-            tensor.requires_grad_(requires_grad)
-
-            # Cache the tensor for future lookups
-            self.tensor_cache[object_id] = tensor
+                # Cache the tensor for future lookups
+                self.tensor_cache[object_id] = tensor
 
             # Collect tensor linking info for orchestrator to handle
             temp_id = metadata["id"]
