@@ -158,13 +158,16 @@ class Pickler(cloudpickle.Pickler):
             # Collect tensor for orchestrator to call _materialize_tensor on
             self.tensors[id(obj)] = obj
             tensor_id = get_tensor_id(obj)  # Use metadata hash as tensor ID
+
             # Include requires_grad and is_parameter metadata for proper autograd reconstruction
             # Include object_id for server-side deduplication
+            # Include gradient (will be None or a tensor, both pickle correctly)
             return ("mycelya_tensor", {
                 "id": tensor_id,
                 "requires_grad": obj.requires_grad,
                 "is_parameter": isinstance(obj, torch.nn.Parameter),
-                "object_id": id(obj)
+                "object_id": id(obj),
+                "grad": obj.grad  # None or tensor, pickled recursively via persistent_id
             })
 
         # Handle mycelya devices
@@ -227,7 +230,7 @@ class Unpickler(pickle.Unpickler):
         type_tag, data = pid
 
         if type_tag == "remote_tensor":
-            # Extract metadata, requires_grad, is_parameter, and object_id
+            # Extract metadata, requires_grad, is_parameter, object_id, and grad
             metadata = data["metadata"]
             requires_grad = data["requires_grad"]
             is_parameter = data["is_parameter"]
@@ -271,6 +274,9 @@ class Unpickler(pickle.Unpickler):
 
                 # Cache the tensor for future lookups
                 self.tensor_cache[object_id] = tensor
+
+            # Restore gradient (None or tensor, both work)
+            tensor.grad = data["grad"]
 
             # Collect tensor linking info for orchestrator to handle
             temp_id = metadata["id"]

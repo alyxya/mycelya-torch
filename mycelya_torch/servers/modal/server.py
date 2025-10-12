@@ -18,6 +18,7 @@ import os
 import pickle
 import subprocess
 import uuid
+import warnings
 import weakref
 from typing import Any, TypedDict
 
@@ -198,6 +199,9 @@ def create_modal_app_for_gpu(
                 # Restore requires_grad after wrapping
                 tensor.requires_grad_(requires_grad)
 
+                # Restore gradient (None or tensor, both work)
+                tensor.grad = data["grad"]
+
                 # Cache the tensor for future lookups
                 self.tensor_cache[object_id] = tensor
 
@@ -240,12 +244,19 @@ def create_modal_app_for_gpu(
                     object_id = str(id(obj))
                     self.tensor_to_object_id[obj] = object_id
 
-                # Return metadata, requires_grad, is_parameter, and object_id
+                # Get gradient (None or tensor, both pickle correctly)
+                # Suppress warning about accessing .grad on non-leaf tensors
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", message=".*non-leaf Tensor.*")
+                    grad = obj.grad
+
+                # Return metadata, requires_grad, is_parameter, object_id, and grad
                 return ("remote_tensor", {
                     "metadata": metadata,
                     "requires_grad": obj.requires_grad,
                     "is_parameter": isinstance(obj, torch.nn.Parameter),
-                    "object_id": object_id
+                    "object_id": object_id,
+                    "grad": grad  # None or tensor, pickled recursively via persistent_id
                 })
 
             elif isinstance(obj, torch.device):
