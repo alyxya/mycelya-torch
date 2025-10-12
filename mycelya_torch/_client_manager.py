@@ -698,8 +698,9 @@ class ClientManager:
                     self.state = ClientState.PAUSED
 
             except Exception as e:
-                log.error(f"Fatal error for client {self.machine_id}: {e}")
-                self.propagate_exception_to_futures(e)
+                if self.state != ClientState.STOPPED:
+                    log.error(f"Fatal error for client {self.machine_id}: {e}")
+                    self.propagate_exception_to_futures(e)
 
         # Check if client should be stopped (stop request signaled by cleared event)
         # Only stop if there are no pending batch calls or futures to prevent race conditions
