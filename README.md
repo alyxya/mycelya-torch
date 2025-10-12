@@ -100,7 +100,7 @@ device = machine.device("cuda")
 def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return a @ b
 
-@mycelya_torch.remote()
+@mycelya_torch.remote
 def complex_computation(x: torch.Tensor, scale: float = 2.0) -> torch.Tensor:
     # Multiple operations executed remotely
     y = x * scale
