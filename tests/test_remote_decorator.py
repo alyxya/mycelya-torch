@@ -290,6 +290,115 @@ class TestRemoteDecoratorAdvanced:
         torch.testing.assert_close(result_cpu, expected, rtol=1e-4, atol=1e-6)
 
 
+@pytest.mark.fast
+class TestRemoteDecoratorAsync:
+    """Tests for @remote decorator with run_async=True."""
+
+    def test_async_basic(self, shared_machines, provider):
+        """Test basic async execution with run_async=True."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        @mycelya_torch.remote(run_async=True)
+        def async_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+            return x + y
+
+        a = torch.randn(3, 3, device=device)
+        b = torch.randn(3, 3, device=device)
+
+        # Should return a Future immediately
+        future = async_add(a, b)
+
+        # Check that it's a Future object
+        from concurrent.futures import Future
+        assert isinstance(future, Future)
+
+        # Get the result by blocking
+        result = future.result()
+
+        assert result.device.type == "mycelya"
+        assert result.shape == (3, 3)
+
+        # Verify correctness
+        result_cpu = result.cpu()
+        expected = (a.cpu() + b.cpu())
+        torch.testing.assert_close(result_cpu, expected, rtol=1e-4, atol=1e-6)
+
+    def test_async_multiple_operations(self, shared_machines, provider):
+        """Test async execution with multiple concurrent operations."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        @mycelya_torch.remote(run_async=True)
+        def async_operation(x: torch.Tensor, scale: float) -> torch.Tensor:
+            return torch.relu(x * scale)
+
+        x = torch.randn(5, 5, device=device)
+
+        # Launch multiple async operations
+        future1 = async_operation(x, 2.0)
+        future2 = async_operation(x, 3.0)
+        future3 = async_operation(x, 4.0)
+
+        # Get results
+        result1 = future1.result()
+        result2 = future2.result()
+        result3 = future3.result()
+
+        # All should be valid mycelya tensors
+        assert result1.device.type == "mycelya"
+        assert result2.device.type == "mycelya"
+        assert result3.device.type == "mycelya"
+
+    def test_async_vs_sync_comparison(self, shared_machines, provider):
+        """Test that async and sync modes produce same results."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        @mycelya_torch.remote
+        def sync_func(x: torch.Tensor) -> torch.Tensor:
+            return torch.sigmoid(x)
+
+        @mycelya_torch.remote(run_async=True)
+        def async_func(x: torch.Tensor) -> torch.Tensor:
+            return torch.sigmoid(x)
+
+        x = torch.randn(4, 4, device=device)
+
+        # Execute both
+        sync_result = sync_func(x)
+        async_future = async_func(x)
+        async_result = async_future.result()
+
+        # Compare results
+        sync_cpu = sync_result.cpu()
+        async_cpu = async_result.cpu()
+        torch.testing.assert_close(sync_cpu, async_cpu, rtol=1e-4, atol=1e-6)
+
+    def test_async_multiple_returns(self, shared_machines, provider):
+        """Test async execution with multiple return values."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        @mycelya_torch.remote(run_async=True)
+        def async_split(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            return x * 2, x * 3
+
+        x = torch.randn(3, 3, device=device)
+
+        future = async_split(x)
+        result1, result2 = future.result()
+
+        assert result1.device.type == "mycelya"
+        assert result2.device.type == "mycelya"
+        assert result1.shape == (3, 3)
+        assert result2.shape == (3, 3)
+
+
 class TestRemoteDecoratorErrorHandling:
     """Error handling tests for @remote decorator."""
 

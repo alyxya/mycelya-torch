@@ -29,7 +29,9 @@ def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
 
     Args:
         _func: Function to decorate (when used as @remote) or None (when used as @remote())
-        run_async: Whether to run the function asynchronously (unused for now, defaults to False)
+        run_async: Whether to run the function asynchronously (defaults to False)
+                   - If False: Blocks until result is ready and returns the result directly
+                   - If True: Returns a Future immediately without blocking
 
     Returns:
         Decorated function (when used as @remote) or decorator function (when used as @remote())
@@ -45,7 +47,7 @@ def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
         def matrix_add(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a + b
 
-        # Future async support:
+        # Asynchronous execution:
         @remote(run_async=True)
         def async_function(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a + b
@@ -53,8 +55,15 @@ def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
         machine = RemoteMachine("modal", "A100")
         x = torch.randn(100, 100, device=machine.device("cuda"))
         y = torch.randn(100, 100, device=machine.device("cuda"))
-        result1 = matrix_multiply(x, y)  # Executes remotely
-        result2 = matrix_add(x, y)       # Executes remotely
+
+        # Synchronous execution (blocks until result is ready)
+        result1 = matrix_multiply(x, y)
+        result2 = matrix_add(x, y)
+
+        # Asynchronous execution (returns Future immediately)
+        future = async_function(x, y)  # Returns immediately
+        # ... do other work ...
+        result3 = future.result()  # Block only when needed
     """
 
     def create_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -67,7 +76,12 @@ def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
         def wrapper(*args, **kwargs):
             # Execute the function remotely via orchestrator
             # Machine inference happens during pickling via Pickler.machine_id
-            return orchestrator.execute_function(func, args, kwargs)
+            if run_async:
+                # Asynchronous execution - return Future immediately
+                return orchestrator.execute_function_future(func, args, kwargs)
+            else:
+                # Synchronous execution - block until result is ready
+                return orchestrator.execute_function(func, args, kwargs)
 
         return wrapper
 
