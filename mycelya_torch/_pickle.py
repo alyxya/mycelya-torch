@@ -237,6 +237,11 @@ class Unpickler(pickle.Unpickler):
             if object_id in self.tensor_cache:
                 tensor = self.tensor_cache[object_id]
 
+                # Resize storage if needed
+                storage = tensor.untyped_storage()
+                if metadata["nbytes"] > storage.nbytes():
+                    storage.resize_(metadata["nbytes"])
+
                 # Apply in-place metadata mutations if changed
                 if (list(tensor.shape) != metadata["shape"]
                     or list(tensor.stride()) != metadata["stride"]
