@@ -23,6 +23,9 @@ venv.bak/
 *.pt
 lightning_logs/
 
+# Data files
+data/
+
 # C++ extensions
 *.so
 *.dylib
