@@ -236,15 +236,8 @@ class ClientManager:
         else:
             self.client.reload()
 
-    def is_running(self) -> bool:
-        """Check if the machine is currently running and ready."""
-        return self.state == ClientState.RUNNING
-
     def resolve_futures(self) -> None:
         """Resolve any pending futures by fetching results from the queue."""
-        if not self.is_running():
-            return
-
         # Poll for completed RPC results and resolve corresponding futures
         while self._pending_results and self._pending_futures:
             rpc_result = self._pending_results[0]  # Peek at first
@@ -671,7 +664,7 @@ class ClientManager:
     def process_background_tasks(self) -> None:
         """Process background tasks for this client manager."""
         # Normal processing for running clients
-        if self.is_running():
+        if self.state == ClientState.RUNNING:
             try:
                 # Check if there's any work to do
                 has_work = bool(
@@ -711,7 +704,7 @@ class ClientManager:
             and not self.cpu_tensor_futures_deque
             and not self.function_result_futures_deque
         ):
-            if self.is_running():
+            if self.state == ClientState.RUNNING:
                 # Stop the cloud provider's compute resources
                 self.client.stop()
                 # Set state based on _stop_state (STOPPED or PAUSED)
