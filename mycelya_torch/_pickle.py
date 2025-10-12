@@ -53,8 +53,8 @@ class Pickler(cloudpickle.Pickler):
         super().__init__(file, protocol=protocol, buffer_callback=buffer_callback)
         self.storage_manager = storage_manager
         self.machine_id: str | None = None
-        # Collect tensors that need _materialize_tensor called
-        self.tensors = []
+        # Collect tensors that need _materialize_tensor called (mapping from object_id to tensor)
+        self.tensors: dict[int, torch.Tensor] = {}
         # Collect module dependencies
         self.module_dependencies: set[str] = set()
 
@@ -156,7 +156,7 @@ class Pickler(cloudpickle.Pickler):
                 )
 
             # Collect tensor for orchestrator to call _materialize_tensor on
-            self.tensors.append(obj)
+            self.tensors[id(obj)] = obj
             tensor_id = get_tensor_id(obj)  # Use metadata hash as tensor ID
             # Include requires_grad and is_parameter metadata for proper autograd reconstruction
             # Include object_id for server-side deduplication
@@ -202,10 +202,15 @@ class Unpickler(pickle.Unpickler):
     remote_device info back into local mycelya devices.
     """
 
-    def __init__(self, file: io.BytesIO, machine_id: str, storage_manager):
+    def __init__(self, file: io.BytesIO, machine_id: str, storage_manager, pickler_tensors: dict[int, torch.Tensor]):
         super().__init__(file)
         self.machine_id = machine_id
         self.storage_manager = storage_manager
+        # Cache for tensor deduplication: object_id (int | str) -> tensor
+        # Initialize from pickler's tensors
+        self.tensor_cache: dict[int | str, torch.Tensor] = {}
+        for object_id, tensor in pickler_tensors.items():
+            self.tensor_cache[object_id] = tensor
         # Collect tensor linking info for orchestrator to handle
         self.tensors_to_link = []  # List of (tensor, temp_id) tuples
 
@@ -222,10 +227,15 @@ class Unpickler(pickle.Unpickler):
         type_tag, data = pid
 
         if type_tag == "remote_tensor":
-            # Extract metadata, requires_grad, and is_parameter separately
+            # Extract metadata, requires_grad, is_parameter, and object_id
             metadata = data["metadata"]
             requires_grad = data["requires_grad"]
             is_parameter = data["is_parameter"]
+            object_id = data["object_id"]
+
+            # Check cache first for deduplication
+            if object_id in self.tensor_cache:
+                return self.tensor_cache[object_id]
 
             # Get device using device_manager
             device = device_manager.get_mycelya_device(
@@ -243,6 +253,9 @@ class Unpickler(pickle.Unpickler):
 
             # Apply requires_grad after wrapping
             tensor.requires_grad_(requires_grad)
+
+            # Cache the tensor for future lookups
+            self.tensor_cache[object_id] = tensor
 
             # Collect tensor linking info for orchestrator to handle
             temp_id = metadata["id"]

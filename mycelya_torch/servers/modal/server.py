@@ -217,20 +217,35 @@ def create_modal_app_for_gpu(
             self,
             file: Any,
             tensor_manager: TensorManager,
+            unpickler_tensor_cache: dict[int, torch.Tensor],
         ) -> None:
             super().__init__(file)
             self.tensor_manager = tensor_manager
+            # Create reverse mapping from tensors to object_ids (int from client | str from server)
+            self.tensor_to_object_id: dict[torch.Tensor, int | str] = {}
+            for object_id, tensor in unpickler_tensor_cache.items():
+                self.tensor_to_object_id[tensor] = object_id
 
         def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
             if isinstance(obj, torch.Tensor):
                 # Register tensor and get metadata
                 metadata = self.tensor_manager.register_temp_tensor(obj)
 
-                # Return metadata, requires_grad, and is_parameter separately
+                # Determine object_id for deduplication
+                if obj in self.tensor_to_object_id:
+                    # Tensor from client - use client's object_id (int)
+                    object_id = self.tensor_to_object_id[obj]
+                else:
+                    # New server-side tensor - create server object_id (str)
+                    object_id = str(id(obj))
+                    self.tensor_to_object_id[obj] = object_id
+
+                # Return metadata, requires_grad, is_parameter, and object_id
                 return ("remote_tensor", {
                     "metadata": metadata,
                     "requires_grad": obj.requires_grad,
-                    "is_parameter": isinstance(obj, torch.nn.Parameter)
+                    "is_parameter": isinstance(obj, torch.nn.Parameter),
+                    "object_id": object_id
                 })
 
             elif isinstance(obj, torch.device):
@@ -702,7 +717,7 @@ def create_modal_app_for_gpu(
                 "kwargs": kwargs,
             }
             result_buffer = io.BytesIO()
-            pickler = Pickler(result_buffer, self.tensor_manager)
+            pickler = Pickler(result_buffer, self.tensor_manager, unpickler.tensor_cache)
             pickler.dump(result_bundle)
 
             return result_buffer.getvalue()

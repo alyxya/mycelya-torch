@@ -591,7 +591,7 @@ class Orchestrator:
         pickled_func = buffer.getvalue()
 
         # Handle tensor creation for any tensors collected by pickler
-        for tensor in pickler.tensors:
+        for tensor in pickler.tensors.values():
             self._materialize_tensor(tensor)
 
         # Get machine_id from pickler (inferred during pickling)
@@ -627,10 +627,13 @@ class Orchestrator:
         # Create future for final result
         final_result_future = Future()
 
+        # Capture pickler tensors for unpickler cache
+        pickler_tensors = pickler.tensors
+
         # Create unpickling callback for background thread
         def unpickle_and_link(pickled_result: bytes) -> Any:
             buffer = io.BytesIO(pickled_result)
-            unpickler = Unpickler(buffer, machine_id, self.storage)
+            unpickler = Unpickler(buffer, machine_id, self.storage, pickler_tensors)
             result_bundle = unpickler.load()
 
             # Extract result from bundle (args/kwargs ignored for now)
