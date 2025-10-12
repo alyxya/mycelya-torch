@@ -65,8 +65,7 @@ at::Tensor empty_mycelya(at::IntArrayRef size,
   return tensor;
 }
 
-// C++ implementation of empty_strided_mycelya following NPU pattern (delegate
-// to empty + resize)
+// C++ implementation of empty_strided_mycelya following NPU pattern
 at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
                                  c10::optional<at::ScalarType> dtype,
                                  c10::optional<at::Layout> layout,
@@ -79,12 +78,41 @@ at::Tensor empty_strided_mycelya(at::IntArrayRef size, at::IntArrayRef stride,
   TORCH_CHECK(target_device.type() == c10::DeviceType::PrivateUse1,
               "empty_strided_mycelya expects PrivateUse1 device, got: ",
               target_device.type());
+
+  TORCH_CHECK(size.size() == stride.size(),
+              "empty_strided: size and stride must have the same length");
+
+  const auto resolved_dtype = c10::dtype_or_default(dtype);
+  TORCH_CHECK(c10::layout_or_default(layout) == c10::Layout::Strided,
+              "Only strided layout is supported");
+  TORCH_CHECK(!c10::pinned_memory_or_default(pin_memory),
+              "Pin memory is not supported on remote devices");
+
   const c10::DeviceGuard device_guard(target_device);
 
-  // Create empty tensor with size {0} first, then set proper size and stride
-  c10::optional<c10::MemoryFormat> no_memory_format = c10::nullopt;
-  auto tensor =
-      empty_mycelya({0}, dtype, layout, device, pin_memory, no_memory_format);
+  // Calculate storage size needed for the strided layout
+  // storage_size = 1 + sum((size[i] - 1) * stride[i]) for all dimensions
+  int64_t storage_size = 1;
+  for (size_t i = 0; i < size.size(); i++) {
+    if (size[i] == 0) {
+      storage_size = 0;
+      break;
+    }
+    storage_size += (size[i] - 1) * stride[i];
+  }
+
+  auto dtype_meta = c10::scalarTypeToTypeMeta(resolved_dtype);
+  int64_t size_bytes = storage_size * dtype_meta.itemsize();
+
+  // Create custom storage with the correct size for strided layout
+  c10::intrusive_ptr<c10::StorageImpl> storage_impl = make_mycelya_storage_impl(
+      c10::StorageImpl::use_byte_size_t(), c10::SymInt(size_bytes),
+      c10::DataPtr(), // Empty DataPtr - let the factory call our allocator
+      &get_mycelya_allocator(), true);
+
+  // Create tensor using custom MycelyaTensorImpl
+  auto tensor = at::detail::make_tensor<MycelyaTensorImpl>(
+      c10::Storage(storage_impl), dtype_meta);
 
   // Set the requested size and stride
   tensor.unsafeGetTensorImpl()->set_sizes_and_strides(size, stride);
