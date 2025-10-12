@@ -8,7 +8,6 @@ This module provides RemoteMachine abstraction and factory functions for creatin
 machines with different cloud providers and GPU types.
 """
 
-import atexit
 import uuid
 from typing import Any
 
@@ -134,10 +133,9 @@ class RemoteMachine:
         if pip_packages:
             self._client_manager.pip_install(pip_packages)
 
-        # Start client if requested and register cleanup
+        # Start client if requested
         if _start:
             self.start()
-        atexit.register(self.stop)
 
         # Track all machine instances
         RemoteMachine._all_machines.append(self)
