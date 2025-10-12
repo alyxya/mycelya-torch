@@ -128,7 +128,7 @@ print(f"Results computed on {result1.device}")
 machine = mycelya_torch.RemoteMachine(
     "modal", "A100",
     gpu_count=1,                                  # 1-8 GPUs
-    pip_packages=["transformers", "diffusers"],   # Pre-install packages at startup
+    pip_packages=["transformers", "diffusers"],   # Pre-install for remote functions
     idle_timeout=300,                             # Pause after 5 min inactivity
     modal_timeout=3600                            # Function timeout (default: 1 hour)
 )
