@@ -75,7 +75,7 @@ class Orchestrator:
         gpu_count: int,
         batching: bool = True,
         idle_timeout: int | None = None,
-        modal_timeout: int | None = None,
+        modal_timeout: int | None = 3600,
     ) -> ClientManager:
         """Create and register a client for a machine.
 
@@ -86,7 +86,7 @@ class Orchestrator:
             gpu_count: Number of GPUs (1-8, ignored for mock)
             batching: Whether to enable batching
             idle_timeout: Number of seconds of inactivity before machine pauses (optional, default None)
-            modal_timeout: Timeout in seconds (optional for modal, ignored for mock)
+            modal_timeout: Timeout in seconds for modal provider (default: 3600, ignored for mock)
         """
         if provider == "modal":
             from .clients.modal.client import ModalClient
