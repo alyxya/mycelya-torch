@@ -52,35 +52,36 @@ class MNISTNet(nn.Module):
 
 
 @mycelya_torch.remote
-def train_model(model, train_loader_list, num_epochs, device):
-    """Execute complete training loop (multiple epochs) remotely.
+def train_epoch(model, optimizer, scheduler, train_loader_list, device):
+    """Execute a single training epoch remotely.
 
     This function is pickled and executed entirely on the remote GPU,
-    iterating through all epochs and all batches.
+    iterating through all batches in a single epoch.
+
+    Args:
+        model: The neural network model
+        optimizer: Optimizer instance (e.g., AdamW)
+        scheduler: Learning rate scheduler instance
+        train_loader_list: List of (data, target) tuples for training
+        device: Target device for computation
+
+    Returns:
+        Tuple of (model, optimizer, scheduler) with updated state
     """
-    # AdamW with learning rate scheduler for faster convergence
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.002)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=0.01,
-        epochs=num_epochs,
-        steps_per_epoch=len(train_loader_list)
-    )
+    model.train()
+    for data, target in train_loader_list:
+        # Move data to device inside the remote function
+        data, target = data.to(device), target.to(device)
 
-    for epoch in range(num_epochs):
-        model.train()
-        for data, target in train_loader_list:
-            # Move data to device inside the remote function
-            data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = nn.functional.cross_entropy(output, target)
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
 
-            optimizer.zero_grad()
-            output = model(data)
-            loss = nn.functional.cross_entropy(output, target)
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-        print(f"Epoch {epoch+1}/{num_epochs} completed")
-    return model
+    print("Epoch completed")
+    return model, optimizer, scheduler
 
 
 @mycelya_torch.remote
@@ -122,6 +123,15 @@ test_loader = DataLoader(test_data, batch_size=1000, shuffle=False)
 # Initialize model
 model = MNISTNet().to(device)
 
+# Initialize optimizer and scheduler (persist across epochs)
+optimizer = torch.optim.AdamW(model.parameters(), lr=0.002)
+scheduler = torch.optim.lr_scheduler.OneCycleLR(
+    optimizer,
+    max_lr=0.01,
+    epochs=3,  # Configure for 3 epochs
+    steps_per_epoch=len(train_loader)
+)
+
 # Train for 3 epochs
 print(f"Training on {device} using remote function execution")
 print(f"Total batches per epoch: {len(train_loader)}\n")
@@ -129,9 +139,12 @@ print(f"Total batches per epoch: {len(train_loader)}\n")
 # Prepare all training batches (kept on CPU)
 train_batches = [(data, target) for data, target in train_loader]
 
-# Entire training loop (all epochs) executed remotely via @remote decorator
-# Data is pickled on CPU and moved to device inside the function
-model = train_model(model, train_batches, num_epochs=3, device=device)
+# Train 3 epochs, calling train_epoch for each
+# Each epoch executed remotely via @remote decorator
+# Optimizer and scheduler state is maintained across calls
+for epoch in range(3):
+    print(f"Starting epoch {epoch + 1}/3")
+    model, optimizer, scheduler = train_epoch(model, optimizer, scheduler, train_batches, device=device)
 
 print("\nEvaluating on test set...")
 
