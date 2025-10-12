@@ -36,6 +36,11 @@ print(f"Result: {result_local}")
 
 ### Install
 ```bash
+pip install mycelya-torch
+```
+
+Or install from source:
+```bash
 pip install git+https://github.com/alyxya/mycelya-torch.git
 ```
 
