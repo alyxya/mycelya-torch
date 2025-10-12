@@ -1441,6 +1441,26 @@ _mycelya_lib_aten.impl(
     dispatch_key="PrivateUse1",
 )
 _mycelya_lib_aten.impl(
+    "mse_loss",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mse_loss),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mse_loss.out",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mse_loss.out),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mse_loss_backward",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mse_loss_backward),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
+    "mse_loss_backward.grad_input",
+    _mycelya_kernel_fallback_wrapper(torch.ops.aten.mse_loss_backward.grad_input),
+    dispatch_key="PrivateUse1",
+)
+_mycelya_lib_aten.impl(
     "mul.Scalar",
     _mycelya_kernel_fallback_wrapper(torch.ops.aten.mul.Scalar),
     dispatch_key="PrivateUse1",
