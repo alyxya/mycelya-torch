@@ -123,6 +123,42 @@ content = generate_text(model, tokenizer, "Explain quantum computing briefly.")
 print("Response:", content)
 ```
 
+### Diffusion Model Inference
+```python
+import torch
+import mycelya_torch
+from diffusers import DiffusionPipeline
+
+# Define remote functions for pipeline loading and image generation
+@mycelya_torch.remote
+def load_pipeline(model_name: str):
+    pipe = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch.bfloat16).to("cuda")
+    return pipe
+
+@mycelya_torch.remote
+def generate_image(pipe, prompt: str, height: int, width: int, seed: int):
+    image = pipe(
+        prompt,
+        height=height,
+        width=width,
+        num_inference_steps=50,
+        true_cfg_scale=4.0,
+        generator=torch.Generator(device="cuda").manual_seed(seed)
+    ).images[0]
+    return image
+
+# Create remote machine with required packages
+machine = mycelya_torch.RemoteMachine(
+    "modal", "H100", pip_packages=["diffusers", "transformers", "accelerate"]
+)
+
+# Load pipeline and generate image - all on remote GPU
+pipe = load_pipeline("Qwen/Qwen-Image")
+image = generate_image(pipe, "A cat holding a sign that says hello world",
+                       height=1024, width=1024, seed=0)
+image.save("cat.png")
+```
+
 ## API Reference
 
 ### `RemoteMachine`
