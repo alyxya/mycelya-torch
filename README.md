@@ -119,6 +119,47 @@ result2 = complex_computation(x, scale=3.0)  # Executes remotely
 print(f"Results computed on {result1.device}")
 ```
 
+## API Reference
+
+### `RemoteMachine`
+
+```python
+# Create remote machine with cloud GPU
+machine = mycelya_torch.RemoteMachine(
+    "modal", "A100",
+    gpu_count=1,                                  # 1-8 GPUs
+    pip_packages=["transformers", "diffusers"],   # Pre-install packages at startup
+    idle_timeout=300,                             # Pause after 5 min inactivity
+    modal_timeout=3600                            # Function timeout (default: 1 hour)
+)
+device = machine.device("cuda")
+
+# Install packages dynamically
+machine.pip_install("numpy")
+
+# Pause to save costs, resume when needed
+machine.pause()   # Offload state and stop compute
+machine.resume()  # Restart and reload state
+```
+
+### `@remote` Decorator
+
+```python
+# Execute entire function remotely
+@mycelya_torch.remote
+def custom_function(x: torch.Tensor) -> torch.Tensor:
+    return torch.relu(x @ x.T)
+
+result = custom_function(x)  # Runs on remote GPU
+
+# Async execution
+@mycelya_torch.remote(run_async=True)
+def async_function(x: torch.Tensor) -> torch.Tensor:
+    return x @ x.T
+
+future = async_function(x)
+result = future.result()
+```
 
 ## License
 
