@@ -110,9 +110,6 @@ class ClientManager:
         self.stop_signal = threading.Event()
         self.stop_signal.set()
 
-        # Fully stopped signal (set when stop is complete and state is STOPPED)
-        self.fully_stopped = threading.Event()
-
         # Stop state for stop operations (None when not stopping)
         self._stop_state = None
 
@@ -693,10 +690,5 @@ class ClientManager:
                 self.client.stop()
                 # Set state based on _stop_state (STOPPED or PAUSED)
                 self.state = self._stop_state
-
-            # Set fully stopped signal only when state is STOPPED
-            if self.state == ClientState.STOPPED:
-                self.fully_stopped.set()
-
             # Set event to signal completion of stop
             self.stop_signal.set()
