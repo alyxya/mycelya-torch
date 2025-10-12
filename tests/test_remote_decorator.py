@@ -399,6 +399,212 @@ class TestRemoteDecoratorAsync:
         assert result2.shape == (3, 3)
 
 
+@pytest.mark.fast
+class TestRemoteDecoratorGradients:
+    """Tests for gradient preservation in remote function execution."""
+
+    def test_gradient_client_to_server(self, shared_machines, provider):
+        """Test that gradients are preserved when sending tensors to remote function."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Create tensor with gradient
+        x = torch.tensor([2.0, 3.0, 4.0], requires_grad=True, device=device)
+        y = (x**2).sum()
+        y.backward()
+
+        # Verify gradient exists
+        assert x.grad is not None
+        expected_grad = torch.tensor([4.0, 6.0, 8.0], device=device)
+        torch.testing.assert_close(x.grad, expected_grad, rtol=1e-4, atol=1e-6)
+
+        @mycelya_torch.remote
+        def use_gradient(tensor: torch.Tensor) -> torch.Tensor:
+            """Access gradient inside remote function."""
+            return tensor.grad * 2.0
+
+        result = use_gradient(x)
+
+        # Verify gradient was accessible on remote side
+        assert result.device.type == "mycelya"
+        expected_result = expected_grad * 2.0
+        torch.testing.assert_close(result, expected_result, rtol=1e-4, atol=1e-6)
+
+    def test_gradient_server_to_client(self, shared_machines, provider):
+        """Test that gradients are preserved when returning tensors from remote function."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        x = torch.randn(3, 3, device=device)
+
+        @mycelya_torch.remote
+        def compute_with_gradient(tensor: torch.Tensor) -> torch.Tensor:
+            """Compute gradient inside remote function and return tensor with gradient."""
+            t = tensor.clone().requires_grad_(True)
+            loss = (t**2).sum()
+            loss.backward()
+            return t
+
+        result = compute_with_gradient(x)
+
+        # Verify gradient was preserved in return
+        assert result.grad is not None
+        assert result.grad.device.type == "mycelya"
+        expected_grad = 2.0 * x
+        torch.testing.assert_close(result.grad, expected_grad, rtol=1e-4, atol=1e-6)
+
+    def test_gradient_update_step(self, shared_machines, provider):
+        """Test gradient descent step using remote function."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Create tensor with gradient
+        x = torch.tensor([2.0, 3.0, 4.0], requires_grad=True, device=device)
+        y = (x**2).sum()
+        y.backward()
+
+        @mycelya_torch.remote
+        def gradient_step(tensor: torch.Tensor, lr: float = 0.1) -> torch.Tensor:
+            """Perform gradient descent step."""
+            return tensor - lr * tensor.grad
+
+        x_updated = gradient_step(x, lr=0.1)
+
+        # Verify gradient descent step
+        expected = torch.tensor([1.6, 2.4, 3.2], device=device)
+        torch.testing.assert_close(x_updated, expected, rtol=1e-4, atol=1e-6)
+
+    def test_gradient_none_handling(self, shared_machines, provider):
+        """Test that None gradients are handled correctly."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Create tensor without gradient
+        x = torch.randn(3, 3, device=device)
+        assert x.grad is None
+
+        @mycelya_torch.remote
+        def check_none_gradient(tensor: torch.Tensor) -> bool:
+            """Check that None gradient is preserved."""
+            return tensor.grad is None
+
+        result = check_none_gradient(x)
+        assert result is True
+
+    def test_gradient_multiple_tensors(self, shared_machines, provider):
+        """Test gradients with multiple tensor arguments."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Create two tensors with gradients
+        a = torch.tensor([1.0, 2.0], requires_grad=True, device=device)
+        b = torch.tensor([3.0, 4.0], requires_grad=True, device=device)
+
+        loss = (a**2 + b**2).sum()
+        loss.backward()
+
+        @mycelya_torch.remote
+        def use_both_gradients(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+            """Use gradients from both tensors."""
+            return x.grad + y.grad
+
+        result = use_both_gradients(a, b)
+
+        expected = torch.tensor([8.0, 12.0], device=device)
+        torch.testing.assert_close(result, expected, rtol=1e-4, atol=1e-6)
+
+    def test_gradient_mixed_none_and_tensor(self, shared_machines, provider):
+        """Test mixed case: some tensors with gradients, some without."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # One tensor with gradient, one without
+        with_grad = torch.tensor([1.0, 2.0], requires_grad=True, device=device)
+        (with_grad**2).sum().backward()
+
+        without_grad = torch.tensor([3.0, 4.0], device=device)
+
+        @mycelya_torch.remote
+        def handle_mixed(
+            x: torch.Tensor, y: torch.Tensor
+        ) -> tuple[torch.Tensor, bool]:
+            """Handle mixed gradient case."""
+            has_grad = x.grad is not None
+            no_grad = y.grad is None
+            return x.grad if has_grad else torch.zeros_like(x), has_grad and no_grad
+
+        grad_result, flags_correct = handle_mixed(with_grad, without_grad)
+
+        assert flags_correct is True
+        expected_grad = torch.tensor([2.0, 4.0], device=device)
+        torch.testing.assert_close(grad_result, expected_grad, rtol=1e-4, atol=1e-6)
+
+    def test_gradient_tuple_return(self, shared_machines, provider):
+        """Test gradients in tuple returns."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        x = torch.randn(4, 4, device=device)
+
+        @mycelya_torch.remote
+        def compute_multiple_with_grads(
+            tensor: torch.Tensor,
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+            """Return multiple tensors with gradients."""
+            t1 = tensor.clone().requires_grad_(True)
+            t2 = tensor.clone().requires_grad_(True)
+
+            loss1 = (t1**2).sum()
+            loss2 = (t2**3).sum()
+
+            loss1.backward()
+            loss2.backward()
+
+            return t1, t2
+
+        result1, result2 = compute_multiple_with_grads(x)
+
+        # Both should have gradients
+        assert result1.grad is not None
+        assert result2.grad is not None
+
+        expected_grad1 = 2.0 * x
+        expected_grad2 = 3.0 * x**2
+
+        torch.testing.assert_close(result1.grad, expected_grad1, rtol=1e-4, atol=1e-6)
+        torch.testing.assert_close(result2.grad, expected_grad2, rtol=1e-4, atol=1e-6)
+
+    def test_gradient_round_trip(self, shared_machines, provider):
+        """Test gradient preservation in full round trip: client -> server -> client."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Create tensor with gradient
+        x = torch.tensor([5.0, 10.0, 15.0], requires_grad=True, device=device)
+        (x**2).sum().backward()
+
+        original_grad = x.grad.clone()
+
+        @mycelya_torch.remote
+        def identity_with_grad(tensor: torch.Tensor) -> torch.Tensor:
+            """Return tensor unchanged - gradient should survive round trip."""
+            return tensor
+
+        result = identity_with_grad(x)
+
+        # Gradient should be preserved after round trip
+        assert result.grad is not None
+        torch.testing.assert_close(result.grad, original_grad, rtol=1e-4, atol=1e-6)
+
+
 class TestRemoteDecoratorErrorHandling:
     """Error handling tests for @remote decorator."""
 
