@@ -235,8 +235,17 @@ class Unpickler(pickle.Unpickler):
 
             # Check cache first for deduplication
             if object_id in self.tensor_cache:
-                # Use cached tensor
                 tensor = self.tensor_cache[object_id]
+
+                # Apply in-place metadata mutations if changed
+                if (list(tensor.shape) != metadata["shape"]
+                    or list(tensor.stride()) != metadata["stride"]
+                    or tensor.storage_offset() != metadata["storage_offset"]):
+                    tensor.as_strided_(metadata["shape"], metadata["stride"], metadata["storage_offset"])
+
+                # Apply requires_grad change if needed
+                if tensor.requires_grad != requires_grad:
+                    tensor.requires_grad_(requires_grad)
             else:
                 # Get device using device_manager
                 device = device_manager.get_mycelya_device(
