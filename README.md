@@ -86,37 +86,41 @@ for data, target in train_loader:
     optimizer.step()
 ```
 
-### Remote Function Execution
+### LLM Inference
 ```python
-import torch
 import mycelya_torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Create remote machine
-machine = mycelya_torch.RemoteMachine("modal", "A100")
-device = machine.device("cuda")
-
-# Define custom functions that execute remotely
+# Define remote functions for model loading and inference
 @mycelya_torch.remote
-def matrix_multiply(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    return a @ b
+def load_model(model_name: str):
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, torch_dtype="auto", device_map="auto"
+    )
+    return model, tokenizer
 
 @mycelya_torch.remote
-def complex_computation(x: torch.Tensor, scale: float = 2.0) -> torch.Tensor:
-    # Multiple operations executed remotely
-    y = x * scale
-    z = torch.relu(y)
-    w = torch.softmax(z, dim=-1)
-    return w.sum(dim=0)
+def generate_text(model, tokenizer, prompt: str):
+    messages = [{"role": "user", "content": prompt}]
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
-# Create tensors on remote GPU
-x = torch.randn(1000, 1000, device=device)
-y = torch.randn(1000, 1000, device=device)
+    generated_ids = model.generate(**model_inputs, max_new_tokens=512)
+    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+    return tokenizer.decode(output_ids, skip_special_tokens=True)
 
-# Functions automatically execute on remote GPU
-result1 = matrix_multiply(x, y)  # Executes remotely
-result2 = complex_computation(x, scale=3.0)  # Executes remotely
+# Create remote machine with required packages
+machine = mycelya_torch.RemoteMachine(
+    "modal", "A100", pip_packages=["transformers", "accelerate"]
+)
 
-print(f"Results computed on {result1.device}")
+# Load model and generate text - all on remote GPU
+model, tokenizer = load_model("Qwen/Qwen3-4B-Instruct-2507")
+content = generate_text(model, tokenizer, "Explain quantum computing briefly.")
+print("Response:", content)
 ```
 
 ## API Reference
