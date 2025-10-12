@@ -710,14 +710,6 @@ class Orchestrator:
 
     def _shutdown(self) -> None:
         """Gracefully shutdown the orchestrator background thread."""
-        # Stop all client managers first
-        for machine_id, client_manager in self._client_managers.items():
-            try:
-                client_manager.stop()
-            except Exception as e:
-                log.error(f"Error stopping client manager {machine_id}: {e}")
-
-        # Then shutdown the background thread
         self._running_flag.clear()
         self._main_thread_waiting.set()  # Wake up the background thread
 
