@@ -652,7 +652,7 @@ class ClientManager:
         if self.is_running():
             try:
                 # Check if there's any work to do
-                has_work = (
+                has_work = bool(
                     self._batch_calls
                     or (self._pending_results and self._pending_futures)
                     or self.cpu_tensor_futures_deque
