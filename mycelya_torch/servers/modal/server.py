@@ -743,6 +743,10 @@ def create_modal_app_for_gpu(
 
         def _pip_install_impl(self, packages: list[str]) -> None:
             """Install packages using uv pip on the remote machine."""
+            # Skip pip install for local/mock execution
+            if gpu_type == "local":
+                return
+
             if not packages:
                 return
 
@@ -759,6 +763,10 @@ def create_modal_app_for_gpu(
 
         def _offload_impl(self) -> None:
             """Offload tensor registry to disk."""
+            # Skip offload for local/mock execution
+            if gpu_type == "local":
+                return
+
             filepath = f"/offload/{self.machine_id}.pt"
             self.tensor_manager.offload(filepath)
 
@@ -769,6 +777,10 @@ def create_modal_app_for_gpu(
 
         def _reload_impl(self) -> None:
             """Reload tensor registry from disk."""
+            # Skip reload for local/mock execution
+            if gpu_type == "local":
+                return
+
             filepath = f"/offload/{self.machine_id}.pt"
             self.tensor_manager.reload(filepath)
 
