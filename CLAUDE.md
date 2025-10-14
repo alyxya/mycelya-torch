@@ -57,8 +57,8 @@ To run type checking:
 **IMPORTANT**: PyTorch 2.6+ must be pre-installed before building mycelya-torch.
 
 ```bash
-# Install PyTorch first (CPU-only example)
-pip install torch>=2.6.0
+# Install latest PyTorch first (CPU-only example)
+pip install --upgrade torch
 
 # For GPU support, visit: https://pytorch.org/get-started/locally/
 ```

@@ -35,8 +35,8 @@ print(f"Result: {result_local}")
 ### Quick Install
 
 ```bash
-# 1. Install PyTorch first if not installed yet
-pip install torch
+# 1. Install latest PyTorch first
+pip install --upgrade torch
 
 # 2. Install mycelya-torch from source
 pip install git+https://github.com/alyxya/mycelya-torch.git
