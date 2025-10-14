@@ -41,6 +41,9 @@ pip install torch
 # 2. Install mycelya-torch
 pip install mycelya-torch
 
+# Or install from source
+pip install git+https://github.com/alyxya/mycelya-torch.git
+
 # 3. Setup Modal if not setup yet
 modal setup
 ```
