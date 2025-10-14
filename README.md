@@ -27,27 +27,25 @@ print(f"Result: {result_local}")
 
 ## Installation
 
-### Requirements
+### Prerequisites
 - Python 3.10+
-- PyTorch 2.0+
+- PyTorch 2.0+ (must be pre-installed)
 - Modal account (free tier available)
 
-**Note**: Modal is currently the only supported GPU cloud provider. Support for other providers (AWS, etc.) will be added in future releases.
+### Quick Install
 
-### Install
 ```bash
+# 1. Install PyTorch first if not installed yet
+pip install torch
+
+# 2. Install mycelya-torch
 pip install mycelya-torch
-```
 
-Or install from source:
-```bash
-pip install git+https://github.com/alyxya/mycelya-torch.git
-```
-
-### Setup Modal
-```bash
+# 3. Setup Modal if not setup yet
 modal setup
 ```
+
+**Note**: Modal is currently the only supported GPU cloud provider. Support for other providers (AWS, etc.) will be added in future releases.
 
 ## Quick Start
 

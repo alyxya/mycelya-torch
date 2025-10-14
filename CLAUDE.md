@@ -53,13 +53,23 @@ To run type checking:
 
 ## Local Development Setup
 
+### Prerequisites
+**IMPORTANT**: PyTorch 2.0+ must be pre-installed before building mycelya-torch.
+
+```bash
+# Install PyTorch first (CPU-only example)
+pip install torch>=2.0.0
+
+# For GPU support, visit: https://pytorch.org/get-started/locally/
+```
+
 ### Building C++ Extensions
 ```bash
 # Clone the repository
 git clone https://github.com/alyxya/mycelya-torch.git
 cd mycelya-torch
 
-# Build C++ extensions for development
+# Build C++ extensions for development (PyTorch must already be installed)
 python setup.py build_ext --inplace
 ```
 
@@ -90,8 +100,9 @@ y = x @ x  # Executed locally
 
 ### Modern Python Packaging
 - **`pyproject.toml`**: Modern build system using setuptools with PyTorch C++ extensions
-- **`setup.py`**: C++ extension compilation with platform-specific compiler flags
-- **Dependencies**: torch>=2.0.0, modal>=1.1.0, numpy
+- **`setup.py`**: C++ extension compilation with platform-specific compiler flags, includes PyTorch version validation
+- **Dependencies**: modal>=1.1.0, numpy, cloudpickle>=3.1.1
+- **Pre-requisite**: PyTorch>=2.0.0 (must be pre-installed before installing mycelya-torch)
 - **License**: AGPL-3.0-or-later
 - **Python Support**: 3.10+
 

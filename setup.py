@@ -17,28 +17,68 @@ version = "0.1.1"
 ROOT_DIR = Path(__file__).absolute().parent
 CSRC_DIR = ROOT_DIR / "mycelya_torch/csrc"
 
+# Minimum required PyTorch version
+TORCH_MIN_VERSION = "2.0.0"
+
+
+def parse_version(version_str):
+    """Parse version string into (major, minor) tuple for comparison."""
+    try:
+        version_str = version_str.split("+")[0]  # Remove +cu118
+        return tuple(int(p) for p in version_str.split(".")[:2])
+    except:
+        return (0, 0)
+
+
+def check_pytorch_installation():
+    """Check if PyTorch is installed and meets version requirements."""
+    try:
+        import torch
+    except ImportError:
+        print(
+            "\nERROR: PyTorch is not installed.",
+            "\n",
+            "\nmycelya-torch requires PyTorch >= 2.0.0 to be pre-installed.",
+            "\nInstall PyTorch: https://pytorch.org/get-started/locally/",
+            "\n",
+            "\nThen retry: pip install mycelya-torch\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Check PyTorch version
+    torch_version = torch.__version__
+    torch_version_tuple = parse_version(torch_version)
+    min_version_tuple = parse_version(TORCH_MIN_VERSION)
+
+    if torch_version_tuple < min_version_tuple:
+        print(
+            f"\nERROR: PyTorch {torch_version} is too old (need >= {TORCH_MIN_VERSION})",
+            "\n",
+            "\nUpgrade PyTorch: https://pytorch.org/get-started/locally/",
+            "\n",
+            "\nThen retry: pip install mycelya-torch\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+# Check PyTorch installation before proceeding
+check_pytorch_installation()
+
 
 def get_build_ext_class():
-    """Get PyTorch's BuildExtension class, importing only when needed."""
-    try:
-        from torch.utils.cpp_extension import BuildExtension
+    """Get PyTorch's BuildExtension class."""
+    from torch.utils.cpp_extension import BuildExtension
 
-        return BuildExtension.with_options(no_python_abi_suffix=True)
-    except ImportError:
-        # Fallback to standard build_ext if PyTorch not available
-        return build_ext
+    return BuildExtension.with_options(no_python_abi_suffix=True)
 
 
 def get_extension_class():
-    """Get appropriate Extension class."""
-    try:
-        from torch.utils.cpp_extension import CppExtension
+    """Get PyTorch's CppExtension class."""
+    from torch.utils.cpp_extension import CppExtension
 
-        return CppExtension
-    except ImportError:
-        from setuptools import Extension
-
-        return Extension
+    return CppExtension
 
 
 class clean(distutils.command.clean.clean):
