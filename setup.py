@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 from setuptools import find_packages, setup
-from setuptools.command.build_ext import build_ext
 
 PACKAGE_NAME = "mycelya_torch"
 version = "0.1.1"
@@ -26,7 +25,7 @@ def parse_version(version_str):
     try:
         version_str = version_str.split("+")[0]  # Remove +cu118
         return tuple(int(p) for p in version_str.split(".")[:2])
-    except:
+    except (ValueError, AttributeError, IndexError):
         return (0, 0)
 
 
@@ -126,7 +125,38 @@ if __name__ == "__main__":
     ]
 
     setup(
+        name=PACKAGE_NAME,
+        version=version,
+        description="Mycelya: PyTorch extension for transparent remote GPU execution on cloud infrastructure",
+        long_description=open(ROOT_DIR / "README.md").read(),
+        long_description_content_type="text/markdown",
+        author="Mycelya Extension",
+        license="AGPL-3.0-or-later",
+        url="https://github.com/alyxya/mycelya-torch",
         packages=find_packages(exclude=("tests",)),
+        python_requires=">=3.10",
+        install_requires=[
+            "modal>=1.1.0",
+            "numpy",
+            "cloudpickle>=3.1.1",
+        ],
+        extras_require={
+            "aws": ["boto3>=1.33.0"],
+            "all": ["boto3>=1.33.0"],
+        },
+        classifiers=[
+            "Development Status :: 4 - Beta",
+            "Intended Audience :: Developers",
+            "Programming Language :: Python :: 3",
+            "Programming Language :: Python :: 3.10",
+            "Programming Language :: Python :: 3.11",
+            "Programming Language :: Python :: 3.12",
+            "Programming Language :: Python :: 3.13",
+            "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        ],
+        package_data={
+            "mycelya_torch": ["*.dll", "*.dylib", "*.so"],
+        },
         ext_modules=ext_modules,
         cmdclass={
             "build_ext": get_build_ext_class(),

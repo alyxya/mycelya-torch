@@ -98,13 +98,14 @@ y = x @ x  # Executed locally
 
 ## Build Configuration
 
-### Modern Python Packaging
-- **`pyproject.toml`**: Modern build system using setuptools with PyTorch C++ extensions
-- **`setup.py`**: C++ extension compilation with platform-specific compiler flags, includes PyTorch version validation
+### Python Packaging
+- **`setup.py`**: Legacy setuptools build (no build isolation), C++ extension compilation with platform-specific compiler flags, includes PyTorch version validation
+- **`ruff.toml`**: Ruff linter and formatter configuration
 - **Dependencies**: modal>=1.1.0, numpy, cloudpickle>=3.1.1
 - **Pre-requisite**: PyTorch>=2.0.0 (must be pre-installed before installing mycelya-torch)
 - **License**: AGPL-3.0-or-later
 - **Python Support**: 3.10+
+- **Note**: No pyproject.toml to avoid pip build isolation, following pytorch/xla pattern
 
 ### Code Quality Configuration
 - **Ruff**: Line length 88, comprehensive rule selection (E, W, F, I, B, C4, UP)
@@ -195,7 +196,7 @@ Complete custom PyTorch integration following pytorch-npu patterns:
   - `test_utilities.py` - Utility functions
   - `test_view_operations.py` - View and reshape operations
   - `conftest.py` - Pytest configuration and fixtures
-- Modern build system with `pyproject.toml`, `setup.py` for C++ extensions, and ruff configuration
+- Legacy build system with `setup.py` for C++ extensions and `ruff.toml` for code quality
 
 ## Current Architecture
 
@@ -386,6 +387,10 @@ for epoch in range(10):
 - Updates to RPC batching system or background thread processing
 - Reorganizing ATen operation handling or modular dispatch system
 - Updates to build system, development workflows, or testing strategies
+
+**Recent Changes**:
+- Removed pyproject.toml to eliminate pip build isolation (follows pytorch/xla pattern)
+- All metadata now in setup.py, ruff configuration in ruff.toml
 
 ## Development Guidelines
 
