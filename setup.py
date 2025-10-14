@@ -38,8 +38,8 @@ def check_pytorch_installation():
         print(
             "\nERROR: PyTorch is not installed.",
             "\n",
-            "\nmycelya-torch requires PyTorch >= 2.0.0 to be pre-installed.",
-            "\nInstall PyTorch: https://pytorch.org/get-started/locally/",
+            "\nInstall PyTorch first:",
+            "\n  pip install torch",
             "\n",
             "\nThen retry: pip install mycelya-torch\n",
             file=sys.stderr,
@@ -55,7 +55,8 @@ def check_pytorch_installation():
         print(
             f"\nERROR: PyTorch {torch_version} is too old (need >= {TORCH_MIN_VERSION})",
             "\n",
-            "\nUpgrade PyTorch: https://pytorch.org/get-started/locally/",
+            "\nUpgrade PyTorch:",
+            "\n  pip install --upgrade torch",
             "\n",
             "\nThen retry: pip install mycelya-torch\n",
             file=sys.stderr,
