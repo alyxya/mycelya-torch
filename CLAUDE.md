@@ -54,11 +54,11 @@ To run type checking:
 ## Local Development Setup
 
 ### Prerequisites
-**IMPORTANT**: PyTorch 2.0+ must be pre-installed before building mycelya-torch.
+**IMPORTANT**: PyTorch 2.6+ must be pre-installed before building mycelya-torch.
 
 ```bash
 # Install PyTorch first (CPU-only example)
-pip install torch>=2.0.0
+pip install torch>=2.6.0
 
 # For GPU support, visit: https://pytorch.org/get-started/locally/
 ```
@@ -102,7 +102,7 @@ y = x @ x  # Executed locally
 - **`setup.py`**: Legacy setuptools build (no build isolation), C++ extension compilation with platform-specific compiler flags, includes PyTorch version validation
 - **`ruff.toml`**: Ruff linter and formatter configuration
 - **Dependencies**: modal>=1.1.0, numpy, cloudpickle>=3.1.1
-- **Pre-requisite**: PyTorch>=2.0.0 (must be pre-installed before installing mycelya-torch)
+- **Pre-requisite**: PyTorch>=2.6.0 (must be pre-installed before installing mycelya-torch)
 - **License**: AGPL-3.0-or-later
 - **Python Support**: 3.10+
 - **Note**: No pyproject.toml to avoid pip build isolation, following pytorch/xla pattern

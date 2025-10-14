@@ -17,7 +17,7 @@ ROOT_DIR = Path(__file__).absolute().parent
 CSRC_DIR = ROOT_DIR / "mycelya_torch/csrc"
 
 # Minimum required PyTorch version
-TORCH_MIN_VERSION = "2.0.0"
+TORCH_MIN_VERSION = "2.6.0"
 
 
 def parse_version(version_str):

@@ -29,7 +29,7 @@ print(f"Result: {result_local}")
 
 ### Prerequisites
 - Python 3.10+
-- PyTorch 2.0+ (must be pre-installed)
+- PyTorch 2.6+ (must be pre-installed)
 - Modal account (free tier available)
 
 ### Quick Install
