@@ -40,7 +40,7 @@ def check_pytorch_installation():
             "\nInstall PyTorch first:",
             "\n  pip install torch",
             "\n",
-            "\nThen retry: pip install mycelya-torch\n",
+            "\nThen retry building mycelya-torch\n",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -57,7 +57,7 @@ def check_pytorch_installation():
             "\nUpgrade PyTorch:",
             "\n  pip install --upgrade torch",
             "\n",
-            "\nThen retry: pip install mycelya-torch\n",
+            "\nThen retry building mycelya-torch\n",
             file=sys.stderr,
         )
         sys.exit(1)
