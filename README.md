@@ -39,7 +39,7 @@ print(f"Result: {result_local}")
 pip install --upgrade torch
 
 # 2. Install mycelya-torch from source
-pip install git+https://github.com/alyxya/mycelya-torch.git
+pip install --no-build-isolation git+https://github.com/alyxya/mycelya-torch.git
 
 # 3. Setup Modal if not setup yet
 modal setup
