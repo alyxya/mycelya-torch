@@ -38,7 +38,10 @@ print(f"Result: {result_local}")
 # 1. Install latest PyTorch first
 pip install --upgrade torch
 
-# 2. Install mycelya-torch from source
+# 2. Install mycelya-torch
+pip install --no-build-isolation mycelya-torch
+
+# Or install from source
 pip install --no-build-isolation git+https://github.com/alyxya/mycelya-torch.git
 
 # 3. Setup Modal if not setup yet
