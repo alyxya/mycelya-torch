@@ -111,3 +111,5 @@ with torch.no_grad():
 accuracy = (correct.float() / total).item() * 100
 print(f"Test Accuracy: {accuracy:.2f}%")
 print("\nTraining completed!")
+
+machine.stop()

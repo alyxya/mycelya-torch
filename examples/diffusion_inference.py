@@ -54,6 +54,8 @@ def main():
     # Save generated image locally
     image.save("cat.png")
 
+    machine.stop()
+
 
 if __name__ == "__main__":
     main()

@@ -68,6 +68,8 @@ def main():
 
     print("content:", content)
 
+    machine.stop()
+
 
 if __name__ == "__main__":
     main()

@@ -88,6 +88,9 @@ device = machine.device("cpu")  # Mock client uses CPU
 # All operations run locally but through the same API
 x = torch.randn(100, 100, device=device)
 y = x @ x  # Executed locally
+
+# Clean up resources
+machine.stop()
 ```
 
 **Mock Client Benefits:**
@@ -246,6 +249,9 @@ result = x @ y  # Matrix multiplication on remote A100, Storage ID: 3
 
 # Each tensor has FNV-1a metadata hash for debugging
 print(f"Result computed on {result.device}: {result.shape}")
+
+# Clean up resources
+machine.stop()
 ```
 
 ### CPU Scalar Tensor Support
@@ -266,6 +272,9 @@ result = x * scalar_cpu  # Works! CPU scalar auto-transferred
 # Non-scalar CPU tensors still raise error
 cpu_vector = torch.randn(1000)  # Non-scalar
 # result = x + cpu_vector  # RuntimeError: Cannot mix cpu tensors with mycelya tensors
+
+# Clean up resources
+machine.stop()
 ```
 
 ### Remote Function Execution
@@ -299,6 +308,9 @@ result1 = matrix_multiply(x, y)  # Executes remotely on A100
 result2 = complex_computation(x, scale=3.0)  # Executes remotely on A100
 
 print(f"Results computed on {result1.device}")
+
+# Clean up resources
+machine.stop()
 ```
 
 ### Production Neural Network Training
@@ -334,6 +346,9 @@ for epoch in range(10):
 
         if batch_idx % 100 == 0:
             print(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.item():.4f}")
+
+# Clean up resources
+machine.stop()
 ```
 
 
