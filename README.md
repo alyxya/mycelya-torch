@@ -29,13 +29,13 @@ print(f"Result: {result_local}")
 
 ### Prerequisites
 - Python 3.10+
-- PyTorch 2.9+ (must be pre-installed)
+- PyTorch 2.6+ (must be pre-installed)
 - Modal account (free tier available)
 
 ### Quick Install
 
 ```bash
-# 1. Install PyTorch 2.9+ first
+# 1. Install PyTorch 2.6+ first
 pip install --upgrade torch
 
 # 2. Install mycelya-torch
