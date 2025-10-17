@@ -5,6 +5,13 @@ include LICENSE
 # Include C++ header files for compilation
 include mycelya_torch/csrc/*.h
 
+# Exclude tests and development files from source distributions
+recursive-exclude tests *
+global-exclude pytest.ini
+global-exclude ruff.toml
+global-exclude .pytest_cache
+global-exclude .ruff_cache
+
 # Exclude compiled extensions from source distributions
 # (they'll be built on user's machine)
 global-exclude *.so
