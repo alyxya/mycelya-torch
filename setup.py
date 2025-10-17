@@ -11,7 +11,7 @@ from pathlib import Path
 from setuptools import find_packages, setup
 
 PACKAGE_NAME = "mycelya_torch"
-version = "0.1.4"
+version = "0.1.5"
 
 ROOT_DIR = Path(__file__).absolute().parent
 CSRC_DIR = ROOT_DIR / "mycelya_torch/csrc"
@@ -66,16 +66,7 @@ def check_pytorch_installation():
 # Check PyTorch installation before proceeding
 check_pytorch_installation()
 
-# Include PyTorch version in package version for wheels only
-# This ensures wheels built against different PyTorch versions don't conflict
-# For source distributions (sdist), keep the base version since they're compiled
-# on the user's machine with their PyTorch version
 import torch
-
-if "sdist" not in sys.argv:
-    # Add suffix for all wheel builds (direct or via pip install from source)
-    pt_major, pt_minor = parse_version(torch.__version__)
-    version = f"{version}+pt{pt_major}.{pt_minor}"  # e.g., "0.1.2+pt2.9"
 
 
 def get_build_ext_class():
