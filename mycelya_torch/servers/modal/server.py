@@ -41,7 +41,7 @@ def create_modal_app_for_gpu(
         machine_id: Unique machine ID used as the app name
         gpu_type: The GPU type (e.g., "T4", "A100", "local" for local execution)
         timeout: Function timeout in seconds (default: 3600)
-        packages: List of versioned packages to install (e.g., ["torch==2.0.0", "numpy==1.24.0"])
+        packages: List of versioned packages to install (e.g., ["torch==2.9.0", "numpy==2.2.0"])
         python_version: Python version for base image (e.g., "3.11")
 
     Returns:

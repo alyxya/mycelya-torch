@@ -217,7 +217,7 @@ class RemoteMachine:
 
         Args:
             packages: Package name(s) to install. Can be a single string or list of strings.
-                     Examples: "numpy", ["numpy", "scipy"], "torch==2.0.0"
+                     Examples: "numpy", ["numpy", "scipy"], "torch==2.9.0"
 
         Returns:
             Self for method chaining.
