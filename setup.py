@@ -66,6 +66,13 @@ def check_pytorch_installation():
 # Check PyTorch installation before proceeding
 check_pytorch_installation()
 
+# Include PyTorch version in package version for cache differentiation
+# This ensures wheels built against different PyTorch versions don't conflict
+import torch
+
+pt_major, pt_minor = parse_version(torch.__version__)
+version = f"{version}+pt{pt_major}.{pt_minor}"  # e.g., "0.1.2+pt2.9"
+
 
 def get_build_ext_class():
     """Get PyTorch's BuildExtension class."""
