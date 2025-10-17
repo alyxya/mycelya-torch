@@ -1,2 +1,6 @@
+# Include documentation and license
+include README.md
+include LICENSE
+
 # Include C++ header files for compilation
 include mycelya_torch/csrc/*.h
