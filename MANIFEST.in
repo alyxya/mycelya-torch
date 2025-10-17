@@ -4,3 +4,10 @@ include LICENSE
 
 # Include C++ header files for compilation
 include mycelya_torch/csrc/*.h
+
+# Exclude compiled extensions from source distributions
+# (they'll be built on user's machine)
+global-exclude *.so
+global-exclude *.dylib
+global-exclude *.dll
+global-exclude *.pyd
