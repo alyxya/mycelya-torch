@@ -17,7 +17,7 @@ ROOT_DIR = Path(__file__).absolute().parent
 CSRC_DIR = ROOT_DIR / "mycelya_torch/csrc"
 
 # Minimum required PyTorch version
-TORCH_MIN_VERSION = "2.6.0"
+TORCH_MIN_VERSION = "2.9.0"
 
 
 def parse_version(version_str):
@@ -52,9 +52,9 @@ def check_pytorch_installation():
 
     if torch_version_tuple < min_version_tuple:
         print(
-            f"\nERROR: PyTorch {torch_version} is too old (need >= {TORCH_MIN_VERSION})",
+            f"\nERROR: PyTorch {torch_version} is not supported (need >= {TORCH_MIN_VERSION})",
             "\n",
-            "\nUpgrade PyTorch:",
+            "\nInstall PyTorch 2.9+:",
             "\n  pip install --upgrade torch",
             "\n",
             "\nThen retry building mycelya-torch\n",
