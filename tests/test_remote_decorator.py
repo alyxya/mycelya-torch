@@ -640,3 +640,75 @@ class TestRemoteDecoratorErrorHandling:
         # Should raise error about no tensor arguments
         with pytest.raises((RuntimeError, ValueError)):
             no_tensors(1, 2)
+
+
+@pytest.mark.fast
+class TestRemoteDecoratorPackages:
+    """Tests for custom package dependencies in @remote decorator."""
+
+    def test_packages_parameter_basic(self, shared_machines, provider):
+        """Test that packages parameter is accepted and doesn't break execution."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Test with empty packages list
+        @mycelya_torch.remote(packages=[])
+        def simple_add_empty_packages(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+            return x + y
+
+        a = torch.randn(3, 3, device=device)
+        b = torch.randn(3, 3, device=device)
+
+        result = simple_add_empty_packages(a, b)
+
+        assert result.device.type == "mycelya"
+        assert result.shape == (3, 3)
+
+        # Verify correctness
+        result_cpu = result.cpu()
+        expected = (a.cpu() + b.cpu())
+        torch.testing.assert_close(result_cpu, expected, rtol=1e-4, atol=1e-6)
+
+    def test_packages_parameter_with_packages(self, shared_machines, provider):
+        """Test that custom packages parameter works for basic operations."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Test with numpy specified (should already be available)
+        @mycelya_torch.remote(packages=["numpy"])
+        def use_numpy_ops(x: torch.Tensor) -> torch.Tensor:
+            # Just return x, but package should be installed
+            return x * 2.0
+
+        x = torch.randn(4, 4, device=device)
+
+        result = use_numpy_ops(x)
+
+        assert result.device.type == "mycelya"
+        assert result.shape == (4, 4)
+
+        # Verify correctness
+        result_cpu = result.cpu()
+        expected = x.cpu() * 2.0
+        torch.testing.assert_close(result_cpu, expected, rtol=1e-4, atol=1e-6)
+
+    def test_packages_parameter_none(self, shared_machines, provider):
+        """Test that packages=None uses auto-detection (default behavior)."""
+        machine = shared_machines["T4"]
+        device_type = "cpu" if provider == "mock" else "cuda"
+        device = machine.device(device_type)
+
+        # Explicitly set packages=None to verify default behavior
+        @mycelya_torch.remote(packages=None)
+        def matrix_multiply(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+            return torch.matmul(x, y)
+
+        a = torch.randn(3, 3, device=device)
+        b = torch.randn(3, 3, device=device)
+
+        result = matrix_multiply(a, b)
+
+        assert result.device.type == "mycelya"
+        assert result.shape == (3, 3)

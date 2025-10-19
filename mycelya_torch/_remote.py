@@ -15,7 +15,12 @@ from typing import Any, Callable
 from ._orchestrator import orchestrator
 
 
-def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
+def remote(
+    _func: Callable[..., Any] | None = None,
+    *,
+    run_async: bool = False,
+    packages: list[str] | None = None,
+):
     """
     Dual-mode decorator that converts a function to execute remotely on mycelya tensors.
 
@@ -32,6 +37,10 @@ def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
         run_async: Whether to run the function asynchronously (defaults to False)
                    - If False: Blocks until result is ready and returns the result directly
                    - If True: Returns a Future immediately without blocking
+        packages: List of package dependencies to install (defaults to None for auto-detection)
+                  - If None: Auto-detects dependencies from imports in the function
+                  - If provided: Overrides auto-detection and installs specified packages
+                  - Example: ["torch==2.6.0", "numpy>=1.24.0"]
 
     Returns:
         Decorated function (when used as @remote) or decorator function (when used as @remote())
@@ -51,6 +60,13 @@ def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
         @remote(run_async=True)
         def async_function(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a + b
+
+        # Custom package dependencies:
+        @remote(packages=["transformers==4.30.0", "pillow>=9.0.0"])
+        def use_custom_packages(x: torch.Tensor) -> torch.Tensor:
+            from transformers import AutoModel
+            # Custom logic using specified packages
+            return x * 2
 
         machine = RemoteMachine("modal", "A100")
         x = torch.randn(100, 100, device=machine.device("cuda"))
@@ -78,10 +94,12 @@ def remote(_func: Callable[..., Any] | None = None, *, run_async: bool = False):
             # Machine inference happens during pickling via Pickler.machine_id
             if run_async:
                 # Asynchronous execution - return Future immediately
-                return orchestrator.execute_function_future(func, args, kwargs)
+                return orchestrator.execute_function_future(
+                    func, args, kwargs, packages=packages
+                )
             else:
                 # Synchronous execution - block until result is ready
-                return orchestrator.execute_function(func, args, kwargs)
+                return orchestrator.execute_function(func, args, kwargs, packages=packages)
 
         return wrapper
 

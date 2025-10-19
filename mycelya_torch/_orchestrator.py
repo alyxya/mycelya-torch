@@ -561,7 +561,9 @@ class Orchestrator:
         # Clear temporary storage mappings after linking is complete
         self.storage.clear_temp_storage_map()
 
-    def execute_function_future(self, func, args, kwargs) -> Future[Any]:
+    def execute_function_future(
+        self, func, args, kwargs, packages: list[str] | None = None
+    ) -> Future[Any]:
         """
         Execute a pickled function on the remote machine asynchronously.
 
@@ -572,6 +574,7 @@ class Orchestrator:
             func: Function to execute remotely
             args: Function arguments
             kwargs: Function keyword arguments
+            packages: Optional list of package dependencies to install (overrides auto-detection)
 
         Returns:
             Future[Any]: Future that will resolve to the function result
@@ -610,16 +613,23 @@ class Orchestrator:
         # Get client manager for the target machine
         client_manager = self._client_managers[machine_id]
 
-        # Install module dependencies if any were found
-        if pickler.module_dependencies:
-            modules_to_install = [
-                pkg
-                for mod in pickler.module_dependencies
-                if (pkg := module_name_to_package_name(mod))
-            ]
-            if modules_to_install:
-                log.debug(f"Installing module dependencies: {modules_to_install}")
-                client_manager.pip_install(modules_to_install)
+        # Install dependencies: use custom packages if provided, otherwise auto-detect
+        if packages is not None:
+            # User-specified packages override auto-detection
+            if packages:
+                log.debug(f"Installing user-specified packages: {packages}")
+                client_manager.pip_install(packages)
+        else:
+            # Auto-detect module dependencies from imports
+            if pickler.module_dependencies:
+                modules_to_install = [
+                    pkg
+                    for mod in pickler.module_dependencies
+                    if (pkg := module_name_to_package_name(mod))
+                ]
+                if modules_to_install:
+                    log.debug(f"Installing module dependencies: {modules_to_install}")
+                    client_manager.pip_install(modules_to_install)
 
         # Execute remotely (returns Future[bytes])
         pickled_result_future = client_manager.execute_function(pickled_func)
@@ -652,7 +662,9 @@ class Orchestrator:
 
         return final_result_future
 
-    def execute_function(self, func, args, kwargs) -> Any:
+    def execute_function(
+        self, func, args, kwargs, packages: list[str] | None = None
+    ) -> Any:
         """
         Execute a pickled function on the remote machine synchronously.
 
@@ -662,6 +674,7 @@ class Orchestrator:
             func: Function to execute remotely
             args: Function arguments
             kwargs: Function keyword arguments
+            packages: Optional list of package dependencies to install (overrides auto-detection)
 
         Returns:
             Function result with proper tensor linking
@@ -670,7 +683,7 @@ class Orchestrator:
             RuntimeError: If no machine can be inferred or client not available
         """
         # Use the async version and wait for result
-        result_future = self.execute_function_future(func, args, kwargs)
+        result_future = self.execute_function_future(func, args, kwargs, packages=packages)
 
         # Wait for result while signaling background thread to continue
         self._main_thread_waiting.set()
