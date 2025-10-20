@@ -617,7 +617,6 @@ class Orchestrator:
         if packages is not None:
             # User-specified packages override auto-detection
             if packages:
-                log.debug(f"Installing user-specified packages: {packages}")
                 client_manager.pip_install(packages)
         else:
             # Auto-detect module dependencies from imports
@@ -628,7 +627,6 @@ class Orchestrator:
                     if (pkg := module_name_to_package_name(mod))
                 ]
                 if modules_to_install:
-                    log.debug(f"Installing module dependencies: {modules_to_install}")
                     client_manager.pip_install(modules_to_install)
 
         # Execute remotely (returns Future[bytes])
