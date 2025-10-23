@@ -54,7 +54,7 @@ def generate_text(model, tokenizer, prompt: str):
 def main():
     # Create remote machine with cloud GPU
     machine = mycelya_torch.RemoteMachine(
-        "modal", "A100", pip_packages=["transformers", "accelerate"]
+        "modal", "A100", packages=["transformers", "accelerate"]
     )
 
     model_name = "Qwen/Qwen3-4B-Instruct-2507"

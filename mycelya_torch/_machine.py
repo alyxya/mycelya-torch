@@ -52,7 +52,7 @@ class RemoteMachine:
         gpu_type: str = "",
         *,
         gpu_count: int = 1,
-        pip_packages: list[str] | None = None,
+        packages: list[str] | None = None,
         idle_timeout: int | None = None,
         modal_timeout: int | None = 3600,
         _start: bool = True,
@@ -66,8 +66,8 @@ class RemoteMachine:
             gpu_type: The GPU type (e.g., "A100", "T4").
                      Required for modal provider, ignored for mock provider.
             gpu_count: Number of GPUs (1-8, default: 1). Ignored for mock provider.
-            pip_packages: Additional pip packages to install in the modal app.
-                         These will be added to the default packages (default: None)
+            packages: Additional pip packages to install in the modal app.
+                     These will be added to the default packages (default: None)
             idle_timeout: Number of seconds of inactivity before machine pauses (default: None, no timeout)
             modal_timeout: Timeout in seconds for modal provider (default: 3600)
             _start: Whether to start the client immediately (default: True)
@@ -131,8 +131,8 @@ class RemoteMachine:
         )
 
         # Install additional pip packages if specified
-        if pip_packages:
-            self._client_manager.pip_install(pip_packages)
+        if packages:
+            self._client_manager.pip_install(packages)
 
         # Start client if requested and register cleanup
         if _start:

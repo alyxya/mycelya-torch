@@ -120,7 +120,7 @@ def generate_text(model, tokenizer, prompt: str):
 
 # Create remote machine with required packages
 machine = mycelya_torch.RemoteMachine(
-    "modal", "A100", pip_packages=["transformers", "accelerate"]
+    "modal", "A100", packages=["transformers", "accelerate"]
 )
 
 # Load model and generate text - all on remote GPU
@@ -155,7 +155,7 @@ def generate_image(pipe, prompt: str, height: int, width: int, seed: int):
 
 # Create remote machine with required packages
 machine = mycelya_torch.RemoteMachine(
-    "modal", "H100", pip_packages=["diffusers", "transformers", "accelerate"]
+    "modal", "H100", packages=["diffusers", "transformers", "accelerate"]
 )
 
 # Load pipeline and generate image - all on remote GPU
@@ -174,7 +174,7 @@ image.save("cat.png")
 machine = mycelya_torch.RemoteMachine(
     "modal", "A100",
     gpu_count=1,                                  # 1-8 GPUs
-    pip_packages=["transformers", "diffusers"],   # Pre-install for remote functions
+    packages=["transformers", "diffusers"],       # Pre-install for remote functions
     idle_timeout=300                              # Pause after 5 min inactivity
 )
 device = machine.device("cuda")

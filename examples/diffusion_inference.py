@@ -39,7 +39,7 @@ def generate_image(pipe, prompt: str, height: int, width: int, seed: int):
 def main():
     # Create remote machine with cloud GPU
     machine = mycelya_torch.RemoteMachine(
-        "modal", "H100", pip_packages=["diffusers", "transformers", "accelerate"]
+        "modal", "H100", packages=["diffusers", "transformers", "accelerate"]
     )
 
     model_name = "Qwen/Qwen-Image"
