@@ -11,8 +11,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import torch
-import mycelya_torch
 from diffusers import DiffusionPipeline
+
+import mycelya_torch
 
 
 @mycelya_torch.remote

@@ -184,7 +184,7 @@ def create_modal_app_for_gpu(
                 requires_grad = data["requires_grad"]
                 is_parameter = data["is_parameter"]
 
-                if not tensor_id in self.tensor_manager.tensor_registry:
+                if tensor_id not in self.tensor_manager.tensor_registry:
                     raise ValueError(
                         f"Tensor ID {tensor_id} not found in remote registry"
                     )
@@ -342,7 +342,7 @@ def create_modal_app_for_gpu(
 
                 # Reload packages first if available
                 if os.path.exists(packages_filepath):
-                    with open(packages_filepath, "r") as f:
+                    with open(packages_filepath) as f:
                         packages_to_install = [line.strip() for line in f if line.strip()]
                     if packages_to_install:
                         self._pip_install_impl(packages_to_install)
@@ -459,7 +459,7 @@ def create_modal_app_for_gpu(
 
             # Use tensor manager instead of direct registry access
 
-            if not tensor_id in self.tensor_manager.tensor_registry:
+            if tensor_id not in self.tensor_manager.tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             target_tensor = self.tensor_manager.tensor_registry[tensor_id]
@@ -512,7 +512,7 @@ def create_modal_app_for_gpu(
 
             # Use tensor manager instead of direct registry access
 
-            if not tensor_id in self.tensor_manager.tensor_registry:
+            if tensor_id not in self.tensor_manager.tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             tensor = self.tensor_manager.tensor_registry[tensor_id]
@@ -548,7 +548,7 @@ def create_modal_app_for_gpu(
 
             # Use tensor manager instead of direct registry access
 
-            if not tensor_id in self.tensor_manager.tensor_registry:
+            if tensor_id not in self.tensor_manager.tensor_registry:
                 raise ValueError(f"Tensor ID {tensor_id} does not exist")
 
             tensor = self.tensor_manager.tensor_registry[tensor_id]

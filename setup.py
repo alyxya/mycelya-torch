@@ -66,8 +66,6 @@ def check_pytorch_installation():
 # Check PyTorch installation before proceeding
 check_pytorch_installation()
 
-import torch
-
 
 def get_build_ext_class():
     """Get PyTorch's BuildExtension class."""

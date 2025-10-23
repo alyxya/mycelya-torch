@@ -10,8 +10,9 @@ Copyright (C) 2025 alyxya
 SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
-import mycelya_torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+import mycelya_torch
 
 
 @mycelya_torch.remote
