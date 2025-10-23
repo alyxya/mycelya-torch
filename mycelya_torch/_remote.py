@@ -40,7 +40,7 @@ def remote(
         packages: List of package dependencies to install (defaults to None for auto-detection)
                   - If None: Auto-detects dependencies from imports in the function
                   - If provided: Overrides auto-detection and installs specified packages
-                  - Example: ["torch==2.6.0", "numpy>=1.24.0"]
+                  - Example: ["torch==2.6.0", "numpy>=2.0.0"]
 
     Returns:
         Decorated function (when used as @remote) or decorator function (when used as @remote())

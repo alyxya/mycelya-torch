@@ -10,6 +10,7 @@ to ensure Modal containers use the same versions as the local development enviro
 
 import importlib.metadata
 import importlib.util
+import re
 import sys
 
 
@@ -43,23 +44,28 @@ def get_versioned_packages(package_names: list[str]) -> list[str]:
     """
     Convert package names to versioned package specifications.
 
-    For packages installed locally, returns "package==version".
-    For packages not installed locally, returns "package" (no version).
+    For packages with existing version specifiers, returns them unchanged.
+    For packages without version specifiers, adds "==version" from local install.
 
     Args:
-        package_names: List of package names to check
+        package_names: List of package names/specs to check (e.g., ["torch", "numpy>=2.0.0"])
 
     Returns:
         List of package specifications with versions where available
     """
     versioned_packages = []
 
-    for package_name in package_names:
-        local_version = get_local_package_version(package_name)
-        if local_version is not None:
-            versioned_packages.append(f"{package_name}=={local_version}")
+    for package_spec in package_names:
+        # If package already has a version specifier, keep as-is
+        if re.search(r'[<>=!~]', package_spec):
+            versioned_packages.append(package_spec)
         else:
-            versioned_packages.append(package_name)
+            # No version specified - try to add local version
+            local_version = get_local_package_version(package_spec)
+            if local_version is not None:
+                versioned_packages.append(f"{package_spec}=={local_version}")
+            else:
+                versioned_packages.append(package_spec)
 
     return versioned_packages
 
