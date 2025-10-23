@@ -630,15 +630,14 @@ class TestRemoteDecoratorErrorHandling:
                 mixed_add(a, b)
 
     def test_no_tensor_arguments_error(self, shared_machines, provider):
-        """Test that functions without tensor arguments fail appropriately."""
-        machine = shared_machines["T4"]
-
+        """Test that functions without tensor arguments fail when multiple machines exist."""
         @mycelya_torch.remote
         def no_tensors(x: int, y: int) -> int:
             return x + y
 
-        # Should raise error about no tensor arguments
-        with pytest.raises((RuntimeError, ValueError)):
+        # Should raise error about not being able to infer which machine to use
+        # (since shared_machines creates both T4 and L4)
+        with pytest.raises(RuntimeError, match="No mycelya tensors or devices found"):
             no_tensors(1, 2)
 
 
