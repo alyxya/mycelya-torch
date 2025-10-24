@@ -50,7 +50,48 @@ modal setup
 
 **Note**: Modal is currently the only supported GPU cloud provider. Support for other providers (AWS, etc.) will be added in future releases.
 
-## Quick Start
+## API Reference
+
+### `RemoteMachine`
+
+```python
+# Create remote machine with cloud GPU
+machine = mycelya_torch.RemoteMachine(
+    "modal", "A100",
+    gpu_count=1,                                  # 1-8 GPUs
+    packages=["transformers", "diffusers"],       # Pre-install for remote functions
+    idle_timeout=300                              # Pause after 5 min inactivity
+)
+device = machine.device("cuda")
+
+# Install packages dynamically
+machine.pip_install("numpy")
+
+# Pause to save costs, resume when needed
+machine.pause()   # Offload state and stop compute
+machine.resume()  # Restart and reload state
+```
+
+### `@remote` Decorator
+
+```python
+# Execute entire function remotely
+@mycelya_torch.remote
+def custom_function(x: torch.Tensor) -> torch.Tensor:
+    return torch.relu(x @ x.T)
+
+result = custom_function(x)  # Runs on remote GPU
+
+# Async execution
+@mycelya_torch.remote(run_async=True)
+def async_function(x: torch.Tensor) -> torch.Tensor:
+    return x @ x.T
+
+future = async_function(x)
+result = future.result()
+```
+
+## Examples
 
 ### MNIST Training
 ```python
@@ -163,47 +204,6 @@ pipe = load_pipeline("Qwen/Qwen-Image")
 image = generate_image(pipe, "A cat holding a sign that says hello world",
                        height=1024, width=1024, seed=0)
 image.save("cat.png")
-```
-
-## API Reference
-
-### `RemoteMachine`
-
-```python
-# Create remote machine with cloud GPU
-machine = mycelya_torch.RemoteMachine(
-    "modal", "A100",
-    gpu_count=1,                                  # 1-8 GPUs
-    packages=["transformers", "diffusers"],       # Pre-install for remote functions
-    idle_timeout=300                              # Pause after 5 min inactivity
-)
-device = machine.device("cuda")
-
-# Install packages dynamically
-machine.pip_install("numpy")
-
-# Pause to save costs, resume when needed
-machine.pause()   # Offload state and stop compute
-machine.resume()  # Restart and reload state
-```
-
-### `@remote` Decorator
-
-```python
-# Execute entire function remotely
-@mycelya_torch.remote
-def custom_function(x: torch.Tensor) -> torch.Tensor:
-    return torch.relu(x @ x.T)
-
-result = custom_function(x)  # Runs on remote GPU
-
-# Async execution
-@mycelya_torch.remote(run_async=True)
-def async_function(x: torch.Tensor) -> torch.Tensor:
-    return x @ x.T
-
-future = async_function(x)
-result = future.result()
 ```
 
 ## License
