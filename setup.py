@@ -11,7 +11,7 @@ from pathlib import Path
 from setuptools import find_packages, setup
 
 PACKAGE_NAME = "mycelya_torch"
-version = "0.1.6"
+version = "0.1.7"
 
 ROOT_DIR = Path(__file__).absolute().parent
 CSRC_DIR = ROOT_DIR / "mycelya_torch/csrc"
