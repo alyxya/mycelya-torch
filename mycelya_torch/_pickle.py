@@ -15,6 +15,7 @@ import dis
 import io
 import pickle
 import sys
+import sysconfig
 import types
 from typing import Any
 
@@ -154,7 +155,6 @@ class Pickler(cloudpickle.Pickler):
             return False
 
         # Check if module is in Python's standard library
-        import sysconfig
         stdlib_path = sysconfig.get_path("stdlib")
         if stdlib_path and module_file.startswith(stdlib_path):
             return False
