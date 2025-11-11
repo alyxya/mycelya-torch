@@ -14,6 +14,7 @@ properly during serialization for remote execution. It includes:
 import dis
 import io
 import pickle
+import sys
 import types
 from typing import Any
 
@@ -57,6 +58,8 @@ class Pickler(cloudpickle.Pickler):
         self.tensors: dict[int, torch.Tensor] = {}
         # Collect module dependencies
         self.module_dependencies: set[str] = set()
+        # Track modules registered for pickle by value
+        self._registered_modules: set[types.ModuleType] = set()
 
     def _extract_module_from_globals(self, globals_dict: dict) -> None:
         """
@@ -123,6 +126,108 @@ class Pickler(cloudpickle.Pickler):
         # Handle code objects directly
         elif isinstance(obj, types.CodeType):
             self._extract_modules_from_code(obj)
+
+    def _is_user_module(self, module: types.ModuleType) -> bool:
+        """
+        Check if a module is a user module (not stdlib or installed package).
+
+        User modules are typically:
+        - Local modules (no __file__ or __file__ points to current working directory)
+        - Modules without a proper package installation
+
+        Args:
+            module: Module to check
+
+        Returns:
+            True if module should be pickled by value
+        """
+        # Skip built-in modules
+        if not hasattr(module, "__file__"):
+            return False
+
+        module_file = module.__file__
+        if module_file is None:
+            return False
+
+        # Check if module is in site-packages (installed package)
+        if "site-packages" in module_file or "dist-packages" in module_file:
+            return False
+
+        # Check if module is in Python's standard library
+        import sysconfig
+        stdlib_path = sysconfig.get_path("stdlib")
+        if stdlib_path and module_file.startswith(stdlib_path):
+            return False
+
+        # It's likely a user module
+        return True
+
+    def _register_user_modules_by_value(self, obj: Any) -> None:
+        """
+        Register user modules to be pickled by value instead of by reference.
+
+        This ensures that when functions from local modules (like 'src.module')
+        are pickled, their code is included in the pickle rather than just
+        a reference to the module path.
+
+        Args:
+            obj: Object to analyze for user modules (typically a function)
+        """
+        # Check if it's a function with a module
+        if hasattr(obj, "__module__"):
+            module_name = obj.__module__
+            if module_name and module_name in sys.modules:
+                module = sys.modules[module_name]
+                if self._is_user_module(module):
+                    # Register module and all its parent packages
+                    modules_to_register = []
+
+                    # Register the module itself
+                    modules_to_register.append(module)
+
+                    # Register parent packages (e.g., for 'src.submodule', register 'src')
+                    parts = module_name.split(".")
+                    for i in range(1, len(parts)):
+                        parent_name = ".".join(parts[:i])
+                        if parent_name in sys.modules:
+                            parent_module = sys.modules[parent_name]
+                            if self._is_user_module(parent_module):
+                                modules_to_register.append(parent_module)
+
+                    # Register all collected modules
+                    for mod in modules_to_register:
+                        if mod not in self._registered_modules:
+                            cloudpickle.register_pickle_by_value(mod)
+                            self._registered_modules.add(mod)
+                            log.debug(f"Registered module for pickle by value: {mod.__name__}")
+
+    def _unregister_modules(self) -> None:
+        """
+        Unregister all modules that were registered for pickle by value.
+        """
+        for module in self._registered_modules:
+            cloudpickle.unregister_pickle_by_value(module)
+            log.debug(f"Unregistered module from pickle by value: {module.__name__}")
+        self._registered_modules.clear()
+
+    def dump(self, obj: Any) -> None:
+        """
+        Override dump to register user modules for pickle by value.
+
+        Args:
+            obj: Object to pickle
+        """
+        try:
+            # If obj is a dict with a 'function' key, register that function's module
+            if isinstance(obj, dict) and "function" in obj:
+                func = obj["function"]
+                self._register_user_modules_by_value(func)
+
+            # Perform the actual pickling
+            super().dump(obj)
+        finally:
+            # Always unregister modules after pickling to avoid side effects
+            self._unregister_modules()
 
     def persistent_id(self, obj: Any) -> tuple[str, Any] | None:
         """
