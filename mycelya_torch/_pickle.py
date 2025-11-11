@@ -162,45 +162,6 @@ class Pickler(cloudpickle.Pickler):
         # It's likely a user module
         return True
 
-    def _register_user_modules_by_value(self, obj: Any) -> None:
-        """
-        Register user modules to be pickled by value instead of by reference.
-
-        This ensures that when functions from local modules (like 'src.module')
-        are pickled, their code is included in the pickle rather than just
-        a reference to the module path.
-
-        Args:
-            obj: Object to analyze for user modules (typically a function)
-        """
-        # Check if it's a function with a module
-        if hasattr(obj, "__module__"):
-            module_name = obj.__module__
-            if module_name and module_name in sys.modules:
-                module = sys.modules[module_name]
-                if self._is_user_module(module):
-                    # Register module and all its parent packages
-                    modules_to_register = []
-
-                    # Register the module itself
-                    modules_to_register.append(module)
-
-                    # Register parent packages (e.g., for 'src.submodule', register 'src')
-                    parts = module_name.split(".")
-                    for i in range(1, len(parts)):
-                        parent_name = ".".join(parts[:i])
-                        if parent_name in sys.modules:
-                            parent_module = sys.modules[parent_name]
-                            if self._is_user_module(parent_module):
-                                modules_to_register.append(parent_module)
-
-                    # Register all collected modules
-                    for mod in modules_to_register:
-                        if mod not in self._registered_modules:
-                            cloudpickle.register_pickle_by_value(mod)
-                            self._registered_modules.add(mod)
-                            log.debug(f"Registered module for pickle by value: {mod.__name__}")
-
     def _unregister_modules(self) -> None:
         """
         Unregister all modules that were registered for pickle by value.
@@ -210,6 +171,39 @@ class Pickler(cloudpickle.Pickler):
             log.debug(f"Unregistered module from pickle by value: {module.__name__}")
         self._registered_modules.clear()
 
+    def _register_module_if_user(self, obj: Any) -> None:
+        """
+        Register an object's module for pickle by value if it's a user module.
+
+        This is called during pickling to discover user modules on-the-fly.
+
+        Args:
+            obj: Object whose module might need registration
+        """
+        # Check if object has a module
+        if hasattr(obj, "__module__"):
+            module_name = obj.__module__
+            if module_name and module_name in sys.modules:
+                module = sys.modules[module_name]
+                if module not in self._registered_modules and self._is_user_module(module):
+                    # Register module and parent packages
+                    modules_to_register = [module]
+
+                    # Register parent packages
+                    parts = module_name.split(".")
+                    for i in range(1, len(parts)):
+                        parent_name = ".".join(parts[:i])
+                        if parent_name in sys.modules:
+                            parent_module = sys.modules[parent_name]
+                            if parent_module not in self._registered_modules and self._is_user_module(parent_module):
+                                modules_to_register.append(parent_module)
+
+                    # Register all collected modules
+                    for mod in modules_to_register:
+                        cloudpickle.register_pickle_by_value(mod)
+                        self._registered_modules.add(mod)
+                        log.debug(f"Registered module for pickle by value: {mod.__name__}")
+
     def dump(self, obj: Any) -> None:
         """
         Override dump to register user modules for pickle by value.
@@ -218,12 +212,8 @@ class Pickler(cloudpickle.Pickler):
             obj: Object to pickle
         """
         try:
-            # If obj is a dict with a 'function' key, register that function's module
-            if isinstance(obj, dict) and "function" in obj:
-                func = obj["function"]
-                self._register_user_modules_by_value(func)
-
             # Perform the actual pickling
+            # persistent_id will register user modules as they're encountered
             super().dump(obj)
         finally:
             # Always unregister modules after pickling to avoid side effects
@@ -242,6 +232,9 @@ class Pickler(cloudpickle.Pickler):
         Raises:
             RuntimeError: If tensors/devices from different machines are mixed
         """
+        # Register user modules as we encounter objects with them
+        self._register_module_if_user(obj)
+
         # Analyze object for package dependencies
         self._analyze_dependencies(obj)
         # Handle mycelya tensors
